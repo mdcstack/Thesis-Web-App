@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Executive Dashboard - BOOKLETLOG</title>
+    <!-- Import Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        /* Main Layout */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
+        
+        /* Dashboard Grid */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }
+        .kpi-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 5px solid #3498db; position: relative; }
+        .kpi-card.revenue { border-left-color: #27ae60; }
+        .kpi-card.warning { border-left-color: #f39c12; }
+        .kpi-card h3 { color: #7f8c8d; font-size: 0.9rem; text-transform: uppercase; margin-bottom: 10px; }
+        .kpi-card .value { font-size: 2rem; font-weight: bold; color: #2c3e50; }
+        
+        /* Interactive Card Styles */
+        .clickable-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .clickable-card:hover { transform: translateY(-3px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        .clickable-icon { position: absolute; top: 15px; right: 15px; font-size: 1.2rem; opacity: 0.5; }
+        
+        /* Visual Progress Section (DSS) */
+        .visual-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 30px; border-left: 5px solid #e67e22; }
+        .visual-card h2 { margin-bottom: 5px; color: #2c3e50; font-size: 1.2rem; }
+        .progress-container { width: 100%; background-color: #ecf0f1; border-radius: 20px; height: 30px; overflow: hidden; position: relative; margin-top: 15px; }
+        .progress-bar { height: 100%; transition: width 0.5s ease-in-out; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 0.9rem; white-space: nowrap; }
+        .progress-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.9rem; color: #7f8c8d; font-weight: bold; }
+
+        /* Chart Containers */
+        .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
+        .chart-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .chart-container h3 { margin-bottom: 15px; color: #2c3e50; text-align: center; }
+
+        .btn-report { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; }
+        .btn-report:hover { background-color: #219653; }
+        
+        .btn-comp { background-color: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; margin-right: 10px; }
+        .btn-comp:hover { background-color: #732d91; }
+        
+        .btn-action { background-color: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; transition: 0.3s; }
+        .btn-action:hover { background-color: #2980b9; }
+
+        /* Modals */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .modal-card select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem; }
+        
+        .breakdown-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #ecf0f1; font-size: 1.15rem; }
+        .breakdown-row:last-child { border-bottom: none; font-weight: bold; font-size: 1.35rem; }
+
+        /* PRINT STYLES */
+        #print-computations-area { display: none; }
+        .print-header { display: none; text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
+
+        @media print {
+            body { height: auto; overflow: visible; background-color: white; }
+            .sidebar, .btn-report, .btn-comp, .visual-card, .clickable-icon { display: none !important; }
+            .main-content { padding: 0; }
+            .header-bar { border: none; margin-bottom: 10px; padding-bottom: 0; display: block; text-align: center; }
+            .header-bar h2 { display: none; }
+            
+            /* STANDARD KPI DASHBOARD PRINT */
+            body:not(.print-computations-mode) .print-header { display: block; } 
+            body:not(.print-computations-mode) .kpi-card { box-shadow: none; border: 1px solid #000; border-left: 1px solid #000; break-inside: avoid; }
+            body:not(.print-computations-mode) .charts-grid { grid-template-columns: 1fr; gap: 30px; }
+            body:not(.print-computations-mode) .chart-container { box-shadow: none; border: 1px solid #000; break-inside: avoid; page-break-inside: avoid; }
+            
+            /* TRANSPARENT COMPUTATIONS PRINT */
+            body.print-computations-mode .main-content > *:not(#print-computations-area) { display: none !important; }
+            body.print-computations-mode #print-computations-area { display: block !important; width: 100%; font-family: 'Times New Roman', Times, serif; }
+            .page-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar no-print">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+
+        <!-- FORCED INITIALIZATION MODAL (ADMIN ONLY) -->
+<div class="modal-overlay" id="initSetupModal" style="background: rgba(44, 62, 80, 0.95); z-index: 9999;">
+    <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 500px;">
+        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ System Not Initialized</h2>
+        <p style="color: #7f8c8d; font-size: 1rem; margin-bottom: 25px; line-height: 1.5;">
+            Welcome to BOOKLETLOG. Before the system can accept any transactions, you must set the current active exam period. 
+            <strong>All staff operations are locked until this is completed.</strong>
+        </p>
+        
+        <div style="text-align: left; margin-bottom: 20px;">
+            <label style="font-weight: bold; color: #2c3e50; display: block; margin-bottom: 5px;">Select Current Term:</label>
+            <select id="initTermSelect" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem;">
+                <option value="1st Sem - Midterms">1st Sem - Midterms</option>
+                <option value="1st Sem - Finals">1st Sem - Finals</option>
+                <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
+                <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+            </select>
+        </div>
+
+        <div style="text-align: left; margin-bottom: 25px;">
+            <label style="font-weight: bold; color: #2c3e50; display: block; margin-bottom: 5px;">Academic Year (Auto-detected):</label>
+            <input type="text" id="initAyDisplay" disabled style="width: 100%; padding: 12px; background: #ecf0f1; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem; color: #7f8c8d;">
+        </div>
+        
+        <button class="btn-action" style="background-color: #27ae60; font-size: 1.1rem; padding: 15px;" onclick="executeSystemInit()">Initialize System</button>
+    </div>
+</div>
+
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link active">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link">📜 Transaction Trail</a>
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="print-header">
+            <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
+            <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
+            <h3 style="margin: 10px 0 0 0; font-size: 1.4rem;">End of Shift Financial & Analytics Report</h3>
+            <p style="margin-top: 10px; font-weight: bold;" id="print-date">Generated on: </p>
+        </div>
+
+        <div class="header-bar">
+            <h2 style="color: #2c3e50; margin: 0;">Sales & Analytics Dashboard</h2>
+            <div>
+                <button class="btn-comp no-print" onclick="printComputations()">🖨️ Print Transparent Computations</button>
+                <button class="btn-report no-print" onclick="window.print()">🖨️ Print KPI Dashboard</button>
+            </div>
+        </div>
+        
+        <div class="kpi-grid">
+            <div class="kpi-card clickable-card" style="border-left-color: #8e44ad;" onclick="openFilterModal()" title="Click to filter dashboard">
+                <div class="clickable-icon">🔍</div>
+                <h3>📌 Viewing Period</h3>
+                <div class="value" id="kpi-period" style="font-size: 1.3rem; margin-top: 10px;">Loading...</div>
+            </div>
+            <div class="kpi-card revenue clickable-card" onclick="openRevenueModal()" title="Click to view Gross Revenue Breakdown">
+                <div class="clickable-icon">💰</div>
+                <h3>Gross Revenue (Combined)</h3>
+                <div class="value" id="kpi-revenue">₱0.00</div>
+            </div>
+            <div class="kpi-card clickable-card" onclick="openIssuedModal()" title="Click to view Department Issue Breakdown">
+                <div class="clickable-icon">📦</div>
+                <h3>Total Booklets Issued</h3>
+                <div class="value" id="kpi-issued">0</div>
+            </div>
+            <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defect Breakdown (CS & IT)">
+                <div class="clickable-icon">⚠️</div>
+                <h3>Defective Returns</h3>
+                <div class="value" id="kpi-defective">0</div>
+            </div>
+        </div>
+
+        <!-- INFO-VISUAL: LIVE INVENTORY COUNTDOWN METER -->
+        <div class="visual-card">
+            <h2>Semester Inventory Readiness</h2>
+            <p style="color: #7f8c8d; font-size: 0.9rem;">Visualizing current physical stock against the remaining undistributed demand.</p>
+            
+            <div class="progress-container">
+                <div id="meter-bar" class="progress-bar" style="width: 0%; position: absolute; left: 0; z-index: 2;"></div>
+            </div>
+            
+            <div class="progress-labels">
+                <span id="meter-stock-label" style="font-weight: bold;">Current Stock: Loading...</span>
+                <span id="meter-demand-label" style="color: #2c3e50; font-weight: bold;">Remaining Demand: Loading...</span>
+            </div>
+            
+            <div id="meter-alert" style="margin-top: 15px; padding: 10px; font-size: 0.85rem; font-weight: bold; display: none;"></div>
+        </div>
+
+        <!-- NEW: SIDE-BY-SIDE CHARTS GRID -->
+        <div class="charts-grid">
+            <!-- Left: Grouped Bar Chart -->
+            <div class="chart-container" style="margin-bottom: 0;">
+                <h3>Revenue by Year Level (CS vs IT)</h3>
+                <!-- STRICT WRAPPER: Prevents infinite resizing -->
+                <div style="position: relative; height: 300px; width: 100%; margin-top: 10px;">
+                    <canvas id="yearLevelChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Right: Profit Allocation Infographic (Doughnut Chart) -->
+            <div class="chart-container" style="margin-bottom: 0; display: flex; flex-direction: column; justify-content: space-between;">
+                <h3>Profit Allocation Summary</h3>
+                
+                <!-- STRICT WRAPPER: Centers the Doughnut perfectly and prevents glitching -->
+                <div style="position: relative; height: 180px; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 10px;">
+                    <canvas id="allocationChart"></canvas>
+                </div>
+
+                <!-- Clean Text Metrics -->
+                <div style="font-size: 0.95rem; border-top: 2px solid #ecf0f1; padding-top: 15px; margin-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #27ae60; font-weight: bold;">🟢 DCS Net Profit</span>
+                        <strong style="color: #27ae60; font-size: 1.1rem;" id="alloc-net">₱0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #7f8c8d; font-weight: bold;">⚪ Uni Remittance (20%)</span>
+                        <strong style="color: #7f8c8d;" id="alloc-uni">₱0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #e74c3c; font-weight: bold;">🔴 CS Dept Budget (1%)</span>
+                        <strong style="color: #e74c3c;" id="alloc-cs-budget">₱0.00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #f39c12; font-weight: bold;">🟠 IT Dept Budget (1%)</span>
+                        <strong style="color: #f39c12;" id="alloc-it-budget">₱0.00</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Signature line for the PDF Report -->
+        <div class="print-header" style="border-bottom: none; border-top: 2px solid #000; margin-top: 50px; padding-top: 30px; display: none;">
+            <div style="display: flex; justify-content: space-around;">
+                <div style="text-align: center;">
+                    <p style="border-top: 1px solid #000; padding-top: 5px; width: 250px; margin: 0 auto; font-weight: bold;" id="sign-name">Name</p>
+                    <p style="font-size: 0.9rem;">Distribution Clerk</p>
+                </div>
+                <div style="text-align: center;">
+                    <p style="border-top: 1px solid #000; padding-top: 5px; width: 250px; margin: 0 auto; font-weight: bold;">University Cashier</p>
+                    <p style="font-size: 0.9rem;">Received By</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- HIDDEN PRINTABLE COMPUTATIONS AREA -->
+        <div id="print-computations-area"></div>
+
+    </div>
+
+    <!-- MODALS SECTION -->
+    <div class="modal-overlay" id="filterModal">
+        <div class="modal-card" style="border-top: 6px solid #8e44ad;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">🔍 Filter Dashboard Data</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">Select an exam period to view historical or future revenue and analytics.</p>
+            <select id="filterTermSelect">
+                <option value="1st Sem - Midterms">1st Sem - Midterms</option>
+                <option value="1st Sem - Finals">1st Sem - Finals</option>
+                <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
+                <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+            </select>
+            <select id="filterAySelect"></select>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn-action" style="background-color: #bdc3c7; color: #2c3e50;" onclick="closeModals()">Cancel</button>
+                <button class="btn-action" style="background-color: #8e44ad;" onclick="applyDashboardFilter()">View Data</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="revenueModal">
+        <div class="modal-card" style="border-top: 6px solid #27ae60;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">💰 Gross Revenue Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="revModalPeriodLabel">Loading...</p>
+            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalRevCS">₱0.00</span></div>
+            <div class="breakdown-row"><span>🔌 Information Technology (IT)</span><span id="modalRevIT">₱0.00</span></div>
+            
+            <div class="breakdown-row" style="color: #27ae60;"><span>Total Combined Revenue</span><span id="modalRevTotal">₱0.00</span></div>
+            <button class="btn-action" style="background-color: #27ae60;" onclick="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="issuedModal">
+        <div class="modal-card" style="border-top: 6px solid #3498db;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">📦 Booklets Issued Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="issuedModalPeriodLabel">Loading...</p>
+            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalIssuedCS">0 pcs</span></div>
+            <div class="breakdown-row"><span>🔌 Information Technology (IT)</span><span id="modalIssuedIT">0 pcs</span></div>
+            
+            <div class="breakdown-row" style="color: #2980b9;"><span>Total Booklets Issued</span><span id="modalIssuedTotal">0 pcs</span></div>
+            <button class="btn-action" style="background-color: #3498db;" onclick="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="defectiveModal">
+        <div class="modal-card" style="border-top: 6px solid #f39c12;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">⚠️ Defective Returns Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="defectiveModalPeriodLabel">Loading...</p>
+            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalDefectCS">0 pcs</span></div>
+            <div class="breakdown-row" style="border-bottom: 2px solid #2c3e50; padding-bottom: 15px;"><span>🔌 Information Technology (IT)</span><span id="modalDefectIT">0 pcs</span></div>
+            <div class="breakdown-row" style="color: #d35400;"><span>Total Defective (CS & IT)</span><span id="modalDefectTotal">0 pcs</span></div>
+            <button class="btn-action" style="background-color: #f39c12;" onclick="closeModals()">Close</button>
+        </div>
+    </div>
+
+<script>
+    // --- AUTHENTICATION & GLOBAL STATE ---
+    const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+    if (!activeUser) window.location.href = '/login';
+    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    
+    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+
+    // Global Cache
+    let currentDashboardPeriod = "";
+    let yearLevelChartInstance = null;
+    let allocationChartInstance = null;
+    let computationsPayload = null; 
+    let statsData = {
+        revenue: { cs: 0, it: 0, total: 0 },
+        issued: { cs: 0, it: 0, total: 0 },
+        defective: { cs: 0, it: 0, total: 0 }
+    };
+
+    function populateFilterYears() {
+        const aySelect = document.getElementById('filterAySelect');
+        aySelect.innerHTML = '';
+        const currentYear = new Date().getFullYear(); 
+        
+        for (let i = 0; i <= 3; i++) {
+            const startYear = currentYear + i;
+            const ayString = `AY ${startYear}-${startYear + 1}`;
+            aySelect.innerHTML += `<option value="${ayString}">${ayString}</option>`;
+        }
+    }
+
+    // --- MODAL CONTROLS ---
+    function openFilterModal() { populateFilterYears(); document.getElementById('filterModal').style.display = 'flex'; }
+    function openRevenueModal() {
+        document.getElementById('revModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
+        document.getElementById('modalRevCS').innerText = `₱${statsData.revenue.cs.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        document.getElementById('modalRevIT').innerText = `₱${statsData.revenue.it.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        
+        document.getElementById('modalRevTotal').innerText = `₱${statsData.revenue.total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        document.getElementById('revenueModal').style.display = 'flex';
+    }
+    function openIssuedModal() {
+        document.getElementById('issuedModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
+        document.getElementById('modalIssuedCS').innerText = `${statsData.issued.cs.toLocaleString()} pcs`;
+        document.getElementById('modalIssuedIT').innerText = `${statsData.issued.it.toLocaleString()} pcs`;
+        
+        document.getElementById('modalIssuedTotal').innerText = `${statsData.issued.total.toLocaleString()} pcs`;
+        document.getElementById('issuedModal').style.display = 'flex';
+    }
+    function openDefectiveModal() {
+        document.getElementById('defectiveModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
+        document.getElementById('modalDefectCS').innerText = `${statsData.defective.cs.toLocaleString()} pcs`;
+        document.getElementById('modalDefectIT').innerText = `${statsData.defective.it.toLocaleString()} pcs`;
+        document.getElementById('modalDefectTotal').innerText = `${statsData.defective.total.toLocaleString()} pcs`;
+        document.getElementById('defectiveModal').style.display = 'flex';
+    }
+    function closeModals() {
+        document.getElementById('filterModal').style.display = 'none';
+        document.getElementById('revenueModal').style.display = 'none';
+        document.getElementById('issuedModal').style.display = 'none';
+        document.getElementById('defectiveModal').style.display = 'none';
+    }
+
+    window.onclick = function(event) { if (event.target.classList.contains('modal-overlay')) closeModals(); };
+
+    function applyDashboardFilter() {
+        const term = document.getElementById('filterTermSelect').value;
+        const ay = document.getElementById('filterAySelect').value;
+        currentDashboardPeriod = `${term} | ${ay}`;
+        closeModals();
+        fetchDashboardData(currentDashboardPeriod);
+    }
+
+    // --- CHART RENDERING ---
+    function renderYearLevelChart(yearSalesData) {
+        const canvas = document.getElementById('yearLevelChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (yearLevelChartInstance) yearLevelChartInstance.destroy();
+
+        const csData = [(yearSalesData?.CS?.["1"]||0), (yearSalesData?.CS?.["2"]||0), (yearSalesData?.CS?.["3"]||0), (yearSalesData?.CS?.["4"]||0)];
+        const itData = [(yearSalesData?.IT?.["1"]||0), (yearSalesData?.IT?.["2"]||0), (yearSalesData?.IT?.["3"]||0), (yearSalesData?.IT?.["4"]||0)];
+
+        yearLevelChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+                datasets: [
+                    { label: 'CS Revenue (PHP)', data: csData, backgroundColor: '#2ecc71', borderRadius: 4 },
+                    { label: 'IT Revenue (PHP)', data: itData, backgroundColor: '#f1c40f', borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // Prevents resizing loops inside locked wrappers
+                plugins: {
+                    legend: { display: true, position: 'bottom' },
+                    tooltip: { callbacks: { label: function(c) { return c.dataset.label + ': ₱' + c.raw.toLocaleString(); } } }
+                },
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Gross Revenue (PHP)' }, ticks: { callback: function(v) { return '₱' + v; } } } }
+            }
+        });
+    }
+
+    function renderAllocationChart(csGross, itGross) {
+    const combinedGross = csGross + itGross;
+    const csDeptBudget = csGross * 0.01;
+    const itDeptBudget = itGross * 0.01;
+    const totalDeptBudget = csDeptBudget + itDeptBudget;
+    
+    const subtotalBalance = combinedGross - totalDeptBudget;
+    const universityShare = subtotalBalance * 0.20;
+    const dcsNetProfit = subtotalBalance - universityShare;
+
+    // Update Text Metrics dynamically
+    document.getElementById('alloc-net').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('alloc-uni').innerText = `₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('alloc-cs-budget').innerText = `₱${csDeptBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    document.getElementById('alloc-it-budget').innerText = `₱${itDeptBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+
+    const canvas = document.getElementById('allocationChart');
+    if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (allocationChartInstance) allocationChartInstance.destroy();
+
+        // Render Doughnut Graphic
+        const hasData = combinedGross > 0;
+        const dataValues = hasData ? [dcsNetProfit, universityShare, csDeptBudget, itDeptBudget] : [1];
+        const bgColors = hasData ? ['#27ae60', '#95a5a6', '#e74c3c', '#f39c12'] : ['#ecf0f1'];
+        const labels = hasData ? ['DCS Net Profit', 'University Remittance', 'CS Dept Budget', 'IT Dept Budget'] : ['No Data'];
+
+        allocationChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: bgColors,
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // Key rule for fixed containers
+                cutout: '70%', 
+                plugins: {
+                    legend: { display: false }, // Text acts as legend
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) { 
+                                if(!hasData) return " No transactions yet";
+                                return ' ₱' + context.raw.toLocaleString(undefined, {minimumFractionDigits: 2}); 
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- INIT & FETCH DATA ---
+    window.onload = function() {
+        fetch('/api/active-period')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    currentDashboardPeriod = data.active_period;
+                    fetchDashboardData(currentDashboardPeriod);
+                }
+            });
+    };
+
+    function fetchDashboardData(periodQuery) {
+        document.getElementById('kpi-period').innerText = "Loading...";
+        
+        fetch(`/api/dashboard-stats?period=${encodeURIComponent(periodQuery)}`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === "success") {
+                    const kpi = data.kpi || { revenue: 0, issued: 0, defective: 0 };
+                    
+                    document.getElementById('kpi-period').innerText = data.active_period || periodQuery;
+                    document.getElementById('kpi-revenue').innerText = "₱" + (kpi.revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                    document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
+                    document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
+                    
+                    // --- NEW: LIVE METER CALCULATION ---
+                    if (data.inventory) {
+                        const stock = data.inventory.available;
+                        const demand = data.inventory.remaining_demand;
+                        
+                        const bar = document.getElementById('meter-bar');
+                        const stockLbl = document.getElementById('meter-stock-label');
+                        const demandLbl = document.getElementById('meter-demand-label');
+                        const alertBox = document.getElementById('meter-alert');
+                        
+                        // Calculate percentage of demand fulfilled by current stock
+                        let percentage = 0;
+                        if (demand > 0) {
+                            percentage = (stock / demand) * 100;
+                            if (percentage > 100) percentage = 100;
+                        } else if (demand === 0) {
+                            percentage = 100; // Demand is fully met!
+                        }
+
+                        // Animate Bar
+                        bar.style.width = percentage + '%';
+                        stockLbl.innerText = `Current Stock: ${stock}`;
+                        demandLbl.innerText = `Remaining Demand: ${demand}`;
+                        alertBox.style.display = 'block';
+
+                        // Smart Status Coloring
+                        if (demand === 0) {
+                            bar.style.backgroundColor = '#27ae60';
+                            stockLbl.style.color = '#27ae60';
+                            alertBox.style.background = '#f0fdf4';
+                            alertBox.style.borderLeft = '4px solid #27ae60';
+                            alertBox.style.color = '#166534';
+                            alertBox.innerText = '✅ DISTRIBUTION COMPLETE: All sections have been fulfilled for this period!';
+                        } else if (stock < demand) {
+                            bar.style.backgroundColor = '#f39c12';
+                            stockLbl.style.color = '#f39c12';
+                            alertBox.style.background = '#fff3f3';
+                            alertBox.style.borderLeft = '4px solid #e74c3c';
+                            alertBox.style.color = '#c0392b';
+                            alertBox.innerText = `⚠️ INVENTORY DEFICIT: The system requires ${demand - stock} more booklets to fulfill all remaining classes.`;
+                        } else {
+                            bar.style.backgroundColor = '#27ae60';
+                            stockLbl.style.color = '#27ae60';
+                            alertBox.style.background = '#f0fdf4';
+                            alertBox.style.borderLeft = '4px solid #27ae60';
+                            alertBox.style.color = '#166534';
+                            alertBox.innerText = '✅ INVENTORY SUFFICIENT: You have enough physical stock to cover all remaining demand.';
+                        }
+                    }
+
+                    // Existing Chart Renderers...
+                    renderYearLevelChart(data.year_level_sales || { CS: {}, IT: {} });
+                    
+                    // We also ensure statsData gets populated for the modals!
+                    statsData.issued.total = kpi.issued || 0;
+                    statsData.revenue.total = kpi.revenue || 0;
+                    if (data.charts && data.charts.departments) {
+                        statsData.revenue.cs = (data.charts.departments.CS || 0) * 10;
+                        statsData.revenue.it = (data.charts.departments.IT || 0) * 10;
+                        statsData.issued.cs = data.charts.departments.CS || 0;
+                        statsData.issued.it = data.charts.departments.IT || 0;
+                        renderAllocationChart(statsData.revenue.cs, statsData.revenue.it);
+                    }
+
+                    computationsPayload = data.computations_data;
+                }
+            })
+            .catch(err => console.error("Dashboard failed to load:", err));
+    }
+
+    // --- TRANSPARENT COMPUTATIONS RENDERER ---
+    function printComputations() {
+        if (!computationsPayload) {
+            alert("Report data is still loading. Please wait.");
+            return;
+        }
+
+        const area = document.getElementById('print-computations-area');
+        const comp = computationsPayload.records;
+        const summ = computationsPayload.summary;
+        const depts = ["CS", "IT"];
+        const deptNames = {"CS": "Computer Science (CS)", "IT": "Information Technology (IT)"};
+
+        let html = `
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h2 style="margin:0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
+                <h3 style="margin:5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
+                <h3 style="margin:10px 0 0 0; font-size: 1.4rem;">Transparent Computations Report</h3>
+                <p style="margin-top:5px;"><strong>Exam Period:</strong> ${currentDashboardPeriod}</p>
+            </div>
+        `;
+
+        depts.forEach((dept, index) => {
+            let deptHasData = false;
+            
+            // Check if there is data for this dept first
+            for(let y = 1; y <= 4; y++) {
+                if(comp[dept][y.toString()] && comp[dept][y.toString()].length > 0) {
+                    deptHasData = true; break;
+                }
+            }
+
+            if (deptHasData) {
+                // Apply a page break if it is the IT department (index > 0)
+                let pageBreakHTML = index > 0 ? '<div class="page-break"></div>' : '';
+                
+                let deptHtml = pageBreakHTML + `<h2 style="margin-top: 40px; border-bottom: 2px solid #000; padding-bottom: 5px; color: #2c3e50;">${deptNames[dept]}</h2>`;
+                
+                for(let y = 1; y <= 4; y++) {
+                    const rows = comp[dept][y.toString()];
+                    if(rows && rows.length > 0) {
+                        deptHtml += `<h3 style="margin-top: 20px; color: #34495e;">${y} Year Sections</h3>`;
+                        deptHtml += `
+                            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.9rem;" border="1">
+                                <thead>
+                                    <tr style="background-color: #f2f2f2; color: #000;">
+                                        <th style="padding: 10px; text-align: left;">Teacher</th>
+                                        <th style="padding: 10px; text-align: left;">Subject</th>
+                                        <th style="padding: 10px; text-align: left;">Section</th>
+                                        <th style="padding: 10px; text-align: center;">Headcount (Issued)</th>
+                                        <th style="padding: 10px; text-align: right;">Total Amount (PHP)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+                        rows.forEach(r => {
+                            deptHtml += `
+                                <tr>
+                                    <td style="padding: 8px;">${r.teacher}</td>
+                                    <td style="padding: 8px;">${r.subject}</td>
+                                    <td style="padding: 8px;">${r.section}</td>
+                                    <td style="padding: 8px; text-align: center;">${r.headcount}</td>
+                                    <td style="padding: 8px; text-align: right;">${r.amount.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        });
+                        deptHtml += `
+                                <tr>
+                                    <th colspan="4" style="padding: 10px; text-align: right; font-style: italic;">Total for ${y} Year ${dept}</th>
+                                    <th style="padding: 10px; text-align: right; background-color: #f8f9fa;">₱${summ[dept][y.toString()].toFixed(2)}</th>
+                                </tr>
+                            </tbody>
+                            </table>
+                        `;
+                    }
+                }
+                html += deptHtml;
+            }
+        });
+
+        // Calculations for Final Page
+        const csGross = summ["CS"]["total"] || 0;
+        const itGross = summ["IT"]["total"] || 0;
+        const combinedGross = csGross + itGross;
+        const csDeptBudget = csGross * 0.01;
+        const itDeptBudget = itGross * 0.01;
+        const subtotalBalance = combinedGross - csDeptBudget - itDeptBudget;
+        const universityShare = subtotalBalance * 0.20;
+        const dcsNetProfit = subtotalBalance - universityShare;
+
+        html += `
+            <div class="page-break">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="margin:0; font-size: 1.5rem;">Final Sales & Profit Allocation Summary</h2>
+                    <p style="margin-top:5px;"><strong>Exam Period:</strong> ${currentDashboardPeriod}</p>
+                </div>
+                
+                <table style="width: 100%; max-width: 700px; margin: 0 auto 30px auto; border-collapse: collapse; font-size: 1.05rem;" border="1">
+                    <thead>
+                        <tr style="background-color: #f2f2f2; color: #000;">
+                            <th style="padding: 12px; text-align: left;">Gross Revenue Breakdown by Year Level</th>
+                            <th style="padding: 12px; text-align: right;">Amount (PHP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        depts.forEach(dept => {
+            html += `<tr><th colspan="2" style="padding: 12px; background-color: #e9ecef; text-align: left;">${deptNames[dept]}</th></tr>`;
+            for(let y = 1; y <= 4; y++) {
+                html += `<tr><td style="padding: 10px; padding-left: 30px;">${y} Year</td><td style="padding: 10px; text-align: right;">₱${(summ[dept][y.toString()] || 0).toFixed(2)}</td></tr>`;
+            }
+            html += `<tr><th style="padding: 10px; text-align: right; font-style: italic;">Gross ${dept} Revenue</th><th style="padding: 10px; text-align: right; color: #000;">₱${(summ[dept]["total"] || 0).toFixed(2)}</th></tr>`;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+                
+                <table style="width: 100%; max-width: 700px; margin: 0 auto; border-collapse: collapse; font-size: 1.1rem;" border="1">
+                    <tbody>
+                        <tr>
+                            <th style="padding: 12px; text-align: left; background-color: #2c3e50; color: black;">Total Combined Gross Revenue</th>
+                            <th style="padding: 12px; text-align: right; background-color: #2c3e50; color: red;">₱${combinedGross.toFixed(2)}</th>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="padding: 12px; background-color: #f8f9fa; font-weight: bold; text-align: center;">Deductions & Allocations</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; padding-left: 30px;">Less: CS Department Budget Allocation (1%)</td>
+                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${csDeptBudget.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; padding-left: 30px;">Less: IT Department Budget Allocation (1%)</td>
+                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${itDeptBudget.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <th style="padding: 10px; text-align: right; background-color: #e9ecef;">Subtotal Balance</th>
+                            <th style="padding: 10px; text-align: right; background-color: #e9ecef;">₱${subtotalBalance.toFixed(2)}</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; padding-left: 30px;">Less: University Remittance Share (20% of Subtotal)</td>
+                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${universityShare.toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <th style="padding: 15px; text-align: left; background-color: #27ae60; color: black; font-size: 1.25rem;">Final DCS Net Profit</th>
+                            <th style="padding: 15px; text-align: right; background-color: #27ae60; color: red; font-size: 1.25rem;">₱${dcsNetProfit.toFixed(2)}</th>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        area.innerHTML = html;
+        document.body.classList.add("print-computations-mode");
+        window.print();
+        setTimeout(() => { document.body.classList.remove("print-computations-mode"); area.innerHTML = ""; }, 500);
+    }
+
+    // --- STANDARD PRINT PREP (For KPI Dashboard) ---
+    window.addEventListener('beforeprint', () => {
+        if (!document.body.classList.contains("print-computations-mode")) {
+            document.querySelectorAll('.print-header')[0].style.display = 'block';
+            document.getElementById('print-date').innerText = "Generated on: " + new Date().toLocaleString();
+            document.getElementById('sign-name').innerText = activeUser.username.toUpperCase();
+        }
+    });
+    window.addEventListener('afterprint', () => {
+        if (!document.body.classList.contains("print-computations-mode")) {
+            document.querySelectorAll('.print-header')[0].style.display = 'none';
+        }
+    });
+
+    function logout() {
+        if(confirm("Are you sure you want to log out?")) {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+    }
+
+    fetch('/api/dss-alert').then(response => response.json()).then(data => {
+        const badge = document.getElementById('notifBadge');
+        const panel = document.getElementById('notifPanel');
+        const bell = document.getElementById('notifBell');
+        if (data.alert) {
+            badge.style.display = 'inline-block';
+            bell.style.color = 'white'; 
+            if (activeUser.role === 'Admin') {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+            } else {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+            }
+        } else {
+            badge.style.display = 'none';
+            panel.style.borderLeftColor = '#27ae60'; 
+            panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+        }
+    });
+
+    function toggleNotifPanel() {
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    window.onload = function() {
+    fetch('/api/active-period')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                if (data.active_period === "UNSET") {
+                    // Trigger Initialization Lockout
+                    const currentYear = new Date().getFullYear();
+                    document.getElementById('initAyDisplay').value = `AY ${currentYear}-${currentYear + 1}`;
+                    document.getElementById('initSetupModal').style.display = 'flex';
+                } else {
+                    currentDashboardPeriod = data.active_period;
+                    fetchDashboardData(currentDashboardPeriod);
+                }
+            }
+        });
+};
+
+function executeSystemInit() {
+    const term = document.getElementById('initTermSelect').value;
+    const ay = document.getElementById('initAyDisplay').value;
+    const combinedPeriod = `${term} | ${ay}`;
+    
+    fetch('/api/active-period', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active_period: combinedPeriod })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "success") {
+            window.location.reload(); 
+        }
+    });
+}
+</script>
+</body>
+</html>

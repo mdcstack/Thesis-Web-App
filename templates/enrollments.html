@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Enrollments - Proposed System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        /* Main Layout */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; scroll-behavior: smooth; }
+        .header-action { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        /* Form Layout */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
+        input { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
+        .btn-primary { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; padding: 11px 20px; border-radius: 4px; transition: 0.3s; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-danger { background-color: #e74c3c; color: white; border: none; cursor: pointer; padding: 10px 15px; font-weight: bold; border-radius: 4px; }
+        
+        /* Instructor Cards Grid */
+        .instructor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .instructor-card { background: white; border: 1px solid #e0e6ed; border-top: 4px solid #34495e; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); position: relative; }
+        
+        .instructor-card h3 { color: #2c3e50; margin-bottom: 5px; font-size: 1.1rem; display: flex; align-items: center; justify-content: space-between; }
+        .card-subtitle { font-size: 0.8rem; color: #7f8c8d; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Edit Buttons */
+        .card-action-btn { background: none; border: 1px solid #bdc3c7; color: #34495e; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-left: 5px; }
+        .card-action-btn:hover { background: #ecf0f1; }
+        .card-action-btn.active { background: #34495e; color: white; border-color: #34495e; }
+
+        /* Class Items */
+        .class-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed #ecf0f1; }
+        .class-item:last-child { border-bottom: none; }
+        .class-details { font-size: 0.9rem; color: #34495e; }
+        .class-headcount { background: #e8f4f8; color: #2980b9; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; transition: opacity 0.3s; }
+        
+        /* Hidden Action Buttons (Revealed in Edit Mode) */
+        .action-group { display: none; gap: 5px; }
+        .edit-btn { background: #3498db; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; }
+        
+        /* When card is in edit mode */
+        .instructor-card.edit-mode .action-group { display: flex; }
+        .instructor-card.edit-mode .class-headcount { display: none; }
+
+        /* Modal Styles */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 400px; width: 100%; }
+        .modal-card h3 { margin-bottom: 20px; color: #2c3e50; border-bottom: 1px solid #ecf0f1; padding-bottom: 10px; }
+        .modal-card label { display: block; font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-bottom: 5px; }
+        .modal-card input { margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+
+        <!-- NEW: Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <!-- Hidden Dropdown Panel -->
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+        
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link active">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <div class="main-content" id="mainView">
+        
+        <div class="header-action">
+            <h1 style="color: #2c3e50; font-size: 1.5rem;">Semester Masterfile</h1>
+            <button class="btn-danger" onclick="resetSemester()">⚠️ End of Semester Reset</button>
+        </div>
+
+        <!-- INLINE ADD FORM -->
+        <div class="card" style="padding: 20px;">
+            <form id="addForm" onsubmit="submitClass(event, 'POST', null)" class="form-grid">
+                <div>
+                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Instructor</label>
+                    <input type="text" id="teacher" placeholder="e.g., Grace S. Ibañez" required>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Section</label>
+                    <input type="text" id="section" placeholder="e.g., BSCS-1E" required>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Subject</label>
+                    <input type="text" id="subject" placeholder="e.g., COSC 105" required>
+                </div>
+                <div>
+                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Headcount</label>
+                    <input type="number" id="headcount" min="1" required>
+                </div>
+                <button type="submit" class="btn-primary" id="addBtn">Add Class</button>
+            </form>
+        </div>
+
+        <!-- GROUPED INSTRUCTOR CARDS -->
+        <div class="instructor-grid">
+            {% for teacher, classes in enrollments|groupby('teacher_name') %}
+            <div class="instructor-card" id="card-{{ loop.index }}">
+                <h3>
+                    👨‍🏫 {{ teacher }}
+                </h3>
+                <div class="card-subtitle">
+                    <span>{{ classes|length }} Classes Assigned</span>
+                    <div>
+                        <button class="card-action-btn" onclick="quickAdd('{{ teacher }}')">+ Add Class</button>
+                        <button class="card-action-btn" id="btn-{{ loop.index }}" onclick="toggleEditMode('{{ loop.index }}')">Edit Load</button>
+                    </div>
+                </div>
+                
+                {% for c in classes %}
+                <div class="class-item">
+                    <div class="class-details">
+                        <strong>{{ c.subject }}</strong> <br>
+                        <span style="color: #7f8c8d; font-size: 0.8rem;">{{ c.section }}</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: center;">
+                        <span class="class-headcount">{{ c.student_headcount }} Pax</span>
+                        
+                        <!-- These appear when "Edit Load" is clicked -->
+                        <div class="action-group">
+                            <button class="edit-btn" onclick="openEditModal({{ c.id }}, '{{ teacher }}', '{{ c.section }}', '{{ c.subject }}', {{ c.student_headcount }})">✏️</button>
+                            <button class="delete-btn" onclick="deleteClass({{ c.id }})">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: 8px;">
+                No class records have been added for this semester yet.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- UPDATE MODAL (Hidden by default) -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal-card">
+            <h3>Update Class Record</h3>
+            <form onsubmit="submitUpdate(event)">
+                <input type="hidden" id="edit-id">
+                <input type="hidden" id="edit-teacher"> <!-- We keep the teacher name intact -->
+                
+                <label>Section</label>
+                <input type="text" id="edit-section" required>
+                
+                <label>Subject</label>
+                <input type="text" id="edit-subject" required>
+                
+                <label>Student Headcount</label>
+                <input type="number" id="edit-headcount" min="1" required>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" class="btn-primary" style="flex: 1;" id="updateBtn">Save Changes</button>
+                    <button type="button" class="btn-primary" style="flex: 1; background: #95a5a6;" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTHENTICATION GUARD & RBAC ---
+        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        
+        if (!activeUser) {
+            window.location.href = '/login';
+        } else {
+            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    
+            // Hide admin-only links (Manage Classes) if the user is a clerk
+            if (activeUser.role !== 'Admin') {
+                const adminLinks = document.querySelectorAll('.admin-only');
+                adminLinks.forEach(link => link.style.display = 'none');
+            }
+        }
+    
+        function logout() {
+            if(confirm("Are you sure you want to log out?")) {
+                localStorage.removeItem('bookletlog_user');
+                window.location.href = '/login';
+            }
+        }
+    
+        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+        fetch('/api/dss-alert')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('notifBadge');
+                const panel = document.getElementById('notifPanel');
+                const bell = document.getElementById('notifBell');
+    
+                if (data.alert) {
+                    badge.style.display = 'inline-block';
+                    bell.style.color = 'white'; 
+                    
+                    if (activeUser.role === 'Admin') {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                    } else {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                    }
+                    
+                    if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                        showDSSModal(data.message, data.reams_needed);
+                    }
+                } else {
+                    badge.style.display = 'none';
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            });
+    
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+    
+        function showDSSModal(message, reams) {
+            const modalHtml = `
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+    
+        function dismissDSS() {
+            sessionStorage.setItem('dss_acknowledged', 'true');
+            document.getElementById('dssModal').remove();
+            
+            const panel = document.getElementById('notifPanel');
+            panel.style.display = 'block'; 
+            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        }
+    
+        // --- QUICK ADD HELPER ---
+        function quickAdd(teacherName) {
+            document.getElementById('teacher').value = teacherName;
+            document.getElementById('mainView').scrollTop = 0; 
+            document.getElementById('section').focus(); 
+        }
+    
+        // --- ADD NEW RECORD ---
+        function submitClass(event) {
+            event.preventDefault();
+            const btn = document.getElementById('addBtn');
+            btn.innerText = "Adding..."; btn.disabled = true;
+    
+            const payload = {
+                teacher_name: document.getElementById('teacher').value,
+                section: document.getElementById('section').value,
+                subject: document.getElementById('subject').value,
+                student_headcount: parseInt(document.getElementById('headcount').value)
+            };
+    
+            fetch('/api/enrollments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                // Automatically refresh the page unconditionally once the fetch is complete
+                window.location.reload(); 
+            })
+            .catch(err => {
+                console.error("Error adding class:", err);
+                btn.innerText = "Add Class"; btn.disabled = false;
+            });
+        }
+    
+        // --- EDIT MODE TOGGLE ---
+        function toggleEditMode(cardId) {
+            const card = document.getElementById(`card-${cardId}`);
+            const btn = document.getElementById(`btn-${cardId}`);
+            
+            card.classList.toggle('edit-mode');
+            if (card.classList.contains('edit-mode')) {
+                btn.innerText = "Done Editing";
+                btn.classList.add('active');
+            } else {
+                btn.innerText = "Edit Load";
+                btn.classList.remove('active');
+            }
+        }
+    
+        // --- UPDATE RECORD (MODAL LOGIC) ---
+        function openEditModal(id, teacher, section, subject, headcount) {
+            document.getElementById('edit-id').value = id;
+            document.getElementById('edit-teacher').value = teacher;
+            document.getElementById('edit-section').value = section;
+            document.getElementById('edit-subject').value = subject;
+            document.getElementById('edit-headcount').value = headcount;
+            
+            document.getElementById('editModal').style.display = 'flex';
+        }
+    
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+    
+        function submitUpdate(event) {
+            event.preventDefault();
+            const btn = document.getElementById('updateBtn');
+            btn.innerText = "Saving..."; btn.disabled = true;
+    
+            const id = document.getElementById('edit-id').value;
+            const payload = {
+                teacher_name: document.getElementById('edit-teacher').value,
+                section: document.getElementById('edit-section').value,
+                subject: document.getElementById('edit-subject').value,
+                student_headcount: parseInt(document.getElementById('edit-headcount').value)
+            };
+    
+            fetch(`/api/enrollments/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                // Automatically refresh the page unconditionally once the update is complete
+                window.location.reload();
+            })
+            .catch(err => console.error("Error updating class:", err));
+        }
+    
+        // --- DELETE RECORD ---
+        function deleteClass(id) {
+            if(confirm("Are you sure you want to remove this class from the instructor's load?")) {
+                fetch(`/api/enrollments/${id}`, { method: 'DELETE' })
+                .then(() => {
+                    // Automatically refresh the page unconditionally once the deletion is complete
+                    window.location.reload(); 
+                })
+                .catch(err => console.error("Error deleting class:", err));
+            }
+        }
+    
+        // --- SEMESTER RESET ---
+        function resetSemester() {
+            if(confirm("🚨 WARNING: Are you sure you want to wipe ALL class records? This prepares the system for a new semester and cannot be undone.")) {
+                fetch(`/api/enrollments/reset-semester`, { method: 'DELETE' })
+                .then(() => {
+                    window.location.reload(); 
+                });
+            }
+        }
+    </script>
+</body>
+</html>

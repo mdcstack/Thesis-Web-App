@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generator - Proposed System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .card-title { margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        
+        .generator-container { text-align: left; padding: 20px; }
+        
+        /* New Layout for Dynamic Input */
+        .input-panel { display: flex; align-items: center; gap: 30px; background: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 30px; }
+        .input-group label { display: block; font-weight: bold; margin-bottom: 10px; color: #2c3e50; }
+        .input-group input { padding: 12px; font-size: 1.2rem; width: 120px; border: 1px solid #ccc; border-radius: 5px; text-align: center; }
+        .math-symbol { font-size: 2rem; color: #bdc3c7; font-weight: bold; }
+        .yield-display { text-align: center; }
+        .yield-display span { display: block; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
+        .yield-display .number { font-size: 2rem; font-weight: bold; color: #27ae60; }
+        
+        .btn-primary { background-color: #3498db; color: white; border: none; padding: 15px 30px; border-radius: 5px; font-size: 1.1rem; cursor: pointer; font-weight: bold; transition: background 0.3s; width: 100%; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-primary:disabled { background-color: #95a5a6; cursor: not-allowed; }
+        #loadingMsg { margin-top: 20px; color: #e67e22; font-weight: bold; display: none; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <!-- NEW: Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <!-- Hidden Dropdown Panel -->
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link active">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link ">📜 Transaction Trail</a>
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.3s;">Log Out</button>
+        </div>
+
+    </div>
+
+    <div class="main-content">
+        <div class="card generator-container">
+            <h2 class="card-title">Master Batch Production</h2>
+            <p style="margin-bottom: 30px; color: #7f8c8d;">
+                Convert raw A4 inventory into sequential booklet batches. The system enforces a strict deterministic conversion rate of 83 booklets per ream.
+            </p>
+            
+            <div class="input-panel">
+                <div class="input-group">
+                    <label for="reamCount">Input Raw Reams:</label>
+                    <input type="number" id="reamCount" value="1" min="1" max="50">
+                </div>
+                <div class="math-symbol">→</div>
+                <div class="yield-display">
+                    <span>Total Target Booklets</span>
+                    <div class="number" id="yieldDisplay">83</div>
+                </div>
+            </div>
+            
+            <button class="btn-primary" onclick="registerReam()" id="registerBtn">
+                Execute Batch Conversion & Print PDF
+            </button>
+            <p id="loadingMsg">⚙️ Stamping sequential reference numbers, please wait...</p>
+        </div>
+    </div>
+
+    <script>
+
+// --- AUTHENTICATION GUARD & RBAC ---
+const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+    
+    if (!activeUser) {
+        window.location.href = '/login';
+    } else {
+        document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+        document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+
+        // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
+        if (activeUser.role !== 'Admin') {
+            const adminLinks = document.querySelectorAll('.admin-only');
+            adminLinks.forEach(link => link.style.display = 'none');
+        }
+    }
+
+    function logout() {
+        if(confirm("Are you sure you want to log out?")) {
+            localStorage.removeItem('bookletlog_user');
+            localStorage.removeItem('bookletlog_active_pack'); // Clear any active distribution scans
+            window.location.href = '/login';
+        }
+    }
+
+
+    // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+    // We removed the 'if Admin' check here so ALL users fetch the alert status
+    fetch('/api/dss-alert')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('notifBadge');
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBell');
+
+            if (data.alert) {
+                // 1. Show the red badge and alert panel to EVERYONE (Clerks & Admins)
+                badge.style.display = 'inline-block';
+                bell.style.color = 'white'; 
+                
+                // If Admin, show the link to the generator. If Clerk, just show the warning.
+                if (activeUser.role === 'Admin') {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                } else {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                }
+                
+                // 2. Trigger the aggressive Modal ONLY for the Admin, if not acknowledged yet this session
+                if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                    showDSSModal(data.message, data.reams_needed);
+                }
+            } else {
+                // No deficit? Keep the bell quiet for everyone.
+                badge.style.display = 'none';
+                panel.style.borderLeftColor = '#27ae60'; 
+                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            }
+        });
+
+    // Toggle the dropdown panel when clicking the bell
+    function toggleNotifPanel() {
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Only the Admin will ever trigger this function
+    function showDSSModal(message, reams) {
+        const modalHtml = `
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                    <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                    <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                    <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                    <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function dismissDSS() {
+        sessionStorage.setItem('dss_acknowledged', 'true');
+        document.getElementById('dssModal').remove();
+        
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = 'block'; 
+        setTimeout(() => { panel.style.display = 'none'; }, 2500);
+    }
+
+
+        // Listen for typing in the number box and update the yield instantly
+        document.getElementById('reamCount').addEventListener('input', function() {
+            let reams = parseInt(this.value) || 0;
+            if (reams < 1) reams = 1; // Prevent zero or negative
+            document.getElementById('yieldDisplay').innerText = reams * 83;
+        });
+
+        async function registerReam() {
+            const btn = document.getElementById('registerBtn');
+            const msg = document.getElementById('loadingMsg');
+            const reamsRequested = parseInt(document.getElementById('reamCount').value) || 1;
+            const totalYield = reamsRequested * 83;
+            
+            btn.disabled = true;
+            msg.style.display = 'block';
+            msg.style.color = '#e67e22';
+            msg.innerHTML = `⚙️ Stamping ${totalYield} sequential reference numbers. This may take a moment...`;
+
+            try {
+                // Send the exact ream count to the backend
+                const response = await fetch('/api/register-ream', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ream_count: reamsRequested })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.open(data.pdf_download_link, '_blank');
+                    msg.innerHTML = `✅ Successfully generated Batch: ${data.master_batch_id}`;
+                    msg.style.color = "green";
+                } else {
+                    alert("Error: " + data.detail);
+                    msg.style.display = 'none';
+                }
+            } catch (error) {
+                console.error(error);
+                alert("A network error occurred while reaching the offline server.");
+                msg.style.display = 'none';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+
+</body>
+</html>

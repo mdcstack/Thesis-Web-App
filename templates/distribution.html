@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live POS - BOOKLETLOG</title>
+    <script src="/static/html5-qrcode.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        /* Main Layout Grid */
+        .main-content { flex: 1; padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; flex-shrink: 0; }
+        
+        /* --- NEW: Period Badge Styles --- */
+        .period-badge { background: #3498db; color: white; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .period-badge.admin-mode { cursor: pointer; background: #e67e22; }
+        .period-badge.admin-mode:hover { background: #d35400; transform: translateY(-1px); }
+
+        .pos-grid { display: flex; gap: 20px; flex: 1; overflow: hidden; }
+        
+        /* Left Panel - Controls */
+        .control-panel { flex: 1; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); overflow-y: auto; max-width: 45%; }
+        
+        /* Right Panel - Live Receipt */
+        .receipt-panel { flex: 1.2; background: white; padding: 0; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); overflow-y: auto; display: flex; flex-direction: column; border: 1px solid #bdc3c7; position: relative; }
+        .receipt-header { background: #2c3e50; color: white; padding: 15px; text-align: center; font-weight: bold; font-size: 1.1rem; }
+        
+        /* Form Elements */
+        select, .btn { padding: 12px; font-size: 16px; width: 100%; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
+        .btn { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        .btn:hover { background-color: #2980b9; }
+        .btn-success { background-color: #27ae60; font-size: 1.1rem; padding: 15px; }
+        .btn-success:hover { background-color: #219653; }
+        .btn-warning { background-color: #f39c12; color: white; }
+        .btn-danger { background-color: #e74c3c; color: white; }
+        .btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        
+        /* Modals */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; }
+        
+        #reader-modal { width: 100%; margin: auto; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+
+        /* Receipt Formatting */
+        .live-receipt-content { padding: 30px; font-family: 'Times New Roman', Times, serif; color: #000; opacity: 0.4; transition: opacity 0.3s; pointer-events: none; }
+        .live-receipt-content.active { opacity: 1; }
+        .r-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 15px; }
+        .r-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 1rem; border-bottom: 1px solid #000; padding-bottom: 15px; margin-bottom: 15px; }
+        .r-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 1rem; }
+        .r-table th { text-align: left; padding-bottom: 8px; border-bottom: 2px solid #000; }
+        .r-table td { padding-top: 10px; }
+        
+        /* --- PRINT STYLES --- */
+        @media print {
+            body * { visibility: hidden; } 
+            .receipt-panel { box-shadow: none; border-radius: 0; max-width: 100%; width: 100%; padding: 0; position: absolute; left: 0; top: 0; border: none; }
+            .receipt-header { display: none; }
+            .live-receipt-content { opacity: 1 !important; visibility: visible; }
+            .live-receipt-content * { visibility: visible; } 
+        }
+
+        /* --- PRINT STYLES --- */
+        @media print {
+            body * { visibility: hidden; } 
+            .receipt-panel { box-shadow: none; border-radius: 0; max-width: 100%; width: 100%; padding: 0; position: absolute; left: 0; top: 0; border: none; }
+            .receipt-header { display: none; }
+            .live-receipt-content { opacity: 1 !important; visibility: visible; }
+            .live-receipt-content * { visibility: visible; } 
+            .modal-overlay, .modal-overlay * { display: none !important; visibility: hidden !important; } /* Prevents modal from printing */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar no-print">
+
+        <!-- NEW: Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <!-- Hidden Dropdown Panel -->
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+
+        <!-- STAFF LOCKOUT MODAL -->
+<div class="modal-overlay" id="staffLockoutModal" style="background: rgba(44, 62, 80, 0.95); z-index: 9999;">
+    <div class="modal-card" style="border-top: 6px solid #e74c3c;">
+        <div style="font-size: 3rem; margin-bottom: 10px;">🔒</div>
+        <h2 style="color: #e74c3c; margin-bottom: 10px;">System Locked</h2>
+        <p style="color: #7f8c8d; font-size: 1.1rem; line-height: 1.5; margin-bottom: 25px;">
+            The active exam period has not been configured for this semester. <br><br>
+            <strong style="color: #2c3e50;">Please ask the System Administrator to log in and initialize the term before resuming distribution operations.</strong>
+        </p>
+        <button class="btn btn-danger" onclick="logout()" style="width: 100%;">Return to Login</button>
+    </div>
+</div>
+
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link admin-mode">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link active">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link">📜 Transaction Trail</a>
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <div class="main-content no-print">
+        <div class="header-bar">
+            <h2 style="color: #2c3e50; margin: 0;">Live Distribution Counter</h2>
+            
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <!-- THE NEW ACTIVE PERIOD BADGE -->
+                <div id="activePeriodBadge" class="period-badge" onclick="openPeriodModal()" title="Current Exam Period">
+                    📌 <span id="periodText">Loading Period...</span>
+                </div>
+                <a href="/receipts" target="_blank" class="btn" style="width: auto; margin: 0; background-color: #8e44ad; text-decoration: none;">🌐 Public Receipts Portal</a>
+            </div>
+        </div>
+        
+        <div class="pos-grid">
+            
+            <!-- LEFT PANEL: CONTROLS -->
+            <div class="control-panel" id="control-panel">
+                <h3 style="margin-bottom: 15px;">📦 Step 1: Active Supply</h3>
+                
+                <!-- Supply Status Block -->
+                <div id="supply-status-card" style="background: #ecf0f1; padding: 15px; border-radius: 6px; text-align: center; margin-bottom: 25px; border-left: 4px solid #3498db;">
+                    <div id="no-supply-view">
+                        <p style="color: #7f8c8d; margin-bottom: 10px;">No supply box opened.</p>
+                        <button class="btn" style="margin:0;" onclick="openScannerModal('primary')">Scan Master Pack QR</button>
+                    </div>
+                    <div id="active-supply-view" style="display: none;">
+                        <h4 style="color: #27ae60; margin-bottom: 5px;">ACTIVE BOX</h4>
+                        <p id="pack-qr-display" style="font-family: monospace; font-weight: bold; color: #2c3e50;"></p>
+                        <p style="font-size: 1.5rem; font-weight: bold; color: #2c3e50; margin: 10px 0;"><span id="pack-stock-display">0</span> <span style="font-size: 1rem; font-weight: normal;">pcs remaining</span></p>
+                        <button class="btn btn-warning" style="margin:0; padding: 8px;" onclick="manualCloseBox()">Close Box & Swap</button>
+                    </div>
+                </div>
+
+                <div id="transaction-form" style="opacity: 0.5; pointer-events: none; transition: opacity 0.3s;">
+                    <h3 style="margin-bottom: 15px; border-top: 2px solid #ecf0f1; padding-top: 20px;">🧾 Step 2: Transaction Details</h3>
+                    
+                    <label style="font-weight: bold; margin-bottom: 5px; display: block;">Instructor:</label>
+                    <select id="instructorSelect" onchange="handleInstructorChange()">
+                        <option value="">-- Select Instructor --</option>
+                    </select>
+
+                    <label style="font-weight: bold; margin-bottom: 5px; display: block;">Section:</label>
+                    <select id="sectionSelect" onchange="handleSectionChange()" disabled>
+                        <option value="">-- Select Section --</option>
+                    </select>
+
+                    <label style="font-weight: bold; margin-bottom: 5px; display: block;">Subject:</label>
+                    <select id="subjectSelect" onchange="handleSubjectChange()" disabled>
+                        <option value="">-- Select Subject --</option>
+                    </select>
+
+                    <div style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
+                        <label style="font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; color: #2c3e50;">
+                            <input type="checkbox" id="useLooseStockToggle" onchange="triggerLivePreview()" style="width: 18px; height: 18px;">
+                            ♻️ Use Loose Stock First
+                        </label>
+                    </div>
+
+                    <button class="btn btn-success" id="submitTxBtn" onclick="submitTransaction()" disabled>Select Subject to Continue</button>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: LIVE RECEIPT -->
+            <div class="receipt-panel">
+                <div class="receipt-header">LIVE RECEIPT PREVIEW</div>
+                
+                <div class="live-receipt-content" id="receipt-print-area">
+                    <div class="r-header">
+                        <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
+                        <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
+                        <h3 style="margin: 10px 0 0 0; font-size: 1.3rem; color: #e74c3c;" id="doc-title">Document Title: PREVIEW (NOT RECORDED)</h3>
+                        <p style="margin-top: 5px; font-weight: bold;" id="r-period">For: <span>---</span></p>
+                    </div>
+
+                    <div class="r-grid">
+                        <div>
+                            <p style="margin: 5px 0;">Issued To: <strong id="r-teacher">---</strong></p>
+                            <p style="margin: 5px 0;">Section: <span id="r-section">---</span></p>
+                            <p style="margin: 5px 0;">Subject: <span id="r-subject">---</span></p>
+                        </div>
+                        <div>
+                            <p style="margin: 5px 0;">Date: <span id="r-date">---</span></p>
+                            <p style="margin: 5px 0;">Clerk: <span id="r-staff">---</span></p>
+                            <p style="margin: 5px 0;">Students: <span id="r-headcount">0</span></p>
+                        </div>
+                    </div>
+
+                    <table class="r-table">
+                        <thead>
+                            <tr>
+                                <th>QTY</th>
+                                <th>ITEM DESCRIPTION</th>
+                                <th style="text-align: right;">UNIT PRICE</th>
+                                <th style="text-align: right;">AMOUNT (PHP)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td id="r-qty-table">0</td>
+                                <td>Examination Booklets</td>
+                                <td style="text-align: right;">10.00</td>
+                                <td style="text-align: right;" id="r-amount-table">0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <div style="font-size: 1rem; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 5px 0; font-size: 1.1rem;">Inventory Traceability (The Audit Trail)</h3>
+                        <p style="margin: 3px 0;">Total Booklets Issued: <span id="r-total-issued">0</span></p>
+                        <p style="margin: 3px 0;">Reference Numbers (Allocations):</p>
+                        <ul id="r-log" style="list-style-type: none; padding-left: 20px; margin: 5px 0; font-family: monospace; font-size: 1rem; color: #e74c3c; font-weight: bold;">
+                            <li>Awaiting subject selection...</li>
+                        </ul>
+                    </div>
+
+                    <div style="border: 2px solid #000; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 2px solid #000; font-size: 1.2rem; font-weight: bold; background-color: #f8f9fa !important; -webkit-print-color-adjust: exact;">
+                            <span>Financial Summary</span>
+                            <span>Total Amount: PHP <span id="r-total-bottom">0.00</span></span>
+                        </div>
+                        <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
+                            ☑ Payment Status: PAID
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PERIOD SWITCHER MODAL (ADMIN ONLY) -->
+    <div class="modal-overlay" id="periodModal">
+        <div class="modal-card" style="border-top-color: #e67e22;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">⚙️ Change Exam Period</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">
+                Warning: Changing the active period will reset the distribution demand for all classes. Only do this at the start of a new exam week.
+            </p>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+                <select id="newPeriodSelect" style="flex: 1.2; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                    <option value="1st Sem - Midterms">1st Sem - Midterms</option>
+                    <option value="1st Sem - Finals">1st Sem - Finals</option>
+                    <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
+                    <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+                </select>
+                
+                <!-- INFINITELY DYNAMIC ACADEMIC YEAR SELECTOR -->
+                <select id="newAySelect" style="flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                    <!-- JavaScript will automatically generate the years here based on the server clock -->
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-danger" onclick="closePeriodModal()" style="margin:0; flex:1;">Cancel</button>
+                <button class="btn btn-success" onclick="savePeriod()" style="margin:0; flex:1;">Save Period</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PROACTIVE BRIDGING SCANNER MODAL -->
+    <div class="modal-overlay" id="scannerModal">
+        <div class="modal-card">
+            <h3 id="scanner-modal-title" style="color: #2c3e50; margin-bottom: 10px;">Scan Master Pack</h3>
+            <p id="scanner-modal-msg" style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">
+                Position the QR code inside the frame.
+            </p>
+            <div id="reader-modal"></div>
+            <button class="btn btn-danger" onclick="cancelScannerModal()" style="margin-top: 15px;">Cancel</button>
+        </div>
+    </div>
+
+    <!-- POST-TRANSACTION SUCCESS MODAL -->
+    <div class="modal-overlay" id="successModal">
+        <div class="modal-card" style="border-top-color: #27ae60; max-width: 750px; width: 95%; max-height: 95vh; overflow-y: auto;">
+            <h2 style="color: #27ae60; margin-bottom: 5px;">✅ Transaction Recorded!</h2>
+            <p style="color: #7f8c8d; margin-bottom: 20px;">Review the official receipt below before printing.</p>
+            
+            <!-- EXACT RECEIPT MIRROR CONTAINER -->
+            <div id="modal-receipt-mirror" style="background: #fff; border: 1px solid #bdc3c7; border-radius: 4px; padding: 0; margin-bottom: 20px; text-align: left; box-shadow: inset 0 0 10px rgba(0,0,0,0.05);">
+                <!-- Javascript will inject the cloned receipt here -->
+            </div>
+
+            <div style="display: flex; gap: 15px;">
+                <button class="btn btn-warning" onclick="window.print()" style="margin: 0; flex: 1;">🖨️ Print Physical Receipt</button>
+                <button class="btn btn-success" onclick="serveNext()" style="margin: 0; flex: 1;">Serve Next Instructor</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    
+    // --- 1. GLOBAL STATE & AUTH ---
+    const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+    if (!activeUser) window.location.href = '/login';
+    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+
+    let globalActivePeriod = "Loading...";
+
+    // Turn badge orange and clickable if Admin
+    if (activeUser.role === 'Admin') {
+        document.getElementById('activePeriodBadge').classList.add('admin-mode');
+        document.getElementById('activePeriodBadge').title = "Click to Change Exam Period";
+    }
+
+    // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
+    if (activeUser.role !== 'Admin') {
+            const adminLinks = document.querySelectorAll('.admin-mode');
+            adminLinks.forEach(link => link.style.display = 'none');
+        }
+
+    function logout() {
+        if(confirm("Are you sure you want to log out?")) {
+            localStorage.clear();
+            window.location.href = '/login';
+        }
+    }
+
+    let enrollmentsData = [];
+    let primaryPackQR = localStorage.getItem('bookletlog_active_pack') || null;
+    let primaryPackStock = 0;
+    
+    let bridgingPackQR = null; 
+    let bridgingPackStock = 0;
+    
+    let currentDemand = 0;
+    let html5QrcodeScanner = null;
+    let currentScanIntent = 'primary'; 
+
+    window.onload = function() {
+        fetchActivePeriod(); // Fetch the period FIRST
+        if (primaryPackQR) {
+            checkSavedSupply(primaryPackQR);
+        }
+    };
+
+    // --- 2. PERIOD MANAGEMENT LOGIC ---
+    function fetchActivePeriod() {
+    fetch('/api/active-period')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                if (data.active_period === "UNSET") {
+                    // Lock out the staff completely
+                    document.getElementById('staffLockoutModal').style.display = 'flex';
+                } else {
+                    globalActivePeriod = data.active_period;
+                    document.getElementById('periodText').innerText = "ACTIVE: " + globalActivePeriod;
+                    document.getElementById('r-period').querySelector('span').innerText = globalActivePeriod;
+                    
+                    fetchPendingDistributions();
+                }
+            }
+        });
+}
+
+    // --- DYNAMIC YEAR GENERATOR (STRICT LIMIT) ---
+    function populateAcademicYears(selectedAy) {
+        const aySelect = document.getElementById('newAySelect');
+        aySelect.innerHTML = ''; // Clear out any old options
+        
+        // Get the exact current year from the system clock (e.g., 2026)
+        const currentYear = new Date().getFullYear(); 
+        
+        // Generate only Current Year + 3 Years Forward (0, 1, 2, 3)
+        for (let i = 0; i <= 3; i++) {
+            const startYear = currentYear + i;
+            const endYear = startYear + 1;
+            const ayString = `AY ${startYear}-${endYear}`;
+            
+            let opt = document.createElement('option');
+            opt.value = ayString;
+            opt.text = ayString;
+            
+            if (selectedAy === ayString) {
+                opt.selected = true;
+            }
+            aySelect.appendChild(opt);
+        }
+        
+        // SMART FAILSAFE: If the currently active year is from the past and 
+        // didn't get generated in our strict loop, inject it at the very top 
+        // so the system doesn't break!
+        const existingOptions = Array.from(aySelect.options).map(opt => opt.value);
+        if (selectedAy && !existingOptions.includes(selectedAy)) {
+            let legacyOpt = document.createElement('option');
+            legacyOpt.value = selectedAy;
+            legacyOpt.text = selectedAy + " (Current)";
+            legacyOpt.selected = true;
+            aySelect.insertBefore(legacyOpt, aySelect.firstChild);
+        }
+    }
+
+    function openPeriodModal() {
+        if (activeUser.role !== 'Admin') {
+            alert("Only Administrators are authorized to change the Active Exam Period.");
+            return;
+        }
+        
+        // Default fallbacks
+        let currentPeriod = "1st Sem - Midterms";
+        let currentAy = `AY ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`; 
+        
+        // If an active period is already set in the database, extract it
+        if (globalActivePeriod.includes(" | ")) {
+            let parts = globalActivePeriod.split(" | ");
+            currentPeriod = parts[0];
+            currentAy = parts[1];
+        } 
+        
+        // Set the UI
+        document.getElementById('newPeriodSelect').value = currentPeriod;
+        populateAcademicYears(currentAy); // Auto-generate and select the right year!
+        
+        document.getElementById('periodModal').style.display = 'flex';
+    }
+
+    function closePeriodModal() {
+        document.getElementById('periodModal').style.display = 'none';
+    }
+
+    function savePeriod() {
+        // CONSTRUCT THE NEW BULLETPROOF STRING
+        const newPeriod = document.getElementById('newPeriodSelect').value;
+        const newAy = document.getElementById('newAySelect').value;
+        const combinedPeriod = newPeriod + " | " + newAy;
+        
+        if (combinedPeriod === globalActivePeriod) {
+            closePeriodModal();
+            return;
+        }
+        
+        if (!confirm(`WARNING: You are about to shift the entire system to [${combinedPeriod}].\n\nThis will reset the distribution demands for ALL classes. Proceed?`)) return;
+
+        fetch('/api/active-period', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active_period: combinedPeriod })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                alert(data.message);
+                window.location.reload(); 
+            }
+        });
+    }
+
+    // --- 3. DATA FETCHING ---
+    function fetchPendingDistributions() {
+        fetch('/api/pending-distributions')
+            .then(res => res.json())
+            .then(data => {
+                const dept = activeUser.department;
+                if (dept === 'CS') enrollmentsData = data.data.filter(item => item.section.toUpperCase().includes('BSCS'));
+                else if (dept === 'IT') enrollmentsData = data.data.filter(item => item.section.toUpperCase().includes('BSIT'));
+                else enrollmentsData = data.data;
+
+                populateInstructors();
+            });
+    }
+
+    function populateInstructors() {
+        const select = document.getElementById('instructorSelect');
+        select.innerHTML = '<option value="">-- Select Instructor --</option>'; 
+        [...new Set(enrollmentsData.map(item => item.teacher_name))].forEach(t => {
+            select.innerHTML += `<option value="${t}">${t}</option>`;
+        });
+    }
+
+    // --- 4. UI EVENT HANDLERS ---
+    function handleInstructorChange() {
+        const teacher = document.getElementById('instructorSelect').value;
+        const sectionSelect = document.getElementById('sectionSelect');
+        const subjectSelect = document.getElementById('subjectSelect');
+        
+        sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+        subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+        sectionSelect.disabled = true; subjectSelect.disabled = true;
+        resetReceipt();
+
+        if (teacher) {
+            sectionSelect.disabled = false;
+            [...new Set(enrollmentsData.filter(i => i.teacher_name === teacher).map(i => i.section))].forEach(sec => {
+                sectionSelect.innerHTML += `<option value="${sec}">${sec}</option>`;
+            });
+        }
+    }
+
+    function handleSectionChange() {
+        const teacher = document.getElementById('instructorSelect').value;
+        const section = document.getElementById('sectionSelect').value;
+        const subjectSelect = document.getElementById('subjectSelect');
+        
+        subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+        subjectSelect.disabled = true;
+        resetReceipt();
+
+        if (section) {
+            subjectSelect.disabled = false;
+            enrollmentsData.filter(i => i.teacher_name === teacher && i.section === section).forEach(sub => {
+                let opt = document.createElement('option');
+                opt.value = sub.enrollment_id;
+                opt.dataset.demand = sub.remaining;
+                opt.text = sub.subject;
+                subjectSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function handleSubjectChange() {
+        const select = document.getElementById('subjectSelect');
+        if (select.value) {
+            currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
+            checkProactiveBridging();
+        } else {
+            currentDemand = 0;
+            resetReceipt();
+        }
+    }
+
+    // --- 5. PROACTIVE BRIDGING LOGIC ---
+    function checkProactiveBridging() {
+        if (!primaryPackQR) {
+            alert("Please scan a Master Pack supply box first.");
+            document.getElementById('subjectSelect').value = "";
+            return;
+        }
+
+        const submitBtn = document.getElementById('submitTxBtn');
+        
+        if (currentDemand > (primaryPackStock + bridgingPackStock)) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Scanning Bridging Supply...";
+            openScannerModal('bridge', currentDemand - primaryPackStock);
+        } else {
+            triggerLivePreview();
+        }
+    }
+
+    // --- 6. THE GHOST ENGINE (Live WYSIWYG Receipt) ---
+    function triggerLivePreview() {
+        const enrollmentId = document.getElementById('subjectSelect').value;
+        const btn = document.getElementById('submitTxBtn');
+        
+        if (!enrollmentId) { resetReceipt(); return; }
+
+        btn.disabled = true;
+        btn.innerText = "Calculating allocations...";
+
+        fetch('/api/preview-distribution', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enrollment_id: parseInt(enrollmentId),
+                scanned_pack_qr: primaryPackQR, 
+                bridging_pack_qr: bridgingPackQR, 
+                clerk_name: activeUser.username,
+                use_loose_stock: document.getElementById('useLooseStockToggle').checked
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                paintLiveReceipt(data.preview_log);
+                btn.disabled = false;
+                btn.innerText = "Verify Booklets & Submit Transaction";
+                btn.className = "btn btn-success";
+            } else {
+                alert("Preview Error: " + data.message);
+                btn.innerText = "Error calculating stock";
+            }
+        });
+    }
+
+    function paintLiveReceipt(previewLogString) {
+        document.querySelector('.live-receipt-content').classList.add('active');
+        
+        const teacher = document.getElementById('instructorSelect').value;
+        const sec = document.getElementById('sectionSelect');
+        const sub = document.getElementById('subjectSelect');
+        
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + " " + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+        document.getElementById('r-date').innerText = dateStr;
+        document.getElementById('r-staff').innerText = activeUser.username;
+        document.getElementById('r-teacher').innerText = teacher.toUpperCase();
+        document.getElementById('r-section').innerText = sec.options[sec.selectedIndex].text;
+        document.getElementById('r-subject').innerText = sub.options[sub.selectedIndex].text;
+        
+        document.getElementById('r-headcount').innerText = currentDemand;
+        document.getElementById('r-qty-table').innerText = currentDemand;
+        document.getElementById('r-total-issued').innerText = currentDemand;
+        
+        const amount = (currentDemand * 10).toFixed(2);
+        document.getElementById('r-amount-table').innerText = amount;
+        document.getElementById('r-total-bottom').innerText = amount;
+
+        const logUl = document.getElementById('r-log');
+        logUl.innerHTML = `<li>- ${previewLogString}</li>`;
+    }
+
+    function resetReceipt() {
+        document.querySelector('.live-receipt-content').classList.remove('active');
+        document.getElementById('submitTxBtn').disabled = true;
+        document.getElementById('submitTxBtn').innerText = "Select Subject to Continue";
+        document.getElementById('submitTxBtn').className = "btn";
+        bridgingPackQR = null; 
+        bridgingPackStock = 0;
+    }
+
+    // --- 7. SCANNER & SUPPLY LOGIC ---
+    function checkSavedSupply(qr) {
+        fetch(`/api/pack-status/${qr}`).then(res => res.json()).then(data => {
+            if (data.status === "success" && data.available > 0) {
+                setPrimarySupply(qr, data.available);
+            } else {
+                localStorage.removeItem('bookletlog_active_pack');
+            }
+        });
+    }
+
+    function openScannerModal(intent, deficit = 0) {
+        currentScanIntent = intent;
+        
+        const title = document.getElementById('scanner-modal-title');
+        const msg = document.getElementById('scanner-modal-msg');
+        
+        if (intent === 'primary') {
+            title.innerText = "Scan Master Pack";
+            msg.innerText = "Position the QR code inside the frame to activate supply.";
+        } else {
+            title.innerText = "⚠️ Bridging Required";
+            title.style.color = "#e74c3c";
+            msg.innerText = `You are short ${deficit} booklets. Grab a new Master Pack from inventory and scan it to bridge this transaction.`;
+        }
+
+        document.getElementById('scannerModal').style.display = 'flex';
+        html5QrcodeScanner = new Html5QrcodeScanner("reader-modal", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        html5QrcodeScanner.render(onScanSuccess, (err)=>{});
+    }
+
+    function closeScannerModal() {
+        if(html5QrcodeScanner) html5QrcodeScanner.clear();
+        document.getElementById('scannerModal').style.display = 'none';
+    }
+
+    function cancelScannerModal() {
+        if(html5QrcodeScanner) html5QrcodeScanner.clear();
+        document.getElementById('scannerModal').style.display = 'none';
+        
+        if (currentScanIntent === 'bridge') {
+            document.getElementById('subjectSelect').value = "";
+            resetReceipt();
+        }
+    }
+
+    function onScanSuccess(decodedText) {
+        closeScannerModal();
+        
+        fetch(`/api/pack-status/${decodedText}`).then(res => res.json()).then(data => {
+            if (data.status === "success") {
+                if (currentScanIntent === 'primary') {
+                    setPrimarySupply(data.qr_code, data.available);
+                } else if (currentScanIntent === 'bridge') {
+                    bridgingPackQR = data.qr_code;
+                    bridgingPackStock = data.available;
+                    triggerLivePreview(); 
+                }
+            } else {
+                alert(data.message);
+                if (currentScanIntent === 'bridge') resetReceipt();
+            }
+        });
+    }
+
+    function setPrimarySupply(qr, stock) {
+        primaryPackQR = qr; primaryPackStock = stock;
+        localStorage.setItem('bookletlog_active_pack', qr);
+        document.getElementById('no-supply-view').style.display = "none";
+        document.getElementById('active-supply-view').style.display = "block";
+        document.getElementById('pack-qr-display').innerText = qr;
+        document.getElementById('pack-stock-display').innerText = stock;
+        
+        document.getElementById('transaction-form').style.opacity = "1";
+        document.getElementById('transaction-form').style.pointerEvents = "auto";
+    }
+
+    function manualCloseBox() {
+        if(confirm("Current supply of booklets run out, close this box and scan a new one?")) {
+            localStorage.removeItem('bookletlog_active_pack');
+            primaryPackQR = null; primaryPackStock = 0;
+            document.getElementById('active-supply-view').style.display = "none";
+            document.getElementById('no-supply-view').style.display = "block";
+            
+            document.getElementById('transaction-form').style.opacity = "0.5";
+            document.getElementById('transaction-form').style.pointerEvents = "none";
+            
+            resetReceipt();
+            document.getElementById('instructorSelect').value = "";
+        }
+    }
+
+    // --- 8. THE FINAL SINGLE-SAVE EXECUTION ---
+    // --- THE FINAL SINGLE-SAVE EXECUTION ---
+    function submitTransaction() {
+        if (!confirm("Are you sure the physical booklets match the Live Receipt? This action is permanent.")) return;
+        
+        const btn = document.getElementById('submitTxBtn');
+        btn.disabled = true;
+        btn.innerText = "Writing to Database...";
+
+        fetch('/api/execute-distribution', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enrollment_id: parseInt(document.getElementById('subjectSelect').value),
+                scanned_pack_qr: primaryPackQR,
+                bridging_pack_qr: bridgingPackQR, 
+                clerk_name: activeUser.username,
+                use_loose_stock: document.getElementById('useLooseStockToggle').checked
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                document.getElementById('doc-title').innerText = "Document Title: Official Acknowledgement Receipt";
+                document.getElementById('doc-title').style.color = "#000";
+                
+                // --- CLONE LIVE RECEIPT FOR MODAL MIRROR ---
+                const originalReceipt = document.getElementById('receipt-print-area');
+                const mirrorContainer = document.getElementById('modal-receipt-mirror');
+                
+                mirrorContainer.innerHTML = ''; 
+                const clonedReceipt = originalReceipt.cloneNode(true);
+                clonedReceipt.removeAttribute('id'); 
+                
+                clonedReceipt.style.opacity = '1';
+                clonedReceipt.style.pointerEvents = 'auto';
+                clonedReceipt.style.padding = '25px'; 
+                
+                mirrorContainer.appendChild(clonedReceipt);
+                
+                document.getElementById('successModal').style.display = "flex";
+
+                // Deduct inventory stats in the background (Prompt Removed)
+                if (bridgingPackQR) {
+                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (currentDemand - primaryPackStock));
+                    bridgingPackQR = null;
+                    bridgingPackStock = 0;
+                } else {
+                    primaryPackStock -= currentDemand;
+                    document.getElementById('pack-stock-display').innerText = primaryPackStock;
+                }
+
+            } else {
+                alert("Execution Error: " + data.message);
+                btn.disabled = false;
+                btn.innerText = "Verify Booklets & Submit Transaction";
+            }
+        });
+    }
+
+    function serveNext() {
+        // 1. Close modal and reset form
+        document.getElementById('successModal').style.display = "none";
+        document.getElementById('instructorSelect').value = "";
+        handleInstructorChange();
+        
+        // 2. Fetch fresh demands
+        fetchPendingDistributions(); 
+        
+        // 3. Trigger the Empty Box prompt AFTER the transaction is fully cleared
+        if (primaryPackStock <= 0 && primaryPackQR !== null) {
+            manualCloseBox();
+        }
+    }
+
+    // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+    // We removed the 'if Admin' check here so ALL users fetch the alert status
+    fetch('/api/dss-alert')
+        .then(response => response.json())
+        .then(data => {
+            const badge = document.getElementById('notifBadge');
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBell');
+
+            if (data.alert) {
+                // 1. Show the red badge and alert panel to EVERYONE (Clerks & Admins)
+                badge.style.display = 'inline-block';
+                bell.style.color = 'white'; 
+                
+                // If Admin, show the link to the generator. If Clerk, just show the warning.
+                if (activeUser.role === 'Admin') {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                } else {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                }
+                
+                // 2. Trigger the aggressive Modal ONLY for the Admin, if not acknowledged yet this session
+                if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                    showDSSModal(data.message, data.reams_needed);
+                }
+            } else {
+                // No deficit? Keep the bell quiet for everyone.
+                badge.style.display = 'none';
+                panel.style.borderLeftColor = '#27ae60'; 
+                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            }
+        });
+
+    // Toggle the dropdown panel when clicking the bell
+    function toggleNotifPanel() {
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Only the Admin will ever trigger this function
+    function showDSSModal(message, reams) {
+        const modalHtml = `
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                    <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                    <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                    <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                    <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function dismissDSS() {
+        sessionStorage.setItem('dss_acknowledged', 'true');
+        document.getElementById('dssModal').remove();
+        
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = 'block'; 
+        setTimeout(() => { panel.style.display = 'none'; }, 2500);
+    }
+</script>
+</body>
+</html>

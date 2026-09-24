@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Registration - Proposed System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
+        .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); width: 100%; max-width: 600px; text-align: center; margin-top: 20px; }
+        
+        /* Dynamic List Styles */
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .input-group input { flex: 1; padding: 15px; font-size: 1.1rem; border: 2px solid #ccc; border-radius: 5px; }
+        .btn-add { background-color: #f39c12; color: white; border: none; padding: 0 25px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .btn-add:hover { background-color: #e67e22; }
+        
+        .batch-list { list-style: none; padding: 0; margin-bottom: 20px; text-align: left; }
+        .batch-item { background: #ecf0f1; margin-bottom: 8px; padding: 12px 15px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 1.1rem; }
+        .remove-btn { color: #e74c3c; cursor: pointer; font-weight: bold; border: none; background: none; font-size: 1.2rem; }
+        
+        .btn-primary { background-color: #3498db; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 1.1rem; cursor: pointer; font-weight: bold; }
+        
+        .qr-label-container { display: none; margin-top: 30px; padding: 20px; border: 2px dashed #bdc3c7; border-radius: 8px; background: #fff; }
+        .qr-label-container img { max-width: 200px; margin: 10px 0; }
+        .btn-print { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            .sidebar { display: none; }
+            #printableLabel, #printableLabel * { visibility: visible; }
+            #printableLabel { position: absolute; left: 0; top: 0; padding: 20px; border: 1px solid #000; text-align: center; width: 300px; }
+            .btn-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <!-- Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link active">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link ">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link ">📜 Transaction Trail</a>
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.3s;">Log Out</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="card">
+            <h2 style="margin-bottom: 10px; color: #2c3e50;">Bundle & Activate Supply</h2>
+            <p style="margin-bottom: 25px; color: #7f8c8d; font-size: 0.95rem;">
+                Scan or enter pending Batch IDs. The system will verify they are contiguous and bundle them into a single Supply Pack.
+            </p>
+            
+            <div class="input-group">
+                <input type="text" id="batchIdInput" placeholder="Enter BATCH ID..." autocomplete="off">
+                <button class="btn-add" onclick="addBatch()">Add</button>
+            </div>
+            
+            <ul class="batch-list" id="batchListUI"></ul>
+            
+            <button class="btn-primary" id="submitBtn" onclick="activateBatches()">Combine & Generate Label</button>
+            <p id="statusMsg" style="margin-top: 15px; font-weight: bold;"></p>
+
+            <div class="qr-label-container" id="printableLabel">
+                <h3 style="font-size: 1.2rem; margin-bottom: 5px;">BOOKLETLOG SUPPLY PACK</h3>
+                <p id="labelPackId" style="font-family: monospace; font-size: 1rem; color: #333; font-weight: bold;"></p>
+                <p id="labelBookletCount" style="color: #555; font-size: 0.9rem; margin-bottom: 5px;"></p>
+                <img id="qrImage" src="" alt="Pack QR Code">
+                <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
+                <button class="btn-print" onclick="window.print()">🖨️ Print Pack Label</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTHENTICATION GUARD ---
+        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        
+        if (!activeUser) {
+            window.location.href = '/login';
+        } else {
+            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+            
+            if (activeUser.role !== 'Admin') {
+                const adminLinks = document.querySelectorAll('.admin-only');
+                adminLinks.forEach(link => link.style.display = 'none');
+            }
+        }
+
+        function logout() {
+            if(confirm("Are you sure you want to log out?")) {
+                localStorage.removeItem('bookletlog_user');
+                localStorage.removeItem('bookletlog_active_pack'); 
+                window.location.href = '/login';
+            }
+        }
+
+        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+        fetch('/api/dss-alert')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('notifBadge');
+                const panel = document.getElementById('notifPanel');
+                const bell = document.getElementById('notifBell');
+
+                if (data.alert) {
+                    badge.style.display = 'inline-block';
+                    bell.style.color = 'white'; 
+                    
+                    if (activeUser.role === 'Admin') {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                    } else {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                    }
+                    
+                    if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                        showDSSModal(data.message, data.reams_needed);
+                    }
+                } else {
+                    badge.style.display = 'none';
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            });
+
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function showDSSModal(message, reams) {
+            const modalHtml = `
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        function dismissDSS() {
+            sessionStorage.setItem('dss_acknowledged', 'true');
+            document.getElementById('dssModal').remove();
+            setTimeout(() => { document.getElementById('notifPanel').style.display = 'none'; }, 2500);
+        }
+
+
+        let batchesToActivate = [];
+
+        document.getElementById("batchIdInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                addBatch();
+            }
+        });
+
+        function addBatch() {
+            const input = document.getElementById('batchIdInput');
+            const val = input.value.trim();
+            if (val && !batchesToActivate.includes(val)) {
+                batchesToActivate.push(val);
+                renderList();
+            }
+            input.value = '';
+            input.focus();
+        }
+
+        function removeBatch(val) {
+            batchesToActivate = batchesToActivate.filter(b => b !== val);
+            renderList();
+        }
+
+        function renderList() {
+            const ul = document.getElementById('batchListUI');
+            ul.innerHTML = '';
+            batchesToActivate.forEach(b => {
+                const li = document.createElement('li');
+                li.className = 'batch-item';
+                li.innerHTML = `<span>${b}</span> <button class="remove-btn" onclick="removeBatch('${b}')">×</button>`;
+                ul.appendChild(li);
+            });
+        }
+
+        async function activateBatches() {
+            if (batchesToActivate.length === 0) {
+                alert("Please add at least one Batch ID to combine.");
+                return;
+            }
+
+            const msg = document.getElementById('statusMsg');
+            const btn = document.getElementById('submitBtn');
+            const labelContainer = document.getElementById('printableLabel');
+            
+            btn.disabled = true;
+            msg.style.color = '#333';
+            msg.innerText = "Verifying contiguity and bundling...";
+            labelContainer.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/activate-batch', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ batch_ids: batchesToActivate })
+                });
+                
+                const data = await response.json();
+
+                if (response.ok) {
+                    msg.style.color = "green";
+                    msg.innerText = data.message;
+                    
+                    document.getElementById('labelPackId').innerText = data.pack_id;
+                    document.getElementById('labelBookletCount').innerText = `Contains ${data.total_booklets} Booklets`;
+                    document.getElementById('qrImage').src = data.qr_code_base64;
+                    labelContainer.style.display = 'block';
+                    
+                    // --- ENHANCED: HTML5 CANVAS STICKER GENERATOR ---
+                    generateAndDownloadSticker(data.pack_id, data.total_booklets, data.qr_code_base64);
+                    
+                    batchesToActivate = []; 
+                    renderList(); 
+                } else {
+                    msg.style.color = "red";
+                    msg.innerText = `❌ Error: ${data.detail}`;
+                }
+            } catch (error) {
+                msg.style.color = "red";
+                msg.innerText = "❌ Network error connecting to database.";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Function to draw a proper physical box label and trigger the download
+        function generateAndDownloadSticker(packId, bookletCount, base64QR) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size (e.g., 400x500 pixels for a nice rectangular sticker)
+            canvas.width = 400;
+            canvas.height = 500;
+            
+            // Draw white background
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw a subtle border for cutting/printing
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+            
+            // Set up text alignment
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#000000";
+            
+            // Draw Title
+            ctx.font = "bold 24px Arial";
+            ctx.fillText("BOOKLETLOG SUPPLY PACK", canvas.width / 2, 60);
+            
+            // Draw Pack ID
+            ctx.font = "bold 20px monospace";
+            ctx.fillText(packId, canvas.width / 2, 100);
+            
+            // Draw Booklet Count
+            ctx.font = "18px Arial";
+            ctx.fillText(`Contains ${bookletCount} Booklets`, canvas.width / 2, 135);
+            
+            // Load and draw the QR Code image asynchronously
+            const qrImg = new Image();
+            qrImg.onload = function() {
+                // Determine square QR size and perfectly center it
+                const qrSize = 250;
+                const xPos = (canvas.width - qrSize) / 2;
+                const yPos = 160;
+                ctx.drawImage(qrImg, xPos, yPos, qrSize, qrSize);
+                
+                // Draw Footer Instructions
+                ctx.font = "italic 16px Arial";
+                ctx.fillStyle = "#555555";
+                ctx.fillText("Scan this label during distribution.", canvas.width / 2, 450);
+                
+                // Trigger the final download of the composed Canvas
+                const finalImageURL = canvas.toDataURL("image/png");
+                const downloadLink = document.createElement("a");
+                downloadLink.href = finalImageURL;
+                downloadLink.download = `${packId}_LABEL.png`; 
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            };
+            qrImg.src = base64QR;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Receipt Portal</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; min-height: 100vh; }
+
+        /* Public Header */
+        .header { background-color: #2c3e50; color: white; padding: 20px 40px; text-align: center; }
+        .header h1 { font-size: 1.5rem; margin: 0; letter-spacing: 1px; }
+
+        /* Main Container */
+        .container { flex: 1; padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+
+        /* Card Header (Title & Buttons Layout) */
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; flex-wrap: wrap; gap: 15px; }
+        .card-title-group h2 { color: #2c3e50; margin-bottom: 5px; }
+        .card-title-group p { color: #7f8c8d; margin: 0; }
+        
+        .card-actions { display: flex; gap: 10px; }
+        .btn-action-top { border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.3s; display: flex; align-items: center; gap: 6px; }
+        .btn-clear { background-color: #e74c3c; color: white; }
+        .btn-clear:hover { background-color: #c0392b; }
+        .btn-refresh { background-color: #34495e; color: white; }
+        .btn-refresh:hover { background-color: #2c3e50; }
+
+        /* Filter Section Styles */
+        .filter-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; align-items: center; }
+        .filter-container > select { flex: 1 1 180px; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
+
+        /* Dedicated Date Range Wrapper */
+        .date-range-group { display: flex; flex: 2 1 320px; gap: 10px; align-items: center; }
+        .date-range-group input[type="date"] { flex: 1; width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; color: #2c3e50; text-transform: uppercase; font-size: 0.85rem; }
+        tr:hover { background-color: #f1f2f6; }
+
+        .btn-view { background-color: #27ae60; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-view:hover { background-color: #219653; }
+
+        /* Modal Receipt Base Styles */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 40px 20px; }
+        .receipt-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 700px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.3); margin: auto; }
+        .btn-close { background-color: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%; }
+        .btn-print { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%; }
+
+        /* --- PRINT STYLES --- */
+        @media print {
+            body * { visibility: hidden; } 
+            .modal-overlay { position: absolute; left: 0; top: 0; padding: 0; background: none; overflow: visible; display: block !important; }
+            .receipt-card { box-shadow: none; border-radius: 0; max-width: 100%; width: 100%; padding: 0; margin: 0; }
+            #receipt-print-area, #receipt-print-area * { visibility: visible; } 
+            #receipt-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header no-print">
+        <h1> Public Receipt Portal</h1>
+    </div>
+
+    <div class="container no-print">
+        <div class="card">
+            
+            <!-- HEADER LAYOUT: Titles on Left, Buttons on Right -->
+            <div class="card-header">
+                <div class="card-title-group">
+                    <h2>Retrieve Distribution Receipt</h2>
+                    <p>Use the filters below to locate and download your official acknowledgement receipt.</p>
+                </div>
+                <div class="card-actions">
+                    <button class="btn-action-top btn-clear" onclick="clearFilters()" title="Clear all search filters">❌ Clear Filters</button>
+                    <button class="btn-action-top btn-refresh" onclick="refreshData()" title="Pull latest records from server">🔄 Refresh Data</button>
+                </div>
+            </div>
+
+            <!-- ADVANCED DYNAMIC FILTERS -->
+            <div class="filter-container">
+                
+                <!-- DATE RANGE FILTER -->
+                <div class="date-range-group">
+                    <input type="date" id="filterStartDate" onchange="applyFilters()" title="Start Date">
+                    <span style="font-weight: bold; color: #7f8c8d;">to</span>
+                    <input type="date" id="filterEndDate" onchange="applyFilters()" title="End Date">
+                </div>
+
+                <select id="filterTeacher" onchange="applyFilters()">
+                    <option value="">-- All Instructors --</option>
+                </select>
+
+                <select id="filterDept" onchange="onDeptChange()">
+                    <option value="">-- All Departments --</option>
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                </select>
+
+                <select id="filterSection" onchange="applyFilters()">
+                    <option value="">-- All Sections --</option>
+                </select>
+            </div>
+
+            <table id="receiptsTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Instructor</th>
+                        <th>Section</th>
+                        <th>Subject</th>
+                        <th>Qty</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- FORMATTED OFFICIAL RECEIPT MODAL -->
+    <div class="modal-overlay" id="receiptModal">
+        <div class="receipt-card">
+
+            <div id="receipt-print-area" style="font-family: 'Times New Roman', Times, serif; color: #000; padding: 10px;">
+                <!-- HEADER -->
+                <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 15px;">
+                    <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
+                    <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
+                    <h3 style="margin: 10px 0 0 0; font-size: 1.3rem;">Document Title: Official Acknowledgement Receipt</h3>
+                    <p style="margin-top: 5px; font-weight: bold; font-size: 1.1rem;">For: <span id="r-period" style="color: #e74c3c;"></span></p>
+                </div>
+
+                <!-- TRANSACTION DETAILS -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 1rem; border-bottom: 1px solid #000; padding-bottom: 15px; margin-bottom: 15px;">
+                    <div>
+                        <p style="margin: 5px 0;">Issued To (Teacher): <strong id="r-teacher"></strong></p>
+                        <p style="margin: 5px 0;">Section: <span id="r-section"></span></p>
+                        <p style="margin: 5px 0;">Subject: <span id="r-subject"></span></p>
+                    </div>
+                    <div>
+                        <p style="margin: 5px 0;">Date & Time: <span id="r-date"></span></p>
+                        <p style="margin: 5px 0;">Issued By (Staff): <span id="r-staff"></span></p>
+                        <p style="margin: 5px 0;">Number of Students: <span id="r-headcount"></span></p>
+                    </div>
+                </div>
+
+                <!-- ITEMIZED BILLING -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 1rem;">
+                    <thead style="border-bottom: 2px solid #000;">
+                        <tr>
+                            <th style="text-align: left; padding-bottom: 8px;">QTY</th>
+                            <th style="text-align: left; padding-bottom: 8px;">ITEM DESCRIPTION</th>
+                            <th style="text-align: right; padding-bottom: 8px;">UNIT PRICE (PHP)</th>
+                            <th style="text-align: right; padding-bottom: 8px;">AMOUNT (PHP)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="padding-top: 10px;" id="r-qty-table">0</td>
+                            <td style="padding-top: 10px;">Examination Booklets</td>
+                            <td style="text-align: right; padding-top: 10px;">10.00</td>
+                            <td style="text-align: right; padding-top: 10px;" id="r-amount-table">0.00</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- INVENTORY TRACEABILITY -->
+                <div style="font-size: 1rem; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 5px 0; font-size: 1.1rem;">Inventory Traceability (The Audit Trail)</h3>
+                    <p style="margin: 3px 0;">Total Booklets Issued: <span id="r-total-issued"></span></p>
+                    <p style="margin: 3px 0;">Reference Numbers (Sequential Batch):</p>
+                    <ul id="r-log" style="list-style-type: none; padding-left: 20px; margin: 5px 0; font-family: monospace; font-size: 1rem; color: #333;"></ul>
+                </div>
+
+                <!-- FINANCIAL SUMMARY -->
+                <div style="border: 2px solid #000; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 2px solid #000; font-size: 1.2rem; font-weight: bold; background-color: #f8f9fa !important; -webkit-print-color-adjust: exact;">
+                        <span>Financial Summary</span>
+                        <span>Unit Price: PHP 10.00</span>
+                        <span>Total Amount: PHP <span id="r-total-bottom"></span></span>
+                    </div>
+                    <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
+                        ☑ Payment Status: FULLY PAID
+                    </div>
+                </div>
+
+                <div style="text-align: center; font-size: 0.85rem; color: #555; margin-top: 15px;">
+                    [SYSTEM GENERATED DOCUMENT] - Do not lose this copy.
+                </div>
+            </div>
+
+            <div class="no-print">
+                <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                <button class="btn-close" onclick="closeReceipt()">Close</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let globalReceipts = [];
+    let allSections = [];
+
+    window.onload = function() {
+        fetchData();
+    };
+
+    function fetchData() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>';
+
+        fetch('/api/public-receipts')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    // SORT NEWEST FIRST
+                    globalReceipts = data.data.sort((a, b) => {
+                        return new Date(b.date) - new Date(a.date);
+                    });
+
+                    populateDropdowns();
+                    applyFilters();
+                }
+            })
+            .catch(err => {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+            });
+    }
+
+    function refreshData() {
+        // Clear all inputs then pull fresh data from DB
+        clearFilterInputs();
+        fetchData();
+    }
+
+    function clearFilters() {
+        // Just clear the UI inputs and reset the view instantly (no network call)
+        clearFilterInputs();
+        updateSectionDropdown(""); 
+        applyFilters();
+    }
+    
+    function clearFilterInputs() {
+        document.getElementById('filterStartDate').value = "";
+        document.getElementById('filterEndDate').value = "";
+        document.getElementById('filterTeacher').value = "";
+        document.getElementById('filterDept').value = "";
+        document.getElementById('filterSection').value = "";
+    }
+
+    function populateDropdowns() {
+        const teacherSelect = document.getElementById('filterTeacher');
+        const uniqueTeachers = [...new Set(globalReceipts.map(item => item.teacher))].sort();
+
+        teacherSelect.innerHTML = '<option value="">-- All Instructors --</option>';
+        uniqueTeachers.forEach(t => {
+            teacherSelect.innerHTML += `<option value="${t}">${t}</option>`;
+        });
+
+        allSections = [...new Set(globalReceipts.map(item => item.section))].sort();
+        updateSectionDropdown("");
+    }
+
+    function onDeptChange() {
+        const dept = document.getElementById('filterDept').value;
+        updateSectionDropdown(dept);
+        document.getElementById('filterSection').value = ""; 
+        applyFilters();
+    }
+
+    function updateSectionDropdown(dept) {
+        const sectionSelect = document.getElementById('filterSection');
+        sectionSelect.innerHTML = '<option value="">-- All Sections --</option>';
+
+        let filteredSections = allSections;
+
+        if (dept === 'CS') {
+            filteredSections = allSections.filter(s => s.toUpperCase().includes('BSCS'));
+        } else if (dept === 'IT') {
+            filteredSections = allSections.filter(s => s.toUpperCase().includes('BSIT'));
+        }
+
+        filteredSections.forEach(s => {
+            sectionSelect.innerHTML += `<option value="${s}">${s}</option>`;
+        });
+    }
+
+    function applyFilters() {
+        const startDateVal = document.getElementById('filterStartDate').value;
+        const endDateVal = document.getElementById('filterEndDate').value;
+        const teacher = document.getElementById('filterTeacher').value;
+        const dept = document.getElementById('filterDept').value;
+        const section = document.getElementById('filterSection').value;
+
+        let filtered = globalReceipts;
+
+        // Apply Date Range Logic
+        if (startDateVal || endDateVal) {
+            let startObj = startDateVal ? new Date(startDateVal) : null;
+            if (startObj) startObj.setHours(0, 0, 0, 0); // Start of the day
+
+            let endObj = endDateVal ? new Date(endDateVal) : null;
+            if (endObj) endObj.setHours(23, 59, 59, 999); // End of the day
+
+            filtered = filtered.filter(row => {
+                const rowDateObj = new Date(row.date); 
+                
+                if (startObj && endObj) {
+                    return rowDateObj >= startObj && rowDateObj <= endObj;
+                } else if (startObj) {
+                    return rowDateObj >= startObj;
+                } else if (endObj) {
+                    return rowDateObj <= endObj;
+                }
+                return true;
+            });
+        }
+
+        if (teacher) {
+            filtered = filtered.filter(row => row.teacher === teacher);
+        }
+        if (dept === 'CS') {
+            filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
+        } else if (dept === 'IT') {
+            filtered = filtered.filter(row => row.section.toUpperCase().includes('BSIT'));
+        }
+        if (section) {
+            filtered = filtered.filter(row => row.section === section);
+        }
+
+        renderTable(filtered);
+    }
+
+    function renderTable(dataArray) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        if (dataArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">No distribution records match your filters.</td></tr>';
+            return;
+        }
+
+        dataArray.forEach((row, index) => {
+            const globalIndex = globalReceipts.indexOf(row);
+
+            let tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.date}</td>
+                <td><strong>${row.teacher}</strong></td>
+                <td>${row.section}</td>
+                <td>${row.subject}</td>
+                <td>${row.qty} pcs</td>
+                <td><button class="btn-view" onclick="openReceipt(${globalIndex})">View Receipt</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function openReceipt(index) {
+        const data = globalReceipts[index];
+
+        document.getElementById('r-period').innerText = data.exam_period; 
+        document.getElementById('r-date').innerText = data.date;
+        document.getElementById('r-teacher').innerText = data.teacher.toUpperCase();
+        document.getElementById('r-section').innerText = data.section;
+        document.getElementById('r-subject').innerText = data.subject;
+        document.getElementById('r-headcount').innerText = data.qty;
+        document.getElementById('r-staff').innerText = data.staff.toUpperCase();
+
+        document.getElementById('r-qty-table').innerText = data.qty;
+        document.getElementById('r-amount-table').innerText = data.amount.toFixed(2);
+
+        document.getElementById('r-total-issued').innerText = data.qty;
+        document.getElementById('r-total-bottom').innerText = data.amount.toFixed(2);
+
+        const logUl = document.getElementById('r-log');
+        logUl.innerHTML = "";
+        data.log.forEach(entry => {
+            let li = document.createElement('li');
+            li.innerText = "- " + entry;
+            logUl.appendChild(li);
+        });
+
+        document.getElementById('receiptModal').style.display = 'flex';
+    }
+
+    function closeReceipt() {
+        document.getElementById('receiptModal').style.display = 'none';
+    }
+</script>
+</body>
+</html>

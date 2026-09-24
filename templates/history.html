@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Trail - Proposed System</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        /* Main Content */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .card-title { margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Filter Section Styles */
+        .filter-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; align-items: center; }
+        .filter-container select, .filter-container input[type="date"], .filter-container input[type="text"] { flex: 1; min-width: 180px; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; }
+        .filter-container select, .filter-container input[type="date"] { cursor: pointer; }
+        .btn-refresh { background-color: #34495e; color: white; border: none; padding: 12px 15px; border-radius: 4px; cursor: pointer; font-size: 1.2rem; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; color: #2c3e50; font-weight: bold; text-transform: uppercase; font-size: 0.9rem; }
+        tr:hover { background-color: #f1f2f6; }
+        .badge { background-color: #27ae60; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; }
+        .ref-text { font-family: monospace; color: #e74c3c; font-weight: bold; line-height: 1.5; }
+        
+        /* Return Button */
+        .return-btn { background-color: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .return-btn:hover { background-color: #d68910; }
+        
+        /* --- RETURN MODAL STYLES --- */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; width: 100%; border-top: 6px solid #f39c12; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .modal-card h3 { color: #d68910; margin-bottom: 10px; text-align: center; }
+        .modal-card p { color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px; }
+        
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
+        .form-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        
+        /* Selectable Checkbox Grid */
+        .ref-search { width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 4px; font-size: 1rem; margin-bottom: 15px; font-family: monospace; outline: none; transition: border-color 0.3s; }
+        .ref-search:focus { border-color: #2980b9; box-shadow: 0 0 5px rgba(52, 152, 219, 0.5); }
+        .ref-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 250px; overflow-y: auto; background: #ecf0f1; padding: 15px; border-radius: 4px; border: 1px solid #bdc3c7; margin-bottom: 10px; }
+        .ref-item { display: flex; align-items: center; gap: 8px; font-family: monospace; font-size: 0.9rem; color: #2c3e50; }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-group button { flex: 1; padding: 12px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        .btn-execute { background-color: #f39c12; color: white; }
+        .btn-execute:hover { background-color: #d68910; }
+        .btn-cancel { background-color: #bdc3c7; color: #2c3e50; }
+        .btn-cancel:hover { background-color: #95a5a6; }
+
+        /* Auth Inputs */
+        .auth-input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <!-- Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link ">📊 Sales Analytics</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/generator" class="nav-link ">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link ">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link active">📜 Transaction Trail</a>
+        
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="card">
+            <div class="card-title">
+                <h2>Transaction Ledger & Audit Trail</h2>
+            </div>
+            
+            <!-- DYNAMIC FILTERS SECTION -->
+            <div class="filter-container">
+                <input type="text" id="filterRef" onkeyup="triggerDatabaseSearch()" placeholder="🔍 Find Ref No. (e.g. 0018)" style="flex: 1.5; font-family: monospace; border: 2px solid #3498db; outline: none; transition: 0.3s;">
+
+                <input type="date" id="filterDate" onchange="applyFilters()" title="Filter by exact date">
+
+                <select id="filterTeacher" onchange="applyFilters()">
+                    <option value="">-- All Instructors --</option>
+                </select>
+                
+                <select id="filterDept" onchange="onDeptChange()">
+                    <option value="">-- All Departments --</option>
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                </select>
+
+                <select id="filterSection" onchange="applyFilters()">
+                    <option value="">-- All Sections --</option>
+                </select>
+                
+                <button class="btn-refresh" onclick="refreshData()" title="Refresh Database">🔄</button>
+            </div>
+
+            <table id="auditTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Instructor</th>
+                        <th>Section</th>
+                        <th>Subject</th>
+                        <th>Qty</th>
+                        <th>Fee Collected</th>
+                        <th>Allocated References</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="8" style="text-align: center;">Loading records...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ADMIN OVERRIDE AUTHORIZATION MODAL (Password Only) -->
+    <div class="modal-overlay" id="adminAuthModal">
+        <div class="modal-card" style="border-top-color: #c0392b; max-width: 400px;">
+            <h3 style="color: #c0392b; margin-bottom: 10px;">🔒 Admin Override Required</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
+                Only System Administrators have the clearance to process returns. Please ask an Admin to enter their password to proceed.
+            </p>
+            
+            <div class="form-group" style="text-align: center;">
+                <!-- Input for password only -->
+                <input type="password" id="authAdminPass" class="auth-input" placeholder="Admin Password">
+                <div id="authErrorMsg" style="color: #e74c3c; font-size: 0.85rem; margin-bottom: 10px; display: none; font-weight: bold;"></div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn-cancel" onclick="closeAdminAuthModal()">Cancel</button>
+                <button class="btn-execute" style="background-color: #c0392b;" onclick="verifyAdminAuth()">Authorize</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RETURN TO LOOSE STOCK MODAL -->
+    <div class="modal-overlay" id="returnModal">
+        <div class="modal-card">
+            <h3>Process Exception / Return</h3>
+            <p>
+                Select the booklets returned by <strong id="modalTeacherName" style="color: #2c3e50;"></strong>. <br>
+                <span style="font-size: 0.85rem;"><em>Usable booklets enter Loose Stock. Defective booklets are permanently voided and will prompt a replacement.</em></span>
+            </p>
+            
+            <input type="hidden" id="pendingReturnEnrollmentId">
+            
+            <div class="form-group">
+                <label>Reason for Return:</label>
+                <select id="returnReason">
+                    <option value="Student Dropped Class">Student Dropped Class</option>
+                    <option value="Misprint / Defect">Misprint / Defect</option>
+                    <option value="Excess Supply">Excess Supply Issued</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Select Returned Booklets:</label>
+                <input type="text" id="refSearchInput" class="ref-search" onkeyup="filterModalReferences()" placeholder="🔍 Type REF-0001...">
+                
+                <div class="ref-grid" id="refGridContainer">
+                    <div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading references...</div>
+                </div>
+                <p style="font-size: 0.8rem; color: #e74c3c; text-align: right; margin-top: 5px;">Total Selected: <span id="selectedCount">0</span></p>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn-cancel" onclick="closeReturnModal()">Cancel</button>
+                <button class="btn-execute" onclick="executeReturn()">Move to Loose Stock</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    let globalHistory = [];
+    let allSections = [];
+    let matchedKeys = null; 
+    let systemActivePeriod = "";
+    
+    // Temporarily holds the target return data while waiting for Admin to login
+    let pendingReturnAction = null; 
+
+    // --- AUTHENTICATION INIT ---
+    const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+    if (!activeUser) window.location.href = '/login';
+    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+
+    function logout() {
+        if(confirm("Are you sure you want to log out?")) {
+            localStorage.removeItem('bookletlog_user');
+            window.location.href = '/login';
+        }
+    }
+
+    // --- DATA FETCHING & CHRONOLOGICAL SORTING ---
+    window.onload = function fetchData() {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading records...</td></tr>';
+        
+        fetch('/api/history-data')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    systemActivePeriod = data.active_period; 
+                    
+                    globalHistory = data.data.sort((a, b) => {
+                        let dateA = new Date(a.date.replace(/-/g, ' '));
+                        let dateB = new Date(b.date.replace(/-/g, ' '));
+                        return dateB - dateA; 
+                    });
+                    
+                    populateDropdowns();
+                    applyFilters();
+                }
+            })
+            .catch(err => {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+            });
+    }
+
+    function refreshData() {
+        document.getElementById('filterRef').value = ""; 
+        document.getElementById('filterDate').value = "";
+        document.getElementById('filterTeacher').value = "";
+        document.getElementById('filterDept').value = "";
+        document.getElementById('filterSection').value = "";
+        matchedKeys = null; 
+        fetchData();
+    }
+
+    function populateDropdowns() {
+        const teacherSelect = document.getElementById('filterTeacher');
+        const uniqueTeachers = [...new Set(globalHistory.map(item => item.teacher))].sort();
+        teacherSelect.innerHTML = '<option value="">-- All Instructors --</option>';
+        uniqueTeachers.forEach(t => { teacherSelect.innerHTML += `<option value="${t}">${t}</option>`; });
+
+        allSections = [...new Set(globalHistory.map(item => item.section))].sort();
+        updateSectionDropdown("");
+    }
+
+    function onDeptChange() {
+        const dept = document.getElementById('filterDept').value;
+        updateSectionDropdown(dept);
+        document.getElementById('filterSection').value = ""; 
+        applyFilters();
+    }
+
+    function updateSectionDropdown(dept) {
+        const sectionSelect = document.getElementById('filterSection');
+        sectionSelect.innerHTML = '<option value="">-- All Sections --</option>';
+        let filteredSections = allSections;
+        if (dept === 'CS') filteredSections = allSections.filter(s => s.toUpperCase().includes('BSCS'));
+        else if (dept === 'IT') filteredSections = allSections.filter(s => s.toUpperCase().includes('BSIT'));
+        filteredSections.forEach(s => { sectionSelect.innerHTML += `<option value="${s}">${s}</option>`; });
+    }
+
+    // --- BULLETPROOF DATABASE SEARCH ---
+    let searchTimeout = null;
+
+    function triggerDatabaseSearch() {
+        clearTimeout(searchTimeout); 
+        searchTimeout = setTimeout(() => {
+            const searchRef = document.getElementById('filterRef').value.trim();
+            if (!searchRef) {
+                matchedKeys = null;
+                applyFilters();
+                return;
+            }
+            fetch(`/api/search-transaction?ref=${searchRef}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        matchedKeys = data.matched_keys; 
+                        applyFilters(); 
+                    }
+                });
+        }, 500); 
+    }
+
+    function applyFilters() {
+        const targetDate = document.getElementById('filterDate').value;
+        const teacher = document.getElementById('filterTeacher').value;
+        const dept = document.getElementById('filterDept').value;
+        const section = document.getElementById('filterSection').value;
+        
+        let filtered = globalHistory;
+        
+        if (matchedKeys !== null) {
+            filtered = filtered.filter(row => {
+                let rowKey = `${row.enrollment_id}|${row.exam_period}`;
+                return matchedKeys.includes(rowKey);
+            });
+        }
+        
+        if (targetDate) {
+            const selectedDateObj = new Date(targetDate);
+            filtered = filtered.filter(row => new Date(row.date).toDateString() === selectedDateObj.toDateString());
+        }
+        if (teacher) filtered = filtered.filter(row => row.teacher === teacher);
+        if (dept === 'CS') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
+        else if (dept === 'IT') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSIT'));
+        if (section) filtered = filtered.filter(row => row.section === section);
+        
+        renderTable(filtered);
+    }
+
+    function renderTable(dataArray) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        
+        if (dataArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #7f8c8d;">No records match your filters.</td></tr>';
+            return;
+        }
+
+        dataArray.forEach(row => {
+            let tr = document.createElement('tr');
+            let actionHtml = "";
+            
+            if (row.days_old > 21) {
+                actionHtml = `<span class="badge" style="background-color: #2c3e50; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="The 21-day return window for this transaction has permanently expired.">🔒 Expired</span>`;
+            } 
+            else if (systemActivePeriod === row.exam_period || row.exam_period === "Legacy (No Period)") {
+                let safeTeacher = row.teacher.replace(/'/g, "\\'"); 
+                actionHtml = `<button class="return-btn" onclick="requestReturnAccess(${row.enrollment_id}, '${safeTeacher}', '${row.exam_period}')">↩ Process Return</button>`;
+            }
+            else {
+                actionHtml = `<span class="badge" style="background-color: #95a5a6; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="This specific exam period has ended.">🔒 Period Closed</span>`;
+            }
+            
+            tr.innerHTML = `
+                <td>${row.date}</td>
+                <td>
+                    <strong>${row.teacher}</strong><br>
+                    <small style="color: #3498db; font-weight: bold;">[${row.exam_period || 'Unknown Period'}]</small>
+                </td>
+                <td>${row.section}</td>
+                <td>${row.subject}</td>
+                <td><span class="badge">${row.qty}</span></td>
+                <td>PHP ${row.amount}.00</td>
+                <td class="ref-text">${row.refs}</td>
+                <td>${actionHtml}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- ADMIN AUTHORIZATION OVERRIDE LOGIC ---
+
+    function requestReturnAccess(enrollmentId, teacherName, examPeriod) {
+        if (activeUser.role === 'Admin') {
+            // Admin is logged in. Skip prompt.
+            openReturnModal(enrollmentId, teacherName, examPeriod);
+        } else {
+            // Clerk is logged in. Prompt for override password.
+            pendingReturnAction = { enrollmentId, teacherName, examPeriod };
+            
+            document.getElementById('authAdminPass').value = '';
+            document.getElementById('authErrorMsg').style.display = 'none';
+            document.getElementById('adminAuthModal').style.display = 'flex';
+            
+            // Automatically focus the password input
+            setTimeout(() => document.getElementById('authAdminPass').focus(), 100);
+        }
+    }
+
+    function closeAdminAuthModal() {
+        document.getElementById('adminAuthModal').style.display = 'none';
+        pendingReturnAction = null;
+    }
+
+    // Allow pressing "Enter" in the password field to submit
+    document.getElementById('authAdminPass').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            verifyAdminAuth();
+        }
+    });
+
+    function verifyAdminAuth() {
+        // We assume 'admin' is the universal admin username under the hood. 
+        const user = "admin"; 
+        const pass = document.getElementById('authAdminPass').value;
+        const errorMsg = document.getElementById('authErrorMsg');
+
+        // Check credentials against the backend
+        fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success" && data.user.role === 'Admin') {
+                
+                // 1. EXACT FIX: Capture the target data BEFORE closing the modal!
+                const targetEnrollment = pendingReturnAction.enrollmentId;
+                const targetTeacher = pendingReturnAction.teacherName;
+                const targetPeriod = pendingReturnAction.examPeriod;
+
+                // 2. Now safely close the auth modal (which resets pendingReturnAction to null)
+                closeAdminAuthModal();
+                
+                // 3. Open the Return modal using our safely captured variables
+                openReturnModal(targetEnrollment, targetTeacher, targetPeriod);
+                
+            } else {
+                errorMsg.innerText = "Access Denied: Invalid password.";
+                errorMsg.style.display = "block";
+            }
+        })
+        .catch(err => {
+            // Fallback: If your FastAPI login expects form-data instead of JSON, 
+            // you will see this network error. Let me know if that happens!
+            errorMsg.innerText = "Network error connecting to database.";
+            errorMsg.style.display = "block";
+        });
+    }
+
+    // --- STANDARD RETURN LOGIC ---
+
+    function openReturnModal(enrollmentId, teacherName, examPeriod) {
+        document.getElementById('pendingReturnEnrollmentId').value = enrollmentId;
+        document.getElementById('modalTeacherName').innerText = teacherName;
+        document.getElementById('returnReason').selectedIndex = 0;
+        document.getElementById('selectedCount').innerText = "0";
+        document.getElementById('refSearchInput').value = ""; 
+        
+        const grid = document.getElementById('refGridContainer');
+        grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading references...</div>';
+        
+        document.getElementById('returnModal').style.display = 'flex';
+
+        fetch(`/api/distributed-booklets/${enrollmentId}?period=${encodeURIComponent(examPeriod)}`)
+            .then(res => res.json())
+            .then(data => {
+                grid.innerHTML = "";
+                if(data.status === "success" && data.data.length > 0) {
+                    data.data.forEach(item => {
+                        let div = document.createElement('div');
+                        div.className = "ref-item";
+                        div.innerHTML = `
+                            <input type="checkbox" class="ref-checkbox" value="${item.ref}" id="chk_${item.id}" onchange="updateCount()">
+                            <label for="chk_${item.id}">${item.ref}</label>
+                        `;
+                        grid.appendChild(div);
+                    });
+                } else {
+                    grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #e74c3c;">No booklets found to return.</div>';
+                }
+            })
+            .catch(err => {
+                grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: red;">Error loading data.</div>';
+            });
+    }
+
+    function closeReturnModal() { 
+        document.getElementById('returnModal').style.display = 'none'; 
+        pendingReturnAction = null;
+    }
+
+    function filterModalReferences() {
+        const input = document.getElementById('refSearchInput').value.toUpperCase();
+        const refItems = document.querySelectorAll('.ref-item');
+        refItems.forEach(item => {
+            const refText = item.querySelector('label').innerText.toUpperCase();
+            item.style.display = (refText.indexOf(input) > -1) ? "flex" : "none";
+        });
+    }
+
+    function updateCount() {
+        document.getElementById('selectedCount').innerText = document.querySelectorAll('.ref-checkbox:checked').length;
+    }
+
+    function executeReturn() {
+        const enrollmentId = document.getElementById('pendingReturnEnrollmentId').value;
+        const reason = document.getElementById('returnReason').value;
+        const checkboxes = document.querySelectorAll('.ref-checkbox:checked');
+        if(checkboxes.length === 0) { alert("Please select at least one booklet to return."); return; }
+
+        const selectedRefs = Array.from(checkboxes).map(cb => cb.value);
+        if(!confirm(`Are you sure you want to move ${selectedRefs.length} booklet(s) back to Loose Stock?`)) return;
+
+        fetch('/api/process-return', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                enrollment_id: parseInt(enrollmentId),
+                reference_numbers: selectedRefs,
+                reason: reason,
+                clerk_name: activeUser.username
+            })
+        }).then(res => res.json()).then(data => {
+            if(data.status === "success") { alert(data.message); window.location.reload(); } 
+            else alert("Error: " + data.message); 
+        }).catch(err => alert("Network error. Could not process return."));
+    }
+
+    // --- DSS ALERT ---
+    fetch('/api/dss-alert').then(res => res.json()).then(data => {
+        const badge = document.getElementById('notifBadge');
+        const panel = document.getElementById('notifPanel');
+        const bell = document.getElementById('notifBell');
+        if (data.alert) {
+            badge.style.display = 'inline-block';
+            bell.style.color = 'white'; 
+            if (activeUser.role === 'Admin') {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+            } else {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+            }
+            if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                showDSSModal(data.message, data.reams_needed);
+            }
+        } else {
+            badge.style.display = 'none';
+            panel.style.borderLeftColor = '#27ae60'; 
+            panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+        }
+    });
+
+    function toggleNotifPanel() {
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function showDSSModal(message, reams) {
+        const modalHtml = `
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                    <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                    <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                    <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                    <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function dismissDSS() {
+        sessionStorage.setItem('dss_acknowledged', 'true');
+        document.getElementById('dssModal').remove();
+        const panel = document.getElementById('notifPanel');
+        panel.style.display = 'block'; 
+        setTimeout(() => { panel.style.display = 'none'; }, 2500);
+    }
+</script>
+</body>
+</html>
