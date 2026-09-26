@@ -31,3 +31,14 @@ class DistributionRequest(BaseModel):
     clerk_name: str = "System Clerk"
     use_loose_stock: bool = False
     bridging_pack_qr: Optional[str] = None
+
+class VerifySessionRequest(BaseModel):
+    username: str
+    session_token: str
+
+class LogoutRequest(BaseModel):
+    username: str
+
+class SaveQRRequest(BaseModel):
+    pack_id: str
+    base64_image: str

@@ -62,6 +62,7 @@ class User(Base):
     password = Column(String(255))
     role = Column(String(20))
     department = Column(String(10))
+    session_token = Column(String(255), nullable=True)
 
 class SystemSettings(Base):
     __tablename__ = "system_settings"

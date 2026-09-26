@@ -209,11 +209,20 @@
         }
     
         function logout() {
-            if(confirm("Are you sure you want to log out?")) {
-                localStorage.removeItem('bookletlog_user');
+        if(confirm("Are you sure you want to log out?")) {
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: activeUser.username })
+            }).then(() => {
+                localStorage.clear();
                 window.location.href = '/login';
-            }
+            }).catch(() => {
+                localStorage.clear();
+                window.location.href = '/login';
+            });
         }
+    }
     
         // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
         fetch('/api/dss-alert')
@@ -383,6 +392,28 @@
                 });
             }
         }
-    </script>
+    
+    // --- REAL-TIME SESSION POLLING ---
+    // This constantly checks if another device has logged in and instantly kicks this device out.
+    setInterval(() => {
+        const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        if(currentUser && currentUser.session_token) {
+            fetch('/api/verify-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== "valid") {
+                    alert("Session Expired: Your account was accessed from another device.");
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+            }).catch(e => console.error(e));
+        }
+    }, 3000); // Checks every 3 seconds
+
+</script>
 </body>
 </html>

@@ -86,7 +86,7 @@
             </div>
             
             <button class="btn-primary" onclick="registerReam()" id="registerBtn">
-                Execute Batch Conversion & Print PDF
+                Execute Batch PDF Conversion
             </button>
             <p id="loadingMsg">⚙️ Stamping sequential reference numbers, please wait...</p>
         </div>
@@ -112,9 +112,17 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
     function logout() {
         if(confirm("Are you sure you want to log out?")) {
-            localStorage.removeItem('bookletlog_user');
-            localStorage.removeItem('bookletlog_active_pack'); // Clear any active distribution scans
-            window.location.href = '/login';
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: activeUser.username })
+            }).then(() => {
+                localStorage.clear();
+                window.location.href = '/login';
+            }).catch(() => {
+                localStorage.clear();
+                window.location.href = '/login';
+            });
         }
     }
 
@@ -228,7 +236,29 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 btn.disabled = false;
             }
         }
-    </script>
+    
+    // --- REAL-TIME SESSION POLLING ---
+    // This constantly checks if another device has logged in and instantly kicks this device out.
+    setInterval(() => {
+        const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        if(currentUser && currentUser.session_token) {
+            fetch('/api/verify-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== "valid") {
+                    alert("Session Expired: Your account was accessed from another device.");
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+            }).catch(e => console.error(e));
+        }
+    }, 3000); // Checks every 3 seconds
+
+</script>
 
 </body>
 </html>

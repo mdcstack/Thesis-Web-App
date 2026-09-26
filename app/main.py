@@ -86,6 +86,18 @@ def create_enrollment(enrollment: schemas.EnrollmentCreate, db: Session = Depend
 class ReamRequest(BaseModel):
     ream_count: int
 
+import os
+import base64
+
+@app.post("/api/save-qr")
+def save_qr_code(req: schemas.SaveQRRequest):
+    os.makedirs("static/qrcodes", exist_ok=True)
+    img_data = req.base64_image.split(",")[1] if "," in req.base64_image else req.base64_image
+    file_path = f"static/qrcodes/{req.pack_id}_LABEL.png"
+    with open(file_path, "wb") as fh:
+        fh.write(base64.b64decode(img_data))
+    return {"status": "success", "file_path": f"/{file_path}"}
+
 @app.post("/api/register-ream")
 def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     ream_count = request_data.ream_count
@@ -363,6 +375,8 @@ def get_pack_status(qr_code: str, db: Session = Depends(get_db)):
 def read_login(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
+import uuid
+
 @app.post("/api/login")
 def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(
@@ -373,15 +387,35 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         return {"status": "error", "message": "Invalid username or password."}
     
+    new_token = str(uuid.uuid4())
+    user.session_token = new_token
+    db.commit()
+    
     # Return user details so the browser knows what role they are
     return {
         "status": "success", 
         "user": {
             "username": user.username,
             "role": user.role,
-            "department": user.department
+            "department": user.department,
+            "session_token": new_token
         }
     }
+
+@app.post("/api/verify-session")
+def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == req.username).first()
+    if user and user.session_token == req.session_token:
+        return {"status": "valid"}
+    return {"status": "invalid"}
+
+@app.post("/api/logout")
+def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == req.username).first()
+    if user:
+        user.session_token = None
+        db.commit()
+    return {"status": "success"}
 
 @app.get("/api/dss-alert")
 def check_dss_alert(db: Session = Depends(get_db)):

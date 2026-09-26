@@ -5,9 +5,9 @@ from reportlab.lib.pagesizes import A4, landscape
 from pypdf import PdfReader, PdfWriter
 
 def generate_batch_pdf(start_num, total_yield, batch_id):
-    os.makedirs("static", exist_ok=True)
+    os.makedirs("static/front_page_pdfs", exist_ok=True)
     template_path = "base_template.pdf" 
-    output_path = f"static/{batch_id}.pdf"
+    output_path = f"static/front_page_pdfs/{batch_id}.pdf"
     
     writer = PdfWriter()
     POS_X = 500

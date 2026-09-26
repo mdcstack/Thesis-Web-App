@@ -78,6 +78,7 @@
                     <p>Use the filters below to locate and download your official acknowledgement receipt.</p>
                 </div>
                 <div class="card-actions">
+                    <a href="/distribution" id="backBtn" class="btn-action-top" style="background-color: #f39c12; color: white; text-decoration: none; display: none;">⬅ Back to Distribution</a>
                     <button class="btn-action-top btn-clear" onclick="clearFilters()" title="Clear all search filters">❌ Clear Filters</button>
                     <button class="btn-action-top btn-refresh" onclick="refreshData()" title="Pull latest records from server">🔄 Refresh Data</button>
                 </div>
@@ -395,6 +396,13 @@
     function closeReceipt() {
         document.getElementById('receiptModal').style.display = 'none';
     }
+
+    // Check if an Admin is logged in, if so, reveal the Back button
+    const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+    if (activeUser && activeUser.session_token) {
+        document.getElementById('backBtn').style.display = 'flex';
+    }
 </script>
 </body>
+
 </html>
