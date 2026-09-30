@@ -21,8 +21,8 @@
         
         /* --- NEW: Period Badge Styles --- */
         .period-badge { background: #3498db; color: white; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .period-badge.admin-mode { cursor: pointer; background: #e67e22; }
-        .period-badge.admin-mode:hover { background: #d35400; transform: translateY(-1px); }
+        .period-badge.admin-only { cursor: pointer; background: #e67e22; }
+        .period-badge.admin-only:hover { background: #d35400; transform: translateY(-1px); }
 
         .pos-grid { display: flex; gap: 20px; flex: 1; overflow: hidden; }
         
@@ -151,12 +151,14 @@
 
 
         <div class="sidebar-header">BOOKLETLOG</div>
-        <a href="/dashboard" class="nav-link">📊 Sales Analytics</a>
-        <a href="/enrollments" class="nav-link admin-mode">🎓 Manage Classes</a>
+        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
         <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
         <a href="/distribution" class="nav-link active">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
@@ -281,10 +283,6 @@
                     </div>
 
                     <div style="border: 2px solid #000; margin-bottom: 10px;">
-                        <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 2px solid #000; font-size: 1.2rem; font-weight: bold; background-color: #f8f9fa !important; -webkit-print-color-adjust: exact;">
-                            <span>Financial Summary</span>
-                            <span>Total Amount: PHP <span id="r-total-bottom">0.00</span></span>
-                        </div>
                         <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
                             ☑ Payment Status: PAID
                         </div>
@@ -381,13 +379,13 @@
 
     // Turn badge orange and clickable if Admin
     if (activeUser.role === 'Admin') {
-        document.getElementById('activePeriodBadge').classList.add('admin-mode');
+        document.getElementById('activePeriodBadge').classList.add('admin-only');
         document.getElementById('activePeriodBadge').title = "Click to Change Exam Period";
     }
 
     // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
     if (activeUser.role !== 'Admin') {
-            const adminLinks = document.querySelectorAll('.admin-mode');
+            const adminLinks = document.querySelectorAll('.admin-only');
             adminLinks.forEach(link => link.style.display = 'none');
         }
 
@@ -686,7 +684,6 @@
         
         const amount = (currentDemand * 10).toFixed(2);
         document.getElementById('r-amount-table').innerText = amount;
-        document.getElementById('r-total-bottom').innerText = amount;
 
         const logUl = document.getElementById('r-log');
         logUl.innerHTML = `<li>- ${previewLogString}</li>`;

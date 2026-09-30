@@ -170,12 +170,14 @@
 
 
         <div class="sidebar-header">BOOKLETLOG</div>
-        <a href="/dashboard" class="nav-link active">📊 Sales Analytics</a>
+        <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
         <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
@@ -206,15 +208,21 @@
                 <h3>📌 Viewing Period</h3>
                 <div class="value" id="kpi-period" style="font-size: 1.3rem; margin-top: 10px;">Loading...</div>
             </div>
-            <div class="kpi-card revenue clickable-card" onclick="openRevenueModal()" title="Click to view Gross Revenue Breakdown">
-                <div class="clickable-icon">💰</div>
-                <h3>Gross Revenue (Combined)</h3>
-                <div class="value" id="kpi-revenue">₱0.00</div>
+            <div class="kpi-card revenue clickable-card" title="Click to view Ream Usage Breakdown">
+                <div class="clickable-icon">📦</div>
+                <h3>Raw Reams Converted</h3>
+                <div class="value" id="kpi-reams-converted">0</div>
+                <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
+                    <span id="kpi-total-generated">0</span> booklets total in system
+                </div>
             </div>
             <div class="kpi-card clickable-card" onclick="openIssuedModal()" title="Click to view Department Issue Breakdown">
                 <div class="clickable-icon">📦</div>
-                <h3>Total Booklets Issued</h3>
-                <div class="value" id="kpi-issued">0</div>
+                <h3>Reams Distributed</h3>
+                <div class="value" id="kpi-reams-distributed">0</div>
+                <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
+                    <span id="kpi-loose-distributed">0</span> loose sheets | <span id="kpi-issued">0</span> booklets
+                </div>
             </div>
             <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defect Breakdown (CS & IT)">
                 <div class="clickable-icon">⚠️</div>
@@ -241,6 +249,27 @@
         </div>
 
         <!-- NEW: SIDE-BY-SIDE CHARTS GRID -->
+        
+        <!-- REORDER EXPERT SYSTEM CARD -->
+        <div class="visual-card" style="border-left-color: #8e44ad; margin-bottom: 30px;" id="expertCard">
+            <h2 style="display: flex; align-items: center; gap: 10px;">
+                🧠 Reorder Decision Expert System
+                <span style="font-size: 0.7rem; background: #8e44ad; color: white; padding: 3px 8px; border-radius: 10px;">AI INFERENCE ENGINE</span>
+            </h2>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 15px;">Knowledge-Based Heuristic Evaluation</p>
+            
+            <div style="background: #f8f9fa; border: 1px solid #ecf0f1; border-radius: 6px; padding: 15px;">
+                <div style="display: flex; gap: 20px; font-size: 0.9rem; margin-bottom: 15px; color: #2c3e50;">
+                    <div><strong>Active Period:</strong> <span id="expertPeriod">...</span></div>
+                    <div><strong>Pending Demand:</strong> <span id="expertDemand">...</span></div>
+                    <div><strong>Available Stock:</strong> <span id="expertStock">...</span></div>
+                </div>
+                <div id="expertAdviceBox" style="padding: 15px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; color: white; background: #34495e;">
+                    Initializing Expert System...
+                </div>
+            </div>
+        </div>
+
         <div class="charts-grid">
             <!-- Left: Grouped Bar Chart -->
             <div class="chart-container" style="margin-bottom: 0;">
@@ -551,11 +580,19 @@
         fetch(`/api/dashboard-stats?period=${encodeURIComponent(periodQuery)}`)
             .then(res => res.json())
             .then(data => {
-                if(data.status === "success") {
-                    const kpi = data.kpi || { revenue: 0, issued: 0, defective: 0 };
+                if(data.status === "success") { try {
+                    const kpi = data.kpi || { reams_opened: 0, loose_sheets: 0, issued: 0, defective: 0 };
                     
                     document.getElementById('kpi-period').innerText = data.active_period || periodQuery;
-                    document.getElementById('kpi-revenue').innerText = "₱" + (kpi.revenue || 0).toLocaleString(undefined, {minimumFractionDigits: 2});
+                    
+                    if (document.getElementById('kpi-reams-converted')) {
+                        document.getElementById('kpi-reams-converted').innerText = kpi.reams_converted || 0;
+                        document.getElementById('kpi-total-generated').innerText = (kpi.total_generated || 0).toLocaleString();
+                        
+                        document.getElementById('kpi-reams-distributed').innerText = kpi.reams_distributed || 0;
+                        document.getElementById('kpi-loose-distributed').innerText = kpi.loose_distributed || 0;
+                    }
+
                     document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
                     document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
                     
@@ -624,6 +661,9 @@
                     }
 
                     computationsPayload = data.computations_data;
+                    } catch(e) { alert('JS Crash: ' + e.message + ' at ' + e.stack); }
+                } else {
+                    alert('Dashboard API Error: ' + data.message);
                 }
             })
             .catch(err => console.error("Dashboard failed to load:", err));
@@ -712,6 +752,22 @@
         // Calculations for Final Page
         const csGross = summ["CS"]["total"] || 0;
         const itGross = summ["IT"]["total"] || 0;
+        
+        const csBooklets = csGross / 10;
+        const itBooklets = itGross / 10;
+        
+        const csSheets = csBooklets * 6;
+        const itSheets = itBooklets * 6;
+        
+        const csReams = Math.floor(csSheets / 500);
+        const csLoose = csSheets % 500;
+        
+        const itReams = Math.floor(itSheets / 500);
+        const itLoose = itSheets % 500;
+        
+        const totalSheets = csSheets + itSheets;
+        const totalReams = Math.floor(totalSheets / 500);
+        const totalLoose = totalSheets % 500;
         const combinedGross = csGross + itGross;
         const csDeptBudget = csGross * 0.01;
         const itDeptBudget = itGross * 0.01;
@@ -722,10 +778,24 @@
         html += `
             <div class="page-break">
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <h2 style="margin:0; font-size: 1.5rem;">Final Sales & Profit Allocation Summary</h2>
+                    <h2 style="margin:0; font-size: 1.5rem;">Final Sales & Paper Consumption Summary</h2>
                     <p style="margin-top:5px;"><strong>Exam Period:</strong> ${currentDashboardPeriod}</p>
                 </div>
                 
+                <table style="width: 100%; max-width: 700px; margin: 0 auto 20px auto; border-collapse: collapse; font-size: 1.05rem;" border="1">
+                    <thead>
+                        <tr style="background-color: #f2f2f2; color: #000;">
+                            <th style="padding: 12px; text-align: left;">Paper Consumption Breakdown</th>
+                            <th style="padding: 12px; text-align: right;">Total Usage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="padding: 10px; font-weight: bold;">Computer Science (CS)</td><td style="padding: 10px; text-align: right;">${csReams} Ream(s) and ${csLoose} loose sheets</td></tr>
+                        <tr><td style="padding: 10px; font-weight: bold;">Information Technology (IT)</td><td style="padding: 10px; text-align: right;">${itReams} Ream(s) and ${itLoose} loose sheets</td></tr>
+                        <tr style="background-color: #f8f9fa;"><th style="padding: 10px; text-align: right; font-style: italic;">Total Department Consumption</th><th style="padding: 10px; text-align: right; color: #000;">${totalReams} Ream(s) and ${totalLoose} loose sheets</th></tr>
+                    </tbody>
+                </table>
+
                 <table style="width: 100%; max-width: 700px; margin: 0 auto 30px auto; border-collapse: collapse; font-size: 1.05rem;" border="1">
                     <thead>
                         <tr style="background-color: #f2f2f2; color: #000;">
@@ -910,5 +980,33 @@ function toggleSidebar() {
 }
 </script>
 
+
+<script>
+    function fetchExpertSystemData() {
+        fetch('/api/reorder-decision-expert')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('expertPeriod').innerText = data.facts.period;
+            document.getElementById('expertDemand').innerText = data.facts.pending_demand;
+            document.getElementById('expertStock').innerText = data.facts.available_stock;
+            
+            const adviceBox = document.getElementById('expertAdviceBox');
+            adviceBox.innerText = data.advice;
+            adviceBox.style.backgroundColor = data.color;
+        }).catch(err => {
+            console.error("Expert System Error:", err);
+            document.getElementById('expertAdviceBox').innerText = "Error loading expert system.";
+        });
+    }
+    
+    // Call it immediately on load
+    fetchExpertSystemData();
+    // And set it to refresh every 10 seconds
+    setInterval(fetchExpertSystemData, 10000);
+</script>
+
 </body>
 </html>
+
+
+

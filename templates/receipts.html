@@ -225,11 +225,6 @@
 
                 <!-- FINANCIAL SUMMARY -->
                 <div style="border: 2px solid #000; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; padding: 10px 15px; border-bottom: 2px solid #000; font-size: 1.2rem; font-weight: bold; background-color: #f8f9fa !important; -webkit-print-color-adjust: exact;">
-                        <span>Financial Summary</span>
-                        <span>Unit Price: PHP 10.00</span>
-                        <span>Total Amount: PHP <span id="r-total-bottom"></span></span>
-                    </div>
                     <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
                         ☑ Payment Status: FULLY PAID
                     </div>
@@ -421,7 +416,6 @@
         document.getElementById('r-amount-table').innerText = data.amount.toFixed(2);
 
         document.getElementById('r-total-issued').innerText = data.qty;
-        document.getElementById('r-total-bottom').innerText = data.amount.toFixed(2);
 
         const logUl = document.getElementById('r-log');
         logUl.innerHTML = "";

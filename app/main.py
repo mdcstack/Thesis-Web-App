@@ -1,5 +1,7 @@
+import math
 import re
 from fastapi import FastAPI, Depends
+import bcrypt
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -9,7 +11,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-import math
+
 from . import models, schemas
 from .database import SessionLocal, engine
 from .utils import generate_batch_pdf
@@ -63,8 +65,7 @@ def get_mrp_status(db: Session = Depends(get_db)):
     total_students = sum(e.student_headcount for e in enrollments)
     required_booklets = total_students
     required_sheets = total_students * 6
-    
-    import math
+
     required_reams = math.ceil(required_booklets / 83) if required_booklets > 0 else 0
     
     return {
@@ -148,7 +149,7 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
 @app.get("/dashboard", response_class=HTMLResponse)
 def read_dashboard(request: Request, db: Session = Depends(get_db)):
     # 1. Total Enrolled Students (This is the Absolute Demand)
-    total_students = db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0
+    total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     
     # 2. Total Distributed
     distributed_booklets = db.query(models.Booklet).filter(models.Booklet.status == "distributed").count()
@@ -379,12 +380,9 @@ import uuid
 
 @app.post("/api/login")
 def login_user(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(
-        models.User.username == req.username, 
-        models.User.password == req.password
-    ).first()
+    user = db.query(models.User).filter(models.User.username == req.username).first()
 
-    if not user:
+    if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
         return {"status": "error", "message": "Invalid username or password."}
     
     new_token = str(uuid.uuid4())
@@ -420,7 +418,7 @@ def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
 @app.get("/api/dss-alert")
 def check_dss_alert(db: Session = Depends(get_db)):
     # 1. Calculate pending demand (Students who haven't received booklets yet)
-    total_students = db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0
+    total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     distributed = db.query(models.Booklet).filter(models.Booklet.status == "distributed").count()
     pending_demand = max(0, total_students - distributed)
     
@@ -918,7 +916,17 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         ).all()
         
         total_issued = len(issued_booklets)
-        total_revenue = total_issued * 10 
+        
+        # 1. Math for Raw Reams Converted
+        total_generated = db.query(models.Booklet).count()
+        total_generated_sheets = total_generated * 6
+
+        reams_converted = math.ceil(total_generated_sheets / 500) if total_generated_sheets > 0 else 0
+        
+        # 2. Math for Reams Distributed
+        total_distributed_sheets = total_issued * 6
+        reams_distributed = total_distributed_sheets // 500
+        loose_distributed = total_distributed_sheets % 500 
         
         defective_count = db.query(models.Booklet).filter(
             models.Booklet.exam_period == active_period,
@@ -985,7 +993,10 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "status": "success",
             "active_period": active_period,
             "kpi": {
-                "revenue": total_revenue,
+                "reams_converted": reams_converted,
+                "total_generated": total_generated,
+                "reams_distributed": reams_distributed,
+                "loose_distributed": loose_distributed,
                 "issued": total_issued,
                 "defective": defective_count
             },
@@ -1006,3 +1017,109 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Dashboard Error: {str(e)}")
         return {"status": "error", "message": str(e)}
+
+# --- REORDER DECISION EXPERT SYSTEM (Inference Engine) ---
+EXPERT_RULES = [
+    {
+        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Finals' in facts['period'],
+        "advice": lambda facts: (
+            f"⚠️ SEMESTER ENDING: Demand is short by {facts['pending_demand'] - facts['available_stock']} booklets. "
+            f"Action: Open exactly {__import__('math').ceil((facts['pending_demand'] - facts['available_stock']) * 6 / 500)} Ream(s). "
+            f"This yields {(__import__('math').ceil((facts['pending_demand'] - facts['available_stock']) * 6 / 500) * 500) // 6} booklets. Do not print extra buffer stock because the semester is ending."
+        ),
+        "color": "#e74c3c"
+    },
+    {
+        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Midterms' in facts['period'],
+        "advice": lambda facts: (
+            f"🔥 CRITICAL PEAK (MIDTERMS): Demand is short by {facts['pending_demand'] - facts['available_stock']} booklets. "
+            f"Action: Open exactly {__import__('math').ceil((int((facts['pending_demand'] - facts['available_stock']) * 1.15)) * 6 / 500)} Ream(s). "
+            f"This yields {(__import__('math').ceil((int((facts['pending_demand'] - facts['available_stock']) * 1.15)) * 6 / 500) * 500) // 6} booklets, covering the deficit PLUS a 15% buffer for late enrollees and replacements."
+        ),
+        "color": "#c0392b"
+    },
+    {
+        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Prelims' in facts['period'],
+        "advice": lambda facts: (
+            f"📉 NORMAL DEFICIT (PRELIMS): Demand is short by {facts['pending_demand'] - facts['available_stock']} booklets. "
+            f"Action: Open exactly {__import__('math').ceil((int((facts['pending_demand'] - facts['available_stock']) * 1.05)) * 6 / 500)} Ream(s). "
+            f"This yields {(__import__('math').ceil((int((facts['pending_demand'] - facts['available_stock']) * 1.05)) * 6 / 500) * 500) // 6} booklets, covering the deficit plus a standard 5% buffer."
+        ),
+        "color": "#e67e22"
+    },
+    {
+        "conditions": lambda facts: facts['available_stock'] >= facts['pending_demand'] and (facts['available_stock'] - facts['pending_demand']) < 20,
+        "advice": lambda facts: "💡 SAFE BUFFER WARNING: Demand is met, but you have dipped below the safe buffer of 20 booklets. Consider a small reorder batch soon.",
+        "color": "#3498db"
+    },
+    {
+        "conditions": lambda facts: facts['available_stock'] >= facts['pending_demand'] and (facts['available_stock'] - facts['pending_demand']) >= 20,
+        "advice": lambda facts: "✅ INVENTORY HEALTHY: Available stock fully meets pending demand with a safe buffer. No reordering necessary.",
+        "color": "#27ae60"
+    }
+]
+
+@app.get("/api/reorder-decision-expert")
+def reorder_decision_expert(db: Session = Depends(get_db)):
+    # 1. Gather facts
+    total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
+    distributed = db.query(models.Booklet).filter(models.Booklet.status == "distributed").count()
+    pending_demand = max(0, total_students - distributed)
+    available_stock = db.query(models.Booklet).filter(models.Booklet.status == "available").count()
+    
+    # Get active period
+    period_name = get_active_period(db)
+    
+    facts = {
+        'available_stock': available_stock,
+        'pending_demand': pending_demand,
+        'period': period_name
+    }
+    
+    # 2. Run Inference Engine
+    expert_advice = []
+    advice_color = "#34495e"
+    
+    for rule in EXPERT_RULES:
+        if rule["conditions"](facts):
+            expert_advice.append(rule["advice"](facts) if callable(rule["advice"]) else rule["advice"])
+            advice_color = rule["color"]
+            break # Fire only highest priority rule
+            
+    if not expert_advice:
+        expert_advice.append("System analyzing...")
+        
+    return {
+        "facts": facts,
+        "advice": expert_advice[0],
+        "color": advice_color
+    }
+
+
+@app.get("/manage_users")
+def manage_users_page(request: Request):
+    return templates.TemplateResponse("manage_user.html", {"request": request})
+
+@app.post("/api/users/create")
+def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
+    # Check if username exists
+    existing_user = db.query(models.User).filter(models.User.username == req.username).first()
+    if existing_user:
+        return {"status": "error", "message": "Username already exists."}
+    
+    # Hash password
+    hashed_password = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    new_user = models.User(
+        username=req.username,
+        password=hashed_password,
+        role=req.role
+    )
+    db.add(new_user)
+    db.commit()
+    
+    return {"status": "success", "message": "Account created successfully!"}
+
+
+
+

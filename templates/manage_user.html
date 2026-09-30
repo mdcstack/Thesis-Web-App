@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Users - BOOKLETLOG</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        
+        /* Main Layout */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
+        
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; border-top: 5px solid #3498db; margin-top: 20px; }
+        .card h2 { margin-bottom: 20px; color: #2c3e50; text-align: center; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 1rem; }
+        
+        .btn { width: 100%; padding: 12px; background-color: #3498db; color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        .btn:hover { background-color: #2980b9; }
+
+        .message { margin-top: 15px; text-align: center; font-weight: bold; padding: 10px; border-radius: 4px; display: none; }
+        .message.success { background-color: #d4edda; color: #155724; display: block; }
+        .message.error { background-color: #f8d7da; color: #721c24; display: block; }
+
+        /* Mobile Hamburger & Overlay Styles */
+        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
+        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
+        .sidebar-overlay.active { display: block; }
+
+        /* Responsive Mobile Layout Fixes */
+        @media (max-width: 900px) {
+            body { flex-direction: column; overflow: hidden; }
+            .mobile-header { display: flex; flex-shrink: 0; }
+            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+            .sidebar.active { left: 0; }
+            .main-content { padding: 15px; align-items: center; }
+            .card { margin-top: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Mobile Header -->
+    <div class="mobile-header no-print">
+        <div class="hamburger" onclick="toggleSidebar()">☰</div>
+        <div class="mobile-title">BOOKLETLOG</div>
+    </div>
+    
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <!-- Notification Bell & Panel -->
+        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+                <span>🔔 Alerts</span>
+                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+            </div>
+            
+            <!-- Hidden Dropdown Panel -->
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+                Loading alerts...
+            </div>
+        </div>
+
+        <div class="sidebar-header">BOOKLETLOG</div>
+        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/manage_users" class="nav-link active admin-only">👥 Manage Users</a>
+        <a href="/generator" class="nav-link">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="card">
+            <h2>Create New Account</h2>
+            <div id="statusMessage" class="message"></div>
+            
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Enter username">
+            </div>
+            
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter password">
+            </div>
+            
+            <div class="form-group">
+                <label>Role</label>
+                <select id="role">
+                    <option value="Staff">Staff / Clerk</option>
+                    <option value="Admin">Admin</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="createUser()">Create Account</button>
+        </div>
+    </div>
+
+    <script>
+        // --- AUTHENTICATION GUARD & RBAC ---
+        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        
+        if (!activeUser) {
+            window.location.href = '/login';
+        } else {
+            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || 'N/A') + ")";
+    
+            // Hide admin-only links (Manage Users should only be accessed by Admin)
+            if (activeUser.role !== 'Admin') {
+                const adminLinks = document.querySelectorAll('.admin-only');
+                adminLinks.forEach(link => link.style.display = 'none');
+                
+                // Extra guard for this specific page
+                document.querySelector('.main-content').innerHTML = `
+                    <div style="text-align: center; margin-top: 50px;">
+                        <h2 style="color: #e74c3c;">Access Denied</h2>
+                        <p style="color: #7f8c8d;">You do not have permission to view this page.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // --- LOGOUT LOGIC ---
+        function logout() {
+            if(confirm("Are you sure you want to log out?")) {
+                fetch('/api/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: activeUser.username })
+                }).then(() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }).catch(() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        // --- SIDEBAR TOGGLE ---
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            if(sidebar) sidebar.classList.toggle('active');
+            if(overlay) overlay.classList.toggle('active');
+        }
+
+        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+        fetch('/api/dss-alert')
+            .then(response => response.json())
+            .then(data => {
+                const badge = document.getElementById('notifBadge');
+                const panel = document.getElementById('notifPanel');
+                const bell = document.getElementById('notifBell');
+    
+                if (data.alert) {
+                    badge.style.display = 'inline-block';
+                    bell.style.color = 'white'; 
+                    
+                    if (activeUser.role === 'Admin') {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                    } else {
+                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                    }
+                    
+                    if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                        showDSSModal(data.message, data.reams_needed);
+                    }
+                } else {
+                    badge.style.display = 'none';
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            }).catch(e => console.error("DSS Alert error:", e));
+    
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+    
+        function showDSSModal(message, reams) {
+            const modalHtml = `
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
+                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
+                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
+                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
+                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
+                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+    
+        function dismissDSS() {
+            sessionStorage.setItem('dss_acknowledged', 'true');
+            document.getElementById('dssModal').remove();
+            
+            const panel = document.getElementById('notifPanel');
+            panel.style.display = 'block'; 
+            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        }
+
+        // --- CREATE USER LOGIC ---
+        function createUser() {
+            if (activeUser.role !== 'Admin') return; // Prevent unauthorized action
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+            const statusMsg = document.getElementById('statusMessage');
+
+            if(!username || !password) {
+                statusMsg.className = "message error";
+                statusMsg.innerText = "Please fill in all fields.";
+                return;
+            }
+
+            fetch('/api/users/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, password: password, role: role })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    statusMsg.className = "message success";
+                    statusMsg.innerText = data.message;
+                    document.getElementById('username').value = "";
+                    document.getElementById('password').value = "";
+                } else {
+                    statusMsg.className = "message error";
+                    statusMsg.innerText = data.message;
+                }
+            })
+            .catch(err => {
+                statusMsg.className = "message error";
+                statusMsg.innerText = "Server connection error.";
+            });
+        }
+
+        // --- REAL-TIME SESSION POLLING ---
+        setInterval(() => {
+            const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+            if(currentUser && currentUser.session_token) {
+                fetch('/api/verify-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== "valid") {
+                        alert("Session Expired: Your account was accessed from another device.");
+                        localStorage.clear();
+                        window.location.href = '/login';
+                    }
+                }).catch(e => console.error(e));
+            }
+        }, 3000); 
+
+    </script>
+</body>
+</html>

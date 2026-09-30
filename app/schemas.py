@@ -42,3 +42,9 @@ class LogoutRequest(BaseModel):
 class SaveQRRequest(BaseModel):
     pack_id: str
     base64_image: str
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    role: str
+
