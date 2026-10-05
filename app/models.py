@@ -26,6 +26,7 @@ class MasterBatch(Base):
     start_reference = Column(String(255)) 
     end_reference = Column(String(255))   
     status = Column(String(255), default="pending_assembly") 
+    registered_period = Column(String(255), nullable=True) 
     
     # Links multiple batches into one physical supply pack
     pack_qr_id = Column(String(255), index=True, nullable=True) 

@@ -150,7 +150,7 @@
 </div>
 
 
-        <div class="sidebar-header">BOOKLETLOG</div>
+        <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
@@ -219,10 +219,12 @@
                     </select>
 
                     <div style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
-                        <label style="font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px; color: #2c3e50;">
-                            <input type="checkbox" id="useLooseStockToggle" onchange="triggerLivePreview()" style="width: 18px; height: 18px;">
-                            ♻️ Use Loose Stock First
-                        </label>
+                        <button id="looseStockBtn" class="btn btn-warning" onclick="openLooseStockModal()" style="width: 100%; text-align: left;" disabled>
+                            <i class="fas fa-hand-pointer"></i> Select Specific Loose Stock
+                        </button>
+                        <div id="looseSelectionPreview" style="margin-top: 8px; font-weight: bold; color: #d35400;">
+                            0 loose booklets selected.
+                        </div>
                     </div>
 
                     <button class="btn btn-success" id="submitTxBtn" onclick="submitTransaction()" disabled>Select Subject to Continue</button>
@@ -418,6 +420,7 @@
 
     window.onload = function() {
         fetchActivePeriod(); // Fetch the period FIRST
+        fetchLooseStockList(); // Pre-fetch loose stock count
         if (primaryPackQR) {
             checkSavedSupply(primaryPackQR);
         }
@@ -562,14 +565,17 @@
         const teacher = document.getElementById('instructorSelect').value;
         const sectionSelect = document.getElementById('sectionSelect');
         const subjectSelect = document.getElementById('subjectSelect');
+        const looseBtn = document.getElementById('looseStockBtn');
         
         sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
         subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
         sectionSelect.disabled = true; subjectSelect.disabled = true;
+        if(looseBtn) looseBtn.disabled = true;
         resetReceipt();
 
         if (teacher) {
             sectionSelect.disabled = false;
+            if(looseBtn && allLooseStock.length > 0) looseBtn.disabled = false;
             [...new Set(enrollmentsData.filter(i => i.teacher_name === teacher).map(i => i.section))].forEach(sec => {
                 sectionSelect.innerHTML += `<option value="${sec}">${sec}</option>`;
             });
@@ -600,10 +606,10 @@
     function handleSubjectChange() {
         const select = document.getElementById('subjectSelect');
         if (select.value) {
-            currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
+        currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
             checkProactiveBridging();
         } else {
-            currentDemand = 0;
+        currentDemand = 0;
             resetReceipt();
         }
     }
@@ -645,7 +651,7 @@
                 scanned_pack_qr: primaryPackQR, 
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
-                use_loose_stock: document.getElementById('useLooseStockToggle').checked
+                selected_loose_refs: globalSelectedLoose
             })
         })
         .then(res => res.json())
@@ -696,6 +702,79 @@
         document.getElementById('submitTxBtn').className = "btn";
         bridgingPackQR = null; 
         bridgingPackStock = 0;
+    }
+
+    
+    let globalSelectedLoose = [];
+    let allLooseStock = [];
+
+    function openLooseStockModal() {
+        document.getElementById('looseStockModal').style.display = 'flex';
+        fetchLooseStockList();
+    }
+
+    function closeLooseStockModal() {
+        document.getElementById('looseStockModal').style.display = 'none';
+    }
+
+    function fetchLooseStockList() {
+        fetch('/api/loose-stock-list')
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                allLooseStock = data.data;
+                renderLooseList(allLooseStock);
+                
+                // Update Button UI
+                const btn = document.getElementById('looseStockBtn');
+                if(btn) {
+                    btn.innerHTML = `<i class="fas fa-hand-pointer"></i> Select Specific Loose Stock (${allLooseStock.length} Available)`;
+                    // If no stock, ensure it is disabled even if teacher is selected
+                    if(allLooseStock.length === 0) {
+                        btn.disabled = true;
+                    }
+                }
+            }
+        });
+    }
+
+    function renderLooseList(list) {
+        const container = document.getElementById('looseListContainer');
+        container.innerHTML = '';
+        if(list.length === 0) {
+            container.innerHTML = '<div style="color:#7f8c8d;">No loose stock available.</div>';
+            return;
+        }
+        
+        list.forEach(item => {
+            const isChecked = globalSelectedLoose.includes(item.reference_num) ? 'checked' : '';
+            container.innerHTML += `
+                <label style="display: block; padding: 8px; border-bottom: 1px solid #eee; cursor: pointer;">
+                    <input type="checkbox" class="loose-checkbox" value="${item.reference_num}" ${isChecked}>
+                    ${item.reference_num}
+                </label>
+            `;
+        });
+    }
+
+    function filterLooseList() {
+        const query = document.getElementById('looseSearch').value.toUpperCase();
+        const filtered = allLooseStock.filter(item => item.reference_num.includes(query));
+        renderLooseList(filtered);
+    }
+
+    function confirmLooseSelection() {
+        const checkboxes = document.querySelectorAll('.loose-checkbox');
+        globalSelectedLoose = [];
+        checkboxes.forEach(cb => {
+            if(cb.checked) {
+                globalSelectedLoose.push(cb.value);
+            }
+        });
+        
+        document.getElementById('looseSelectionPreview').innerText = `${globalSelectedLoose.length} loose booklets selected.`;
+        closeLooseStockModal();
+        triggerLivePreview();
     }
 
     // --- 7. SCANNER & SUPPLY LOGIC ---
@@ -807,7 +886,7 @@
                 scanned_pack_qr: primaryPackQR,
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
-                use_loose_stock: document.getElementById('useLooseStockToggle').checked
+                selected_loose_refs: globalSelectedLoose
             })
         })
         .then(res => res.json())
@@ -960,6 +1039,20 @@ function toggleSidebar() {
     if(overlay) overlay.classList.toggle('active');
 }
 </script>
+
+
+    <!-- LOOSE STOCK SELECTION MODAL -->
+    <div class="modal-overlay" id="looseStockModal">
+        <div class="modal-card" style="max-width: 500px; text-align: left; border-top-color: #f39c12;">
+            <span class="close" style="float: right; font-size: 1.5rem; cursor: pointer; color: #7f8c8d;" onclick="closeLooseStockModal()">&times;</span>
+            <h2>Select Loose Booklets</h2>
+            <input type="text" id="looseSearch" placeholder="Search REF-..." onkeyup="filterLooseList()" style="width: 100%; padding: 10px; margin-bottom: 15px;">
+            <div id="looseListContainer" style="max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                <!-- Checkboxes will be injected here via JS -->
+            </div>
+            <button class="btn btn-success" style="margin-top: 15px; width: 100%;" onclick="confirmLooseSelection()">Confirm Selection</button>
+        </div>
+    </div>
 
 </body>
 </html>

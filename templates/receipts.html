@@ -421,7 +421,7 @@
         logUl.innerHTML = "";
         data.log.forEach(entry => {
             let li = document.createElement('li');
-            li.innerText = "- " + entry;
+            li.innerHTML = "- " + entry;
             logUl.appendChild(li);
         });
 

@@ -169,7 +169,7 @@
 </div>
 
 
-        <div class="sidebar-header">BOOKLETLOG</div>
+        <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
@@ -221,7 +221,7 @@
                 <h3>Reams Distributed</h3>
                 <div class="value" id="kpi-reams-distributed">0</div>
                 <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
-                    <span id="kpi-loose-distributed">0</span> loose sheets | <span id="kpi-issued">0</span> booklets
+                    <span id="kpi-loose-distributed">0</span> paper sheets | <span id="kpi-issued">0</span> booklets
                 </div>
             </div>
             <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defect Breakdown (CS & IT)">
@@ -231,11 +231,15 @@
             </div>
         </div>
 
-        <!-- INFO-VISUAL: LIVE INVENTORY COUNTDOWN METER -->
-        <div class="visual-card">
-            <h2>Semester Inventory Readiness</h2>
-            <p style="color: #7f8c8d; font-size: 0.9rem;">Visualizing current physical stock against the remaining undistributed demand.</p>
+        <!-- UNIFIED DSS MODULE -->
+        <div class="visual-card" style="border-left-color: #8e44ad; margin-bottom: 30px;">
+            <h2 style="display: flex; align-items: center; justify-content: space-between;">
+                <span>Inventory Readiness & Reorder DSS</span>
+                <span style="font-size: 0.7rem; background: #8e44ad; color: white; padding: 4px 10px; border-radius: 12px; vertical-align: middle;">AI INFERENCE ENGINE</span>
+            </h2>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 15px;">Visualizing physical stock vs demand to generate knowledge-based heuristic reorder decisions.</p>
             
+            <!-- TOP HALF: Visual Progress -->
             <div class="progress-container">
                 <div id="meter-bar" class="progress-bar" style="width: 0%; position: absolute; left: 0; z-index: 2;"></div>
             </div>
@@ -245,31 +249,20 @@
                 <span id="meter-demand-label" style="color: #2c3e50; font-weight: bold;">Remaining Demand: Loading...</span>
             </div>
             
+            <!-- Dynamic inline alert for stock status -->
             <div id="meter-alert" style="margin-top: 15px; padding: 10px; font-size: 0.85rem; font-weight: bold; display: none;"></div>
-        </div>
-
-        <!-- NEW: SIDE-BY-SIDE CHARTS GRID -->
         
-        <!-- REORDER EXPERT SYSTEM CARD -->
-        <div class="visual-card" style="border-left-color: #8e44ad; margin-bottom: 30px;" id="expertCard">
-            <h2 style="display: flex; align-items: center; gap: 10px;">
-                🧠 Reorder Decision Expert System
-                <span style="font-size: 0.7rem; background: #8e44ad; color: white; padding: 3px 8px; border-radius: 10px;">AI INFERENCE ENGINE</span>
-            </h2>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 15px;">Knowledge-Based Heuristic Evaluation</p>
-            
+            <hr style="border: 0; height: 1px; background: #ecf0f1; margin: 20px 0;">
+        
+            <!-- BOTTOM HALF: Expert System Recommendation -->
             <div style="background: #f8f9fa; border: 1px solid #ecf0f1; border-radius: 6px; padding: 15px;">
-                <div style="display: flex; gap: 20px; font-size: 0.9rem; margin-bottom: 15px; color: #2c3e50;">
-                    <div><strong>Active Period:</strong> <span id="expertPeriod">...</span></div>
-                    <div><strong>Pending Demand:</strong> <span id="expertDemand">...</span></div>
-                    <div><strong>Available Stock:</strong> <span id="expertStock">...</span></div>
-                </div>
+                <div style="font-size: 0.85rem; color: #7f8c8d; text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Automated Reorder Action Plan:</div>
                 <div id="expertAdviceBox" style="padding: 15px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; color: white; background: #34495e;">
-                    Initializing Expert System...
+                    Analyzing active period and inventory variables...
                 </div>
             </div>
         </div>
-
+        
         <div class="charts-grid">
             <!-- Left: Grouped Bar Chart -->
             <div class="chart-container" style="margin-bottom: 0;">
@@ -790,9 +783,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td style="padding: 10px; font-weight: bold;">Computer Science (CS)</td><td style="padding: 10px; text-align: right;">${csReams} Ream(s) and ${csLoose} loose sheets</td></tr>
-                        <tr><td style="padding: 10px; font-weight: bold;">Information Technology (IT)</td><td style="padding: 10px; text-align: right;">${itReams} Ream(s) and ${itLoose} loose sheets</td></tr>
-                        <tr style="background-color: #f8f9fa;"><th style="padding: 10px; text-align: right; font-style: italic;">Total Department Consumption</th><th style="padding: 10px; text-align: right; color: #000;">${totalReams} Ream(s) and ${totalLoose} loose sheets</th></tr>
+                        <tr><td style="padding: 10px; font-weight: bold;">Computer Science (CS)</td><td style="padding: 10px; text-align: right;">${csReams} Ream(s) and ${csLoose} paper sheets</td></tr>
+                        <tr><td style="padding: 10px; font-weight: bold;">Information Technology (IT)</td><td style="padding: 10px; text-align: right;">${itReams} Ream(s) and ${itLoose} paper sheets</td></tr>
+                        <tr style="background-color: #f8f9fa;"><th style="padding: 10px; text-align: right; font-style: italic;">Total Department Consumption</th><th style="padding: 10px; text-align: right; color: #000;">${totalReams} Ream(s) and ${totalLoose} paper sheets</th></tr>
                     </tbody>
                 </table>
 
@@ -986,9 +979,7 @@ function toggleSidebar() {
         fetch('/api/reorder-decision-expert')
         .then(r => r.json())
         .then(data => {
-            document.getElementById('expertPeriod').innerText = data.facts.period;
-            document.getElementById('expertDemand').innerText = data.facts.pending_demand;
-            document.getElementById('expertStock').innerText = data.facts.available_stock;
+
             
             const adviceBox = document.getElementById('expertAdviceBox');
             adviceBox.innerText = data.advice;
@@ -1007,6 +998,8 @@ function toggleSidebar() {
 
 </body>
 </html>
+
+
 
 
 

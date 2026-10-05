@@ -29,7 +29,7 @@ class DistributionRequest(BaseModel):
     enrollment_id: int
     scanned_pack_qr: str
     clerk_name: str = "System Clerk"
-    use_loose_stock: bool = False
+    selected_loose_refs: List[str] = []
     bridging_pack_qr: Optional[str] = None
 
 class VerifySessionRequest(BaseModel):
@@ -47,4 +47,5 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str
+
 

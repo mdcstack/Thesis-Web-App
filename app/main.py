@@ -37,7 +37,7 @@ class DistributionRequest(BaseModel):
     scanned_pack_qr: str
     bridging_pack_qr: Optional[str] = None  
     clerk_name: str = "System Clerk"
-    use_loose_stock: bool = False
+    selected_loose_refs: List[str] = []
 # 1. Initialize Database Tables
 models.Base.metadata.create_all(bind=engine)
 
@@ -113,12 +113,15 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     # 2. Generate Master Batch ID
     batch_id = f"BATCH-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
+    current_period = get_active_period(db)
+    
     new_batch = models.MasterBatch(
         qr_code_id=batch_id,
         ream_count=ream_count,
         total_yield=total_yield, 
         start_reference=f"REF-{start_num:04d}",
-        end_reference=f"REF-{(start_num + total_yield - 1):04d}"
+        end_reference=f"REF-{(start_num + total_yield - 1):04d}",
+        registered_period=current_period
     )
     db.add(new_batch)
     db.commit()
@@ -295,6 +298,12 @@ from sqlalchemy import func
 def distribution_page(request: Request):
     """Renders the QR scanner and distribution UI"""
     return templates.TemplateResponse("distribution.html", {"request": request})
+
+
+@app.get("/api/loose-stock-list")
+def get_loose_stock_list(db: Session = Depends(get_db)):
+    loose = db.query(models.Booklet).filter(models.Booklet.status == "loose_stock").order_by(models.Booklet.reference_num).all()
+    return {"status": "success", "data": [{"id": b.id, "reference_num": b.reference_num} for b in loose]}
 
 @app.get("/api/pending-distributions")
 def get_pending_distributions(db: Session = Depends(get_db)):
@@ -533,8 +542,19 @@ def get_public_receipts(db: Session = Depends(get_db)):
                     for blk in blocks:
                         f_ref = getattr(blk[0], 'reference_num', getattr(blk[0], 'reference_number', ''))
                         l_ref = getattr(blk[-1], 'reference_num', getattr(blk[-1], 'reference_number', ''))
-                        if len(blk) > 1: log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs)")
-                        else: log_strings.append(f"Ref: #{f_ref} (1 pc)")
+                        batch_id = getattr(blk[0], 'master_batch_id', None)
+                        
+                        trace_str = ""
+                        if batch_id:
+                            batch = db.query(models.MasterBatch).filter(models.MasterBatch.id == batch_id).first()
+                            if batch:
+                                pack_str = f" | Pack: {batch.pack_qr_id}" if batch.pack_qr_id else " | (Loose/Unpacked)"
+                                trace_str = f"<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#7f8c8d; font-size:0.85em;'>[Batch: {batch.qr_code_id}{pack_str}]</span>"
+                        
+                        if len(blk) > 1: 
+                            log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs){trace_str}")
+                        else: 
+                            log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}")
 
                     receipts_data.append({
                         "enrollment_id": enr.id,
@@ -675,10 +695,11 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         still_needed = remaining_demand
 
         # Pool 1: Loose Stock
-        if req.use_loose_stock:
+        if req.selected_loose_refs:
             loose = db.query(models.Booklet).filter(
+                models.Booklet.reference_num.in_(req.selected_loose_refs),
                 models.Booklet.status == "loose_stock"
-            ).order_by(models.Booklet.id).limit(still_needed).all()
+            ).all()
             if loose:
                 booklets_to_distribute.extend(loose)
                 still_needed -= len(loose)
@@ -726,8 +747,19 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         for blk in blocks:
             f_ref = getattr(blk[0], 'reference_num', getattr(blk[0], 'reference_number', ''))
             l_ref = getattr(blk[-1], 'reference_num', getattr(blk[-1], 'reference_number', ''))
-            if len(blk) > 1: log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs)")
-            else: log_strings.append(f"Ref: #{f_ref} (1 pc)")
+            batch_id = getattr(blk[0], 'master_batch_id', None)
+            
+            trace_str = ""
+            if batch_id:
+                batch = db.query(models.MasterBatch).filter(models.MasterBatch.id == batch_id).first()
+                if batch:
+                    pack_str = f" | Pack: {batch.pack_qr_id}" if batch.pack_qr_id else " | (Loose/Unpacked)"
+                    trace_str = f"<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#7f8c8d; font-size:0.85em;'>[Batch: {batch.qr_code_id}{pack_str}]</span>"
+            
+            if len(blk) > 1: 
+                log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs){trace_str}")
+            else: 
+                log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}")
                 
         chunk_log_str = "<br>&nbsp;&nbsp;&nbsp;&nbsp;".join(log_strings)
         return {"status": "success", "preview_log": chunk_log_str}
@@ -770,8 +802,11 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
         booklets_to_distribute = []
         still_needed = remaining_demand
 
-        if req.use_loose_stock:
-            loose = db.query(models.Booklet).filter(models.Booklet.status == "loose_stock").order_by(models.Booklet.id).limit(still_needed).all()
+        if req.selected_loose_refs:
+            loose = db.query(models.Booklet).filter(
+                models.Booklet.reference_num.in_(req.selected_loose_refs),
+                models.Booklet.status == "loose_stock"
+            ).all()
             booklets_to_distribute.extend(loose)
             still_needed -= len(loose)
 
@@ -917,8 +952,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         
         total_issued = len(issued_booklets)
         
-        # 1. Math for Raw Reams Converted
-        total_generated = db.query(models.Booklet).count()
+        # 1. Math for Raw Reams Converted (Period Isolated)
+        period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == active_period).all()
+        total_generated = sum([b.total_yield for b in period_batches])
         total_generated_sheets = total_generated * 6
 
         reams_converted = math.ceil(total_generated_sheets / 500) if total_generated_sheets > 0 else 0

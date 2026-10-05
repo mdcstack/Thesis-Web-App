@@ -1,0 +1,16 @@
+# Web Framework
+fastapi
+uvicorn
+jinja2
+
+# Database & ORM
+sqlalchemy
+pymysql
+
+# Security & Authentication
+bcrypt
+
+# File Generation (QR & PDF)
+qrcode
+pypdf
+reportlab
