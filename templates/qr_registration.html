@@ -73,6 +73,7 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
 
+            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -101,10 +102,12 @@
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/generator" class="nav-link">🖨️ PDF Generator</a>
-        <a href="/qr-registration" class="nav-link active">📥 QR Registration</a>
+        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link mobile-hide active">📥 QR Registration</a>
         <a href="/distribution" class="nav-link ">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link ">📜 Transaction Trail</a>
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
         
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">

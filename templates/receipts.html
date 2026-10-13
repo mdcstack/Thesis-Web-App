@@ -95,6 +95,7 @@
             .card { width: max-content; margin: 0 auto; }
         }
 
+            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -209,7 +210,7 @@
                         <tr>
                             <td style="padding-top: 10px;" id="r-qty-table">0</td>
                             <td style="padding-top: 10px;">Examination Booklets</td>
-                            <td style="text-align: right; padding-top: 10px;">10.00</td>
+                            <td style="text-align: right; padding-top: 10px;" id="r-unit-price-table">₱2.50</td>
                             <td style="text-align: right; padding-top: 10px;" id="r-amount-table">0.00</td>
                         </tr>
                     </tbody>
@@ -219,14 +220,14 @@
                 <div style="font-size: 1rem; margin-bottom: 20px;">
                     <h3 style="margin: 0 0 5px 0; font-size: 1.1rem;">Inventory Traceability (The Audit Trail)</h3>
                     <p style="margin: 3px 0;">Total Booklets Issued: <span id="r-total-issued"></span></p>
-                    <p style="margin: 3px 0;">Reference Numbers (Sequential Batch):</p>
+                    <p style="margin: 3px 0;">Control Numbers (Sequential Batch):</p>
                     <ul id="r-log" style="list-style-type: none; padding-left: 20px; margin: 5px 0; font-family: monospace; font-size: 1rem; color: #333;"></ul>
                 </div>
 
                 <!-- FINANCIAL SUMMARY -->
                 <div style="border: 2px solid #000; margin-bottom: 10px;">
-                    <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
-                        ☑ Payment Status: FULLY PAID
+                    <div style="padding: 10px 15px; font-size: 1.3rem; font-weight: bold;" id="r-payment-box">
+                        <span id="r-payment-icon">☑</span> Payment Status: <span id="r-payment-status">FULLY PAID</span>
                     </div>
                 </div>
 
@@ -244,6 +245,7 @@
 
 <script>
     let globalReceipts = [];
+    let globalBookletPrice = 2.50;
     let allSections = [];
 
     window.onload = function() {
@@ -258,6 +260,10 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === "success") {
+                    if (data.booklet_price !== undefined) {
+                        globalBookletPrice = parseFloat(data.booklet_price) || 2.50;
+                    }
+
                     // SORT NEWEST FIRST
                     globalReceipts = data.data.sort((a, b) => {
                         return new Date(b.date) - new Date(a.date);
@@ -412,10 +418,38 @@
         document.getElementById('r-headcount').innerText = data.qty;
         document.getElementById('r-staff').innerText = data.staff.toUpperCase();
 
+        const unitPrice = data.unit_price !== undefined ? parseFloat(data.unit_price) : (data.qty > 0 ? (data.amount / data.qty) : globalBookletPrice);
+        const unitPriceEl = document.getElementById('r-unit-price-table');
+        if (unitPriceEl) unitPriceEl.innerText = `₱${unitPrice.toFixed(2)}`;
+
         document.getElementById('r-qty-table').innerText = data.qty;
         document.getElementById('r-amount-table').innerText = data.amount.toFixed(2);
 
         document.getElementById('r-total-issued').innerText = data.qty;
+
+        // Dynamic Payment Status Display
+        const status = data.payment_status || "Unpaid";
+        const statusEl = document.getElementById('r-payment-status');
+        const iconEl = document.getElementById('r-payment-icon');
+        const boxEl = document.getElementById('r-payment-box');
+
+        if (statusEl && iconEl && boxEl) {
+            if (status === "Fully Paid") {
+                statusEl.innerText = "FULLY PAID";
+                iconEl.innerText = "☑";
+                boxEl.style.color = "#27ae60";
+            } else if (status === "Partially Paid") {
+                const paid = data.amount_paid !== undefined ? data.amount_paid.toFixed(2) : "0.00";
+                const due = data.amount_due !== undefined ? data.amount_due.toFixed(2) : data.amount.toFixed(2);
+                statusEl.innerText = `PARTIALLY PAID (₱${paid} / ₱${due})`;
+                iconEl.innerText = "⏳";
+                boxEl.style.color = "#d35400";
+            } else {
+                statusEl.innerText = "UNPAID (PENDING COLLECTION)";
+                iconEl.innerText = "⚠️";
+                boxEl.style.color = "#c0392b";
+            }
+        }
 
         const logUl = document.getElementById('r-log');
         logUl.innerHTML = "";

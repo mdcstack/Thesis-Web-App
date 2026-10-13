@@ -21,7 +21,7 @@
         
         /* --- NEW: Period Badge Styles --- */
         .period-badge { background: #3498db; color: white; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; transition: 0.3s; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .period-badge.admin-only { cursor: pointer; background: #e67e22; }
+        .period-badge.admin-only { cursor: default; background: #e67e22; }
         .period-badge.admin-only:hover { background: #d35400; transform: translateY(-1px); }
 
         .pos-grid { display: flex; gap: 20px; flex: 1; overflow: hidden; }
@@ -35,7 +35,7 @@
         
         /* Form Elements */
         select, .btn { padding: 12px; font-size: 16px; width: 100%; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
-        .btn { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        .btn { background-color: #3498db; color: white; border: none; cursor: default; font-weight: bold; transition: background 0.3s; }
         .btn:hover { background-color: #2980b9; }
         .btn-success { background-color: #27ae60; font-size: 1.1rem; padding: 15px; }
         .btn-success:hover { background-color: #219653; }
@@ -79,7 +79,7 @@
     
         /* Mobile Hamburger & Overlay Styles */
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
+        .hamburger { font-size: 1.5rem; cursor: default; margin-right: 15px; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
         .sidebar-overlay.active { display: block; }
 
@@ -109,6 +109,7 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
 
+            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -124,7 +125,7 @@
 
         <!-- NEW: Notification Bell & Panel -->
         <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
+            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: default; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
                 <span>🔔 Alerts</span>
                 <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
             </div>
@@ -136,16 +137,23 @@
         </div>
 
 
-        <!-- STAFF LOCKOUT MODAL -->
-<div class="modal-overlay" id="staffLockoutModal" style="background: rgba(44, 62, 80, 0.95); z-index: 9999;">
-    <div class="modal-card" style="border-top: 6px solid #e74c3c;">
+        <!-- STAFF / SYSTEM LOCKOUT MODAL -->
+<div class="modal-overlay" id="staffLockoutModal" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(4px);">
+    <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 480px; width: 90%; text-align: center; padding: 30px;">
         <div style="font-size: 3rem; margin-bottom: 10px;">🔒</div>
-        <h2 style="color: #e74c3c; margin-bottom: 10px;">System Locked</h2>
-        <p style="color: #7f8c8d; font-size: 1.1rem; line-height: 1.5; margin-bottom: 25px;">
-            The active exam period has not been configured for this semester. <br><br>
-            <strong style="color: #2c3e50;">Please ask the System Administrator to log in and initialize the term before resuming distribution operations.</strong>
+        <h2 style="color: #e74c3c; margin-bottom: 10px;" id="lockoutModalTitle">System Initialization Pending</h2>
+        <p style="color: #555; font-size: 1.05rem; line-height: 1.5; margin-bottom: 25px;" id="lockoutModalDesc">
+            The semester booklet selling price and active period have not yet been established. <br><br>
+            <strong style="color: #2c3e50;">Please ask the System Administrator to log in and set the booklet price for this semester before resuming distribution operations.</strong>
         </p>
-        <button class="btn btn-danger" onclick="logout()" style="width: 100%;">Return to Login</button>
+        <div id="lockoutModalActions" style="display: flex; gap: 10px; flex-direction: column;">
+            <a href="/settings" id="lockoutSettingsBtn" class="btn btn-warning" style="display: none; width: 100%; text-decoration: none; padding: 12px; font-weight: bold; font-size: 1rem; box-sizing: border-box; text-align: center; margin: 0;">
+                ⚙️ Go to Settings to Initialize Price
+            </a>
+            <button class="btn btn-danger" id="lockoutLogoutBtn" onclick="logout()" style="width: 100%; padding: 12px; font-weight: bold; font-size: 1rem; margin: 0;">
+                Return to Login
+            </button>
+        </div>
     </div>
 </div>
 
@@ -154,16 +162,19 @@
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
-        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link active">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
+       
         
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
             <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: default; width: 100%; font-weight: bold;">Log Out</button>
         </div>
     </div>
 
@@ -173,7 +184,7 @@
             
             <div style="display: flex; gap: 15px; align-items: center;">
                 <!-- THE NEW ACTIVE PERIOD BADGE -->
-                <div id="activePeriodBadge" class="period-badge" onclick="openPeriodModal()" title="Current Exam Period">
+                <div id="activePeriodBadge" class="period-badge" title="Current Exam Period (Set via Settings)">
                     📌 <span id="periodText">Loading Period...</span>
                 </div>
                 <a href="/receipts" class="btn" style="width: auto; margin: 0; background-color: #8e44ad; text-decoration: none;">🌐 Public Receipts Portal</a>
@@ -201,7 +212,15 @@
                 </div>
 
                 <div id="transaction-form" style="opacity: 0.5; pointer-events: none; transition: opacity 0.3s;">
-                    <h3 style="margin-bottom: 15px; border-top: 2px solid #ecf0f1; padding-top: 20px;">🧾 Step 2: Transaction Details</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #ecf0f1; padding-top: 20px; margin-bottom: 15px;">
+                        <h3 style="margin: 0;">🧾 Step 2: Transaction Details</h3>
+                        <button class="btn btn-primary" onclick="fetchPendingDistributions(false)" style="margin: 0; padding: 6px 6px; width: 80px; font-size: 0.85rem;" title="Refresh pending sections to prevent concurrent conflicts">
+                            🔄 Refresh Lists
+                        </button>
+                    </div>
+                    <div id="concurrencyBanner" style="display: none; background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 4px; padding: 10px; margin-bottom: 15px; font-size: 0.9rem;">
+                        ⚠️ <strong>Section Already Fulfilled:</strong> The previously selected section was just fulfilled by another clerk. The list has been refreshed.
+                    </div>
                     
                     <label style="font-weight: bold; margin-bottom: 5px; display: block;">Instructor:</label>
                     <select id="instructorSelect" onchange="handleInstructorChange()">
@@ -269,7 +288,7 @@
                             <tr>
                                 <td id="r-qty-table">0</td>
                                 <td>Examination Booklets</td>
-                                <td style="text-align: right;">10.00</td>
+                                <td style="text-align: right;" id="r-unit-price">₱2.50</td>
                                 <td style="text-align: right;" id="r-amount-table">0.00</td>
                             </tr>
                         </tbody>
@@ -278,50 +297,20 @@
                     <div style="font-size: 1rem; margin-bottom: 20px;">
                         <h3 style="margin: 0 0 5px 0; font-size: 1.1rem;">Inventory Traceability (The Audit Trail)</h3>
                         <p style="margin: 3px 0;">Total Booklets Issued: <span id="r-total-issued">0</span></p>
-                        <p style="margin: 3px 0;">Reference Numbers (Allocations):</p>
+                        <p style="margin: 3px 0;">Control Numbers (Allocations):</p>
                         <ul id="r-log" style="list-style-type: none; padding-left: 20px; margin: 5px 0; font-family: monospace; font-size: 1rem; color: #e74c3c; font-weight: bold;">
                             <li>Awaiting subject selection...</li>
                         </ul>
                     </div>
 
-                    <div style="border: 2px solid #000; margin-bottom: 10px;">
-                        <div style="padding: 10px 15px; font-size: 1.4rem; font-weight: bold;">
-                            ☑ Payment Status: PAID
-                        </div>
-                    </div>
+                    
                 </div>
             </div>
         </div>
     </div>
 
     <!-- PERIOD SWITCHER MODAL (ADMIN ONLY) -->
-    <div class="modal-overlay" id="periodModal">
-        <div class="modal-card" style="border-top-color: #e67e22;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px;">⚙️ Change Exam Period</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">
-                Warning: Changing the active period will reset the distribution demand for all classes. Only do this at the start of a new exam week.
-            </p>
-            
-            <div style="display: flex; gap: 10px; margin-bottom: 25px;">
-                <select id="newPeriodSelect" style="flex: 1.2; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
-                    <option value="1st Sem - Midterms">1st Sem - Midterms</option>
-                    <option value="1st Sem - Finals">1st Sem - Finals</option>
-                    <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
-                    <option value="2nd Sem - Finals">2nd Sem - Finals</option>
-                </select>
-                
-                <!-- INFINITELY DYNAMIC ACADEMIC YEAR SELECTOR -->
-                <select id="newAySelect" style="flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
-                    <!-- JavaScript will automatically generate the years here based on the server clock -->
-                </select>
-            </div>
-            
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-danger" onclick="closePeriodModal()" style="margin:0; flex:1;">Cancel</button>
-                <button class="btn btn-success" onclick="savePeriod()" style="margin:0; flex:1;">Save Period</button>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- PROACTIVE BRIDGING SCANNER MODAL -->
     <div class="modal-overlay" id="scannerModal">
@@ -391,24 +380,51 @@
             adminLinks.forEach(link => link.style.display = 'none');
         }
 
+    function getUserPackKey() {
+        return activeUser ? `bookletlog_active_pack_${activeUser.username}` : 'bookletlog_active_pack';
+    }
+
+    // App/Tab Closure: Automatically release physical pack reservation
+    window.addEventListener('beforeunload', () => {
+        if (primaryPackQR && activeUser) {
+            const payload = JSON.stringify({ username: activeUser.username, qr_code: primaryPackQR });
+            navigator.sendBeacon('/api/release-pack-beacon', new Blob([payload], { type: 'application/json' }));
+        }
+    });
+
     function logout() {
         if(confirm("Are you sure you want to log out?")) {
+            const currentPack = primaryPackQR;
+            // Behavior 2: Reset active pack on logout so next person on terminal starts fresh
+            localStorage.removeItem(getUserPackKey());
+            localStorage.removeItem('bookletlog_active_pack');
+            
+            // Release pack reservation on backend
+            if (currentPack && activeUser) {
+                fetch('/api/release-pack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: activeUser.username, qr_code: currentPack })
+                }).catch(() => {});
+            }
+
             fetch('/api/logout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: activeUser.username })
             }).then(() => {
-                localStorage.clear();
+                localStorage.removeItem('bookletlog_user');
                 window.location.href = '/login';
             }).catch(() => {
-                localStorage.clear();
+                localStorage.removeItem('bookletlog_user');
                 window.location.href = '/login';
             });
         }
     }
 
     let enrollmentsData = [];
-    let primaryPackQR = localStorage.getItem('bookletlog_active_pack') || null;
+    let globalBookletPrice = 2.50;
+    let primaryPackQR = localStorage.getItem(getUserPackKey()) || null;
     let primaryPackStock = 0;
     
     let bridgingPackQR = null; 
@@ -424,140 +440,125 @@
         if (primaryPackQR) {
             checkSavedSupply(primaryPackQR);
         }
+
+        // Concurrency protection: Background auto-sync every 8 seconds
+        setInterval(() => {
+            fetchPendingDistributions(true);
+            fetchLooseStockList(true);
+        }, 8000);
+
+        // Auto-refresh when tab regains focus
+        window.addEventListener('focus', () => {
+            fetchPendingDistributions(true);
+            fetchLooseStockList(true);
+        });
     };
 
-    // --- 2. PERIOD MANAGEMENT LOGIC ---
+    // --- 2. PERIOD & SYSTEM STATUS LOGIC ---
     function fetchActivePeriod() {
-    fetch('/api/active-period')
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                if (data.active_period === "UNSET") {
-                    // Lock out the staff completely
-                    document.getElementById('staffLockoutModal').style.display = 'flex';
-                } else {
-                    globalActivePeriod = data.active_period;
-                    document.getElementById('periodText').innerText = "ACTIVE: " + globalActivePeriod;
-                    document.getElementById('r-period').querySelector('span').innerText = globalActivePeriod;
-                    
-                    fetchPendingDistributions();
-                }
-            }
-        });
-}
-
-    // --- DYNAMIC YEAR GENERATOR (STRICT LIMIT) ---
-    function populateAcademicYears(selectedAy) {
-        const aySelect = document.getElementById('newAySelect');
-        aySelect.innerHTML = ''; // Clear out any old options
-        
-        // Get the exact current year from the system clock (e.g., 2026)
-        const currentYear = new Date().getFullYear(); 
-        
-        // Generate only Current Year + 3 Years Forward (0, 1, 2, 3)
-        for (let i = 0; i <= 3; i++) {
-            const startYear = currentYear + i;
-            const endYear = startYear + 1;
-            const ayString = `AY ${startYear}-${endYear}`;
-            
-            let opt = document.createElement('option');
-            opt.value = ayString;
-            opt.text = ayString;
-            
-            if (selectedAy === ayString) {
-                opt.selected = true;
-            }
-            aySelect.appendChild(opt);
-        }
-        
-        // SMART FAILSAFE: If the currently active year is from the past and 
-        // didn't get generated in our strict loop, inject it at the very top 
-        // so the system doesn't break!
-        const existingOptions = Array.from(aySelect.options).map(opt => opt.value);
-        if (selectedAy && !existingOptions.includes(selectedAy)) {
-            let legacyOpt = document.createElement('option');
-            legacyOpt.value = selectedAy;
-            legacyOpt.text = selectedAy + " (Current)";
-            legacyOpt.selected = true;
-            aySelect.insertBefore(legacyOpt, aySelect.firstChild);
-        }
-    }
-
-    function openPeriodModal() {
-        if (activeUser.role !== 'Admin') {
-            alert("Only Administrators are authorized to change the Active Exam Period.");
-            return;
-        }
-        
-        // Default fallbacks
-        let currentPeriod = "1st Sem - Midterms";
-        let currentAy = `AY ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`; 
-        
-        // If an active period is already set in the database, extract it
-        if (globalActivePeriod.includes(" | ")) {
-            let parts = globalActivePeriod.split(" | ");
-            currentPeriod = parts[0];
-            currentAy = parts[1];
-        } 
-        
-        // Set the UI
-        document.getElementById('newPeriodSelect').value = currentPeriod;
-        populateAcademicYears(currentAy); // Auto-generate and select the right year!
-        
-        document.getElementById('periodModal').style.display = 'flex';
-    }
-
-    function closePeriodModal() {
-        document.getElementById('periodModal').style.display = 'none';
-    }
-
-    function savePeriod() {
-        // CONSTRUCT THE NEW BULLETPROOF STRING
-        const newPeriod = document.getElementById('newPeriodSelect').value;
-        const newAy = document.getElementById('newAySelect').value;
-        const combinedPeriod = newPeriod + " | " + newAy;
-        
-        if (combinedPeriod === globalActivePeriod) {
-            closePeriodModal();
-            return;
-        }
-        
-        if (!confirm(`WARNING: You are about to shift the entire system to [${combinedPeriod}].\n\nThis will reset the distribution demands for ALL classes. Proceed?`)) return;
-
-        fetch('/api/active-period', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active_period: combinedPeriod })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                alert(data.message);
-                window.location.reload(); 
-            }
-        });
-    }
-
-    // --- 3. DATA FETCHING ---
-    function fetchPendingDistributions() {
-        fetch('/api/pending-distributions')
+        fetch('/api/system-status')
             .then(res => res.json())
             .then(data => {
-                const dept = activeUser.department;
-                if (dept === 'CS') enrollmentsData = data.data.filter(item => item.section.toUpperCase().includes('BSCS'));
-                else if (dept === 'IT') enrollmentsData = data.data.filter(item => item.section.toUpperCase().includes('BSIT'));
-                else enrollmentsData = data.data;
+                if (data.status === "success") {
+                    if (!data.is_initialized) {
+                        const modal = document.getElementById('staffLockoutModal');
+                        const settingsBtn = document.getElementById('lockoutSettingsBtn');
+                        const logoutBtn = document.getElementById('lockoutLogoutBtn');
+                        const desc = document.getElementById('lockoutModalDesc');
 
-                populateInstructors();
+                        if (activeUser && activeUser.role === 'Admin') {
+                            if (desc) {
+                                desc.innerHTML = `You are logged in as <strong>Administrator</strong>, but the semester booklet selling price and active period have not yet been established.<br><br>Please configure the official booklet price in <strong>Settings</strong> before proceeding with distributions.`;
+                            }
+                            if (settingsBtn) {
+                                settingsBtn.style.display = 'block';
+                            }
+                            if (logoutBtn) {
+                                logoutBtn.style.display = 'none';
+                            }
+                        } else {
+                            if (desc) {
+                                desc.innerHTML = `The semester booklet selling price and active period have not yet been established.<br><br><strong style="color: #2c3e50;">Please ask the System Administrator to log in and set the booklet price for this semester before resuming distribution operations.</strong>`;
+                            }
+                            if (settingsBtn) {
+                                settingsBtn.style.display = 'none';
+                            }
+                            if (logoutBtn) {
+                                logoutBtn.style.display = 'block';
+                            }
+                        }
+
+                        if (modal) modal.style.display = 'flex';
+                    } else {
+                        globalActivePeriod = data.active_period;
+                        if (data.booklet_price > 0) {
+                            globalBookletPrice = data.booklet_price;
+                            const unitPriceEl = document.getElementById('r-unit-price');
+                            if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
+                        }
+                        document.getElementById('periodText').innerText = "ACTIVE: " + globalActivePeriod;
+                        document.getElementById('r-period').querySelector('span').innerText = globalActivePeriod;
+                        
+                        fetchPendingDistributions();
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch system status:", err);
             });
     }
 
-    function populateInstructors() {
+    // --- 3. DATA FETCHING ---
+    function fetchPendingDistributions(isBackground = false) {
+        fetch('/api/pending-distributions')
+            .then(res => res.json())
+            .then(data => {
+                if (data.booklet_price !== undefined) {
+                    globalBookletPrice = parseFloat(data.booklet_price) || 2.50;
+                    const unitPriceEl = document.getElementById('r-unit-price');
+                    if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
+                }
+
+                const dept = activeUser.department;
+                if (dept === 'CS') enrollmentsData = (data.data || []).filter(item => item.section.toUpperCase().includes('BSCS'));
+                else if (dept === 'IT') enrollmentsData = (data.data || []).filter(item => item.section.toUpperCase().includes('BSIT'));
+                else enrollmentsData = data.data || [];
+
+                // Check concurrency conflict for currently selected section/subject
+                const currentSubjectSelect = document.getElementById('subjectSelect');
+                const selectedEnrollmentId = currentSubjectSelect ? parseInt(currentSubjectSelect.value) : null;
+
+                if (selectedEnrollmentId) {
+                    const stillExists = enrollmentsData.some(item => item.enrollment_id === selectedEnrollmentId);
+                    if (!stillExists) {
+                        const banner = document.getElementById('concurrencyBanner');
+                        if (banner) {
+                            banner.style.display = 'block';
+                            setTimeout(() => { banner.style.display = 'none'; }, 6000);
+                        }
+                        // Reset subject selection cleanly without touching scanned active box
+                        currentSubjectSelect.value = "";
+                        handleSubjectChange();
+                    }
+                }
+
+                populateInstructors(isBackground);
+            })
+            .catch(err => {
+                if (!isBackground) console.error("Error fetching pending distributions:", err);
+            });
+    }
+
+    function populateInstructors(keepSelection = false) {
         const select = document.getElementById('instructorSelect');
+        const prevSelected = select.value;
         select.innerHTML = '<option value="">-- Select Instructor --</option>'; 
         [...new Set(enrollmentsData.map(item => item.teacher_name))].forEach(t => {
             select.innerHTML += `<option value="${t}">${t}</option>`;
         });
+        if (keepSelection && prevSelected) {
+            select.value = prevSelected;
+        }
     }
 
     // --- 4. UI EVENT HANDLERS ---
@@ -651,18 +652,27 @@
                 scanned_pack_qr: primaryPackQR, 
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
-                selected_loose_refs: globalSelectedLoose
+                selected_loose_controls: globalSelectedLoose
             })
         })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {
+                if (data.booklet_price !== undefined) {
+                    globalBookletPrice = parseFloat(data.booklet_price) || globalBookletPrice;
+                }
                 paintLiveReceipt(data.preview_log);
                 btn.disabled = false;
                 btn.innerText = "Verify Booklets & Submit Transaction";
                 btn.className = "btn btn-success";
             } else {
-                alert("Preview Error: " + data.message);
+                if (data.code === "ALREADY_FULFILLED") {
+                    alert("⚠️ Concurrent Transaction Notice: " + data.message + " The distribution list will now refresh.");
+                    fetchPendingDistributions();
+                    resetReceipt();
+                } else {
+                    alert("Preview Error: " + data.message);
+                }
                 btn.innerText = "Error calculating stock";
             }
         });
@@ -688,7 +698,10 @@
         document.getElementById('r-qty-table').innerText = currentDemand;
         document.getElementById('r-total-issued').innerText = currentDemand;
         
-        const amount = (currentDemand * 10).toFixed(2);
+        const unitPriceEl = document.getElementById('r-unit-price');
+        if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
+
+        const amount = (currentDemand * globalBookletPrice).toFixed(2);
         document.getElementById('r-amount-table').innerText = amount;
 
         const logUl = document.getElementById('r-log');
@@ -747,11 +760,11 @@
         }
         
         list.forEach(item => {
-            const isChecked = globalSelectedLoose.includes(item.reference_num) ? 'checked' : '';
+            const isChecked = globalSelectedLoose.includes(item.control_num) ? 'checked' : '';
             container.innerHTML += `
-                <label style="display: block; padding: 8px; border-bottom: 1px solid #eee; cursor: pointer;">
-                    <input type="checkbox" class="loose-checkbox" value="${item.reference_num}" ${isChecked}>
-                    ${item.reference_num}
+                <label style="display: block; padding: 8px; border-bottom: 1px solid #eee; cursor: default;">
+                    <input type="checkbox" class="loose-checkbox" value="${item.control_num}" ${isChecked}>
+                    ${item.control_num}
                 </label>
             `;
         });
@@ -759,7 +772,7 @@
 
     function filterLooseList() {
         const query = document.getElementById('looseSearch').value.toUpperCase();
-        const filtered = allLooseStock.filter(item => item.reference_num.includes(query));
+        const filtered = allLooseStock.filter(item => item.control_num.includes(query));
         renderLooseList(filtered);
     }
 
@@ -779,12 +792,25 @@
 
     // --- 7. SCANNER & SUPPLY LOGIC ---
     function checkSavedSupply(qr) {
-        fetch(`/api/pack-status/${qr}`).then(res => res.json()).then(data => {
+        const usernameParam = encodeURIComponent(activeUser.username || '');
+        fetch(`/api/pack-status/${qr}?username=${usernameParam}`).then(res => res.json()).then(data => {
             if (data.status === "success" && data.available > 0) {
                 setPrimarySupply(qr, data.available);
             } else {
+                if (data.code === 'PACK_LOCKED') {
+                    alert(`⚠️ Supply Access Notice: This Master Pack is currently claimed by another user (${data.claimed_by}). Your active supply box has been reset.`);
+                }
+                localStorage.removeItem(getUserPackKey());
                 localStorage.removeItem('bookletlog_active_pack');
+                primaryPackQR = null;
+                primaryPackStock = 0;
+                document.getElementById('active-supply-view').style.display = "none";
+                document.getElementById('no-supply-view').style.display = "block";
+                document.getElementById('transaction-form').style.opacity = "0.5";
+                document.getElementById('transaction-form').style.pointerEvents = "none";
             }
+        }).catch(err => {
+            console.error("Error verifying saved supply pack:", err);
         });
     }
 
@@ -826,7 +852,8 @@
     function onScanSuccess(decodedText) {
         closeScannerModal();
         
-        fetch(`/api/pack-status/${decodedText}`).then(res => res.json()).then(data => {
+        const usernameParam = encodeURIComponent(activeUser.username || '');
+        fetch(`/api/pack-status/${decodedText}?username=${usernameParam}`).then(res => res.json()).then(data => {
             if (data.status === "success") {
                 if (currentScanIntent === 'primary') {
                     setPrimarySupply(data.qr_code, data.available);
@@ -836,15 +863,23 @@
                     triggerLivePreview(); 
                 }
             } else {
-                alert(data.message);
+                if (data.code === 'PACK_LOCKED') {
+                    alert(`⚠️ Pack In Use: This Master Pack is currently opened and held by '${data.claimed_by}'. To maintain an organized workflow, two accounts cannot distribute from the same box. Please scan a different pack.`);
+                } else {
+                    alert(data.message);
+                }
                 if (currentScanIntent === 'bridge') resetReceipt();
             }
+        }).catch(err => {
+            console.error("Error reading scanned pack:", err);
+            alert("Network error scanning pack. Please try again.");
+            if (currentScanIntent === 'bridge') resetReceipt();
         });
     }
 
     function setPrimarySupply(qr, stock) {
         primaryPackQR = qr; primaryPackStock = stock;
-        localStorage.setItem('bookletlog_active_pack', qr);
+        localStorage.setItem(getUserPackKey(), qr);
         document.getElementById('no-supply-view').style.display = "none";
         document.getElementById('active-supply-view').style.display = "block";
         document.getElementById('pack-qr-display').innerText = qr;
@@ -856,6 +891,19 @@
 
     function manualCloseBox() {
         if(confirm("Current supply of booklets run out, close this box and scan a new one?")) {
+            const packToRelease = primaryPackQR;
+            if (packToRelease) {
+                fetch('/api/release-pack', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: activeUser.username,
+                        qr_code: packToRelease
+                    })
+                }).catch(err => console.error("Error releasing pack claim:", err));
+            }
+            
+            localStorage.removeItem(getUserPackKey());
             localStorage.removeItem('bookletlog_active_pack');
             primaryPackQR = null; primaryPackStock = 0;
             document.getElementById('active-supply-view').style.display = "none";
@@ -886,7 +934,8 @@
                 scanned_pack_qr: primaryPackQR,
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
-                selected_loose_refs: globalSelectedLoose
+                selected_loose_controls: globalSelectedLoose,
+                clerk_department: activeUser.department || "CS"
             })
         })
         .then(res => res.json())
@@ -922,7 +971,16 @@
                 }
 
             } else {
-                alert("Execution Error: " + data.message);
+                if (data.code === "ALREADY_FULFILLED") {
+                    alert("⚠️ Concurrency Conflict: " + data.message + " The distribution list will now refresh.");
+                    fetchPendingDistributions();
+                    resetReceipt();
+                } else if (data.code === "STOCK_CONFLICT") {
+                    alert("⚠️ Inventory Stock Conflict: " + data.message + " Please check current supply or scan a new pack.");
+                    fetchPendingDistributions();
+                } else {
+                    alert("Execution Error: " + data.message);
+                }
                 btn.disabled = false;
                 btn.innerText = "Verify Booklets & Submit Transaction";
             }
@@ -992,7 +1050,7 @@
                     <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
                     <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
                     <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: default;">Acknowledge</button>
                 </div>
             </div>
         `;
@@ -1044,7 +1102,7 @@ function toggleSidebar() {
     <!-- LOOSE STOCK SELECTION MODAL -->
     <div class="modal-overlay" id="looseStockModal">
         <div class="modal-card" style="max-width: 500px; text-align: left; border-top-color: #f39c12;">
-            <span class="close" style="float: right; font-size: 1.5rem; cursor: pointer; color: #7f8c8d;" onclick="closeLooseStockModal()">&times;</span>
+            <span class="close" style="float: right; font-size: 1.5rem; cursor: default; color: #7f8c8d;" onclick="closeLooseStockModal()">&times;</span>
             <h2>Select Loose Booklets</h2>
             <input type="text" id="looseSearch" placeholder="Search REF-..." onkeyup="filterLooseList()" style="width: 100%; padding: 10px; margin-bottom: 15px;">
             <div id="looseListContainer" style="max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
@@ -1056,3 +1114,4 @@ function toggleSidebar() {
 
 </body>
 </html>
+

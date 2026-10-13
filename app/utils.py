@@ -4,7 +4,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, landscape
 from pypdf import PdfReader, PdfWriter
 
-def generate_batch_pdf(start_num, total_yield, batch_id):
+def generate_batch_pdf(start_num, total_yield, batch_id, prefix):
     os.makedirs("static/front_page_pdfs", exist_ok=True)
     template_path = "base_template.pdf" 
     output_path = f"static/front_page_pdfs/{batch_id}.pdf"
@@ -14,7 +14,7 @@ def generate_batch_pdf(start_num, total_yield, batch_id):
     POS_Y = 400
 
     for i in range(total_yield):
-        ref_num = f"REF-{(start_num + i):04d}"
+        ref_num = f"{prefix}-{(start_num + i):04d}"
         
         packet = io.BytesIO()
         can = canvas.Canvas(packet, pagesize=landscape(A4))

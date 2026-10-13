@@ -46,6 +46,7 @@
             .main-content { padding: 15px; align-items: center; }
             .card { margin-top: 0; }
         }
+            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -78,10 +79,12 @@
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link active admin-only">👥 Manage Users</a>
-        <a href="/generator" class="nav-link">🖨️ PDF Generator</a> 
-        <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
+        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
         
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
@@ -114,6 +117,14 @@
                     <option value="Admin">Admin</option>
                 </select>
             </div>
+
+            <div class="form-group">
+                <label>Department</label>
+                <select id="department">
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                </select>
+            </div>
             
             <button class="btn" onclick="createUser()">Create Account</button>
         </div>
@@ -128,6 +139,24 @@
         } else {
             document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
             document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || 'N/A') + ")";
+            
+            // Add event listener for role change
+            const roleSelect = document.getElementById('role');
+            if (roleSelect) {
+                roleSelect.addEventListener('change', function() {
+                    const deptSelect = document.getElementById('department');
+                    if (this.value === 'Admin') {
+                        deptSelect.innerHTML = '<option value="All">All</option>';
+                        deptSelect.disabled = true;
+                    } else {
+                        deptSelect.innerHTML = `
+                            <option value="CS">Computer Science (CS)</option>
+                            <option value="IT">Information Technology (IT)</option>
+                        `;
+                        deptSelect.disabled = false;
+                    }
+                });
+            }
     
             // Hide admin-only links (Manage Users should only be accessed by Admin)
             if (activeUser.role !== 'Admin') {
@@ -233,6 +262,13 @@
             const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
             const role = document.getElementById('role').value;
+            
+            // If role is Admin, force department to "All", otherwise get value from dropdown
+            let department = document.getElementById('department').value;
+            if (role === 'Admin') {
+                department = 'All';
+            }
+            
             const statusMsg = document.getElementById('statusMessage');
 
             if(!username || !password) {
@@ -244,7 +280,7 @@
             fetch('/api/users/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, password: password, role: role })
+                body: JSON.stringify({ username: username, password: password, role: role, department: department })
             })
             .then(res => res.json())
             .then(data => {

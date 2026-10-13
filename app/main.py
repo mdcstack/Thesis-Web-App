@@ -101,27 +101,39 @@ def save_qr_code(req: schemas.SaveQRRequest):
 
 @app.post("/api/register-ream")
 def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
+    settings = db.query(models.SystemSettings).first()
+    if not settings:
+        settings = models.SystemSettings()
+        db.add(settings)
+        db.commit()
+
     ream_count = request_data.ream_count
-    total_yield = ream_count * 83  # Deterministic yield logic
+    # Deterministic yield logic based on Admin settings
+    yield_per_ream = 500 // settings.sheets_per_booklet
+    total_yield = ream_count * yield_per_ream
     
     # 1. Find the last generated reference number
     last_booklet = db.query(models.Booklet).order_by(models.Booklet.id.desc()).first()
     start_num = 1
     if last_booklet:
-        start_num = int(last_booklet.reference_num.split('-')[1]) + 1
+        start_num = int(last_booklet.control_num.split("-")[-1]) + 1
         
     # 2. Generate Master Batch ID
     batch_id = f"BATCH-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
     current_period = get_active_period(db)
     
+    prefix = settings.current_semester_name or "1ST26"
+    
     new_batch = models.MasterBatch(
         qr_code_id=batch_id,
         ream_count=ream_count,
         total_yield=total_yield, 
-        start_reference=f"REF-{start_num:04d}",
-        end_reference=f"REF-{(start_num + total_yield - 1):04d}",
-        registered_period=current_period
+        start_control_num=f"{prefix}-{start_num:04d}",
+        end_control_num=f"{prefix}-{(start_num + total_yield - 1):04d}",
+        registered_period=current_period,
+        ream_price=settings.ream_price,
+        sheets_per_booklet=settings.sheets_per_booklet
     )
     db.add(new_batch)
     db.commit()
@@ -129,9 +141,9 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     
     # 3. Log ALL physical booklets dynamically (Marked as pending)
     for i in range(total_yield):
-        ref_num = f"REF-{(start_num + i):04d}"
+        ref_num = f"{prefix}-{(start_num + i):04d}"
         new_booklet = models.Booklet(
-            reference_num=ref_num,
+            control_num=ref_num,
             master_batch_id=new_batch.id,
             status="pending" # Changed from 'available'
         )
@@ -139,7 +151,7 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     db.commit()
     
     # 4. Trigger PDF Stamping for the total yield
-    pdf_path = generate_batch_pdf(start_num, total_yield, batch_id)
+    pdf_path = generate_batch_pdf(start_num, total_yield, batch_id, prefix)
     
     return {
         "message": f"{ream_count} Reams successfully converted.",
@@ -190,7 +202,7 @@ def read_history(request: Request, db: Session = Depends(get_db)):
             qty = len(booklets)
             
             # FIXED: Changed reference_number to reference_num
-            refs = f"{booklets[0].reference_num} ➔ {booklets[-1].reference_num}" if qty > 1 else booklets[0].reference_num
+            refs = f"{booklets[0].control_num} ➔ {booklets[-1].control_num}" if qty > 1 else booklets[0].control_num
             
             history_data.append({
                 "enrollment_id": enr.id,
@@ -240,16 +252,16 @@ def activate_batch(request_data: ActivateRequest, db: Session = Depends(get_db))
         # Converts "REF-0042" into the integer 42
         return int(ref_str.split('-')[1])
         
-    batches.sort(key=lambda x: extract_num(x.start_reference))
+    batches.sort(key=lambda x: extract_num(x.start_control_num))
     
     # 3. Validate Contiguity (Ensure there are no gaps in the reference numbers)
     for i in range(len(batches) - 1):
-        current_end = extract_num(batches[i].end_reference)
-        next_start = extract_num(batches[i+1].start_reference)
+        current_end = extract_num(batches[i].end_control_num)
+        next_start = extract_num(batches[i+1].start_control_num)
         if next_start != current_end + 1:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Gap detected! {batches[i].end_reference} does not seamlessly connect to {batches[i+1].start_reference}."
+                detail=f"Gap detected! {batches[i].end_control_num} does not seamlessly connect to {batches[i+1].start_control_num}."
             )
             
     # 4. Generate the unified Supply Pack ID
@@ -302,13 +314,17 @@ def distribution_page(request: Request):
 
 @app.get("/api/loose-stock-list")
 def get_loose_stock_list(db: Session = Depends(get_db)):
-    loose = db.query(models.Booklet).filter(models.Booklet.status == "loose_stock").order_by(models.Booklet.reference_num).all()
-    return {"status": "success", "data": [{"id": b.id, "reference_num": b.reference_num} for b in loose]}
+    loose = db.query(models.Booklet).filter(models.Booklet.status == "loose_stock").order_by(models.Booklet.control_num).all()
+    return {"status": "success", "data": [{"id": b.id, "control_num": b.control_num} for b in loose]}
 
 @app.get("/api/pending-distributions")
 def get_pending_distributions(db: Session = Depends(get_db)):
     enrollments = db.query(models.Enrollment).all()
     active_period = get_active_period(db) # Get the current period!
+    
+    settings = db.query(models.SystemSettings).first()
+    booklet_price = settings.booklet_price if settings else 2.50
+    
     data = []
     
     for e in enrollments:
@@ -331,37 +347,18 @@ def get_pending_distributions(db: Session = Depends(get_db)):
                 "remaining": remaining
             })
             
-    return {"status": "success", "data": data, "active_period": active_period}
-    enrollments = db.query(models.Enrollment).all()
-    active_period = get_active_period(db) # Get the current period!
-    data = []
-    
-    for e in enrollments:
-        # MAGIC: Only count booklets given during THIS specific period
-        fulfilled_count = db.query(models.Booklet).filter(
-            models.Booklet.enrollment_id == e.id,
-            models.Booklet.exam_period == active_period
-        ).count()
-        
-        remaining = e.student_headcount - fulfilled_count
-        
-        if remaining > 0:
-            data.append({
-                "enrollment_id": e.id,
-                "teacher_name": e.teacher_name,
-                "section": e.section_name,
-                "subject": e.subject_name,
-                "headcount": e.student_headcount,
-                "fulfilled": fulfilled_count,
-                "remaining": remaining
-            })
-            
-    return {"status": "success", "data": data, "active_period": active_period}
+    return {
+        "status": "success", 
+        "data": data, 
+        "active_period": active_period,
+        "booklet_price": booklet_price
+    }
 
 
 @app.get("/api/pack-status/{qr_code}")
-def get_pack_status(qr_code: str, db: Session = Depends(get_db)):
-    """Checks the scanned QR code and returns how many booklets are available inside."""
+def get_pack_status(qr_code: str, username: Optional[str] = None, db: Session = Depends(get_db)):
+    """Checks the scanned QR code and returns how many booklets are available inside.
+    Enforces exclusive pack locking per user session."""
     batches = db.query(models.MasterBatch).filter(
         (models.MasterBatch.qr_code_id == qr_code) |
         (models.MasterBatch.pack_qr_id == qr_code)
@@ -376,7 +373,67 @@ def get_pack_status(qr_code: str, db: Session = Depends(get_db)):
         models.Booklet.status == "available"
     ).count()
 
-    return {"status": "success", "qr_code": qr_code, "available": available_count}
+    if available_count == 0:
+        return {
+            "status": "error",
+            "code": "PACK_DEPLETED",
+            "message": "This Master Pack has already been fully depleted (0 pcs remaining)."
+        }
+
+    # Anti-Overlap Collision Protection: Check if held by another active user
+    primary_batch = batches[0]
+    if primary_batch.claimed_by and username and primary_batch.claimed_by != username:
+        return {
+            "status": "error",
+            "code": "PACK_LOCKED",
+            "claimed_by": primary_batch.claimed_by,
+            "message": f"This Master Pack is currently opened and held by '{primary_batch.claimed_by}'. To maintain an organized workflow, two accounts cannot distribute from the same box. Please scan a different pack."
+        }
+
+    # Exclusively lock/claim this pack for the current user
+    if username:
+        for b in batches:
+            b.claimed_by = username
+        db.commit()
+
+    return {"status": "success", "qr_code": qr_code, "available": available_count, "claimed_by": username}
+
+
+class ReleasePackRequest(BaseModel):
+    username: str
+    qr_code: Optional[str] = None
+
+@app.post("/api/release-pack")
+def release_pack(req: ReleasePackRequest, db: Session = Depends(get_db)):
+    """Releases the exclusive claim on a Master Pack so another user can scan it."""
+    query = db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == req.username)
+    if req.qr_code:
+        query = query.filter(
+            (models.MasterBatch.qr_code_id == req.qr_code) |
+            (models.MasterBatch.pack_qr_id == req.qr_code)
+        )
+    batches = query.all()
+    for b in batches:
+        b.claimed_by = None
+    db.commit()
+    return {"status": "success", "message": "Pack released successfully."}
+
+import json
+
+@app.post("/api/release-pack-beacon")
+async def release_pack_beacon(request: Request, db: Session = Depends(get_db)):
+    """Handles browser exit / tab closure beacon to release the user's active pack immediately."""
+    try:
+        body = await request.body()
+        if body:
+            data = json.loads(body.decode("utf-8"))
+            username = data.get("username")
+            if username:
+                db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == username).update({models.MasterBatch.claimed_by: None})
+                db.commit()
+    except Exception as e:
+        print("Beacon release error:", str(e))
+    return {"status": "ok"}
 
 
     
@@ -409,6 +466,18 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
         }
     }
 
+@app.post("/api/authorize-admin")
+def authorize_admin(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == req.username).first()
+
+    if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
+        return {"status": "error", "message": "Invalid username or password."}
+    
+    if user.role.lower() != 'admin':
+        return {"status": "error", "message": "User does not have Admin privileges."}
+    
+    return {"status": "success", "message": "Authorized"}
+
 @app.post("/api/verify-session")
 def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
@@ -421,6 +490,8 @@ def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if user:
         user.session_token = None
+        # Release any active Master Packs held by this user so others can use them
+        db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == user.username).update({models.MasterBatch.claimed_by: None})
         db.commit()
     return {"status": "success"}
 
@@ -454,11 +525,17 @@ def read_enrollments(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/enrollments")
 def create_enrollment(enr: EnrollmentCreate, db: Session = Depends(get_db)):
+    section_upper = enr.section.strip().upper()
+    inferred_dept = "CS"
+    if "BSIT" in section_upper:
+        inferred_dept = "IT"
+
     new_enr = models.Enrollment(
         teacher_name=enr.teacher_name.strip(),
-        section=enr.section.strip().upper(), # Forces formats like BSCS-1E to uppercase
+        section=section_upper,
         subject=enr.subject.strip().upper(),
-        student_headcount=enr.student_headcount
+        student_headcount=enr.student_headcount,
+        department=inferred_dept
     )
     db.add(new_enr)
     db.commit()
@@ -501,6 +578,9 @@ def get_public_receipts(db: Session = Depends(get_db)):
         enrollments = db.query(models.Enrollment).all()
         receipts_data = []
         
+        settings = db.query(models.SystemSettings).first()
+        booklet_price = settings.booklet_price if settings else 2.50
+        
         for enr in enrollments:
             # Group by period just like we do in the History route!
             periods = db.query(models.Booklet.exam_period).filter(
@@ -540,8 +620,8 @@ def get_public_receipts(db: Session = Depends(get_db)):
 
                     log_strings = []
                     for blk in blocks:
-                        f_ref = getattr(blk[0], 'reference_num', getattr(blk[0], 'reference_number', ''))
-                        l_ref = getattr(blk[-1], 'reference_num', getattr(blk[-1], 'reference_number', ''))
+                        f_ref = getattr(blk[0], 'control_num', getattr(blk[0], 'reference_number', ''))
+                        l_ref = getattr(blk[-1], 'control_num', getattr(blk[-1], 'reference_number', ''))
                         batch_id = getattr(blk[0], 'master_batch_id', None)
                         
                         trace_str = ""
@@ -556,6 +636,28 @@ def get_public_receipts(db: Session = Depends(get_db)):
                         else: 
                             log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}")
 
+                    # Read unit price based on Payment Status Grandfathering Rule
+                    is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
+                    b_prices = [getattr(b, 'unit_price', None) for b in booklets if getattr(b, 'unit_price', None) is not None]
+
+                    if is_fully_paid:
+                        # Rule 1: Grandfathered at the historical rate
+                        if b_prices:
+                            effective_unit_price = float(b_prices[0])
+                        elif qty > 0 and enr.amount_due > 0:
+                            effective_unit_price = round(float(enr.amount_due) / qty, 2)
+                        else:
+                            effective_unit_price = float(booklet_price)
+                        receipt_amount = round(qty * effective_unit_price, 2)
+                    else:
+                        # Rule 2 & 3: Unpaid & Partially Paid accounts reflect current updated price
+                        if b_prices:
+                            effective_unit_price = float(b_prices[0])
+                        else:
+                            effective_unit_price = float(booklet_price)
+                        # Amount reflects total order due for whole batch
+                        receipt_amount = round(qty * effective_unit_price, 2)
+
                     receipts_data.append({
                         "enrollment_id": enr.id,
                         "date": date_str,
@@ -563,13 +665,17 @@ def get_public_receipts(db: Session = Depends(get_db)):
                         "section": enr.section,
                         "subject": enr.subject,
                         "qty": qty,
-                        "amount": qty * 10,
+                        "unit_price": effective_unit_price,
+                        "amount": receipt_amount,
+                        "payment_status": enr.payment_status or "Unpaid",
+                        "amount_due": round(enr.amount_due, 2),
+                        "amount_paid": round(enr.amount_paid or 0.0, 2),
                         "staff": staff_name,
                         "log": log_strings,
                         "exam_period": period if period else "Legacy (No Period)" # NEW: Added Period
                     })
         
-        return {"status": "success", "data": receipts_data}
+        return {"status": "success", "booklet_price": booklet_price, "data": receipts_data}
     except Exception as e:
         return {"status": "error", "message": str(e), "data": []}
     
@@ -604,7 +710,7 @@ def get_distributed_booklets(enrollment_id: int, period: str = None, db: Session
         # Safely extract reference numbers
         data = []
         for b in booklets:
-            ref = getattr(b, 'reference_num', getattr(b, 'reference_number', ''))
+            ref = getattr(b, 'control_num', getattr(b, 'reference_number', ''))
             data.append({"id": b.id, "ref": ref})
             
         return {"status": "success", "data": data}
@@ -617,7 +723,7 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
     try:
         booklets = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == req.enrollment_id,
-            models.Booklet.reference_num.in_(req.reference_numbers)
+            models.Booklet.control_num.in_(req.control_numbers)
         ).all()
         
         if not booklets:
@@ -630,6 +736,21 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
         if enrollment and not is_defective:
             enrollment.student_headcount = max(0, enrollment.student_headcount - return_qty)
 
+        # Phase 3: Payment Tracking deduction on return
+        if enrollment:
+            settings = db.query(models.SystemSettings).first()
+            price = settings.booklet_price if settings else 2.50
+            enrollment.amount_due = max(0.0, enrollment.amount_due - (return_qty * price))
+            
+            if enrollment.amount_due == 0:
+                enrollment.payment_status = "Unpaid" if enrollment.amount_paid == 0 else "Fully Paid"
+            elif enrollment.amount_paid >= enrollment.amount_due:
+                enrollment.payment_status = "Fully Paid"
+            elif enrollment.amount_paid > 0:
+                enrollment.payment_status = "Partially Paid"
+            else:
+                enrollment.payment_status = "Unpaid"
+
         for b in booklets:
             b.return_reason = req.reason
             if is_defective:
@@ -637,7 +758,6 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                 # Keep enrollment_id intact for department defect analytics
             else:
                 b.status = "loose_stock"
-                b.enrollment_id = None 
                 b.date_distributed = None
                 b.distributed_by = None
             
@@ -670,7 +790,8 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         ).count()
         
         remaining_demand = enrollment.student_headcount - fulfilled_count
-        if remaining_demand <= 0: return {"status": "error", "message": f"Section already fulfilled for {active_period}."}
+        if remaining_demand <= 0: 
+            return {"status": "error", "code": "ALREADY_FULFILLED", "message": f"Section already fulfilled for {active_period}."}
 
         # Verify Primary Pack
         primary_batches = db.query(models.MasterBatch).filter(
@@ -695,9 +816,9 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         still_needed = remaining_demand
 
         # Pool 1: Loose Stock
-        if req.selected_loose_refs:
+        if req.selected_loose_controls:
             loose = db.query(models.Booklet).filter(
-                models.Booklet.reference_num.in_(req.selected_loose_refs),
+                models.Booklet.control_num.in_(req.selected_loose_controls),
                 models.Booklet.status == "loose_stock"
             ).all()
             if loose:
@@ -709,7 +830,7 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
             primary = db.query(models.Booklet).filter(
                 models.Booklet.master_batch_id.in_(primary_batch_ids), 
                 models.Booklet.status == "available"
-            ).order_by(models.Booklet.reference_num).limit(still_needed).all()
+            ).order_by(models.Booklet.control_num).limit(still_needed).all()
             if primary:
                 booklets_to_distribute.extend(primary)
                 still_needed -= len(primary)
@@ -719,7 +840,7 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
             bridging = db.query(models.Booklet).filter(
                 models.Booklet.master_batch_id.in_(bridging_batch_ids), 
                 models.Booklet.status == "available"
-            ).order_by(models.Booklet.reference_num).limit(still_needed).all()
+            ).order_by(models.Booklet.control_num).limit(still_needed).all()
             if bridging:
                 booklets_to_distribute.extend(bridging)
                 still_needed -= len(bridging)
@@ -745,8 +866,8 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
 
         log_strings = []
         for blk in blocks:
-            f_ref = getattr(blk[0], 'reference_num', getattr(blk[0], 'reference_number', ''))
-            l_ref = getattr(blk[-1], 'reference_num', getattr(blk[-1], 'reference_number', ''))
+            f_ref = getattr(blk[0], 'control_num', getattr(blk[0], 'reference_number', ''))
+            l_ref = getattr(blk[-1], 'control_num', getattr(blk[-1], 'reference_number', ''))
             batch_id = getattr(blk[0], 'master_batch_id', None)
             
             trace_str = ""
@@ -762,7 +883,15 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
                 log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}")
                 
         chunk_log_str = "<br>&nbsp;&nbsp;&nbsp;&nbsp;".join(log_strings)
-        return {"status": "success", "preview_log": chunk_log_str}
+        settings = db.query(models.SystemSettings).first()
+        booklet_price = settings.booklet_price if settings else 2.50
+        total_amount = round(remaining_demand * booklet_price, 2)
+        return {
+            "status": "success", 
+            "preview_log": chunk_log_str,
+            "booklet_price": booklet_price,
+            "total_amount": total_amount
+        }
         
     except Exception as e:
         print(f"CRITICAL ERROR IN PREVIEW: {str(e)}")
@@ -788,7 +917,7 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
         
         remaining_demand = enrollment.student_headcount - fulfilled_count
         if remaining_demand <= 0:
-            return {"status": "error", "message": f"Section already fulfilled for {active_period}."}
+            return {"status": "error", "code": "ALREADY_FULFILLED", "message": f"Section already fulfilled for {active_period}."}
 
         primary_batches = db.query(models.MasterBatch).filter((models.MasterBatch.qr_code_id == req.scanned_pack_qr) | (models.MasterBatch.pack_qr_id == req.scanned_pack_qr)).all()
         primary_batch_ids = [b.id for b in primary_batches]
@@ -802,30 +931,56 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
         booklets_to_distribute = []
         still_needed = remaining_demand
 
-        if req.selected_loose_refs:
+        if req.selected_loose_controls:
             loose = db.query(models.Booklet).filter(
-                models.Booklet.reference_num.in_(req.selected_loose_refs),
+                models.Booklet.control_num.in_(req.selected_loose_controls),
                 models.Booklet.status == "loose_stock"
             ).all()
             booklets_to_distribute.extend(loose)
             still_needed -= len(loose)
 
         if still_needed > 0:
-            primary = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(primary_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.reference_num).limit(still_needed).all()
+            primary = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(primary_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
             booklets_to_distribute.extend(primary)
             still_needed -= len(primary)
 
         if still_needed > 0 and bridging_batch_ids:
-            bridging = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(bridging_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.reference_num).limit(still_needed).all()
+            bridging = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(bridging_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
             booklets_to_distribute.extend(bridging)
 
-        # 4. Bind the booklets to the teacher permanently and stamp the period
+        if len(booklets_to_distribute) < remaining_demand:
+            return {
+                "status": "error",
+                "code": "STOCK_CONFLICT",
+                "message": f"Stock conflict: Available booklets ({len(booklets_to_distribute)}) did not match required demand ({remaining_demand}). Another clerk may have just distributed from this stock."
+            }
+
+        # 4. Bind the booklets to the teacher permanently and stamp the period & unit price
+        settings = db.query(models.SystemSettings).first()
+        price = settings.booklet_price if settings else 2.50
+
         for b in booklets_to_distribute:
             b.status = "distributed"
             b.enrollment_id = req.enrollment_id
             b.date_distributed = datetime.now()
             b.distributed_by = req.clerk_name
             b.exam_period = active_period
+            b.unit_price = price
+            
+        if "BSCS" in enrollment.section.upper():
+            enrollment.department = "CS"
+        elif "BSIT" in enrollment.section.upper():
+            enrollment.department = "IT"
+
+        # Phase 3: Payment Tracking
+        enrollment.amount_due += (len(booklets_to_distribute) * price)
+        
+        if enrollment.amount_due > 0 and enrollment.amount_paid >= enrollment.amount_due:
+            enrollment.payment_status = "Fully Paid"
+        elif enrollment.amount_paid > 0:
+            enrollment.payment_status = "Partially Paid"
+        else:
+            enrollment.payment_status = "Unpaid"
 
         db.commit() # The Single-Save!
         
@@ -836,10 +991,17 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
 
 # Update this specific function in main.py
 @app.get("/api/history-data")
-def get_history_data(db: Session = Depends(get_db)):
+def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
     try:
-        enrollments = db.query(models.Enrollment).all()
+        query = db.query(models.Enrollment)
+        if department.upper() not in ["ALL", "ADMIN"]:
+            query = query.filter(models.Enrollment.department == department)
+        enrollments = query.all()
         active_period = get_active_period(db)
+        
+        settings = db.query(models.SystemSettings).first()
+        booklet_price = settings.booklet_price if settings else 2.50
+        
         history_data = []
         
         for enr in enrollments:
@@ -857,7 +1019,7 @@ def get_history_data(db: Session = Depends(get_db)):
                 
                 if booklets:
                     qty = len(booklets)
-                    refs = f"{booklets[0].reference_num} ➔ {booklets[-1].reference_num}" if qty > 1 else booklets[0].reference_num
+                    refs = f"{booklets[0].control_num} ➔ {booklets[-1].control_num}" if qty > 1 else booklets[0].control_num
                     
                     dist_date = getattr(booklets[0], 'date_distributed', None)
                     if dist_date:
@@ -868,6 +1030,25 @@ def get_history_data(db: Session = Depends(get_db)):
                         date_str = datetime.now().strftime("%d-%b-%Y %I:%M %p")
                         days_old = 0
 
+                    # Determine effective price based on Payment Status Grandfathering Rule
+                    is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
+                    b_prices = [getattr(b, 'unit_price', None) for b in booklets if getattr(b, 'unit_price', None) is not None]
+
+                    if is_fully_paid:
+                        if b_prices:
+                            effective_price = float(b_prices[0])
+                        elif qty > 0 and enr.amount_due > 0:
+                            effective_price = round(float(enr.amount_due) / qty, 2)
+                        else:
+                            effective_price = float(booklet_price)
+                    else:
+                        if b_prices:
+                            effective_price = float(b_prices[0])
+                        else:
+                            effective_price = float(booklet_price)
+
+                    transaction_total = round(qty * effective_price, 2)
+
                     history_data.append({
                         "enrollment_id": enr.id,
                         "date": date_str,
@@ -875,10 +1056,16 @@ def get_history_data(db: Session = Depends(get_db)):
                         "section": enr.section,
                         "subject": enr.subject,
                         "qty": qty,
-                        "amount": qty * 10,
+                        "booklet_price": effective_price,
+                        "total_bill": transaction_total,
+                        "amount_due": enr.amount_due,
+                        "amount_paid": enr.amount_paid,
+                        "balance": round(max(0.0, enr.amount_due - enr.amount_paid), 2),
+                        "payment_status": enr.payment_status or "Unpaid",
+                        "amount": transaction_total,
                         "refs": refs,
                         "exam_period": period if period else "Legacy (No Period)",
-                        "days_old": days_old  # <--- THIS WAS MISSING
+                        "days_old": days_old
                     })
         
         return {"status": "success", "data": history_data, "active_period": active_period}
@@ -894,7 +1081,7 @@ def search_transaction(ref: str, db: Session = Depends(get_db)):
     """Finds exactly which transaction (Class + Exam Period) owns a specific booklet."""
     try:
         booklets = db.query(models.Booklet).filter(
-            models.Booklet.reference_num.like(f"%{ref.strip()}%"),
+            models.Booklet.control_num.like(f"%{ref.strip()}%"),
             models.Booklet.enrollment_id.isnot(None)
         ).all()
         
@@ -933,6 +1120,89 @@ def api_set_active_period(period: dict, db: Session = Depends(get_db)):
         settings.active_period = period.get("active_period")
     db.commit()
     return {"status": "success", "message": f"Period changed to {settings.active_period}"}
+
+
+# --- SYSTEM INITIALIZATION GATE & STATUS ---
+@app.get("/api/system-status")
+def get_system_status(db: Session = Depends(get_db)):
+    settings = db.query(models.SystemSettings).first()
+    if not settings:
+        settings = models.SystemSettings(active_period="UNSET", booklet_price=0.0)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+
+    price = float(settings.booklet_price) if settings.booklet_price is not None else 0.0
+    period = settings.active_period or "UNSET"
+    
+    # Initialized if a valid positive booklet selling price is established and active_period is set
+    is_initialized = bool(price > 0.0 and period != "UNSET")
+
+    return {
+        "status": "success",
+        "is_initialized": is_initialized,
+        "active_period": period,
+        "booklet_price": price,
+        "ream_price": float(settings.ream_price or 250.0),
+        "sheets_per_booklet": int(settings.sheets_per_booklet or 6),
+        "current_semester_name": settings.current_semester_name or "1ST26",
+        "requires_admin_setup": not is_initialized
+    }
+
+
+class AdminResetRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/admin/reset-transactions")
+def reset_all_transactions(req: AdminResetRequest, db: Session = Depends(get_db)):
+    """Clean slate reset to Day 0: Returns all distributed/loose booklets back to available,
+    clears enrollment dues and payments back to 0, and resets system settings to uninitialized."""
+    # Verify Admin credentials
+    user = db.query(models.User).filter(models.User.username == req.username).first()
+    if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials.")
+    if user.role.lower() != 'admin':
+        raise HTTPException(status_code=403, detail="Only System Administrators can perform a clean slate reset.")
+
+    # 1. Reset all booklets (keep master batches intact)
+    booklets = db.query(models.Booklet).all()
+    reset_booklets_count = 0
+    for b in booklets:
+        b.status = "available"
+        b.enrollment_id = None
+        b.date_distributed = None
+        b.distributed_by = None
+        b.return_reason = None
+        b.exam_period = None
+        b.unit_price = None
+        reset_booklets_count += 1
+
+    # 2. Reset all enrollments
+    enrollments = db.query(models.Enrollment).all()
+    reset_enrollments_count = 0
+    for enr in enrollments:
+        enr.amount_due = 0.0
+        enr.amount_paid = 0.0
+        enr.payment_status = "Unpaid"
+        reset_enrollments_count += 1
+
+    # 3. Reset system settings to uninitialized
+    settings = db.query(models.SystemSettings).first()
+    if not settings:
+        settings = models.SystemSettings()
+        db.add(settings)
+    settings.active_period = "UNSET"
+    settings.booklet_price = 0.0
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Clean slate reset complete! {reset_booklets_count} booklets returned to available stock; {reset_enrollments_count} classes reset to zero dues. System price set to UNSET (Day 0).",
+        "booklets_reset": reset_booklets_count,
+        "enrollments_reset": reset_enrollments_count
+    }
 
 
 
@@ -990,6 +1260,10 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         trend_data = [daily_counts[d] for d in sorted_dates]
 
         # --- 3. YEAR LEVEL REVENUE & TRANSPARENT COMPUTATIONS ENGINE ---
+        settings = db.query(models.SystemSettings).first()
+        booklet_price = settings.booklet_price if settings else 2.50
+        ream_price = settings.ream_price if settings else 250.0
+
         cs_count = 0
         it_count = 0
         
@@ -1005,7 +1279,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             ).count()
 
             if b_count > 0:
-                amount = b_count * 10
+                amount = b_count * booklet_price
                 dept = "CS" if "BSCS" in enr.section.upper() else ("IT" if "BSIT" in enr.section.upper() else None)
                 
                 if dept == "CS": cs_count += b_count
@@ -1024,6 +1298,37 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                             "headcount": b_count,
                             "amount": amount
                         })
+
+        # --- 4. EXPENDITURE & ROI REPORT (FINANCIALS) ---
+        cs_gross = cs_count * booklet_price
+        it_gross = it_count * booklet_price
+        total_gross = cs_gross + it_gross
+        
+        cs_share = cs_gross * 0.01
+        it_share = it_gross * 0.01
+        
+        combined_subtotal = total_gross - cs_share - it_share
+        igp_share = combined_subtotal * 0.20
+        
+        production_cost = reams_converted * ream_price
+        net_income = combined_subtotal - igp_share - production_cost
+        
+        accounts_receivable = sum(max(0, enr.amount_due - enr.amount_paid) for enr in enrollments)
+        
+        financials = {
+            "beginning_balance": 0.00,
+            "accounts_receivable": accounts_receivable,
+            "accounts_payable": igp_share,
+            "production_cost": production_cost,
+            "gross_revenue": total_gross,
+            "cs_share": cs_share,
+            "it_share": it_share,
+            "combined_subtotal": combined_subtotal,
+            "igp_share": igp_share,
+            "net_income": net_income,
+            "booklet_price": booklet_price,
+            "ream_price": ream_price
+        }
 
         return {
             "status": "success",
@@ -1048,7 +1353,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "computations_data": {
                 "records": comp_records,
                 "summary": comp_summary
-            }
+            },
+            "financials": financials
         }
     except Exception as e:
         print(f"Dashboard Error: {str(e)}")
@@ -1146,10 +1452,15 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
     # Hash password
     hashed_password = bcrypt.hashpw(req.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
+    final_department = req.department
+    if req.role == "Admin":
+        final_department = "All"
+    
     new_user = models.User(
         username=req.username,
         password=hashed_password,
-        role=req.role
+        role=req.role,
+        department=final_department
     )
     db.add(new_user)
     db.commit()
@@ -1159,3 +1470,211 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
 
 
 
+
+
+from typing import Optional
+import re
+
+class SettingsUpdate(BaseModel):
+    current_semester_name: Optional[str] = None
+    ream_price: float
+    sheets_per_booklet: int
+    booklet_price: float
+    active_period: str
+
+@app.get("/settings", response_class=HTMLResponse)
+def get_settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request})
+
+@app.get("/api/settings")
+def get_settings(db: Session = Depends(get_db)):
+    settings = db.query(models.SystemSettings).first()
+    if not settings:
+        settings = models.SystemSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return {
+        "current_semester_name": settings.current_semester_name,
+        "ream_price": settings.ream_price,
+        "sheets_per_booklet": settings.sheets_per_booklet,
+        "booklet_price": settings.booklet_price,
+        "active_period": settings.active_period
+    }
+
+@app.post("/api/settings")
+def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
+    settings = db.query(models.SystemSettings).first()
+    if not settings:
+        settings = models.SystemSettings()
+        db.add(settings)
+    
+    try:
+        period_part, ay_part = req.active_period.split(" | ")
+        # e.g. "AY 2026-2027"
+        match = re.search(r"AY\s+(\d{4})-(\d{4})", ay_part)
+        if match:
+            start_year = match.group(1)[-2:]
+            end_year = match.group(2)[-2:]
+        else:
+            start_year = "XX"
+            end_year = "XX"
+            
+        if "1st Sem" in period_part:
+            derived_semester_name = f"1ST{start_year}"
+        else:
+            derived_semester_name = f"2ND{end_year}"
+    except Exception:
+        derived_semester_name = req.current_semester_name or "1STXX"
+    
+    old_price = float(settings.booklet_price) if settings.booklet_price is not None else 2.50
+    new_price = float(req.booklet_price)
+
+    settings.current_semester_name = derived_semester_name
+    settings.ream_price = req.ream_price
+    settings.sheets_per_booklet = req.sheets_per_booklet
+    settings.booklet_price = new_price
+    settings.active_period = req.active_period
+
+    preserved_count = 0
+    adjusted_count = 0
+
+    if old_price != new_price:
+        enrollments = db.query(models.Enrollment).all()
+        for enr in enrollments:
+            # Rule 1: Fully Paid transactions are 100% IMMUTABLE / LOCKED
+            if enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due):
+                preserved_count += 1
+                continue
+
+            # Rule 2 & 3: Unpaid and Partially Paid accounts re-priced for the whole batch
+            distributed_count = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).count()
+
+            if distributed_count > 0:
+                # Whole-batch re-pricing
+                enr.amount_due = round(distributed_count * new_price, 2)
+
+                # Synchronize unit_price column on the actual distributed booklets
+                db.query(models.Booklet).filter(
+                    models.Booklet.enrollment_id == enr.id,
+                    models.Booklet.status == "distributed"
+                ).update({models.Booklet.unit_price: new_price}, synchronize_session=False)
+
+                # Status re-evaluation with payments credited as-is
+                if enr.amount_paid >= enr.amount_due:
+                    enr.payment_status = "Fully Paid"
+                elif enr.amount_paid > 0:
+                    enr.payment_status = "Partially Paid"
+                else:
+                    enr.payment_status = "Unpaid"
+
+                adjusted_count += 1
+
+    db.commit()
+    
+    msg = f"Settings updated successfully. (Grandfathered {preserved_count} fully paid account(s); re-priced {adjusted_count} pending account(s) at ₱{new_price:.2f}/pc)" if old_price != new_price else "Settings updated successfully."
+    return {"status": "success", "message": msg}
+
+
+# ==========================================
+# PHASE 3: INSTRUCTOR PAYMENT TRACKING
+# ==========================================
+
+from pydantic import BaseModel
+class PaymentRequest(BaseModel):
+    amount: float
+
+@app.get("/payment-tracking", response_class=HTMLResponse)
+def payment_tracking_page(request: Request):
+    return templates.TemplateResponse("payment_tracking.html", {"request": request})
+
+@app.get("/department-breakdown", response_class=HTMLResponse)
+def department_breakdown_page(request: Request):
+    return templates.TemplateResponse("department_breakdown.html", {"request": request})
+
+@app.get("/expenditure-report", response_class=HTMLResponse)
+def expenditure_report_page(request: Request):
+    return templates.TemplateResponse("expenditure_report.html", {"request": request})
+
+@app.get("/api/payment-tracking")
+def get_payment_tracking(department: str = "ALL", db: Session = Depends(get_db)):
+    try:
+        # Get global settings to determine booklet price
+        settings = db.query(models.SystemSettings).first()
+        current_price = settings.booklet_price if settings else 2.50
+
+        # Get all enrollments that have at least some booklets distributed (or amount_due > 0)
+        query = db.query(models.Enrollment).filter(models.Enrollment.amount_due > 0)
+        if department.upper() not in ["ALL", "ADMIN"]:
+            query = query.filter(models.Enrollment.department == department)
+        enrollments = query.all()
+        data = []
+        for enr in enrollments:
+            # Count distributed booklets for this enrollment
+            distributed_count = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).count()
+            
+            # Count loose returned booklets
+            loose_returned = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == 'loose_stock'
+            ).count()
+
+            is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
+            effective_price = round(enr.amount_due / distributed_count, 2) if (is_fully_paid and distributed_count > 0) else current_price
+
+            data.append({
+                "id": enr.id,
+                "teacher_name": enr.teacher_name,
+                "section": enr.section,
+                "subject": enr.subject,
+                "amount_due": enr.amount_due,
+                "amount_paid": enr.amount_paid,
+                "balance": round(max(0.0, enr.amount_due - enr.amount_paid), 2),
+                "payment_status": enr.payment_status,
+                "department": enr.department,
+                "student_headcount": enr.student_headcount,
+                "distributed_count": distributed_count,
+                "loose_returned": loose_returned,
+                "booklet_price": effective_price
+            })
+        return {"status": "success", "data": data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/enrollments/{enrollment_id}/pay")
+def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depends(get_db)):
+    try:
+        if req.amount <= 0:
+            return {"status": "error", "message": "Payment amount must be greater than zero."}
+            
+        enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == enrollment_id).first()
+        if not enrollment:
+            return {"status": "error", "message": "Enrollment/Transaction not found."}
+            
+        remaining_balance = round(max(0.0, enrollment.amount_due - enrollment.amount_paid), 2)
+        if round(req.amount, 2) > remaining_balance:
+            return {
+                "status": "error",
+                "message": f"Payment amount (₱{req.amount:,.2f}) exceeds the outstanding balance (₱{remaining_balance:,.2f}). Overpayment is not allowed."
+            }
+            
+        enrollment.amount_paid += req.amount
+        
+        # Recalculate status
+        if enrollment.amount_paid >= enrollment.amount_due:
+            enrollment.payment_status = "Fully Paid"
+        elif enrollment.amount_paid > 0:
+            enrollment.payment_status = "Partially Paid"
+        else:
+            enrollment.payment_status = "Unpaid"
+            
+        db.commit()
+        return {"status": "success", "message": "Payment recorded successfully."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

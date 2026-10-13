@@ -96,6 +96,7 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
 
+            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -124,11 +125,13 @@
         <a href="/dashboard" class="nav-link ">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/generator" class="nav-link ">🖨️ PDF Generator</a>
-        <a href="/qr-registration" class="nav-link ">📥 QR Registration</a>
+        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a>
+        <a href="/qr-registration" class="nav-link mobile-hide ">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link active">📜 Transaction Trail</a>
-        
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
+      
         
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
@@ -162,6 +165,13 @@
                 <select id="filterSection" onchange="applyFilters()">
                     <option value="">-- All Sections --</option>
                 </select>
+
+                <select id="filterPaymentStatus" onchange="applyFilters()" title="Filter by Payment Status">
+                    <option value="">-- All Payment Statuses --</option>
+                    <option value="Fully Paid">🟢 Fully Paid</option>
+                    <option value="Partially Paid">🟠 Partially Paid</option>
+                    <option value="Unpaid">🔴 Unpaid</option>
+                </select>
                 
                 <button class="btn-refresh" onclick="refreshData()" title="Refresh Database">🔄</button>
             </div>
@@ -174,8 +184,8 @@
                         <th>Section</th>
                         <th>Subject</th>
                         <th>Qty</th>
-                        <th>Fee Collected</th>
-                        <th>Allocated References</th>
+                        <th>Payment &amp; Fees</th>
+                        <th>Allocated Control Numbers</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -197,7 +207,8 @@
             </p>
             
             <div class="form-group" style="text-align: center;">
-                <!-- Input for password only -->
+                <!-- Input for username and password -->
+                <input type="text" id="authAdminUser" class="auth-input" placeholder="Admin Username" style="margin-bottom: 10px;">
                 <input type="password" id="authAdminPass" class="auth-input" placeholder="Admin Password">
                 <div id="authErrorMsg" style="color: #e74c3c; font-size: 0.85rem; margin-bottom: 10px; display: none; font-weight: bold;"></div>
             </div>
@@ -231,10 +242,10 @@
 
             <div class="form-group">
                 <label>Select Returned Booklets:</label>
-                <input type="text" id="refSearchInput" class="ref-search" onkeyup="filterModalReferences()" placeholder="🔍 Type REF-0001...">
+                <input type="text" id="refSearchInput" class="ref-search" onkeyup="filterModalControls()" placeholder="🔍 Type 1ST26-0001...">
                 
                 <div class="ref-grid" id="refGridContainer">
-                    <div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading references...</div>
+                    <div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading control numbers...</div>
                 </div>
                 <p style="font-size: 0.8rem; color: #e74c3c; text-align: right; margin-top: 5px;">Total Selected: <span id="selectedCount">0</span></p>
             </div>
@@ -299,7 +310,9 @@
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading records...</td></tr>';
         
-        fetch('/api/history-data')
+        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+            const deptQuery = activeUser && activeUser.department ? `?department=${activeUser.department}` : "";
+            fetch(`/api/history-data${deptQuery}`)
             .then(response => response.json())
             .then(data => {
                 if (data.status === "success") {
@@ -326,6 +339,9 @@
         document.getElementById('filterTeacher').value = "";
         document.getElementById('filterDept').value = "";
         document.getElementById('filterSection').value = "";
+        if (document.getElementById('filterPaymentStatus')) {
+            document.getElementById('filterPaymentStatus').value = "";
+        }
         matchedKeys = null; 
         fetchData();
     }
@@ -384,6 +400,7 @@
         const teacher = document.getElementById('filterTeacher').value;
         const dept = document.getElementById('filterDept').value;
         const section = document.getElementById('filterSection').value;
+        const status = document.getElementById('filterPaymentStatus') ? document.getElementById('filterPaymentStatus').value : "";
         
         let filtered = globalHistory;
         
@@ -402,6 +419,7 @@
         if (dept === 'CS') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
         else if (dept === 'IT') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSIT'));
         if (section) filtered = filtered.filter(row => row.section === section);
+        if (status) filtered = filtered.filter(row => row.payment_status === status);
         
         renderTable(filtered);
     }
@@ -429,6 +447,52 @@
             else {
                 actionHtml = `<span class="badge" style="background-color: #95a5a6; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="This specific exam period has ended.">🔒 Period Closed</span>`;
             }
+
+            // Build Payment & Fee Display synchronized with Payment Tracking & Settings
+            let price = row.booklet_price || 2.50;
+            let totalBill = row.total_bill !== undefined ? row.total_bill : (row.qty * price);
+            let amountPaid = row.amount_paid !== undefined ? row.amount_paid : 0;
+            let balance = row.balance !== undefined ? row.balance : Math.max(0, totalBill - amountPaid);
+            let paymentStatus = row.payment_status || "Unpaid";
+            
+            let paymentHtml = "";
+            if (paymentStatus === "Fully Paid") {
+                paymentHtml = `
+                    <span class="badge" style="background-color: #27ae60; padding: 4px 8px;">🟢 Fully Paid</span>
+                    <div style="font-size: 0.82rem; font-weight: bold; color: #27ae60; margin-top: 3px;">
+                        Paid: ₱${amountPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #7f8c8d;">
+                        Total: ₱${totalBill.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} ( ₱${price.toFixed(2)})
+                    </div>
+                `;
+            } else if (paymentStatus === "Partially Paid") {
+                paymentHtml = `
+                    <span class="badge" style="background-color: #f39c12; padding: 4px 8px;">🟠 Partially Paid</span>
+                    <div style="font-size: 0.82rem; font-weight: bold; color: #27ae60; margin-top: 3px;">
+                        Paid: ₱${amountPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </div>
+                    <div style="font-size: 0.75rem; color: #e74c3c;">
+                        Bal: ₱${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (Total: ₱${totalBill.toFixed(2)})
+                    </div>
+                    <div style="margin-top: 2px;">
+                        <a href="/payment-tracking" style="font-size: 0.72rem; color: #3498db; text-decoration: none; font-weight: bold;">💳 Record Payment ➔</a>
+                    </div>
+                `;
+            } else {
+                paymentHtml = `
+                    <span class="badge" style="background-color: #e74c3c; padding: 4px 8px;">🔴 Unpaid</span>
+                    <div style="font-size: 0.82rem; font-weight: bold; color: #c0392b; margin-top: 3px;">
+                        ₱0.00 Collected
+                    </div>
+                    <div style="font-size: 0.75rem; color: #7f8c8d;">
+                        Due: ₱${totalBill.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (@ ₱${price.toFixed(2)})
+                    </div>
+                    <div style="margin-top: 2px;">
+                        <a href="/payment-tracking" style="font-size: 0.72rem; color: #3498db; text-decoration: none; font-weight: bold;">💳 Settle Balance ➔</a>
+                    </div>
+                `;
+            }
             
             tr.innerHTML = `
                 <td>${row.date}</td>
@@ -438,8 +502,8 @@
                 </td>
                 <td>${row.section}</td>
                 <td>${row.subject}</td>
-                <td><span class="badge">${row.qty}</span></td>
-                <td>PHP ${row.amount}.00</td>
+                <td><span class="badge" style="background-color: #34495e;">${row.qty}</span></td>
+                <td>${paymentHtml}</td>
                 <td class="ref-text">${row.refs}</td>
                 <td>${actionHtml}</td>
             `;
@@ -457,12 +521,13 @@
             // Clerk is logged in. Prompt for override password.
             pendingReturnAction = { enrollmentId, teacherName, examPeriod };
             
+            document.getElementById('authAdminUser').value = '';
             document.getElementById('authAdminPass').value = '';
             document.getElementById('authErrorMsg').style.display = 'none';
             document.getElementById('adminAuthModal').style.display = 'flex';
             
-            // Automatically focus the password input
-            setTimeout(() => document.getElementById('authAdminPass').focus(), 100);
+            // Automatically focus the username input
+            setTimeout(() => document.getElementById('authAdminUser').focus(), 100);
         }
     }
 
@@ -479,20 +544,25 @@
     });
 
     function verifyAdminAuth() {
-        // We assume 'admin' is the universal admin username under the hood. 
-        const user = "admin"; 
+        const user = document.getElementById('authAdminUser').value.trim(); 
         const pass = document.getElementById('authAdminPass').value;
         const errorMsg = document.getElementById('authErrorMsg');
 
-        // Check credentials against the backend
-        fetch('/api/login', {
+        if (!user || !pass) {
+            errorMsg.innerText = "Please enter both Admin username and password.";
+            errorMsg.style.display = "block";
+            return;
+        }
+
+        // Check credentials against the backend stateless endpoint
+        fetch('/api/authorize-admin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
         })
         .then(res => res.json())
         .then(data => {
-            if (data.status === "success" && data.user.role === 'Admin') {
+            if (data.status === "success") {
                 
                 // 1. EXACT FIX: Capture the target data BEFORE closing the modal!
                 const targetEnrollment = pendingReturnAction.enrollmentId;
@@ -506,7 +576,7 @@
                 openReturnModal(targetEnrollment, targetTeacher, targetPeriod);
                 
             } else {
-                errorMsg.innerText = "Access Denied: Invalid password.";
+                errorMsg.innerText = "Access Denied: " + (data.message || "Invalid credentials.");
                 errorMsg.style.display = "block";
             }
         })
@@ -528,7 +598,7 @@
         document.getElementById('refSearchInput').value = ""; 
         
         const grid = document.getElementById('refGridContainer');
-        grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading references...</div>';
+        grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading control numbers...</div>';
         
         document.getElementById('returnModal').style.display = 'flex';
 
@@ -560,7 +630,7 @@
         pendingReturnAction = null;
     }
 
-    function filterModalReferences() {
+    function filterModalControls() {
         const input = document.getElementById('refSearchInput').value.toUpperCase();
         const refItems = document.querySelectorAll('.ref-item');
         refItems.forEach(item => {
@@ -587,7 +657,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 enrollment_id: parseInt(enrollmentId),
-                reference_numbers: selectedRefs,
+                control_numbers: selectedRefs,
                 reason: reason,
                 clerk_name: activeUser.username
             })

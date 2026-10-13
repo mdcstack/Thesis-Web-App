@@ -50,6 +50,12 @@
         
         .btn-comp { background-color: #8e44ad; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; margin-right: 10px; }
         .btn-comp:hover { background-color: #732d91; }
+
+        .header-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .btn-header-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 0.92rem; text-decoration: none; color: #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: all 0.2s ease; white-space: nowrap; }
+        .btn-header-action:hover { transform: translateY(-2px); box-shadow: 0 5px 12px rgba(0,0,0,0.15); filter: brightness(1.08); }
+        .btn-expenditure { background-color: #f39c12; }
+        .btn-breakdown { background-color: #2c3e50; }
         
         .btn-action { background-color: #3498db; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 15px; transition: 0.3s; }
         .btn-action:hover { background-color: #2980b9; }
@@ -68,7 +74,7 @@
 
         @media print {
             body { height: auto; overflow: visible; background-color: white; }
-            .sidebar, .btn-report, .btn-comp, .visual-card, .clickable-icon { display: none !important; }
+            .sidebar, .btn-report, .btn-comp, .btn-header-action, .header-actions, .visual-card, .clickable-icon { display: none !important; }
             .main-content { padding: 0; }
             .header-bar { border: none; margin-bottom: 10px; padding-bottom: 0; display: block; text-align: center; }
             .header-bar h2 { display: none; }
@@ -106,8 +112,9 @@
             .control-panel { max-width: 100%; flex: auto; }
             .receipt-panel { max-width: 100%; flex: auto; margin-top: 15px; }
             
-            .header-bar { flex-direction: column; text-align: center; gap: 10px; height: auto; }
-            .header-bar div { display: flex; flex-direction: column; width: 100%; }
+            .header-bar { flex-direction: column; text-align: center; gap: 12px; height: auto; }
+            .header-actions { flex-direction: column; width: 100%; gap: 10px; }
+            .btn-header-action { width: 100%; }
             
             .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
             .charts-grid { grid-template-columns: 1fr; }
@@ -173,10 +180,14 @@
         <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
+        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
         <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
+        
+        
         
 
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
@@ -195,10 +206,17 @@
         </div>
 
         <div class="header-bar">
-            <h2 style="color: #2c3e50; margin: 0;">Sales & Analytics Dashboard</h2>
             <div>
-                <button class="btn-comp no-print" onclick="printComputations()">🖨️ Print Transparent Computations</button>
-                <button class="btn-report no-print" onclick="window.print()">🖨️ Print KPI Dashboard</button>
+                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem; font-weight: 700;">Sales &amp; Analytics Dashboard</h2>
+                <p style="color: #7f8c8d; margin: 4px 0 0 0; font-size: 0.9rem;">Overview of booklet inventory, departmental distributions, and revenues.</p>
+            </div>
+            <div class="header-actions no-print">
+                <a href="/department-breakdown" class="btn-header-action btn-breakdown">
+                    📑 Dept Breakdown Computation ➔
+                </a>
+                <a href="/expenditure-report" class="btn-header-action btn-expenditure">
+                    💰 Expenditure &amp; ROI Report ➔
+                </a>
             </div>
         </div>
         
@@ -377,6 +395,96 @@
         </div>
     </div>
 
+    <!-- MANDATORY SEMESTER INITIALIZATION MODAL (ADMIN ONLY - NON-DISMISSIBLE) -->
+    <div class="modal-overlay" id="mandatoryPriceModal" style="background: rgba(15, 23, 42, 0.95); z-index: 10000; backdrop-filter: blur(4px);">
+        <div class="modal-card" style="border-top: 6px solid #e67e22; max-width: 520px; width: 92%; text-align: left; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                <span style="font-size: 2.2rem;">⚙️</span>
+                <div>
+                    <h2 style="color: #2c3e50; font-size: 1.4rem; margin: 0;">Initialize Semester Settings</h2>
+                    <p style="color: #e67e22; font-size: 0.85rem; font-weight: bold; margin: 0;">Mandatory Setup Required Before Proceeding</p>
+                </div>
+            </div>
+            
+            <p style="color: #555; font-size: 0.92rem; line-height: 1.5; margin-bottom: 20px; background: #fff8f0; border-left: 4px solid #e67e22; padding: 10px 14px; border-radius: 4px;">
+                <strong>Welcome Administrator!</strong> Before any booklet distribution, payments, or reports can occur for this semester, you must establish the official <strong>Booklet Selling Price</strong> and semester parameters.
+            </p>
+
+            <div id="initModalAlert" style="display:none; padding: 10px 14px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; font-size: 0.9rem;"></div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #2c3e50; margin-bottom: 5px;">Active Exam Period & Academic Year</label>
+                <div style="display: flex; gap: 10px;">
+                    <select id="init_period_select" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                        <option value="1st Sem - Midterms">1st Sem - Midterms</option>
+                        <option value="1st Sem - Finals">1st Sem - Finals</option>
+                        <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
+                        <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+                    </select>
+                    <select id="init_ay_select" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                        <option value="AY 2026-2027">AY 2026-2027</option>
+                        <option value="AY 2027-2028">AY 2027-2028</option>
+                        <option value="AY 2025-2026">AY 2025-2026</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #2c3e50; margin-bottom: 5px;">
+                    Booklet Selling Price (₱) <span style="color: #e74c3c;">*</span>
+                </label>
+                <input type="number" id="init_booklet_price" step="0.01" min="0.01" placeholder="e.g., 2.50" value="2.50" required
+                    style="width: 100%; padding: 11px; border: 2px solid #3498db; border-radius: 4px; font-size: 1.15rem; font-weight: bold; color: #2c3e50; box-sizing: border-box;">
+                <small style="display: block; color: #7f8c8d; margin-top: 4px; font-size: 0.8rem;">
+                    This price will be permanently stamped on newly distributed booklets and receipt records.
+                </small>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div>
+                    <label style="display: block; font-weight: bold; font-size: 0.85rem; color: #2c3e50; margin-bottom: 5px;">Raw Ream Price (₱)</label>
+                    <input type="number" id="init_ream_price" step="0.01" min="1" value="250.00"
+                        style="width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; box-sizing: border-box;">
+                </div>
+                <div>
+                    <label style="display: block; font-weight: bold; font-size: 0.85rem; color: #2c3e50; margin-bottom: 5px;">Sheets Per Booklet</label>
+                    <input type="number" id="init_sheets_per_booklet" min="1" value="6"
+                        style="width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; box-sizing: border-box;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <button type="button" onclick="submitMandatorySetup()" 
+                    style="flex: 2; background-color: #27ae60; color: white; border: none; padding: 13px; border-radius: 5px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s;">
+                    💾 Lock Price & Initialize System
+                </button>
+                <a href="/settings" 
+                    style="flex: 1.5; background-color: #f39c12; color: white; border: none; padding: 13px; border-radius: 5px; font-size: 0.95rem; font-weight: bold; text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️ Go to Settings
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOCKOUT MODAL (WHEN UNINITIALIZED) -->
+    <div class="modal-overlay" id="clerkLockoutModal" style="background: rgba(15, 23, 42, 0.95); z-index: 10000; backdrop-filter: blur(4px);">
+        <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 480px; width: 90%; text-align: center; padding: 35px;">
+            <div style="font-size: 3.5rem; margin-bottom: 15px;">🔒</div>
+            <h2 style="color: #e74c3c; margin-bottom: 12px; font-size: 1.5rem;">System Initialization Pending</h2>
+            <p style="color: #555; font-size: 1rem; line-height: 1.6; margin-bottom: 25px;" id="dashboardLockoutDesc">
+                The semester booklet selling price has not yet been established.
+                <br><br>
+                <strong style="color: #2c3e50;">Please ask the System Administrator to log in and set the booklet price for this semester before continuing.</strong>
+            </p>
+            <div style="display: flex; gap: 10px; flex-direction: column;">
+                <a href="/settings" id="dashboardLockoutSettingsBtn" class="btn btn-warning" style="display: none; width: 100%; text-decoration: none; padding: 12px; font-weight: bold; font-size: 1rem; box-sizing: border-box; text-align: center; margin: 0; background-color: #f39c12; color: white; border-radius: 4px;">
+                    ⚙️ Go to Settings to Initialize Price
+                </a>
+                <button class="btn btn-danger" id="dashboardLockoutLogoutBtn" onclick="logout()" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: bold; margin: 0;">Return to Login</button>
+            </div>
+        </div>
+    </div>
+
 <script>
     // --- AUTHENTICATION & GLOBAL STATE ---
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
@@ -443,6 +551,7 @@
         document.getElementById('modalIssuedTotal').innerText = `${statsData.issued.total.toLocaleString()} pcs`;
         document.getElementById('issuedModal').style.display = 'flex';
     }
+
     function openDefectiveModal() {
         document.getElementById('defectiveModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
         document.getElementById('modalDefectCS').innerText = `${statsData.defective.cs.toLocaleString()} pcs`;
@@ -557,15 +666,116 @@
 
     // --- INIT & FETCH DATA ---
     window.onload = function() {
-        fetch('/api/active-period')
+        checkSystemInitialization();
+    };
+
+    function checkSystemInitialization() {
+        fetch('/api/system-status')
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success") {
-                    currentDashboardPeriod = data.active_period;
-                    fetchDashboardData(currentDashboardPeriod);
+                    if (!data.is_initialized) {
+                        // System price is unset or active_period is UNSET!
+                        if (activeUser.role === 'Admin') {
+                            const modal = document.getElementById('mandatoryPriceModal');
+                            if (modal) modal.style.display = 'flex';
+                            if (data.booklet_price > 0) {
+                                document.getElementById('init_booklet_price').value = data.booklet_price.toFixed(2);
+                            }
+                            if (data.ream_price > 0) {
+                                document.getElementById('init_ream_price').value = data.ream_price.toFixed(2);
+                            }
+                            if (data.sheets_per_booklet > 0) {
+                                document.getElementById('init_sheets_per_booklet').value = data.sheets_per_booklet;
+                            }
+                        } else {
+                            const lockout = document.getElementById('clerkLockoutModal');
+                            if (lockout) lockout.style.display = 'flex';
+                        }
+                    } else {
+                        // System is configured and initialized
+                        currentDashboardPeriod = data.active_period;
+                        fetchDashboardData(currentDashboardPeriod);
+                    }
                 }
+            })
+            .catch(err => {
+                console.error("Initialization check failed:", err);
+                fetch('/api/active-period')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === "success") {
+                            currentDashboardPeriod = data.active_period;
+                            fetchDashboardData(currentDashboardPeriod);
+                        }
+                    });
             });
-    };
+    }
+
+    function submitMandatorySetup() {
+        const periodPart = document.getElementById('init_period_select').value;
+        const ayPart = document.getElementById('init_ay_select').value;
+        const combinedPeriod = `${periodPart} | ${ayPart}`;
+
+        const bookletPrice = parseFloat(document.getElementById('init_booklet_price').value);
+        const reamPrice = parseFloat(document.getElementById('init_ream_price').value);
+        const sheetsPerBooklet = parseInt(document.getElementById('init_sheets_per_booklet').value);
+        const alertBox = document.getElementById('initModalAlert');
+
+        if (isNaN(bookletPrice) || bookletPrice <= 0) {
+            alertBox.style.display = 'block';
+            alertBox.style.background = '#fde8e8';
+            alertBox.style.color = '#c81e1e';
+            alertBox.innerText = '⚠️ Please enter a valid Selling Price per booklet (greater than ₱0.00).';
+            return;
+        }
+
+        if (isNaN(reamPrice) || reamPrice <= 0 || isNaN(sheetsPerBooklet) || sheetsPerBooklet <= 0) {
+            alertBox.style.display = 'block';
+            alertBox.style.background = '#fde8e8';
+            alertBox.style.color = '#c81e1e';
+            alertBox.innerText = '⚠️ Please ensure Raw Ream Price and Sheets Per Booklet are valid numbers.';
+            return;
+        }
+
+        alertBox.style.display = 'block';
+        alertBox.style.background = '#e1effe';
+        alertBox.style.color = '#1e429f';
+        alertBox.innerText = 'Saving semester settings & initializing system...';
+
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                active_period: combinedPeriod,
+                booklet_price: bookletPrice,
+                ream_price: reamPrice,
+                sheets_per_booklet: sheetsPerBooklet
+            })
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                alertBox.style.background = '#def7ec';
+                alertBox.style.color = '#03543f';
+                alertBox.innerText = '✅ System initialized successfully!';
+                setTimeout(() => {
+                    document.getElementById('mandatoryPriceModal').style.display = 'none';
+                    currentDashboardPeriod = combinedPeriod;
+                    fetchDashboardData(currentDashboardPeriod);
+                }, 1000);
+            } else {
+                alertBox.style.background = '#fde8e8';
+                alertBox.style.color = '#c81e1e';
+                alertBox.innerText = 'Error: ' + (result.message || 'Could not save settings.');
+            }
+        })
+        .catch(err => {
+            alertBox.style.background = '#fde8e8';
+            alertBox.style.color = '#c81e1e';
+            alertBox.innerText = 'Network error: ' + err.message;
+        });
+    }
 
     function fetchDashboardData(periodQuery) {
         document.getElementById('kpi-period').innerText = "Loading...";
@@ -646,8 +856,16 @@
                     statsData.issued.total = kpi.issued || 0;
                     statsData.revenue.total = kpi.revenue || 0;
                     if (data.charts && data.charts.departments) {
-                        statsData.revenue.cs = (data.charts.departments.CS || 0) * 10;
-                        statsData.revenue.it = (data.charts.departments.IT || 0) * 10;
+                        if (data.financials) {
+                            // Use dynamic booklet price if available
+                            statsData.revenue.cs = (data.charts.departments.CS || 0) * (data.financials.booklet_price || 10);
+                            statsData.revenue.it = (data.charts.departments.IT || 0) * (data.financials.booklet_price || 10);
+                        } else {
+                            // Fallback if backend hasn't provided financials yet
+                            statsData.revenue.cs = (data.charts.departments.CS || 0) * 10;
+                            statsData.revenue.it = (data.charts.departments.IT || 0) * 10;
+                        }
+
                         statsData.issued.cs = data.charts.departments.CS || 0;
                         statsData.issued.it = data.charts.departments.IT || 0;
                         renderAllocationChart(statsData.revenue.cs, statsData.revenue.it);
@@ -815,18 +1033,18 @@
                     <tbody>
                         <tr>
                             <th style="padding: 12px; text-align: left; background-color: #2c3e50; color: black;">Total Combined Gross Revenue</th>
-                            <th style="padding: 12px; text-align: right; background-color: #2c3e50; color: red;">₱${combinedGross.toFixed(2)}</th>
+                            <th style="padding: 12px; text-align: right; background-color: #2c3e50; color: black;">₱${combinedGross.toFixed(2)}</th>
                         </tr>
                         <tr>
                             <td colspan="2" style="padding: 12px; background-color: #f8f9fa; font-weight: bold; text-align: center;">Deductions & Allocations</td>
                         </tr>
                         <tr>
                             <td style="padding: 10px; padding-left: 30px;">Less: CS Department Budget Allocation (1%)</td>
-                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${csDeptBudget.toFixed(2)}</td>
+                            <td style="padding: 10px; text-align: right; color: black;">- ₱${csDeptBudget.toFixed(2)}</td>
                         </tr>
                         <tr>
                             <td style="padding: 10px; padding-left: 30px;">Less: IT Department Budget Allocation (1%)</td>
-                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${itDeptBudget.toFixed(2)}</td>
+                            <td style="padding: 10px; text-align: right; color: black;">- ₱${itDeptBudget.toFixed(2)}</td>
                         </tr>
                         <tr>
                             <th style="padding: 10px; text-align: right; background-color: #e9ecef;">Subtotal Balance</th>
@@ -834,11 +1052,11 @@
                         </tr>
                         <tr>
                             <td style="padding: 10px; padding-left: 30px;">Less: University Remittance Share (20% of Subtotal)</td>
-                            <td style="padding: 10px; text-align: right; color: #e74c3c;">- ₱${universityShare.toFixed(2)}</td>
+                            <td style="padding: 10px; text-align: right; color: black;">- ₱${universityShare.toFixed(2)}</td>
                         </tr>
                         <tr>
                             <th style="padding: 15px; text-align: left; background-color: #27ae60; color: black; font-size: 1.25rem;">Final DCS Net Profit</th>
-                            <th style="padding: 15px; text-align: right; background-color: #27ae60; color: red; font-size: 1.25rem;">₱${dcsNetProfit.toFixed(2)}</th>
+                            <th style="padding: 15px; text-align: right; background-color: #27ae60; color: black; font-size: 1.25rem;">₱${dcsNetProfit.toFixed(2)}</th>
                         </tr>
                     </tbody>
                 </table>
