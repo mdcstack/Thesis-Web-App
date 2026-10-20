@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live POS - BOOKLETLOG</title>
     <script src="/static/html5-qrcode.min.js"></script>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -14,6 +15,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout Grid */
         .main-content { flex: 1; padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
@@ -43,11 +47,281 @@
         .btn-danger { background-color: #e74c3c; color: white; }
         .btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         
-        /* Modals */
+        /* Modals & Stacking Contexts */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
         .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; }
         
-        #reader-modal { width: 100%; margin: auto; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+        /* Strict Modal Stacking Hierarchy */
+        #scannerModal { z-index: 1200 !important; }
+        #appDialogModal { z-index: 10005 !important; }
+
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes toastSlideIn {
+            0% { transform: translateX(100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+
+        .app-dialog-card {
+            background: #fff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #3498db;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .app-toast-item {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #ffffff;
+            color: #1e293b;
+            padding: 12px 18px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-left: 4px solid #10b981;
+            font-size: 0.9rem;
+            animation: toastSlideIn 0.25s ease-out;
+            max-width: 360px;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        
+        /* ========================================================
+           MODERN HTML5-QRCODE SCANNER UI (Buttons & Dashboard)
+           ======================================================== */
+        #reader-modal {
+            width: 100%;
+            margin: auto;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 16px;
+            background: #f8fafc;
+            padding: 10px;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        /* Flex layout for the scanner dashboard button group */
+        #reader-modal__dashboard_section {
+            padding: 8px 0 !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+
+        #reader-modal__dashboard_section > div {
+            display: inline-flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin: 0 !important;
+        }
+
+        /* Primary Action: Request Camera Permissions Button */
+        #html5-qrcode-button-camera-permission {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            padding: 10px 20px !important;
+            margin: 4px !important;
+            border-radius: 8px !important;
+            background: #2563eb !important;
+            color: #ffffff !important;
+            border: 1px solid #1d4ed8 !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            font-family: inherit !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+            transition: all 0.18s ease !important;
+            outline: none !important;
+        }
+        #html5-qrcode-button-camera-permission:hover {
+            background: #1d4ed8 !important;
+            border-color: #1e40af !important;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
+            transform: translateY(-1px) !important;
+        }
+        #html5-qrcode-button-camera-permission:active {
+            transform: translateY(0) !important;
+        }
+
+        /* Secondary Action: Transform "Scan an Image File" Link into a Styled Button */
+        #html5-qrcode-anchor-scan-type-change {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            padding: 10px 18px !important;
+            margin: 4px !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            color: #334155 !important;
+            border: 1.5px solid #cbd5e1 !important;
+            text-decoration: none !important;
+            font-weight: 600 !important;
+            font-size: 0.88rem !important;
+            font-family: inherit !important;
+            cursor: pointer !important;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+            transition: all 0.18s ease !important;
+            outline: none !important;
+            user-select: none !important;
+        }
+        #html5-qrcode-anchor-scan-type-change:hover {
+            background: #f1f5f9 !important;
+            color: #0f172a !important;
+            border-color: #94a3b8 !important;
+            text-decoration: none !important;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08) !important;
+            transform: translateY(-1px) !important;
+        }
+        #html5-qrcode-anchor-scan-type-change:active {
+            transform: translateY(0) !important;
+            background: #e2e8f0 !important;
+        }
+
+        /* Deactivated State for "Scan an Image File" Button while Camera is Actively Scanning */
+        #reader-modal:has(#html5-qrcode-button-camera-stop:not([style*="display: none"])) #html5-qrcode-anchor-scan-type-change {
+            opacity: 0.42 !important;
+            pointer-events: none !important;
+            cursor: not-allowed !important;
+            background: #f8fafc !important;
+            color: #94a3b8 !important;
+            border-color: #e2e8f0 !important;
+            box-shadow: none !important;
+            transform: none !important;
+            filter: grayscale(1) !important;
+        }
+
+        /* Camera Select Dropdown */
+        #html5-qrcode-select-camera {
+            padding: 9px 14px !important;
+            border-radius: 6px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            background: #ffffff !important;
+            color: #1e293b !important;
+            font-size: 0.9rem !important;
+            font-family: inherit !important;
+            outline: none !important;
+            margin: 4px !important;
+            cursor: pointer !important;
+        }
+
+        /* Start / Stop Scanning Buttons */
+        #html5-qrcode-button-camera-start {
+            background: #10b981 !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 9px 18px !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+            font-size: 0.88rem !important;
+            cursor: pointer !important;
+            margin: 4px !important;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25) !important;
+            transition: all 0.15s ease !important;
+        }
+        #html5-qrcode-button-camera-start:hover {
+            background: #059669 !important;
+            transform: translateY(-1px) !important;
+        }
+
+        #html5-qrcode-button-camera-stop {
+            background: #ef4444 !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 9px 18px !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+            font-size: 0.88rem !important;
+            cursor: pointer !important;
+            margin: 4px !important;
+            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25) !important;
+            transition: all 0.15s ease !important;
+        }
+        #html5-qrcode-button-camera-stop:hover {
+            background: #dc2626 !important;
+            transform: translateY(-1px) !important;
+        }
+
+        /* File Selection Button */
+        #html5-qrcode-button-file-selection {
+            background: #3b82f6 !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 9px 18px !important;
+            border-radius: 6px !important;
+            font-weight: 600 !important;
+            font-size: 0.88rem !important;
+            cursor: pointer !important;
+            margin: 4px !important;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.25) !important;
+            transition: all 0.15s ease !important;
+        }
+        #html5-qrcode-button-file-selection:hover {
+            background: #2563eb !important;
+            transform: translateY(-1px) !important;
+        }
+
+        /* Suppress display of uploaded raw image canvases in scanner modal */
+        #reader-modal #qr-canvas-visible {
+            display: none !important;
+        }
+
+        /* Scan Region & Viewfinder */
+        #reader-modal video {
+            border-radius: 8px !important;
+            max-width: 100% !important;
+        }
+        #reader-modal__header_message {
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            font-size: 0.85rem !important;
+            margin: 8px auto !important;
+            max-width: 90% !important;
+        }
+
+        /* Supermarket POS Flash Animations for Viewfinder */
+        @keyframes posFlashGreen {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.9); border-color: #22c55e; }
+            50% { box-shadow: 0 0 25px 8px rgba(34, 197, 94, 0.7); border-color: #22c55e; }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); border-color: #cbd5e1; }
+        }
+        @keyframes posFlashAmber {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.9); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 25px 8px rgba(245, 158, 11, 0.7); border-color: #f59e0b; }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); border-color: #cbd5e1; }
+        }
+        @keyframes posFlashRed {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.9); border-color: #ef4444; }
+            50% { box-shadow: 0 0 25px 8px rgba(239, 68, 68, 0.7); border-color: #ef4444; }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); border-color: #cbd5e1; }
+        }
+        .viewfinder-flash-green { animation: posFlashGreen 0.5s ease-out !important; }
+        .viewfinder-flash-amber { animation: posFlashAmber 0.5s ease-out !important; }
+        .viewfinder-flash-red { animation: posFlashRed 0.5s ease-out !important; }
 
         /* Receipt Formatting */
         .live-receipt-content { padding: 30px; font-family: 'Times New Roman', Times, serif; color: #000; opacity: 0.4; transition: opacity 0.3s; pointer-events: none; }
@@ -124,14 +398,19 @@
     <div class="sidebar no-print">
 
         <!-- NEW: Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: default; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
             <!-- Hidden Dropdown Panel -->
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -140,7 +419,7 @@
         <!-- STAFF / SYSTEM LOCKOUT MODAL -->
 <div class="modal-overlay" id="staffLockoutModal" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(4px);">
     <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 480px; width: 90%; text-align: center; padding: 30px;">
-        <div style="font-size: 3rem; margin-bottom: 10px;">🔒</div>
+        <div style="font-size: 3rem; margin-bottom: 10px;">⚠️</div>
         <h2 style="color: #e74c3c; margin-bottom: 10px;" id="lockoutModalTitle">System Initialization Pending</h2>
         <p style="color: #555; font-size: 1.05rem; line-height: 1.5; margin-bottom: 25px;" id="lockoutModalDesc">
             The semester booklet selling price and active period have not yet been established. <br><br>
@@ -150,7 +429,7 @@
             <a href="/settings" id="lockoutSettingsBtn" class="btn btn-warning" style="display: none; width: 100%; text-decoration: none; padding: 12px; font-weight: bold; font-size: 1rem; box-sizing: border-box; text-align: center; margin: 0;">
                 ⚙️ Go to Settings to Initialize Price
             </a>
-            <button class="btn btn-danger" id="lockoutLogoutBtn" onclick="logout()" style="width: 100%; padding: 12px; font-weight: bold; font-size: 1rem; margin: 0;">
+            <button class="btn btn-danger" id="lockoutLogoutBtn" onclick="handleLockoutLogout()" style="width: 100%; padding: 12px; font-weight: bold; font-size: 1rem; margin: 0;">
                 Return to Login
             </button>
         </div>
@@ -161,8 +440,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link active">🛒 Point of Distribution</a>
@@ -204,8 +483,10 @@
                         <button class="btn" style="margin:0;" onclick="openScannerModal('primary')">Scan Master Pack QR</button>
                     </div>
                     <div id="active-supply-view" style="display: none;">
-                        <h4 style="color: #27ae60; margin-bottom: 5px;">ACTIVE BOX</h4>
-                        <p id="pack-qr-display" style="font-family: monospace; font-weight: bold; color: #2c3e50;"></p>
+                        <div id="pack-dept-badge" style="margin-bottom: 8px;"></div>
+                        <h4 style="color: #27ae60; margin-bottom: 3px;">ACTIVE BOX</h4>
+                        <p id="pack-qr-display" style="font-family: monospace; font-weight: bold; color: #2c3e50; margin-bottom: 4px;"></p>
+                        <div id="pack-template-display" style="font-size: 0.85rem; color: #475569; font-weight: 600; margin-bottom: 8px;"></div>
                         <p style="font-size: 1.5rem; font-weight: bold; color: #2c3e50; margin: 10px 0;"><span id="pack-stock-display">0</span> <span style="font-size: 1rem; font-weight: normal;">pcs remaining</span></p>
                         <button class="btn btn-warning" style="margin:0; padding: 8px;" onclick="manualCloseBox()">Close Box & Swap</button>
                     </div>
@@ -222,6 +503,17 @@
                         ⚠️ <strong>Section Already Fulfilled:</strong> The previously selected section was just fulfilled by another clerk. The list has been refreshed.
                     </div>
                     
+                    <div id="activeProgramBanner" style="display: none; margin-bottom: 15px; padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.88rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: bold; color: #1e40af;">🎯 Eligible Program:</span>
+                                <span id="activeProgramBadge" style="padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; background: #2563eb; color: white;">CS</span>
+                                <span id="activeProgramText" style="color: #1e3a8a; font-weight: 600;">Computer Science (BSCS)</span>
+                            </div>
+                            <span style="color: #64748b; font-size: 0.78rem; font-style: italic;">Auto-matched to active box</span>
+                        </div>
+                    </div>
+
                     <label style="font-weight: bold; margin-bottom: 5px; display: block;">Instructor:</label>
                     <select id="instructorSelect" onchange="handleInstructorChange()">
                         <option value="">-- Select Instructor --</option>
@@ -236,6 +528,58 @@
                     <select id="subjectSelect" onchange="handleSubjectChange()" disabled>
                         <option value="">-- Select Subject --</option>
                     </select>
+
+                    <!-- DYNAMIC ALLOCATION CONTROLS -->
+                    <div id="allocationModeContainer" style="margin: 15px 0 10px 0;">
+                        <label style="font-weight: bold; margin-bottom: 6px; display: block; font-size: 0.9rem; color: #334155;">Distribution Method:</label>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" id="btnModeAuto" class="btn" onclick="switchAllocationMode('auto')" style="flex: 1; margin: 0; padding: 8px 10px; font-size: 0.85rem; background: #2563eb; color: white; border: 2px solid #2563eb; font-weight: 600; border-radius: 6px;">
+                                ⚡ Auto-Allocate
+                            </button>
+                            <button type="button" id="btnModeManual" class="btn" onclick="switchAllocationMode('manual')" style="flex: 1; margin: 0; padding: 8px 10px; font-size: 0.85rem; background: #f8fafc; color: #475569; border: 2px solid #cbd5e1; font-weight: 600; border-radius: 6px;">
+                                📷 Manual Scan
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MANUAL SCAN INPUT SECTION (Shown only in Manual Mode) -->
+                    <div id="manualScanSection" style="display: none; margin: 12px 0; padding: 12px; background: #f8fafc; border-radius: 6px; border: 1px dashed #94a3b8;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <label style="font-weight: bold; font-size: 0.85rem; color: #1e293b; margin: 0;">Webcam Scanning & Manual Entry:</label>
+                            <span id="manualProgressBadge" style="font-size: 0.78rem; font-weight: bold; padding: 2px 8px; border-radius: 10px; background: #e2e8f0; color: #475569;">0 / 0 scanned</span>
+                        </div>
+
+                        <!-- PRIMARY CONTINUOUS CAMERA SCAN BUTTON -->
+                        <button type="button" class="btn btn-primary" onclick="openBookletCameraScanner('manual')" style="width: 100%; margin: 0 0 10px 0; padding: 10px 14px; font-size: 0.92rem; font-weight: bold; background: #2563eb; color: white; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; box-shadow: 0 2px 4px rgba(37,99,235,0.2);">
+                            <span>📷</span> <span>Start Continuous Camera Scan</span>
+                        </button>
+
+                        <!-- KEYBOARD / MANUAL FALLBACK INPUT -->
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="manualBookletInput" placeholder="Or type Control No / SRN manually..." onkeydown="handleManualBookletKeypress(event)" style="flex: 1; padding: 8px 10px; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 4px; font-family: monospace;">
+                            <button type="button" class="btn" onclick="addManualScannedBooklet()" style="margin: 0; padding: 8px 12px; font-size: 0.85rem; background: #475569; color: white;" title="Add Booklet Manually">
+                                Add
+                            </button>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                            <small style="color: #64748b; font-size: 0.75rem;">Swipe booklets in front of webcam in continuous succession.</small>
+                            <button type="button" onclick="clearManualTray()" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0;">Clear Tray</button>
+                        </div>
+                    </div>
+
+                    <!-- INTERACTIVE BOOKLET TRAY -->
+                    <div id="bookletTraySection" style="margin: 15px 0; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="font-weight: bold; font-size: 0.85rem; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                <span>📑 Booklet Tray</span>
+                                <span id="trayCountBadge" style="font-size: 0.75rem; padding: 2px 7px; border-radius: 10px; background: #dbeafe; color: #1e40af; font-weight: 700;">0 pcs</span>
+                            </div>
+                            <small id="trayHintText" style="color: #64748b; font-size: 0.75rem;">Click any chip to swap out</small>
+                        </div>
+                        <div id="bookletChipsContainer" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; padding: 4px 2px;">
+                            <div style="color: #94a3b8; font-size: 0.82rem; font-style: italic; padding: 4px;">No booklets allocated yet. Select a subject to generate.</div>
+                        </div>
+                    </div>
 
                     <div style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
                         <button id="looseStockBtn" class="btn btn-warning" onclick="openLooseStockModal()" style="width: 100%; text-align: left;" disabled>
@@ -314,13 +658,37 @@
 
     <!-- PROACTIVE BRIDGING SCANNER MODAL -->
     <div class="modal-overlay" id="scannerModal">
-        <div class="modal-card">
-            <h3 id="scanner-modal-title" style="color: #2c3e50; margin-bottom: 10px;">Scan Master Pack</h3>
-            <p id="scanner-modal-msg" style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">
+        <div class="modal-card" style="max-width: 480px;">
+            <h3 id="scanner-modal-title" style="color: #2c3e50; margin-bottom: 8px;">Scan Master Pack</h3>
+            <p id="scanner-modal-msg" style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 12px;">
                 Position the QR code inside the frame.
             </p>
+
+            <!-- CONTINUOUS SCAN HUD (Active during booklet_manual) -->
+            <div id="scanner-hud-container" style="display: none; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">Progress</span>
+                        <span id="scanner-hud-counter" style="background: #2563eb; color: #ffffff; font-weight: 800; font-size: 0.9rem; padding: 2px 10px; border-radius: 999px;">
+                            0 / 0
+                        </span>
+                    </div>
+                    <span id="scanner-hud-ticker" style="font-size: 0.85rem; font-weight: 600; color: #059669; font-family: monospace;">
+                        Awaiting first scan...
+                    </span>
+                </div>
+            </div>
+
             <div id="reader-modal"></div>
-            <button class="btn btn-danger" onclick="cancelScannerModal()" style="margin-top: 15px;">Cancel</button>
+
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+                <button id="scanner-done-btn" class="btn btn-success" onclick="finishContinuousScanning()" style="display: none; margin: 0; padding: 10px 20px;">
+                    ✅ Done (Keep Scanned)
+                </button>
+                <button class="btn btn-danger" onclick="cancelScannerModal()" style="margin: 0; padding: 10px 20px;">
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
 
@@ -342,7 +710,31 @@
         </div>
     </div>
 
+    <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
+        <div class="app-dialog-card">
+            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Notice</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;"></div>
+            <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+                <button id="appDialogCancelBtn" class="btn" style="background: #e2e8f0; color: #475569; margin: 0; padding: 10px 20px; font-weight: 600; display: none; width: auto;">Cancel</button>
+                <button id="appDialogConfirmBtn" class="btn btn-primary" style="margin: 0; padding: 10px 24px; font-weight: 700; width: auto;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer"></div>
+
 <script>
+    // --- GLOBAL SCANNER CONFIGURATION: Suppress visible image canvas during file QR scanning ---
+    if (window.Html5Qrcode && Html5Qrcode.prototype.scanFileV2) {
+        const _origScanFileV2 = Html5Qrcode.prototype.scanFileV2;
+        Html5Qrcode.prototype.scanFileV2 = function(imageFile, showImage) {
+            // Force showImage = false so Html5Qrcode NEVER draws the uploaded file onto any DOM canvas
+            return _origScanFileV2.call(this, imageFile, false);
+        };
+    }
     
     // --- 1. GLOBAL STATE & AUTH ---
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
@@ -357,28 +749,34 @@
         .then(res => res.json())
         .then(data => {
             if (data.status !== "valid") {
-                alert("Session Expired: Your account was accessed from another device.");
                 localStorage.removeItem('bookletlog_user');
-                window.location.href = '/login';
+                showAppAlert("Session Expired", "Your account was accessed from another device.", "error").then(() => {
+                    window.location.href = '/login';
+                });
             }
         });
     }
-    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    if (activeUser) {
+        if (document.getElementById('loggedInUser')) document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+        if (document.getElementById('loggedInRole')) document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
 
-    let globalActivePeriod = "Loading...";
+        // Turn badge orange and clickable if Admin
+        if (activeUser.role === 'Admin') {
+            const badge = document.getElementById('activePeriodBadge');
+            if (badge) {
+                badge.classList.add('admin-only');
+                badge.title = "Click to Change Exam Period";
+            }
+        }
 
-    // Turn badge orange and clickable if Admin
-    if (activeUser.role === 'Admin') {
-        document.getElementById('activePeriodBadge').classList.add('admin-only');
-        document.getElementById('activePeriodBadge').title = "Click to Change Exam Period";
-    }
-
-    // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
-    if (activeUser.role !== 'Admin') {
+        // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
+        if (activeUser.role !== 'Admin') {
             const adminLinks = document.querySelectorAll('.admin-only');
             adminLinks.forEach(link => link.style.display = 'none');
+            const navUsers = document.getElementById('navManageUsers');
+            if (navUsers) navUsers.innerHTML = '👤 My Account';
         }
+    }
 
     function getUserPackKey() {
         return activeUser ? `bookletlog_active_pack_${activeUser.username}` : 'bookletlog_active_pack';
@@ -392,40 +790,84 @@
         }
     });
 
-    function logout() {
-        if(confirm("Are you sure you want to log out?")) {
-            const currentPack = primaryPackQR;
-            // Behavior 2: Reset active pack on logout so next person on terminal starts fresh
-            localStorage.removeItem(getUserPackKey());
-            localStorage.removeItem('bookletlog_active_pack');
-            
-            // Release pack reservation on backend
-            if (currentPack && activeUser) {
-                fetch('/api/release-pack', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: activeUser.username, qr_code: currentPack })
-                }).catch(() => {});
+    async function logout() {
+        const confirmed = await showAppConfirm(
+            "Confirm Sign Out",
+            "Are you sure you want to log out of BookletLog?",
+            {
+                type: 'danger',
+                confirmText: "Sign Out",
+                cancelText: "Stay Logged In",
+                confirmClass: "btn btn-danger"
             }
+        );
+        if (!confirmed) return;
 
+        const currentPack = primaryPackQR;
+        // Behavior 2: Reset active pack on logout so next person on terminal starts fresh
+        localStorage.removeItem(getUserPackKey());
+        localStorage.removeItem('bookletlog_active_pack');
+        
+        // Release pack reservation on backend
+        if (currentPack && activeUser) {
+            fetch('/api/release-pack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: activeUser.username, qr_code: currentPack })
+            }).catch(() => {});
+        }
+
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: activeUser.username })
+        }).then(() => {
+            localStorage.removeItem('bookletlog_user');
+            window.location.href = '/login';
+        }).catch(() => {
+            localStorage.removeItem('bookletlog_user');
+            window.location.href = '/login';
+        });
+    }
+
+    function handleLockoutLogout() {
+        const btn = document.getElementById('lockoutLogoutBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Returning to Login...';
+        }
+        
+        try {
+            if (typeof primaryPackQR !== 'undefined' && primaryPackQR && activeUser) {
+                navigator.sendBeacon('/api/release-pack-beacon', new Blob([JSON.stringify({ username: activeUser.username, qr_code: primaryPackQR })], { type: 'application/json' }));
+            }
+        } catch (e) {}
+
+        const uname = (typeof activeUser !== 'undefined' && activeUser) ? activeUser.username : null;
+        localStorage.clear();
+        sessionStorage.clear();
+
+        if (uname) {
             fetch('/api/logout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: activeUser.username })
-            }).then(() => {
-                localStorage.removeItem('bookletlog_user');
-                window.location.href = '/login';
-            }).catch(() => {
-                localStorage.removeItem('bookletlog_user');
+                body: JSON.stringify({ username: uname })
+            }).finally(() => {
                 window.location.href = '/login';
             });
+        } else {
+            window.location.href = '/login';
         }
     }
 
+    let rawPendingDistributions = [];
     let enrollmentsData = [];
     let globalBookletPrice = 2.50;
     let primaryPackQR = localStorage.getItem(getUserPackKey()) || null;
     let primaryPackStock = 0;
+    let activePackDept = null;
+    let activePackTemplateName = null;
+    let activePackTemplateSlot = null;
     
     let bridgingPackQR = null; 
     let bridgingPackStock = 0;
@@ -433,6 +875,242 @@
     let currentDemand = 0;
     let html5QrcodeScanner = null;
     let currentScanIntent = 'primary'; 
+    let currentAllocationMode = 'auto'; // 'auto' | 'manual'
+    let allocatedBooklets = []; // array of { id, control_num, sort_record_num, status, department, is_swapped }
+    let swappingTargetControlNum = null; 
+    let lastScannedBarcode = null;
+    let lastScannedBarcodeTime = 0;
+    let isLookupBusy = false;
+
+    // --- POS SYNTHETIC AUDIO ENGINE (Web Audio API) ---
+    const PosAudio = {
+        ctx: null,
+        init() {
+            try {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            } catch (e) {
+                console.warn("AudioContext init error:", e);
+            }
+        },
+        beep(frequency = 1750, durationMs = 85, type = 'sine', gainVal = 0.12) {
+            try {
+                this.init();
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+                gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + durationMs / 1000);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + durationMs / 1000);
+            } catch (e) {
+                console.warn("Audio synthesis error:", e);
+            }
+        },
+        success() {
+            // Supermarket POS register high beep (1750 Hz)
+            this.beep(1750, 90, 'sine', 0.15);
+        },
+        warning() {
+            // Amber / Duplicate: quick double tone (750 Hz)
+            this.beep(750, 80, 'sine', 0.12);
+            setTimeout(() => this.beep(750, 80, 'sine', 0.12), 110);
+        },
+        error() {
+            // Red / Conflict / Mismatch: low buzzy square wave
+            this.beep(220, 220, 'square', 0.08);
+        },
+        complete() {
+            // Upbeat ascending C-Major chord (C5 -> E5 -> G5 -> C6)
+            const notes = [523.25, 659.25, 783.99, 1046.50];
+            notes.forEach((freq, idx) => {
+                setTimeout(() => this.beep(freq, 140, 'triangle', 0.15), idx * 80);
+            });
+        }
+    };
+
+    function triggerViewfinderFlash(type) {
+        const reader = document.getElementById('reader-modal');
+        if (!reader) return;
+        reader.classList.remove('viewfinder-flash-green', 'viewfinder-flash-amber', 'viewfinder-flash-red');
+        void reader.offsetWidth; // Force reflow
+        reader.classList.add(`viewfinder-flash-${type}`);
+        setTimeout(() => {
+            reader.classList.remove(`viewfinder-flash-${type}`);
+        }, 550);
+    } 
+
+    // --- APP CUSTOM MODAL DIALOGS & NOTIFICATION TOASTS ---
+    function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+        return new Promise(resolve => {
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                alert(`${title}: ${message}`);
+                resolve(true);
+                return;
+            }
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#3498db';
+            let icon = 'ℹ️';
+            let btnClass = 'btn btn-primary';
+
+            if (type === 'warning') {
+                borderCol = '#f59e0b';
+                icon = '⚠️';
+                btnClass = 'btn btn-warning';
+            } else if (type === 'error') {
+                borderCol = '#ef4444';
+                icon = '❌';
+                btnClass = 'btn btn-danger';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                btnClass = 'btn btn-success';
+            }
+
+            if (card) card.style.borderTopColor = borderCol;
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+            confirmBtn.innerText = confirmText;
+            confirmBtn.className = btnClass;
+            cancelBtn.style.display = 'none';
+
+            confirmBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    function showAppConfirm(title, message, options = {}) {
+        return new Promise(resolve => {
+            const {
+                type = 'warning',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                confirmClass = null
+            } = options;
+
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                const res = confirm(`${title}\n\n${message}`);
+                resolve(res);
+                return;
+            }
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBtnClass = 'btn btn-primary';
+
+            if (type === 'danger') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBtnClass = 'btn btn-danger';
+            } else if (type === 'question') {
+                borderCol = '#3b82f6';
+                icon = '❓';
+                defaultBtnClass = 'btn btn-primary';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                defaultBtnClass = 'btn btn-success';
+            } else if (type === 'box_swap') {
+                borderCol = '#f59e0b';
+                icon = '📦';
+                defaultBtnClass = 'btn btn-warning';
+            }
+
+            if (card) card.style.borderTopColor = borderCol;
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+            confirmBtn.innerText = confirmText;
+            confirmBtn.className = confirmClass || defaultBtnClass;
+            cancelBtn.innerText = cancelText;
+            cancelBtn.style.display = 'inline-block';
+
+            confirmBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+
+            cancelBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(false);
+            };
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    function showToast(message, type = 'success', title = null) {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+
+        const toast = document.createElement('div');
+        toast.className = 'app-toast-item';
+
+        let icon = '✅';
+        let borderColor = '#10b981';
+        let defaultTitle = 'Success';
+
+        if (type === 'error') {
+            icon = '❌';
+            borderColor = '#ef4444';
+            defaultTitle = 'Error';
+        } else if (type === 'warning') {
+            icon = '⚠️';
+            borderColor = '#f59e0b';
+            defaultTitle = 'Notice';
+        } else if (type === 'info') {
+            icon = 'ℹ️';
+            borderColor = '#3b82f6';
+            defaultTitle = 'Info';
+        }
+
+        toast.style.borderLeftColor = borderColor;
+        toast.innerHTML = `
+            <div style="font-size: 1.3rem;">${icon}</div>
+            <div style="flex: 1;">
+                <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-bottom: 2px;">${title || defaultTitle}</strong>
+                <span style="font-size: 0.85rem; color: #475569;">${message}</span>
+            </div>
+        `;
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3200);
+    } 
 
     window.onload = function() {
         fetchActivePeriod(); // Fetch the period FIRST
@@ -446,6 +1124,63 @@
             fetchPendingDistributions(true);
             fetchLooseStockList(true);
         }, 8000);
+
+        // Instant Real-Time Offline LAN Sync (Event-Filtered & Form-Safe)
+        if (window.lanSync) {
+            window.lanSync.onUpdate((payload) => {
+                const event = payload ? payload.event : null;
+
+                // 1. Completely ignore events irrelevant to booklet distribution
+                if (event === "PAYMENT_RECORDED" || event === "TEMPLATE_UPDATED" || event === "TEMPLATE_DELETED") {
+                    return;
+                }
+
+                // 2. Returns processed from history.html
+                if (event === "RETURN_PROCESSED") {
+                    // Update loose stock count & pending demands quietly in the background
+                    fetchLooseStockList(true);
+                    fetchPendingDistributions(true);
+                    // Crucial: NEVER touch primaryPackQR or reset active form fields!
+                    return;
+                }
+
+                // 3. Class enrollments added, edited, or bulk imported
+                if (event === "ENROLLMENT_UPDATED") {
+                    fetchPendingDistributions(true);
+                    return;
+                }
+
+                // 4. Distribution completed by another clerk/terminal
+                if (event === "DISTRIBUTION_RECORDED") {
+                    fetchPendingDistributions(true);
+                    fetchLooseStockList(true);
+                    if (primaryPackQR) {
+                        syncActivePackStockSilently(primaryPackQR);
+                    }
+                    return;
+                }
+
+                // 5. Academic period changed or price settings updated
+                if (event === "PERIOD_CHANGED" || event === "SETTINGS_UPDATED") {
+                    fetchActivePeriod();
+                    fetchPendingDistributions(true);
+                    return;
+                }
+
+                // 6. System Reset to Day 0
+                if (event === "SYSTEM_RESET") {
+                    window.location.reload();
+                    return;
+                }
+
+                // 7. Generic fallback / polling update (VERSION_DESYNC_DETECTED or unclassified)
+                fetchPendingDistributions(true);
+                fetchLooseStockList(true);
+                if (primaryPackQR) {
+                    syncActivePackStockSilently(primaryPackQR);
+                }
+            });
+        }
 
         // Auto-refresh when tab regains focus
         window.addEventListener('focus', () => {
@@ -510,6 +1245,10 @@
 
     // --- 3. DATA FETCHING ---
     function fetchPendingDistributions(isBackground = false) {
+        // Guard: If scanner modal is active in continuous scanning, defer non-essential updates
+        const scannerModal = document.getElementById('scannerModal');
+        const isScanningModalOpen = scannerModal && (scannerModal.style.display === 'flex' || scannerModal.style.display === 'block');
+
         fetch('/api/pending-distributions')
             .then(res => res.json())
             .then(data => {
@@ -519,41 +1258,106 @@
                     if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
                 }
 
-                const dept = activeUser.department;
-                if (dept === 'CS') enrollmentsData = (data.data || []).filter(item => item.section.toUpperCase().includes('BSCS'));
-                else if (dept === 'IT') enrollmentsData = (data.data || []).filter(item => item.section.toUpperCase().includes('BSIT'));
-                else enrollmentsData = data.data || [];
+                rawPendingDistributions = data.data || [];
 
-                // Check concurrency conflict for currently selected section/subject
+                // Snapshot current form selections before updating data
+                const currentInstructorSelect = document.getElementById('instructorSelect');
+                const currentSectionSelect = document.getElementById('sectionSelect');
                 const currentSubjectSelect = document.getElementById('subjectSelect');
-                const selectedEnrollmentId = currentSubjectSelect ? parseInt(currentSubjectSelect.value) : null;
 
-                if (selectedEnrollmentId) {
-                    const stillExists = enrollmentsData.some(item => item.enrollment_id === selectedEnrollmentId);
-                    if (!stillExists) {
-                        const banner = document.getElementById('concurrencyBanner');
-                        if (banner) {
-                            banner.style.display = 'block';
-                            setTimeout(() => { banner.style.display = 'none'; }, 6000);
+                const savedTeacher = currentInstructorSelect ? currentInstructorSelect.value : "";
+                const savedSection = currentSectionSelect ? currentSectionSelect.value : "";
+                const savedSubjectId = currentSubjectSelect && currentSubjectSelect.value ? parseInt(currentSubjectSelect.value) : null;
+
+                applyCourseFilter(isBackground);
+
+                // If running in background and user already has selections in progress:
+                if (isBackground) {
+                    if (savedTeacher && currentInstructorSelect && currentInstructorSelect.value !== savedTeacher) {
+                        currentInstructorSelect.value = savedTeacher;
+                    }
+                    if (savedSection && currentSectionSelect && currentSectionSelect.value !== savedSection) {
+                        currentSectionSelect.value = savedSection;
+                    }
+
+                    // Check concurrency conflict for currently selected section/subject
+                    if (savedSubjectId) {
+                        const currentClassRecord = enrollmentsData.find(item => item.enrollment_id === savedSubjectId);
+                        if (!currentClassRecord) {
+                            // Concurrency conflict: The selected section was fulfilled by another clerk
+                            const banner = document.getElementById('concurrencyBanner');
+                            if (banner) {
+                                banner.style.display = 'block';
+                                setTimeout(() => { banner.style.display = 'none'; }, 6000);
+                            }
+                            if (currentSubjectSelect) currentSubjectSelect.value = "";
+                            handleSubjectChange();
+                        } else {
+                            // Section still pending! Preserve selection & update demand dataset cleanly
+                            if (currentSubjectSelect && currentSubjectSelect.value !== String(savedSubjectId)) {
+                                currentSubjectSelect.value = savedSubjectId;
+                            }
+                            const selOption = currentSubjectSelect ? currentSubjectSelect.options[currentSubjectSelect.selectedIndex] : null;
+                            if (selOption && currentClassRecord.remaining !== undefined) {
+                                selOption.dataset.demand = currentClassRecord.remaining;
+                                if (currentDemand !== currentClassRecord.remaining && !isScanningModalOpen) {
+                                    currentDemand = currentClassRecord.remaining;
+                                    updateManualProgress();
+                                }
+                            }
                         }
-                        // Reset subject selection cleanly without touching scanned active box
-                        currentSubjectSelect.value = "";
-                        handleSubjectChange();
+                    }
+                } else {
+                    // Non-background (explicit) call
+                    if (savedSubjectId) {
+                        const stillExists = enrollmentsData.some(item => item.enrollment_id === savedSubjectId);
+                        if (!stillExists) {
+                            const banner = document.getElementById('concurrencyBanner');
+                            if (banner) {
+                                banner.style.display = 'block';
+                                setTimeout(() => { banner.style.display = 'none'; }, 6000);
+                            }
+                            if (currentSubjectSelect) currentSubjectSelect.value = "";
+                            handleSubjectChange();
+                        }
                     }
                 }
-
-                populateInstructors(isBackground);
             })
             .catch(err => {
                 if (!isBackground) console.error("Error fetching pending distributions:", err);
             });
     }
 
+    function applyCourseFilter(keepSelection = false) {
+        if (activePackDept === 'CS') {
+            enrollmentsData = rawPendingDistributions.filter(item => (item.department === 'CS') || (item.section && item.section.toUpperCase().includes('BSCS')));
+        } else if (activePackDept === 'IT') {
+            enrollmentsData = rawPendingDistributions.filter(item => (item.department === 'IT') || (item.section && item.section.toUpperCase().includes('BSIT')));
+        } else {
+            enrollmentsData = [...rawPendingDistributions];
+        }
+        populateInstructors(keepSelection);
+    }
+
     function populateInstructors(keepSelection = false) {
         const select = document.getElementById('instructorSelect');
+        if (!select) return;
         const prevSelected = select.value;
+        const newTeachers = [...new Set(enrollmentsData.map(item => item.teacher_name))];
+
+        // If keeping selection, check if options actually changed to avoid DOM churn & closing open dropdowns
+        if (keepSelection) {
+            const currentOptions = Array.from(select.options).slice(1).map(opt => opt.value);
+            const isIdentical = currentOptions.length === newTeachers.length && 
+                                currentOptions.every((val, idx) => val === newTeachers[idx]);
+            if (isIdentical) {
+                if (prevSelected) select.value = prevSelected;
+                return; // Nothing changed, skip DOM rewrite!
+            }
+        }
+
         select.innerHTML = '<option value="">-- Select Instructor --</option>'; 
-        [...new Set(enrollmentsData.map(item => item.teacher_name))].forEach(t => {
+        newTeachers.forEach(t => {
             select.innerHTML += `<option value="${t}">${t}</option>`;
         });
         if (keepSelection && prevSelected) {
@@ -598,7 +1402,9 @@
                 let opt = document.createElement('option');
                 opt.value = sub.enrollment_id;
                 opt.dataset.demand = sub.remaining;
-                opt.text = sub.subject;
+                opt.dataset.isReplacement = sub.is_replacement ? "true" : "false";
+                let badge = sub.is_replacement ? " 🔄 [Replacement - Pre-Paid]" : "";
+                opt.text = sub.subject + badge;
                 subjectSelect.appendChild(opt);
             });
         }
@@ -606,11 +1412,24 @@
 
     function handleSubjectChange() {
         const select = document.getElementById('subjectSelect');
+        allocatedBooklets = [];
+        renderBookletTray();
+        updateManualProgress();
         if (select.value) {
-        currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
-            checkProactiveBridging();
+            currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
+            updateManualProgress();
+            if (currentAllocationMode === 'auto') {
+                checkProactiveBridging();
+            } else {
+                const btn = document.getElementById('submitTxBtn');
+                btn.disabled = true;
+                btn.innerText = `Scan ${currentDemand} Booklet(s) to Continue`;
+                btn.className = "btn";
+                const input = document.getElementById('manualBookletInput');
+                if (input) input.focus();
+            }
         } else {
-        currentDemand = 0;
+            currentDemand = 0;
             resetReceipt();
         }
     }
@@ -618,7 +1437,7 @@
     // --- 5. PROACTIVE BRIDGING LOGIC ---
     function checkProactiveBridging() {
         if (!primaryPackQR) {
-            alert("Please scan a Master Pack supply box first.");
+            showAppAlert("Supply Box Required", "Please scan a Master Pack supply box first.", "warning");
             document.getElementById('subjectSelect').value = "";
             return;
         }
@@ -634,15 +1453,31 @@
         }
     }
 
-    // --- 6. THE GHOST ENGINE (Live WYSIWYG Receipt) ---
+    // --- 6. THE GHOST ENGINE (Live WYSIWYG Receipt & Dynamic Allocation) ---
     function triggerLivePreview() {
         const enrollmentId = document.getElementById('subjectSelect').value;
         const btn = document.getElementById('submitTxBtn');
         
         if (!enrollmentId) { resetReceipt(); return; }
 
+        // Check if we are in manual mode and haven't scanned enough yet
+        if (currentAllocationMode === 'manual' && allocatedBooklets.length < currentDemand) {
+            btn.disabled = true;
+            btn.innerText = `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...`;
+            btn.className = "btn";
+            updateManualProgress();
+            renderBookletTray();
+            const logUl = document.getElementById('r-log');
+            if (logUl) logUl.innerHTML = `<li>Scanning in progress (${allocatedBooklets.length} of ${currentDemand} scanned)...</li>`;
+            return;
+        }
+
         btn.disabled = true;
         btn.innerText = "Calculating allocations...";
+
+        const hasSwapped = allocatedBooklets && allocatedBooklets.some(b => b.is_swapped);
+        const isExplicit = (currentAllocationMode === 'manual' || hasSwapped);
+        const explicitList = isExplicit ? allocatedBooklets.map(b => b.control_num) : [];
 
         fetch('/api/preview-distribution', {
             method: 'POST',
@@ -652,7 +1487,9 @@
                 scanned_pack_qr: primaryPackQR, 
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
-                selected_loose_controls: globalSelectedLoose
+                selected_loose_controls: globalSelectedLoose,
+                distribution_mode: currentAllocationMode,
+                explicit_control_nums: explicitList
             })
         })
         .then(res => res.json())
@@ -661,24 +1498,59 @@
                 if (data.booklet_price !== undefined) {
                     globalBookletPrice = parseFloat(data.booklet_price) || globalBookletPrice;
                 }
-                paintLiveReceipt(data.preview_log);
+
+                // If in auto mode and no swaps made, populate tray from backend
+                if (currentAllocationMode === 'auto' && !hasSwapped && data.allocated_details) {
+                    allocatedBooklets = data.allocated_details.map(d => ({
+                        id: d.id,
+                        control_num: d.control_num,
+                        sort_record_num: d.sort_record_num,
+                        status: d.status,
+                        department: d.department,
+                        is_swapped: false
+                    }));
+                }
+                renderBookletTray();
+                updateManualProgress();
+
+                paintLiveReceipt(data);
                 btn.disabled = false;
-                btn.innerText = "Verify Booklets & Submit Transaction";
-                btn.className = "btn btn-success";
+                btn.onclick = submitTransaction;
+                btn.style.backgroundColor = "";
+                btn.style.color = "";
+                if (data.is_replacement) {
+                    btn.innerText = "🔄 Distribute Replacement (Fully Paid)";
+                    btn.className = "btn btn-success";
+                } else {
+                    btn.innerText = "Verify Booklets & Submit Transaction";
+                    btn.className = "btn btn-success";
+                }
             } else {
                 if (data.code === "ALREADY_FULFILLED") {
-                    alert("⚠️ Concurrent Transaction Notice: " + data.message + " The distribution list will now refresh.");
+                    showAppAlert("Concurrent Transaction Notice", data.message + "\n\nThe distribution list will now refresh.", "warning");
                     fetchPendingDistributions();
                     resetReceipt();
+                } else if (data.code === "DEPT_MISMATCH" || data.code === "BRIDGING_DEPT_MISMATCH" || data.code === "LOOSE_DEPT_MISMATCH") {
+                    showAppAlert("Course Template Conflict", data.message, "warning").then(() => {
+                        handleBridgingShortageState();
+                    });
+                } else if (data.code === "DUPLICATE_PACK") {
+                    showAppAlert("Duplicate Pack Detected", data.message, "warning").then(() => {
+                        handleBridgingShortageState();
+                    });
                 } else {
-                    alert("Preview Error: " + data.message);
+                    showAppAlert("Preview Calculation Error", data.message || "Failed to calculate stock allocation.", "error");
+                    btn.disabled = true;
+                    btn.className = "btn btn-danger";
+                    btn.style.backgroundColor = "";
+                    btn.style.color = "";
+                    btn.innerText = "Error calculating stock";
                 }
-                btn.innerText = "Error calculating stock";
             }
         });
     }
 
-    function paintLiveReceipt(previewLogString) {
+    function paintLiveReceipt(previewData) {
         document.querySelector('.live-receipt-content').classList.add('active');
         
         const teacher = document.getElementById('instructorSelect').value;
@@ -701,20 +1573,461 @@
         const unitPriceEl = document.getElementById('r-unit-price');
         if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
 
-        const amount = (currentDemand * globalBookletPrice).toFixed(2);
-        document.getElementById('r-amount-table').innerText = amount;
+        const docTitle = document.getElementById('doc-title');
+        const amountTable = document.getElementById('r-amount-table');
+
+        if (previewData && previewData.is_replacement) {
+            if (docTitle) docTitle.innerText = "Document Title: PREVIEW - REPLACEMENT DISTRIBUTION (PRE-PAID)";
+            if (amountTable) amountTable.innerHTML = `<span style="color:#27ae60; font-weight:bold;">₱0.00 (Pre-Paid)</span>`;
+        } else {
+            if (docTitle) docTitle.innerText = "Document Title: PREVIEW (NOT RECORDED)";
+            const amount = (currentDemand * globalBookletPrice).toFixed(2);
+            if (amountTable) amountTable.innerText = amount;
+        }
 
         const logUl = document.getElementById('r-log');
-        logUl.innerHTML = `<li>- ${previewLogString}</li>`;
+        const logStr = (previewData && previewData.preview_log) ? previewData.preview_log : previewData;
+        logUl.innerHTML = `<li>- ${logStr}</li>`;
     }
 
     function resetReceipt() {
         document.querySelector('.live-receipt-content').classList.remove('active');
-        document.getElementById('submitTxBtn').disabled = true;
-        document.getElementById('submitTxBtn').innerText = "Select Subject to Continue";
-        document.getElementById('submitTxBtn').className = "btn";
+        const btn = document.getElementById('submitTxBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Select Subject to Continue";
+            btn.className = "btn";
+            btn.style.backgroundColor = "";
+            btn.style.color = "";
+            btn.onclick = submitTransaction;
+        }
         bridgingPackQR = null; 
         bridgingPackStock = 0;
+        allocatedBooklets = [];
+        renderBookletTray();
+        updateManualProgress();
+    }
+
+    function handleBridgingShortageState() {
+        bridgingPackQR = null; 
+        bridgingPackStock = 0;
+        allocatedBooklets = [];
+        renderBookletTray();
+        updateManualProgress();
+        document.querySelector('.live-receipt-content').classList.remove('active');
+
+        const shortage = Math.max(0, currentDemand - primaryPackStock);
+        const btn = document.getElementById('submitTxBtn');
+        const secSelect = document.getElementById('subjectSelect');
+        if (btn && shortage > 0 && secSelect && secSelect.value) {
+            btn.disabled = false;
+            btn.className = "btn btn-warning";
+            btn.style.backgroundColor = "#d97706";
+            btn.style.color = "#ffffff";
+            btn.innerText = `📷 Scan Bridging Pack (${shortage} pcs needed)`;
+            btn.onclick = () => {
+                openScannerModal('bridge', shortage);
+            };
+        } else if (btn) {
+            btn.disabled = true;
+            btn.className = "btn";
+            btn.style.backgroundColor = "";
+            btn.style.color = "";
+            btn.innerText = "Select Subject to Continue";
+            btn.onclick = submitTransaction;
+        }
+
+        const logUl = document.getElementById('r-log');
+        if (logUl && shortage > 0) {
+            logUl.innerHTML = `<li style="color: #d97706; font-weight: bold;">⚠️ Bridging Required: Active pack has only ${primaryPackStock} booklet(s) (short by ${shortage} pcs). Scan another Master Pack to continue or select a different section.</li>`;
+        }
+    }
+
+    // --- DYNAMIC ALLOCATION & TRAY CONTROLS ---
+    function switchAllocationMode(mode) {
+        currentAllocationMode = mode;
+        const btnAuto = document.getElementById('btnModeAuto');
+        const btnManual = document.getElementById('btnModeManual');
+        const manualSection = document.getElementById('manualScanSection');
+        const trayHint = document.getElementById('trayHintText');
+
+        if (mode === 'auto') {
+            btnAuto.style.background = '#2563eb';
+            btnAuto.style.color = '#ffffff';
+            btnAuto.style.borderColor = '#2563eb';
+
+            btnManual.style.background = '#f8fafc';
+            btnManual.style.color = '#475569';
+            btnManual.style.borderColor = '#cbd5e1';
+
+            manualSection.style.display = 'none';
+            if (trayHint) trayHint.innerText = "Click any chip to swap out";
+
+            if (document.getElementById('subjectSelect').value) {
+                allocatedBooklets = [];
+                triggerLivePreview();
+            }
+        } else {
+            btnManual.style.background = '#2563eb';
+            btnManual.style.color = '#ffffff';
+            btnManual.style.borderColor = '#2563eb';
+
+            btnAuto.style.background = '#f8fafc';
+            btnAuto.style.color = '#475569';
+            btnAuto.style.borderColor = '#cbd5e1';
+
+            manualSection.style.display = 'block';
+            if (trayHint) trayHint.innerText = "Click ✖ on any chip to remove";
+
+            renderBookletTray();
+            updateManualProgress();
+
+            const input = document.getElementById('manualBookletInput');
+            if (input) input.focus();
+
+            if (allocatedBooklets.length < currentDemand) {
+                const btn = document.getElementById('submitTxBtn');
+                btn.disabled = true;
+                btn.innerText = currentDemand > 0 ? `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...` : "Select Subject to Continue";
+                btn.className = "btn";
+            }
+        }
+    }
+
+    async function clearManualTray() {
+        if (!allocatedBooklets || allocatedBooklets.length === 0) return;
+        const confirmed = await showAppConfirm(
+            "Clear Scanned Tray",
+            `Are you sure you want to clear all ${allocatedBooklets.length} scanned booklet(s) from the tray?`,
+            {
+                type: 'warning',
+                confirmText: "Clear All",
+                cancelText: "Keep Scanned",
+                confirmClass: "btn btn-danger"
+            }
+        );
+        if (!confirmed) return;
+
+        allocatedBooklets = [];
+        renderBookletTray();
+        updateManualProgress();
+        const btn = document.getElementById('submitTxBtn');
+        btn.disabled = true;
+        btn.innerText = currentDemand > 0 ? `Scan ${currentDemand} Booklet(s) to Continue` : "Select Subject to Continue";
+        btn.className = "btn";
+        const logUl = document.getElementById('r-log');
+        if (logUl) logUl.innerHTML = `<li>Scanning in progress (0 of ${currentDemand} scanned)...</li>`;
+        const input = document.getElementById('manualBookletInput');
+        if (input) input.focus();
+    }
+
+    function updateManualProgress() {
+        const badge = document.getElementById('manualProgressBadge');
+        if (badge) {
+            const count = allocatedBooklets ? allocatedBooklets.length : 0;
+            badge.innerText = `${count} / ${currentDemand} scanned`;
+            if (currentDemand > 0 && count === currentDemand) {
+                badge.style.background = "#dcfce7";
+                badge.style.color = "#15803d";
+            } else {
+                badge.style.background = "#e2e8f0";
+                badge.style.color = "#475569";
+            }
+        }
+    }
+
+    function renderBookletTray() {
+        const container = document.getElementById('bookletChipsContainer');
+        const badge = document.getElementById('trayCountBadge');
+        if (!container) return;
+
+        const count = allocatedBooklets ? allocatedBooklets.length : 0;
+        if (badge) {
+            badge.innerText = currentDemand > 0 ? `${count} / ${currentDemand} pcs` : `${count} pcs`;
+            if (currentDemand > 0 && count === currentDemand) {
+                badge.style.background = "#dcfce7";
+                badge.style.color = "#15803d";
+            } else if (currentDemand > 0 && count < currentDemand) {
+                badge.style.background = "#fef3c7";
+                badge.style.color = "#b45309";
+            } else {
+                badge.style.background = "#dbeafe";
+                badge.style.color = "#1e40af";
+            }
+        }
+
+        if (count === 0) {
+            container.innerHTML = currentAllocationMode === 'manual'
+                ? '<div style="color: #94a3b8; font-size: 0.82rem; font-style: italic; padding: 4px;">No booklets scanned yet. Use the scan box above to add booklets.</div>'
+                : '<div style="color: #94a3b8; font-size: 0.82rem; font-style: italic; padding: 4px;">No booklets allocated yet. Select a subject to generate.</div>';
+            return;
+        }
+
+        let html = '';
+        allocatedBooklets.forEach((b, index) => {
+            const isSwapped = b.is_swapped;
+            const ctrl = b.control_num;
+            const srn = b.sort_record_num && b.sort_record_num !== 'N/A' ? ` | ${b.sort_record_num}` : '';
+
+            if (currentAllocationMode === 'manual') {
+                html += `
+                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; font-family: monospace; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-weight: 600;">
+                        <span>#${index + 1}: ${ctrl}${srn}</span>
+                        <span onclick="removeManualBooklet('${ctrl}', event)" title="Remove this booklet" style="cursor: pointer; color: #ef4444; font-weight: bold; font-size: 1.1rem; line-height: 1; padding: 0 2px;">&times;</span>
+                    </div>
+                `;
+            } else {
+                const bg = isSwapped ? '#fef3c7' : '#f8fafc';
+                const border = isSwapped ? '#f59e0b' : '#cbd5e1';
+                const textColor = isSwapped ? '#92400e' : '#334155';
+                const tag = isSwapped ? '<span style="background: #f59e0b; color: white; border-radius: 3px; padding: 1px 4px; font-size: 0.7rem; margin-left: 4px;">SWAPPED</span>' : '<span style="color: #64748b; font-size: 0.75rem; margin-left: 4px;">🔄</span>';
+
+                html += `
+                    <div onclick="openSwapModal('${ctrl}')" title="Click to swap this booklet" style="cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 6px; font-size: 0.82rem; font-family: monospace; background: ${bg}; border: 1px solid ${border}; color: ${textColor}; font-weight: 600; transition: all 0.15s ease;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='${border}'">
+                        <span>${ctrl}${tag}</span>
+                    </div>
+                `;
+            }
+        });
+        container.innerHTML = html;
+    }
+
+    function removeManualBooklet(ctrlNum, event) {
+        if (event) event.stopPropagation();
+        allocatedBooklets = allocatedBooklets.filter(b => b.control_num !== ctrlNum);
+        renderBookletTray();
+        updateManualProgress();
+        if (allocatedBooklets.length === currentDemand) {
+            triggerLivePreview();
+        } else {
+            const btn = document.getElementById('submitTxBtn');
+            btn.disabled = true;
+            btn.innerText = `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...`;
+            btn.className = "btn";
+            const logUl = document.getElementById('r-log');
+            if (logUl) logUl.innerHTML = `<li>Scanning in progress (${allocatedBooklets.length} of ${currentDemand} scanned)...</li>`;
+        }
+    }
+
+    function addManualScannedBooklet() {
+        const input = document.getElementById('manualBookletInput');
+        const raw = input.value.trim();
+        if (!raw) return;
+
+        PosAudio.init();
+
+        if (!document.getElementById('subjectSelect').value || currentDemand <= 0) {
+            PosAudio.warning();
+            showAppAlert("Selection Required", "Please select Instructor, Section, and Subject first.", "warning");
+            input.focus();
+            return;
+        }
+
+        if (allocatedBooklets.length >= currentDemand) {
+            PosAudio.warning();
+            showAppAlert("Headcount Met", `Target headcount of ${currentDemand} booklets already reached. Remove a booklet if you wish to replace one.`, "info");
+            input.value = '';
+            return;
+        }
+
+        if (allocatedBooklets.some(b => b.control_num === raw || b.sort_record_num === raw)) {
+            PosAudio.warning();
+            showToast(`Booklet '${raw}' is already added in the tray.`, 'warning', 'Duplicate');
+            input.value = '';
+            input.focus();
+            return;
+        }
+
+        const deptParam = encodeURIComponent(activePackDept || 'CS');
+        fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    const b = data.booklet;
+                    if (allocatedBooklets.some(item => item.control_num === b.control_num)) {
+                        PosAudio.warning();
+                        showToast(`Booklet '${b.control_num}' is already added in the tray.`, 'warning', 'Duplicate');
+                        input.value = '';
+                        input.focus();
+                        return;
+                    }
+                    if (b.status !== "available" && b.status !== "loose_stock") {
+                        PosAudio.error();
+                        showAppAlert("Allocation Ineligible", `Booklet '${b.control_num}' cannot be allocated.\nCurrent status: ${b.status}`, "error");
+                        input.focus();
+                        return;
+                    }
+
+                    allocatedBooklets.push({
+                        id: b.id,
+                        control_num: b.control_num,
+                        sort_record_num: b.sort_record_num,
+                        status: b.status,
+                        department: b.department,
+                        is_swapped: false
+                    });
+
+                    input.value = '';
+                    renderBookletTray();
+                    updateManualProgress();
+
+                    if (allocatedBooklets.length === currentDemand) {
+                        PosAudio.complete();
+                        triggerLivePreview();
+                        showToast(`Headcount complete! All ${currentDemand} booklets scanned.`, 'success', 'Scanning Complete');
+                    } else {
+                        PosAudio.success();
+                        showToast(`Booklet ${b.control_num} added.`, 'success', 'Booklet Scanned');
+                        const btn = document.getElementById('submitTxBtn');
+                        btn.disabled = true;
+                        btn.innerText = `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...`;
+                        btn.className = "btn";
+                        const logUl = document.getElementById('r-log');
+                        if (logUl) logUl.innerHTML = `<li>Scanning in progress (${allocatedBooklets.length} of ${currentDemand} scanned)...</li>`;
+                    }
+                    input.focus();
+                } else {
+                    PosAudio.error();
+                    showToast(`Lookup Failed: ${data.message}`, 'error', 'Not Found');
+                    input.select();
+                }
+            })
+            .catch(err => {
+                console.error("Error looking up booklet:", err);
+                PosAudio.error();
+                showToast("Network error looking up booklet.", 'error', 'Network Error');
+            });
+    }
+
+    function handleManualBookletKeypress(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addManualScannedBooklet();
+        }
+    }
+
+    function openSwapModal(ctrlNum) {
+        swappingTargetControlNum = ctrlNum;
+        document.getElementById('swapTargetCtrlNum').innerText = ctrlNum;
+        const input = document.getElementById('swapInputIdentifier');
+        input.value = '';
+        const errMsg = document.getElementById('swapErrorMsg');
+        errMsg.style.display = 'none';
+        errMsg.innerText = '';
+        document.getElementById('swapBookletModal').style.display = 'flex';
+        setTimeout(() => input.focus(), 100);
+    }
+
+    function closeSwapModal() {
+        document.getElementById('swapBookletModal').style.display = 'none';
+        swappingTargetControlNum = null;
+    }
+
+    function confirmBookletSwap() {
+        const input = document.getElementById('swapInputIdentifier');
+        const errMsg = document.getElementById('swapErrorMsg');
+        const raw = input.value.trim();
+
+        PosAudio.init();
+
+        if (!raw) {
+            PosAudio.warning();
+            document.getElementById('swapBookletModal').style.display = 'flex';
+            errMsg.innerText = "Please enter or scan a replacement booklet.";
+            errMsg.style.display = 'block';
+            input.focus();
+            return;
+        }
+
+        if (raw === swappingTargetControlNum) {
+            PosAudio.warning();
+            document.getElementById('swapBookletModal').style.display = 'flex';
+            errMsg.innerText = "Replacement booklet cannot be the same booklet being replaced.";
+            errMsg.style.display = 'block';
+            return;
+        }
+
+        if (allocatedBooklets.some(b => b.control_num !== swappingTargetControlNum && (b.control_num === raw || b.sort_record_num === raw))) {
+            PosAudio.warning();
+            document.getElementById('swapBookletModal').style.display = 'flex';
+            errMsg.innerText = `Booklet '${raw}' is already allocated in the tray.`;
+            errMsg.style.display = 'block';
+            return;
+        }
+
+        const deptParam = encodeURIComponent(activePackDept || 'CS');
+        fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    const b = data.booklet;
+                    if (allocatedBooklets.some(item => item.control_num !== swappingTargetControlNum && item.control_num === b.control_num)) {
+                        PosAudio.warning();
+                        document.getElementById('swapBookletModal').style.display = 'flex';
+                        errMsg.innerText = `Booklet '${b.control_num}' is already allocated in the tray.`;
+                        errMsg.style.display = 'block';
+                        return;
+                    }
+                    if (b.status !== "available" && b.status !== "loose_stock") {
+                        PosAudio.error();
+                        document.getElementById('swapBookletModal').style.display = 'flex';
+                        errMsg.innerText = `Booklet '${b.control_num}' cannot be allocated (Status: ${b.status}).`;
+                        errMsg.style.display = 'block';
+                        return;
+                    }
+
+                    const idx = allocatedBooklets.findIndex(item => item.control_num === swappingTargetControlNum);
+                    if (idx !== -1) {
+                        allocatedBooklets[idx] = {
+                            id: b.id,
+                            control_num: b.control_num,
+                            sort_record_num: b.sort_record_num,
+                            status: b.status,
+                            department: b.department,
+                            is_swapped: true
+                        };
+                    }
+
+                    const oldCtrl = swappingTargetControlNum;
+                    PosAudio.success();
+                    closeSwapModal();
+                    renderBookletTray();
+                    triggerLivePreview();
+                    showToast(`Booklet ${oldCtrl} replaced with ${b.control_num}`, 'success', 'Booklet Swapped');
+                } else {
+                    PosAudio.error();
+                    document.getElementById('swapBookletModal').style.display = 'flex';
+                    errMsg.innerText = data.message || "Failed to find booklet.";
+                    errMsg.style.display = 'block';
+                    input.select();
+                }
+            })
+            .catch(err => {
+                console.error("Error in booklet swap lookup:", err);
+                PosAudio.error();
+                document.getElementById('swapBookletModal').style.display = 'flex';
+                errMsg.innerText = "Network error during booklet lookup.";
+                errMsg.style.display = 'block';
+            });
+    }
+
+    function openBookletCameraScanner(subIntent) {
+        if (subIntent === 'manual') {
+            if (!document.getElementById('subjectSelect').value || currentDemand <= 0) {
+                showAppAlert("Selection Required", "Please select Instructor, Section, and Subject before scanning booklets.", "warning");
+                return;
+            }
+            if (allocatedBooklets.length >= currentDemand) {
+                showAppAlert("Headcount Met", `Target headcount of ${currentDemand} booklets already reached. Remove a booklet if you wish to replace one.`, "info");
+                return;
+            }
+        }
+        if (subIntent === 'swap') {
+            // Temporarily hide the swap modal so it doesn't overlap the camera scanner!
+            const swapModal = document.getElementById('swapBookletModal');
+            if (swapModal) swapModal.style.display = 'none';
+        }
+        openScannerModal(subIntent === 'swap' ? 'booklet_swap' : 'booklet_manual');
     }
 
     
@@ -722,6 +2035,11 @@
     let allLooseStock = [];
 
     function openLooseStockModal() {
+        const modalTitle = document.querySelector('#looseStockModal h2');
+        if (modalTitle) {
+            const deptText = activePackDept ? ` (${activePackDept === 'CS' ? 'Computer Science' : 'Information Technology'})` : '';
+            modalTitle.innerText = `Select Loose Booklets${deptText}`;
+        }
         document.getElementById('looseStockModal').style.display = 'flex';
         fetchLooseStockList();
     }
@@ -730,24 +2048,30 @@
         document.getElementById('looseStockModal').style.display = 'none';
     }
 
-    function fetchLooseStockList() {
-        fetch('/api/loose-stock-list')
+    function fetchLooseStockList(isBackground = false) {
+        const url = activePackDept ? `/api/loose-stock-list?department=${encodeURIComponent(activePackDept)}` : '/api/loose-stock-list';
+        fetch(url)
         .then(res => res.json())
         .then(data => {
             if(data.status === 'success') {
-                allLooseStock = data.data;
+                allLooseStock = data.data || [];
                 renderLooseList(allLooseStock);
                 
                 // Update Button UI
                 const btn = document.getElementById('looseStockBtn');
                 if(btn) {
-                    btn.innerHTML = `<i class="fas fa-hand-pointer"></i> Select Specific Loose Stock (${allLooseStock.length} Available)`;
+                    const deptLabel = activePackDept ? ` (${activePackDept})` : '';
+                    btn.innerHTML = `<i class="fas fa-hand-pointer"></i> Select Specific Loose Stock (${allLooseStock.length}${deptLabel} Available)`;
                     // If no stock, ensure it is disabled even if teacher is selected
                     if(allLooseStock.length === 0) {
                         btn.disabled = true;
+                    } else if (document.getElementById('instructorSelect').value) {
+                        btn.disabled = false;
                     }
                 }
             }
+        }).catch(err => {
+            if (!isBackground) console.error("Error fetching loose stock:", err);
         });
     }
 
@@ -791,19 +2115,71 @@
     }
 
     // --- 7. SCANNER & SUPPLY LOGIC ---
-    function checkSavedSupply(qr) {
+    function syncActivePackStockSilently(qr) {
+        if (!qr) return;
+        const usernameParam = encodeURIComponent(activeUser.username || '');
+        fetch(`/api/pack-status/${qr}?username=${usernameParam}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success" && data.available > 0) {
+                    // Update numeric stock counter ONLY - zero form disruption
+                    primaryPackStock = data.available;
+                    const stockEl = document.getElementById('pack-stock-display');
+                    if (stockEl) stockEl.innerText = data.available;
+                } else if (data.code === 'PACK_LOCKED') {
+                    showAppAlert("Supply Access Notice", `This Master Pack is currently claimed by another user (${data.claimed_by}).\n\nYour active supply box has been reset.`, "warning");
+                    localStorage.removeItem(getUserPackKey());
+                    localStorage.removeItem('bookletlog_active_pack');
+                    primaryPackQR = null;
+                    primaryPackStock = 0;
+                    activePackDept = null;
+                    activePackTemplateName = null;
+                    activePackTemplateSlot = null;
+                    document.getElementById('active-supply-view').style.display = "none";
+                    document.getElementById('no-supply-view').style.display = "block";
+                    document.getElementById('transaction-form').style.opacity = "0.5";
+                    document.getElementById('transaction-form').style.pointerEvents = "none";
+                } else if (data.code === 'PACK_DEPLETED' || (data.status === 'success' && data.available === 0)) {
+                    primaryPackStock = 0;
+                    const stockEl = document.getElementById('pack-stock-display');
+                    if (stockEl) stockEl.innerText = 0;
+                    // Prompt exhaustion only if submit is not actively processing
+                    const submitBtn = document.getElementById('submitTxBtn');
+                    if (submitBtn && !submitBtn.disabled) {
+                        manualCloseBox();
+                    }
+                }
+            })
+            .catch(err => {
+                console.warn("Silent pack sync warning:", err);
+            });
+    }
+
+    function checkSavedSupply(qr, isBackground = false) {
+        const supplyView = document.getElementById('active-supply-view');
+        const isSupplyViewOpen = supplyView && supplyView.style.display === 'block';
+
+        // If background sync or if the box is already active in view, sync silently without wiping form!
+        if (isBackground || (primaryPackQR === qr && isSupplyViewOpen)) {
+            syncActivePackStockSilently(qr);
+            return;
+        }
+
         const usernameParam = encodeURIComponent(activeUser.username || '');
         fetch(`/api/pack-status/${qr}?username=${usernameParam}`).then(res => res.json()).then(data => {
             if (data.status === "success" && data.available > 0) {
-                setPrimarySupply(qr, data.available);
+                setPrimarySupply(qr, data.available, data.department, data.template_name, data.template_slot, false);
             } else {
                 if (data.code === 'PACK_LOCKED') {
-                    alert(`⚠️ Supply Access Notice: This Master Pack is currently claimed by another user (${data.claimed_by}). Your active supply box has been reset.`);
+                    showAppAlert("Supply Access Notice", `This Master Pack is currently claimed by another user (${data.claimed_by}).\n\nYour active supply box has been reset.`, "warning");
                 }
                 localStorage.removeItem(getUserPackKey());
                 localStorage.removeItem('bookletlog_active_pack');
                 primaryPackQR = null;
                 primaryPackStock = 0;
+                activePackDept = null;
+                activePackTemplateName = null;
+                activePackTemplateSlot = null;
                 document.getElementById('active-supply-view').style.display = "none";
                 document.getElementById('no-supply-view').style.display = "block";
                 document.getElementById('transaction-form').style.opacity = "0.5";
@@ -814,117 +2190,491 @@
         });
     }
 
+    function updateScannerHud(tickerText = null, isError = false) {
+        const counter = document.getElementById('scanner-hud-counter');
+        const ticker = document.getElementById('scanner-hud-ticker');
+        if (counter) {
+            counter.innerText = `${allocatedBooklets.length} / ${currentDemand}`;
+            if (allocatedBooklets.length >= currentDemand && currentDemand > 0) {
+                counter.style.background = '#059669';
+            } else {
+                counter.style.background = '#2563eb';
+            }
+        }
+        if (ticker && tickerText) {
+            ticker.innerText = tickerText;
+            ticker.style.color = isError ? '#dc2626' : '#059669';
+        }
+    }
+
+    let isHandlingFileScanError = false;
+
+    function onScanFailure(errorMessage, error) {
+        // Only handle file scan failures; ignore normal continuous camera frame misses
+        const isFileScan = (html5QrcodeScanner && html5QrcodeScanner.currentScanType === 1) || 
+                           !!document.getElementById('qr-canvas-visible') ||
+                           (document.getElementById('html5-qrcode-private-filescan-input') && 
+                            document.getElementById('html5-qrcode-private-filescan-input').files && 
+                            document.getElementById('html5-qrcode-private-filescan-input').files.length > 0);
+        
+        if (!isFileScan) return;
+
+        if (isHandlingFileScanError) return;
+        isHandlingFileScanError = true;
+
+        // 1. Immediately close the scanner modal so no modal or canvas lingers
+        closeScannerModal();
+
+        // 2. Audiovisual feedback
+        PosAudio.error();
+
+        // 3. Show user alert modal
+        showAppAlert(
+            "Invalid Image – No QR Code Detected",
+            "The uploaded image does not contain a recognizable QR code.\n\nPlease upload a clear image containing only an official Master Pack or Booklet QR code.",
+            "error"
+        ).then(() => {
+            isHandlingFileScanError = false;
+        });
+    }
+
     function openScannerModal(intent, deficit = 0) {
         currentScanIntent = intent;
+        lastScannedBarcode = null;
+        lastScannedBarcodeTime = 0;
+        isLookupBusy = false;
+        PosAudio.init();
         
         const title = document.getElementById('scanner-modal-title');
         const msg = document.getElementById('scanner-modal-msg');
+        const hudContainer = document.getElementById('scanner-hud-container');
+        const doneBtn = document.getElementById('scanner-done-btn');
         
         if (intent === 'primary') {
             title.innerText = "Scan Master Pack";
+            title.style.color = "#2c3e50";
             msg.innerText = "Position the QR code inside the frame to activate supply.";
-        } else {
+            if (hudContainer) hudContainer.style.display = 'none';
+            if (doneBtn) doneBtn.style.display = 'none';
+        } else if (intent === 'bridge') {
             title.innerText = "⚠️ Bridging Required";
             title.style.color = "#e74c3c";
-            msg.innerText = `You are short ${deficit} booklets. Grab a new Master Pack from inventory and scan it to bridge this transaction.`;
+            const deptLabel = activePackDept === 'CS' ? 'Computer Science (CS)' : (activePackDept === 'IT' ? 'Information Technology (IT)' : 'matching');
+            msg.innerHTML = `You are short <strong>${deficit}</strong> booklets.<br>Grab a new <strong>${deptLabel}</strong> Master Pack from inventory and scan it to bridge this transaction.`;
+            if (hudContainer) hudContainer.style.display = 'none';
+            if (doneBtn) doneBtn.style.display = 'none';
+        } else if (intent === 'booklet_manual') {
+            title.innerText = "📷 Continuous Booklet QR Scanner";
+            title.style.color = "#2563eb";
+            msg.innerHTML = `Hold booklet QR codes up to your camera in succession.<br>A <strong>chime</strong> will sound for each valid booklet.`;
+            if (hudContainer) {
+                hudContainer.style.display = 'block';
+                updateScannerHud("Ready to scan. Swipe booklets...");
+            }
+            if (doneBtn) doneBtn.style.display = 'inline-block';
+        } else if (intent === 'booklet_swap') {
+            title.innerText = "🔁 Scan Replacement Booklet";
+            title.style.color = "#d97706";
+            msg.innerHTML = `Replacing: <strong style="color: #e74c3c; font-family: monospace;">${swappingTargetControlNum || 'Booklet'}</strong><br>Position the replacement QR stamped on the booklet cover inside the frame.`;
+            if (hudContainer) hudContainer.style.display = 'none';
+            if (doneBtn) doneBtn.style.display = 'none';
         }
 
         document.getElementById('scannerModal').style.display = 'flex';
         html5QrcodeScanner = new Html5QrcodeScanner("reader-modal", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-        html5QrcodeScanner.render(onScanSuccess, (err)=>{});
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
     }
 
     function closeScannerModal() {
-        if(html5QrcodeScanner) html5QrcodeScanner.clear();
+        if (html5QrcodeScanner) {
+            try {
+                html5QrcodeScanner.clear();
+            } catch (e) {
+                console.warn("Scanner clear error:", e);
+            }
+        }
         document.getElementById('scannerModal').style.display = 'none';
+        lastScannedBarcode = null;
+        lastScannedBarcodeTime = 0;
+        isLookupBusy = false;
     }
 
     function cancelScannerModal() {
-        if(html5QrcodeScanner) html5QrcodeScanner.clear();
-        document.getElementById('scannerModal').style.display = 'none';
-        
-        if (currentScanIntent === 'bridge') {
-            document.getElementById('subjectSelect').value = "";
-            resetReceipt();
+        const prevIntent = currentScanIntent;
+        closeScannerModal();
+        if (prevIntent === 'bridge') {
+            handleBridgingShortageState();
+        } else if (prevIntent === 'booklet_swap') {
+            // Restore the swap modal so the user returns to their modal
+            if (swappingTargetControlNum) {
+                document.getElementById('swapBookletModal').style.display = 'flex';
+                const input = document.getElementById('swapInputIdentifier');
+                if (input) setTimeout(() => input.focus(), 100);
+            }
+        }
+        currentScanIntent = null;
+    }
+
+    function finishContinuousScanning() {
+        closeScannerModal();
+        currentScanIntent = null;
+        renderBookletTray();
+        updateManualProgress();
+        if (allocatedBooklets.length === currentDemand) {
+            triggerLivePreview();
+        } else {
+            const btn = document.getElementById('submitTxBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...`;
+                btn.className = "btn";
+            }
+            const logUl = document.getElementById('r-log');
+            if (logUl) logUl.innerHTML = `<li>Scanning paused (${allocatedBooklets.length} of ${currentDemand} scanned)...</li>`;
         }
     }
 
     function onScanSuccess(decodedText) {
+        const intent = currentScanIntent;
+        const now = Date.now();
+
+        if (intent === 'booklet_manual') {
+            // Anti-repeat debounce: ignore identical QR within 1400ms
+            if (lastScannedBarcode === decodedText && (now - lastScannedBarcodeTime) < 1400) {
+                return;
+            }
+            lastScannedBarcode = decodedText;
+            lastScannedBarcodeTime = now;
+
+            if (isLookupBusy) return;
+
+            if (allocatedBooklets.length >= currentDemand) {
+                PosAudio.warning();
+                triggerViewfinderFlash('amber');
+                updateScannerHud(`Headcount of ${currentDemand} already reached!`, true);
+                return;
+            }
+
+            const raw = decodedText.trim();
+            if (allocatedBooklets.some(b => b.control_num === raw || b.sort_record_num === raw)) {
+                PosAudio.warning();
+                triggerViewfinderFlash('amber');
+                updateScannerHud(`Duplicate: ${raw} already in tray!`, true);
+                return;
+            }
+
+            isLookupBusy = true;
+            const deptParam = encodeURIComponent(activePackDept || 'CS');
+            fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        const b = data.booklet;
+                        if (allocatedBooklets.some(item => item.control_num === b.control_num)) {
+                            PosAudio.warning();
+                            triggerViewfinderFlash('amber');
+                            updateScannerHud(`Duplicate: ${b.control_num} already in tray!`, true);
+                            return;
+                        }
+                        if (b.status !== "available" && b.status !== "loose_stock") {
+                            PosAudio.error();
+                            triggerViewfinderFlash('red');
+                            updateScannerHud(`${b.control_num} not available (${b.status})`, true);
+                            return;
+                        }
+
+                        allocatedBooklets.push({
+                            id: b.id,
+                            control_num: b.control_num,
+                            sort_record_num: b.sort_record_num,
+                            status: b.status,
+                            department: b.department,
+                            is_swapped: false
+                        });
+
+                        renderBookletTray();
+                        updateManualProgress();
+
+                        if (allocatedBooklets.length === currentDemand) {
+                            PosAudio.complete();
+                            triggerViewfinderFlash('green');
+                            updateScannerHud(`🎉 Complete! All ${currentDemand} booklets scanned.`, false);
+                            triggerLivePreview();
+                            setTimeout(() => {
+                                closeScannerModal();
+                                currentScanIntent = null;
+                            }, 650);
+                        } else {
+                            PosAudio.success();
+                            triggerViewfinderFlash('green');
+                            updateScannerHud(`✅ Scanned: ${b.control_num}`, false);
+                            const btn = document.getElementById('submitTxBtn');
+                            if (btn) {
+                                btn.disabled = true;
+                                btn.innerText = `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...`;
+                                btn.className = "btn";
+                            }
+                            const logUl = document.getElementById('r-log');
+                            if (logUl) logUl.innerHTML = `<li>Scanning in progress (${allocatedBooklets.length} of ${currentDemand} scanned)...</li>`;
+                        }
+                    } else {
+                        PosAudio.error();
+                        triggerViewfinderFlash('red');
+                        updateScannerHud(`Mismatch: ${data.message || 'Lookup failed'}`, true);
+                    }
+                })
+                .catch(err => {
+                    console.error("Continuous scan lookup error:", err);
+                    PosAudio.error();
+                    triggerViewfinderFlash('red');
+                    updateScannerHud("Network error looking up booklet.", true);
+                })
+                .finally(() => {
+                    isLookupBusy = false;
+                });
+
+            return; // Maintain open continuous stream!
+        }
+
+        // For non-continuous scan intents (primary, bridge, booklet_swap):
         closeScannerModal();
-        
+
+        if (intent === 'booklet_swap') {
+            const input = document.getElementById('swapInputIdentifier');
+            if (input) input.value = decodedText;
+            confirmBookletSwap();
+            return;
+        }
+
+        // Anti-duplicate bridging guard (Synchronous pre-check)
+        const rawCode = decodedText.trim();
+        if (intent === 'bridge' && primaryPackQR && (rawCode === primaryPackQR.trim())) {
+            PosAudio.warning();
+            triggerViewfinderFlash('amber');
+            showAppAlert(
+                "Duplicate Pack Scanned",
+                "This Master Pack is already currently in use as your active primary supply box.\n\nPlease scan a different Master Pack from your inventory to bridge this transaction.",
+                "warning"
+            ).then(() => {
+                handleBridgingShortageState();
+            });
+            return;
+        }
+
         const usernameParam = encodeURIComponent(activeUser.username || '');
         fetch(`/api/pack-status/${decodedText}?username=${usernameParam}`).then(res => res.json()).then(data => {
             if (data.status === "success") {
-                if (currentScanIntent === 'primary') {
-                    setPrimarySupply(data.qr_code, data.available);
-                } else if (currentScanIntent === 'bridge') {
+                if (intent === 'primary') {
+                    setPrimarySupply(data.qr_code, data.available, data.department, data.template_name, data.template_slot);
+                } else if (intent === 'bridge') {
+                    if (primaryPackQR && data.qr_code === primaryPackQR) {
+                        PosAudio.warning();
+                        triggerViewfinderFlash('amber');
+                        showAppAlert(
+                            "Duplicate Pack Scanned",
+                            "This Master Pack is already currently in use as your active primary supply box.\n\nPlease scan a different Master Pack from your inventory to bridge this transaction.",
+                            "warning"
+                        ).then(() => {
+                            handleBridgingShortageState();
+                        });
+                        return;
+                    }
+                    if (data.available <= 0) {
+                        PosAudio.warning();
+                        triggerViewfinderFlash('amber');
+                        showAppAlert(
+                            "Depleted Master Pack",
+                            "The scanned bridging pack has 0 available booklets remaining.\n\nPlease scan a new or partially filled Master Pack with available stock.",
+                            "warning"
+                        ).then(() => {
+                            handleBridgingShortageState();
+                        });
+                        return;
+                    }
+                    // Guard 3: Strict Bridging Department Guard
+                    if (activePackDept && data.department && data.department !== activePackDept) {
+                        const activeLabel = activePackDept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+                        const scannedLabel = data.department === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+                        showAppAlert(
+                            "Bridging Department Mismatch",
+                            `The active box is for ${activeLabel}, but you scanned a ${scannedLabel} pack.\n\nAll booklets in a single distribution must use the same department template design.`,
+                            "warning"
+                        ).then(() => {
+                            handleBridgingShortageState();
+                        });
+                        return;
+                    }
                     bridgingPackQR = data.qr_code;
                     bridgingPackStock = data.available;
                     triggerLivePreview(); 
                 }
             } else {
                 if (data.code === 'PACK_LOCKED') {
-                    alert(`⚠️ Pack In Use: This Master Pack is currently opened and held by '${data.claimed_by}'. To maintain an organized workflow, two accounts cannot distribute from the same box. Please scan a different pack.`);
+                    showAppAlert("Pack In Use", `This Master Pack is currently opened and held by '${data.claimed_by}'.\n\nTo maintain an organized workflow, two accounts cannot distribute from the same box. Please scan a different pack.`, "warning").then(() => {
+                        if (intent === 'bridge') handleBridgingShortageState();
+                    });
                 } else {
-                    alert(data.message);
+                    showAppAlert("Master Pack Notice", data.message || "Failed to scan Master Pack.", "warning").then(() => {
+                        if (intent === 'bridge') handleBridgingShortageState();
+                    });
                 }
-                if (currentScanIntent === 'bridge') resetReceipt();
             }
         }).catch(err => {
             console.error("Error reading scanned pack:", err);
-            alert("Network error scanning pack. Please try again.");
-            if (currentScanIntent === 'bridge') resetReceipt();
+            showToast("Network error scanning pack. Please try again.", "error", "Network Error");
+            if (intent === 'bridge') handleBridgingShortageState();
         });
     }
 
-    function setPrimarySupply(qr, stock) {
-        primaryPackQR = qr; primaryPackStock = stock;
+    function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false) {
+        primaryPackQR = qr; 
+        primaryPackStock = stock;
+        activePackDept = (dept && (dept.toUpperCase() === 'IT' || dept.toUpperCase() === 'CS')) ? dept.toUpperCase() : 'CS';
+        activePackTemplateName = templateName || `Template ${templateSlot || 1}`;
+        activePackTemplateSlot = templateSlot || 1;
+
         localStorage.setItem(getUserPackKey(), qr);
         document.getElementById('no-supply-view').style.display = "none";
         document.getElementById('active-supply-view').style.display = "block";
         document.getElementById('pack-qr-display').innerText = qr;
         document.getElementById('pack-stock-display').innerText = stock;
         
+        // Guard 1: Visual Pack Tagging
+        const badgeContainer = document.getElementById('pack-dept-badge');
+        const tplContainer = document.getElementById('pack-template-display');
+        if (badgeContainer) {
+            if (activePackDept === 'CS') {
+                badgeContainer.innerHTML = '<span style="background: #2563eb; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(37,99,235,0.3);">💻 Computer Science (CS) Pack</span>';
+            } else if (activePackDept === 'IT') {
+                badgeContainer.innerHTML = '<span style="background: #7c3aed; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(124,58,237,0.3);">🌐 Information Technology (IT) Pack</span>';
+            } else {
+                badgeContainer.innerHTML = '';
+            }
+        }
+        if (tplContainer) {
+            tplContainer.innerText = activePackTemplateName ? `Design: ${activePackTemplateName}` : '';
+        }
+
+        // Guard 2: Automatic Smart Course Filter & Program Tag
+        const progBanner = document.getElementById('activeProgramBanner');
+        const progBadge = document.getElementById('activeProgramBadge');
+        const progText = document.getElementById('activeProgramText');
+        if (progBanner && progBadge && progText) {
+            progBanner.style.display = 'block';
+            if (activePackDept === 'IT') {
+                progBadge.innerText = 'IT';
+                progBadge.style.background = '#7c3aed';
+                progText.innerText = 'Information Technology (BSIT)';
+            } else {
+                progBadge.innerText = 'CS';
+                progBadge.style.background = '#2563eb';
+                progText.innerText = 'Computer Science (BSCS)';
+            }
+        }
+
+        if (preserveForm) {
+            applyCourseFilter(true);
+            // Do NOT call handleInstructorChange() - preserves active selections!
+        } else {
+            applyCourseFilter(false);
+            handleInstructorChange();
+        }
+
         document.getElementById('transaction-form').style.opacity = "1";
         document.getElementById('transaction-form').style.pointerEvents = "auto";
+
+        // Refresh loose stock list for this department
+        fetchLooseStockList(preserveForm);
     }
 
-    function manualCloseBox() {
-        if(confirm("Current supply of booklets run out, close this box and scan a new one?")) {
-            const packToRelease = primaryPackQR;
-            if (packToRelease) {
-                fetch('/api/release-pack', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: activeUser.username,
-                        qr_code: packToRelease
-                    })
-                }).catch(err => console.error("Error releasing pack claim:", err));
+    async function manualCloseBox() {
+        const confirmed = await showAppConfirm(
+            "Supply Box Exhausted",
+            "Current supply of booklets has run out.\nWould you like to close this box and scan a new one?",
+            {
+                type: 'box_swap',
+                confirmText: "Close & Scan New Box",
+                cancelText: "Keep Box View",
+                confirmClass: "btn btn-warning"
             }
-            
-            localStorage.removeItem(getUserPackKey());
-            localStorage.removeItem('bookletlog_active_pack');
-            primaryPackQR = null; primaryPackStock = 0;
-            document.getElementById('active-supply-view').style.display = "none";
-            document.getElementById('no-supply-view').style.display = "block";
-            
-            document.getElementById('transaction-form').style.opacity = "0.5";
-            document.getElementById('transaction-form').style.pointerEvents = "none";
-            
-            resetReceipt();
-            document.getElementById('instructorSelect').value = "";
+        );
+        if (!confirmed) return;
+
+        const packToRelease = primaryPackQR;
+        if (packToRelease) {
+            fetch('/api/release-pack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUser.username,
+                    qr_code: packToRelease
+                })
+            }).catch(err => console.error("Error releasing pack claim:", err));
         }
+        
+        localStorage.removeItem(getUserPackKey());
+        localStorage.removeItem('bookletlog_active_pack');
+        primaryPackQR = null; 
+        primaryPackStock = 0;
+        activePackDept = null;
+        activePackTemplateName = null;
+        activePackTemplateSlot = null;
+
+        document.getElementById('active-supply-view').style.display = "none";
+        document.getElementById('no-supply-view').style.display = "block";
+        
+        const badgeContainer = document.getElementById('pack-dept-badge');
+        if (badgeContainer) badgeContainer.innerHTML = '';
+        const tplContainer = document.getElementById('pack-template-display');
+        if (tplContainer) tplContainer.innerText = '';
+
+        // Reset Program Tag and filter
+        const progBanner = document.getElementById('activeProgramBanner');
+        if (progBanner) progBanner.style.display = 'none';
+        applyCourseFilter(false);
+
+        document.getElementById('transaction-form').style.opacity = "0.5";
+        document.getElementById('transaction-form').style.pointerEvents = "none";
+        
+        resetReceipt();
+        document.getElementById('instructorSelect').value = "";
+        fetchLooseStockList();
+
+        // Proactively open scanner for next box
+        openScannerModal('primary');
     }
 
     // --- 8. THE FINAL SINGLE-SAVE EXECUTION ---
     // --- THE FINAL SINGLE-SAVE EXECUTION ---
-    function submitTransaction() {
-        if (!confirm("Are you sure the physical booklets match the Live Receipt? This action is permanent.")) return;
+    async function submitTransaction() {
+        if (currentAllocationMode === 'manual' && allocatedBooklets.length < currentDemand) {
+            showAppAlert(
+                "Incomplete Allocation",
+                `Please scan all ${currentDemand} booklets before submitting.\n\nCurrently scanned: ${allocatedBooklets.length} of ${currentDemand} booklets.`,
+                "warning"
+            );
+            return;
+        }
+
+        const confirmed = await showAppConfirm(
+            "Confirm Transaction",
+            "Are you sure the physical booklets match the Live Receipt?\n\nThis action is permanent and records the audit trail.",
+            {
+                type: 'success',
+                confirmText: "Yes, Issue Booklets",
+                cancelText: "Review Live Receipt",
+                confirmClass: "btn btn-success"
+            }
+        );
+        if (!confirmed) return;
         
         const btn = document.getElementById('submitTxBtn');
         btn.disabled = true;
         btn.innerText = "Writing to Database...";
+
+        const hasSwapped = allocatedBooklets && allocatedBooklets.some(b => b.is_swapped);
+        const isExplicit = (currentAllocationMode === 'manual' || hasSwapped);
+        const explicitList = isExplicit ? allocatedBooklets.map(b => b.control_num) : [];
 
         fetch('/api/execute-distribution', {
             method: 'POST',
@@ -935,13 +2685,17 @@
                 bridging_pack_qr: bridgingPackQR, 
                 clerk_name: activeUser.username,
                 selected_loose_controls: globalSelectedLoose,
-                clerk_department: activeUser.department || "CS"
+                clerk_department: activeUser.department || "CS",
+                distribution_mode: currentAllocationMode,
+                explicit_control_nums: explicitList
             })
         })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {
-                document.getElementById('doc-title').innerText = "Document Title: Official Acknowledgement Receipt";
+                const sub = document.getElementById('subjectSelect');
+                const isRep = sub && sub.options[sub.selectedIndex] && sub.options[sub.selectedIndex].dataset.isReplacement === "true";
+                document.getElementById('doc-title').innerText = isRep ? "Document Title: Official Acknowledgement Receipt (Replacement - Fully Paid)" : "Document Title: Official Acknowledgement Receipt";
                 document.getElementById('doc-title').style.color = "#000";
                 
                 // --- CLONE LIVE RECEIPT FOR MODAL MIRROR ---
@@ -962,7 +2716,7 @@
 
                 // Deduct inventory stats in the background (Prompt Removed)
                 if (bridgingPackQR) {
-                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (currentDemand - primaryPackStock));
+                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (currentDemand - primaryPackStock), activePackDept, activePackTemplateName, activePackTemplateSlot);
                     bridgingPackQR = null;
                     bridgingPackStock = 0;
                 } else {
@@ -972,14 +2726,22 @@
 
             } else {
                 if (data.code === "ALREADY_FULFILLED") {
-                    alert("⚠️ Concurrency Conflict: " + data.message + " The distribution list will now refresh.");
+                    showAppAlert("Concurrency Conflict", data.message + "\n\nThe distribution list will now refresh.", "warning");
                     fetchPendingDistributions();
                     resetReceipt();
                 } else if (data.code === "STOCK_CONFLICT") {
-                    alert("⚠️ Inventory Stock Conflict: " + data.message + " Please check current supply or scan a new pack.");
+                    showAppAlert("Inventory Stock Conflict", data.message + "\n\nPlease check current supply or scan a new pack.", "warning");
                     fetchPendingDistributions();
+                } else if (data.code === "DEPT_MISMATCH" || data.code === "BRIDGING_DEPT_MISMATCH" || data.code === "LOOSE_DEPT_MISMATCH") {
+                    showAppAlert("Course Template Conflict", data.message, "warning");
+                    fetchPendingDistributions();
+                    resetReceipt();
+                } else if (data.code === "DUPLICATE_PACK") {
+                    showAppAlert("Duplicate Pack Detected", data.message, "warning");
+                    fetchPendingDistributions();
+                    resetReceipt();
                 } else {
-                    alert("Execution Error: " + data.message);
+                    showAppAlert("Execution Error", data.message || "An error occurred during transaction execution.", "error");
                 }
                 btn.disabled = false;
                 btn.innerText = "Verify Booklets & Submit Transaction";
@@ -991,6 +2753,8 @@
         // 1. Close modal and reset form
         document.getElementById('successModal').style.display = "none";
         document.getElementById('instructorSelect').value = "";
+        allocatedBooklets = [];
+        switchAllocationMode('auto');
         handleInstructorChange();
         
         // 2. Fetch fresh demands
@@ -1025,13 +2789,22 @@
                 
                 // 2. Trigger the aggressive Modal ONLY for the Admin, if not acknowledged yet this session
                 if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                    showDSSModal(data.message, data.reams_needed);
+                    showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
                 }
             } else {
                 // No deficit? Keep the bell quiet for everyone.
                 badge.style.display = 'none';
-                panel.style.borderLeftColor = '#27ae60'; 
-                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                if (data.has_enrollments === false) {
+                    panel.style.borderLeftColor = '#64748b';
+                    if (activeUser && activeUser.role === 'Admin') {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                    } else {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                    }
+                } else {
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
             }
         });
 
@@ -1042,15 +2815,42 @@
     }
 
     // Only the Admin will ever trigger this function
-    function showDSSModal(message, reams) {
+    function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+        let bCount = deficitBooklets;
+        let sCount = deficitSheets;
+        if (typeof message === 'object' && message !== null) {
+            reams = message.reams_needed;
+            bCount = message.deficit_booklets;
+            sCount = message.deficit_sheets;
+            message = message.message;
+        }
         const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                    <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                    <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                    <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                    <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: default;">Acknowledge</button>
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                    
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                            <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                            <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                        To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                    </p>
+                    
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                            Acknowledge & Close
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -1059,11 +2859,14 @@
 
     function dismissDSS() {
         sessionStorage.setItem('dss_acknowledged', 'true');
-        document.getElementById('dssModal').remove();
+        const modal = document.getElementById('dssModal');
+        if (modal) modal.remove();
         
         const panel = document.getElementById('notifPanel');
-        panel.style.display = 'block'; 
-        setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        if (panel) {
+            panel.style.display = 'block'; 
+            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        }
     }
 
     // --- REAL-TIME SESSION POLLING ---
@@ -1079,9 +2882,10 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status !== "valid") {
-                    alert("Session Expired: Your account was accessed from another device.");
                     localStorage.clear();
-                    window.location.href = '/login';
+                    showAppAlert("Session Expired", "Your account was accessed from another device.", "error").then(() => {
+                        window.location.href = '/login';
+                    });
                 }
             }).catch(e => console.error(e));
         }
@@ -1109,6 +2913,31 @@ function toggleSidebar() {
                 <!-- Checkboxes will be injected here via JS -->
             </div>
             <button class="btn btn-success" style="margin-top: 15px; width: 100%;" onclick="confirmLooseSelection()">Confirm Selection</button>
+        </div>
+    </div>
+
+    <!-- SWAP BOOKLET MODAL -->
+    <div class="modal-overlay" id="swapBookletModal" style="display: none;">
+        <div class="modal-card" style="max-width: 480px; text-align: left; border-top-color: #f39c12;">
+            <span class="close" style="float: right; font-size: 1.5rem; cursor: pointer; color: #7f8c8d;" onclick="closeSwapModal()">&times;</span>
+            <h3 style="color: #2c3e50; margin-top: 0; margin-bottom: 8px;">🔁 Swap Defective / Damaged Booklet</h3>
+            <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 15px;">
+                Replacing allocated booklet: <strong id="swapTargetCtrlNum" style="color: #e74c3c; font-family: monospace; font-size: 1rem;">---</strong>
+            </p>
+
+            <label style="font-weight: 600; font-size: 0.85rem; color: #334155; display: block; margin-bottom: 6px;">
+                Scan Replacement Booklet QR / Control No / SRN:
+            </label>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <input type="text" id="swapInputIdentifier" placeholder="Scan QR or enter Control No..." onkeydown="if(event.key==='Enter') confirmBookletSwap()" style="flex: 1; padding: 10px; font-family: monospace; font-size: 0.95rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                <button type="button" class="btn" onclick="openBookletCameraScanner('swap')" style="margin: 0; background: #475569; color: white; padding: 10px 14px;" title="Camera Scanner">📷</button>
+            </div>
+            <div id="swapErrorMsg" style="display: none; color: #dc2626; font-size: 0.82rem; margin-bottom: 12px; font-weight: 500; background: #fef2f2; padding: 8px 10px; border-radius: 4px; border-left: 3px solid #dc2626;"></div>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+                <button type="button" class="btn" onclick="closeSwapModal()" style="margin: 0; background: #94a3b8; color: white; padding: 8px 16px;">Cancel</button>
+                <button type="button" class="btn btn-warning" onclick="confirmBookletSwap()" style="margin: 0; padding: 8px 18px;">Swap Booklet</button>
+            </div>
         </div>
     </div>
 

@@ -4,49 +4,137 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Users - BOOKLETLOG</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
         
         /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; }
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
+        .main-content { flex: 1; padding: 25px 30px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
         
-        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 500px; border-top: 5px solid #3498db; margin-top: 20px; }
-        .card h2 { margin-bottom: 20px; color: #2c3e50; text-align: center; }
+        /* Header Bar */
+        .page-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .page-header h1 { font-size: 1.6rem; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+        .page-header p { font-size: 0.9rem; color: #64748b; margin-top: 4px; }
         
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
-        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 1rem; }
+        /* KPI Cards Grid */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .kpi-card { background: white; padding: 18px 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: flex; align-items: center; gap: 15px; }
+        .kpi-icon { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+        .kpi-icon.blue { background: #e0f2fe; color: #0284c7; }
+        .kpi-icon.purple { background: #ede9fe; color: #7c3aed; }
+        .kpi-icon.orange { background: #fef3c7; color: #d97706; }
+        .kpi-icon.green { background: #dcfce7; color: #16a34a; }
+        .kpi-details .kpi-label { font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kpi-details .kpi-value { font-size: 1.45rem; font-weight: 700; color: #1e293b; margin-top: 2px; }
         
-        .btn { width: 100%; padding: 12px; background-color: #3498db; color: white; border: none; border-radius: 4px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        .btn:hover { background-color: #2980b9; }
+        /* Layout Grid */
+        .user-layout-grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+        
+        /* Card Styles */
+        .card { background: white; padding: 22px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9; }
+        .card-header h2, .card-header h3 { font-size: 1.15rem; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px; }
+        
+        /* Directory Search and Filter Controls */
+        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .search-input { flex: 1; min-width: 180px; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; }
+        .filter-select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; background: white; color: #334155; }
+        
+        /* Users Table */
+        .table-container { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .user-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; text-align: left; }
+        .user-table th { background: #f8fafc; padding: 12px 14px; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+        .user-table td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .user-table tr:hover { background: #f8fafc; }
+        
+        /* Badges & Pills */
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; }
+        .badge-admin { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
+        .badge-staff { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+        .badge-dept-cs { background: #eff6ff; color: #1d4ed8; }
+        .badge-dept-it { background: #fffbeb; color: #b45309; }
+        .badge-dept-all { background: #f5f3ff; color: #6d28d9; }
+        .badge-online { background: #dcfce7; color: #15803d; font-size: 0.72rem; }
+        .badge-offline { background: #f1f5f9; color: #64748b; font-size: 0.72rem; }
+        .badge-self { background: #fef08a; color: #854d0e; font-size: 0.7rem; margin-left: 6px; padding: 2px 6px; }
 
-        .message { margin-top: 15px; text-align: center; font-weight: bold; padding: 10px; border-radius: 4px; display: none; }
-        .message.success { background-color: #d4edda; color: #155724; display: block; }
-        .message.error { background-color: #f8d7da; color: #721c24; display: block; }
+        /* Action Buttons */
+        .action-btn-group { display: flex; gap: 5px; align-items: center; }
+        .action-btn { background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+        .action-btn:hover { background: #e2e8f0; color: #1e293b; transform: translateY(-1px); }
+        .action-btn.btn-delete:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+        .action-btn.btn-revoke:hover { background: #fed7aa; border-color: #fdba74; color: #c2410c; }
+        .action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        
+        /* Forms */
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #334155; font-size: 0.85rem; }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; outline: none; transition: border-color 0.2s; box-sizing: border-box; }
+        .form-group input:focus, .form-group select:focus { border-color: #3b82f6; }
 
-        /* Mobile Hamburger & Overlay Styles */
+        /* Password Input Wrapper & Visibility Eye Toggle */
+        .password-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+        .password-input-wrapper input { padding-right: 42px; width: 100%; }
+        .toggle-password-btn { position: absolute; right: 8px; background: none; border: none; font-size: 1.15rem; cursor: pointer; color: #64748b; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: color 0.2s, transform 0.1s; user-select: none; }
+        .toggle-password-btn:hover { color: #1e293b; transform: scale(1.1); }
+        .toggle-password-btn:focus { outline: none; }
+
+        /* Input Hint */
+        .input-hint { font-size: 0.78rem; color: #64748b; margin-top: 4px; transition: color 0.2s; line-height: 1.4; }
+        
+        .btn-primary { width: 100%; padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-primary:hover { background-color: #2563eb; }
+        .btn-secondary { padding: 9px 14px; background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .btn-secondary:hover { background-color: #e2e8f0; }
+        
+        /* Profile Details Box */
+        .profile-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 15px; }
+        .profile-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.88rem; border-bottom: 1px dashed #e2e8f0; }
+        .profile-row:last-child { border-bottom: none; }
+        .profile-label { color: #64748b; font-weight: 600; }
+        .profile-value { color: #1e293b; font-weight: 700; }
+        
+        /* Modals */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-card { background: white; padding: 26px; border-radius: 8px; max-width: 440px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: modalFadeIn 0.2s ease-out; }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; color: #1e293b; }
+        .modal-close-btn { background: none; border: none; font-size: 1.4rem; color: #94a3b8; cursor: pointer; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+        /* Toast Notifications */
+        #toastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+        .app-toast-item { pointer-events: auto; display: flex; align-items: center; gap: 12px; background: #ffffff; color: #1e293b; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); border-left: 4px solid #10b981; font-size: 0.9rem; animation: toastSlideIn 0.25s ease-out; max-width: 360px; }
+        @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Mobile Hamburger & Overlay */
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
         .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
         .sidebar-overlay.active { display: block; }
 
-        /* Responsive Mobile Layout Fixes */
+        @media (max-width: 950px) {
+            .user-layout-grid { grid-template-columns: 1fr; }
+        }
         @media (max-width: 900px) {
             body { flex-direction: column; overflow: hidden; }
             .mobile-header { display: flex; flex-shrink: 0; }
             .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
             .sidebar.active { left: 0; }
-            .main-content { padding: 15px; align-items: center; }
-            .card { margin-top: 0; }
+            .main-content { padding: 15px; }
+            .mobile-hide { display: none !important; }
         }
-            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -63,14 +151,19 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <!-- Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
             <!-- Hidden Dropdown Panel -->
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -78,15 +171,14 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link active admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link active" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
         <a href="/history" class="nav-link">📜 Transaction Trail</a>
         <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
         
-
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
             <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
@@ -94,103 +186,1124 @@
         </div>
     </div>
 
-    <!-- Main Content -->
+    <!-- Main Content Area -->
     <div class="main-content">
-        <div class="card">
-            <h2>Create New Account</h2>
-            <div id="statusMessage" class="message"></div>
-            
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="username" placeholder="Enter username">
+        <!-- Top Page Header -->
+        <div class="page-header">
+            <div>
+                <h1 id="pageTitle">👥 User Management & Security</h1>
+                <p id="pageSubtitle">Manage system credentials, departmental scopes, access permissions, and session security.</p>
             </div>
-            
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="password" placeholder="Enter password">
+            <div>
+                <button class="btn-secondary" id="topChangePwBtn" onclick="openChangePasswordModal()" style="display: flex; align-items: center; gap: 6px;">
+                    🔑 Change My Password
+                </button>
             </div>
-            
-            <div class="form-group">
-                <label>Role</label>
-                <select id="role">
-                    <option value="Staff">Staff / Clerk</option>
-                    <option value="Admin">Admin</option>
-                </select>
+        </div>
+
+        <!-- STAFF DEDICATED PORTAL VIEW -->
+        <div id="staffPortalView" style="display: none; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
+            <!-- Staff Account Info Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>👤 My Account Profile</h3>
+                </div>
+                <div class="profile-box">
+                    <div class="profile-row">
+                        <span class="profile-label">Username:</span>
+                        <span class="profile-value" id="staffUsername">-</span>
+                    </div>
+                    <div class="profile-row">
+                        <span class="profile-label">System Role:</span>
+                        <span class="profile-value"><span class="badge badge-staff">👤 Staff Clerk</span></span>
+                    </div>
+                    <div class="profile-row">
+                        <span class="profile-label">Assigned Department:</span>
+                        <span class="profile-value" id="staffDept">-</span>
+                    </div>
+                    <div class="profile-row">
+                        <span class="profile-label">Session Status:</span>
+                        <span class="profile-value" style="color: #16a34a;">🟢 Active (Online)</span>
+                    </div>
+                </div>
+
             </div>
 
-            <div class="form-group">
-                <label>Department</label>
-                <select id="department">
-                    <option value="CS">Computer Science (CS)</option>
-                    <option value="IT">Information Technology (IT)</option>
-                </select>
+            <!-- Staff Inline Change Password Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>🔐 Change My Password</h3>
+                </div>
+                <form onsubmit="handleStaffChangePassword(event)">
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="staffCurrentPassword" placeholder="Enter current password" required>
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffCurrentPassword', this)" title="Show/Hide Password">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="staffNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffNewPassword', this)" title="Show/Hide Password">👁️</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="staffConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" id="btnStaffChangePw">
+                        <span>Save New Password</span>
+                    </button>
+                </form>
             </div>
-            
-            <button class="btn" onclick="createUser()">Create Account</button>
+        </div>
+
+        <!-- ADMIN PORTAL VIEW -->
+        <div id="adminPortalView">
+            <!-- KPI Metrics Grid -->
+            <div class="kpi-grid" id="kpiContainer" style="margin-bottom: 20px;">
+                <div class="kpi-card">
+                    <div class="kpi-icon blue">👥</div>
+                    <div class="kpi-details">
+                        <div class="kpi-label">Total Accounts</div>
+                        <div class="kpi-value" id="kpiTotalUsers">-</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon purple">🛡️</div>
+                    <div class="kpi-details">
+                        <div class="kpi-label">Administrators</div>
+                        <div class="kpi-value" id="kpiTotalAdmins">-</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon orange">📋</div>
+                    <div class="kpi-details">
+                        <div class="kpi-label">Staff Clerks</div>
+                        <div class="kpi-value" id="kpiTotalStaff">-</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon green">🟢</div>
+                    <div class="kpi-details">
+                        <div class="kpi-label">Active Sessions</div>
+                        <div class="kpi-value" id="kpiActiveSessions">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Workspace Grid -->
+            <div class="user-layout-grid">
+                <!-- LEFT: Accounts Directory -->
+                <div class="card" id="directoryCard">
+                    <div class="card-header">
+                        <h2>📋 User Accounts Directory</h2>
+                        <span id="userCountBadge" style="font-size: 0.8rem; background: #f1f5f9; color: #475569; padding: 3px 8px; border-radius: 12px; font-weight: 600;">Loading...</span>
+                    </div>
+
+                    <!-- Directory Search & Filters -->
+                    <div class="toolbar">
+                        <input type="text" id="userSearchInput" class="search-input" placeholder="🔍 Search by username..." oninput="filterUsers()">
+                        <select id="roleFilter" class="filter-select" onchange="filterUsers()">
+                            <option value="ALL">All Roles</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Staff">Staff</option>
+                        </select>
+                        <select id="deptFilter" class="filter-select" onchange="filterUsers()">
+                            <option value="ALL">All Departments</option>
+                            <option value="CS">Computer Science (CS)</option>
+                            <option value="IT">Information Technology (IT)</option>
+                            <option value="All">All Scope</option>
+                        </select>
+                    </div>
+
+                    <!-- Accounts Table -->
+                    <div class="table-container">
+                        <table class="user-table">
+                            <thead>
+                                <tr>
+                                    <th>User Account</th>
+                                    <th>Role</th>
+                                    <th>Department</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="userTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #94a3b8; padding: 25px;">Loading accounts directory...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Registration & Profile Sidebar -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- REGISTER ACCOUNT CARD -->
+                    <div class="card" id="registerCard">
+                        <div class="card-header">
+                            <h3>➕ Register New Account</h3>
+                        </div>
+                        
+                        <form onsubmit="handleCreateUser(event)">
+                            <div class="form-group">
+                                <label>Username</label>
+                                <input type="text" id="newUsername" placeholder="e.g., clerk_it_01" required autocomplete="off" minlength="8" maxlength="30" oninput="handleUsernameInput(this)">
+                                <div id="newUsernameHint" class="input-hint">Allowed: letters, numbers, underscores (8–30 chars).</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Password</label>
+                                <div class="password-input-wrapper">
+                                    <input type="password" id="newPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
+                                    <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('newPassword', this)" title="Show/Hide Password">👁️</button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>System Role</label>
+                                <select id="newRole" onchange="handleNewRoleChange()">
+                                    <option value="Staff">Staff / Clerk</option>
+                                    <option value="Admin">Administrator</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Assigned Department</label>
+                                <select id="newDepartment">
+                                    <option value="CS">Computer Science (CS)</option>
+                                    <option value="IT">Information Technology (IT)</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="btn-primary" id="btnCreateUser">
+                                <span>Create Account</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- MY ACCOUNT PROFILE CARD -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>👤 My Account Profile</h3>
+                        </div>
+                        
+                        <div class="profile-box">
+                            <div class="profile-row">
+                                <span class="profile-label">Username:</span>
+                                <span class="profile-value" id="profileUsername">-</span>
+                            </div>
+                            <div class="profile-row">
+                                <span class="profile-label">Role:</span>
+                                <span class="profile-value" id="profileRole">-</span>
+                            </div>
+                            <div class="profile-row">
+                                <span class="profile-label">Department:</span>
+                                <span class="profile-value" id="profileDepartment">-</span>
+                            </div>
+                            <div class="profile-row">
+                                <span class="profile-label">Session Status:</span>
+                                <span class="profile-value" style="color: #16a34a;">🟢 Active</span>
+                            </div>
+                        </div>
+
+                        <button class="btn-secondary" onclick="openChangePasswordModal()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>🔑 Change My Password</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- MODAL: EDIT USER ROLE / DEPT -->
+    <div class="modal-overlay" id="editUserModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>✏️ Edit Account</h3>
+                <button class="modal-close-btn" onclick="closeEditUserModal()">&times;</button>
+            </div>
+            <form onsubmit="submitEditUser(event)">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="editUsername" disabled style="background: #f1f5f9; cursor: not-allowed;">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="editRole" onchange="handleEditRoleChange()">
+                        <option value="Staff">Staff / Clerk</option>
+                        <option value="Admin">Administrator</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Department Scope</label>
+                    <select id="editDepartment">
+                        <option value="CS">Computer Science (CS)</option>
+                        <option value="IT">Information Technology (IT)</option>
+                        <option value="All">All Scope (Admin)</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnSaveEditUser">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: ADMIN RESET USER PASSWORD -->
+    <div class="modal-overlay" id="adminResetPwModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>🔑 Reset User Password</h3>
+                <button class="modal-close-btn" onclick="closeAdminResetPwModal()">&times;</button>
+            </div>
+            <form onsubmit="submitAdminResetPw(event)">
+                <input type="hidden" id="resetUserId">
+                <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 14px;">
+                    Set a new password for <strong id="resetTargetUsername" style="color: #1e293b;">-</strong>. Their active session will be revoked upon saving.
+                </p>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="adminNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminNewPassword', this)" title="Show/Hide Password">👁️</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="adminConfirmPassword" placeholder="Repeat new password" required minlength="8" maxlength="72">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeAdminResetPwModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnSubmitAdminReset">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: SELF CHANGE PASSWORD -->
+    <div class="modal-overlay" id="changePasswordModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>🔐 Change My Password</h3>
+                <button class="modal-close-btn" onclick="closeChangePasswordModal()">&times;</button>
+            </div>
+            <form onsubmit="submitSelfChangePassword(event)">
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="selfCurrentPassword" placeholder="Enter current password" required>
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfCurrentPassword', this)" title="Show/Hide Password">👁️</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="selfNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfNewPassword', this)" title="Show/Hide Password">👁️</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <div class="password-input-wrapper">
+                        <input type="password" id="selfConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="width: auto;" id="btnSubmitSelfChange">Save New Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CUSTOM APP CONFIRM DIALOG MODAL -->
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 2500;">
+        <div class="modal-card" style="text-align: center; max-width: 400px;">
+            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Confirm Action</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px;"></div>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="appDialogCancelBtn" class="btn-secondary">Cancel</button>
+                <button id="appDialogConfirmBtn" class="btn-primary" style="width: auto;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer"></div>
+
     <script>
-        // --- AUTHENTICATION GUARD & RBAC ---
+        // --- AUTHENTICATION & RBAC ---
         const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         
         if (!activeUser) {
             window.location.href = '/login';
         } else {
             document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || 'N/A') + ")";
+            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || 'All') + ")";
             
-            // Add event listener for role change
-            const roleSelect = document.getElementById('role');
-            if (roleSelect) {
-                roleSelect.addEventListener('change', function() {
-                    const deptSelect = document.getElementById('department');
-                    if (this.value === 'Admin') {
-                        deptSelect.innerHTML = '<option value="All">All</option>';
-                        deptSelect.disabled = true;
-                    } else {
-                        deptSelect.innerHTML = `
-                            <option value="CS">Computer Science (CS)</option>
-                            <option value="IT">Information Technology (IT)</option>
-                        `;
-                        deptSelect.disabled = false;
-                    }
-                });
-            }
-    
-            // Hide admin-only links (Manage Users should only be accessed by Admin)
+            const navLink = document.getElementById('navManageUsers');
+            const pageTitle = document.getElementById('pageTitle');
+            const pageSubtitle = document.getElementById('pageSubtitle');
+            const topChangePwBtn = document.getElementById('topChangePwBtn');
+            const staffPortalView = document.getElementById('staffPortalView');
+            const adminPortalView = document.getElementById('adminPortalView');
+
+            // RBAC View Enforcement
             if (activeUser.role !== 'Admin') {
-                const adminLinks = document.querySelectorAll('.admin-only');
-                adminLinks.forEach(link => link.style.display = 'none');
+                // Staff Portal Mode
+                if (navLink) navLink.innerHTML = '👤 My Account';
+                if (pageTitle) pageTitle.innerHTML = '👤 My Account & Security Profile';
+                if (pageSubtitle) pageSubtitle.innerText = 'Manage your account credentials, view assigned departmental scope, and update your password.';
                 
-                // Extra guard for this specific page
-                document.querySelector('.main-content').innerHTML = `
-                    <div style="text-align: center; margin-top: 50px;">
-                        <h2 style="color: #e74c3c;">Access Denied</h2>
-                        <p style="color: #7f8c8d;">You do not have permission to view this page.</p>
-                    </div>
-                `;
+                if (topChangePwBtn) topChangePwBtn.style.display = 'none';
+                if (adminPortalView) adminPortalView.style.display = 'none';
+                if (staffPortalView) staffPortalView.style.display = 'grid';
+
+                // Hide admin-only links in sidebar
+                const adminOnlyEls = document.querySelectorAll('.admin-only');
+                adminOnlyEls.forEach(el => el.style.display = 'none');
+
+                // Populate Staff Profile
+                const staffUserEl = document.getElementById('staffUsername');
+                const staffDeptEl = document.getElementById('staffDept');
+                if (staffUserEl) staffUserEl.innerText = activeUser.username;
+                if (staffDeptEl) staffDeptEl.innerText = activeUser.department ? `${activeUser.department} Department` : 'All Departments';
+            } else {
+                // Admin Portal Mode
+                if (navLink) navLink.innerHTML = '👥 Manage Users';
+                if (staffPortalView) staffPortalView.style.display = 'none';
+                if (adminPortalView) adminPortalView.style.display = 'block';
+                if (topChangePwBtn) topChangePwBtn.style.display = 'flex';
+
+                // Populate "My Profile" card in admin sidebar
+                const profUser = document.getElementById('profileUsername');
+                const profRole = document.getElementById('profileRole');
+                const profDept = document.getElementById('profileDepartment');
+                if (profUser) profUser.innerText = activeUser.username;
+                if (profRole) profRole.innerText = activeUser.role;
+                if (profDept) profDept.innerText = activeUser.department || 'All';
+                
+                fetchUsers();
             }
         }
 
-        // --- LOGOUT LOGIC ---
-        function logout() {
-            if(confirm("Are you sure you want to log out?")) {
-                fetch('/api/logout', {
+        // --- GLOBAL USERS STATE ---
+        let allUsers = [];
+
+        // --- FETCH USERS DIRECTORY ---
+        function fetchUsers() {
+            if (activeUser.role !== 'Admin') return;
+
+            fetch('/api/users')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        allUsers = data.users || [];
+                        updateKpis(allUsers);
+                        filterUsers();
+                    } else {
+                        showToast(data.message || "Failed to load users directory.", "error", "Directory Error");
+                    }
+                })
+                .catch(err => {
+                    console.error("Error fetching users:", err);
+                    showToast("Network error connecting to local server.", "error", "Network Error");
+                });
+        }
+
+        // --- PASSWORD VISIBILITY TOGGLE ---
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.innerText = '🙈';
+                btn.title = 'Hide password';
+            } else {
+                input.type = 'password';
+                btn.innerText = '👁️';
+                btn.title = 'Show password';
+            }
+        }
+
+        // --- USERNAME LIVE VALIDATION ---
+        function handleUsernameInput(el) {
+            const hint = document.getElementById('newUsernameHint');
+            const val = el.value.trim();
+            const regex = /^[a-zA-Z0-9_]+$/;
+
+            if (val.length === 0) {
+                if (hint) {
+                    hint.style.color = '#64748b';
+                    hint.innerText = 'Allowed: letters, numbers, underscores (8–30 chars).';
+                }
+                return false;
+            }
+
+            if (!regex.test(val)) {
+                if (hint) {
+                    hint.style.color = '#dc2626';
+                    hint.innerText = '❌ Invalid characters! Only letters, numbers, and underscores allowed.';
+                }
+                return false;
+            } else if (val.length < 8) {
+                if (hint) {
+                    hint.style.color = '#f59e0b';
+                    hint.innerText = `⚠️ Too short (${val.length}/8 min characters).`;
+                }
+                return false;
+            } else if (val.length > 30) {
+                if (hint) {
+                    hint.style.color = '#dc2626';
+                    hint.innerText = '❌ Exceeds 30 maximum characters.';
+                }
+                return false;
+            } else {
+                if (hint) {
+                    hint.style.color = '#16a34a';
+                    hint.innerText = '✅ Valid username format (ready for registration).';
+                }
+                return true;
+            }
+        }
+
+        // --- PASSWORD VALIDATION LOGIC ---
+        function validatePasswordRequirements(password, confirmPassword, username = null) {
+            const cleanPw = password ? password.trim() : '';
+            const cleanConfirm = (confirmPassword !== undefined && confirmPassword !== null) ? confirmPassword.trim() : null;
+
+            const hasMinLen = (cleanPw.length >= 8 && cleanPw.length <= 72);
+            const hasLetter = /[A-Za-z]/.test(cleanPw);
+            const hasNumber = /[0-9]/.test(cleanPw);
+            const hasAlphaNum = hasLetter && hasNumber;
+            const isMatch = (cleanConfirm !== null) ? (cleanPw.length > 0 && cleanPw === cleanConfirm) : true;
+            const notUsername = (!username || cleanPw.toLowerCase() !== username.toLowerCase());
+
+            return {
+                valid: hasMinLen && hasAlphaNum && isMatch && notUsername,
+                hasMinLen,
+                hasAlphaNum,
+                isMatch,
+                notUsername
+            };
+        }
+
+        // --- UPDATE KPI COUNTERS ---
+        function updateKpis(users) {
+            const total = users.length;
+            const admins = users.filter(u => u.role === 'Admin').length;
+            const staff = users.filter(u => u.role === 'Staff').length;
+            const online = users.filter(u => u.is_online).length;
+
+            const totalEl = document.getElementById('kpiTotalUsers');
+            const adminsEl = document.getElementById('kpiTotalAdmins');
+            const staffEl = document.getElementById('kpiTotalStaff');
+            const onlineEl = document.getElementById('kpiActiveSessions');
+            const countBadge = document.getElementById('userCountBadge');
+
+            if (totalEl) totalEl.innerText = total;
+            if (adminsEl) adminsEl.innerText = admins;
+            if (staffEl) staffEl.innerText = staff;
+            if (onlineEl) onlineEl.innerText = online;
+            if (countBadge) countBadge.innerText = `${total} Account${total === 1 ? '' : 's'}`;
+        }
+
+        // --- FILTER & RENDER USERS TABLE ---
+        function filterUsers() {
+            const searchVal = (document.getElementById('userSearchInput')?.value || '').trim().toLowerCase();
+            const roleVal = document.getElementById('roleFilter')?.value || 'ALL';
+            const deptVal = document.getElementById('deptFilter')?.value || 'ALL';
+
+            const filtered = allUsers.filter(u => {
+                const matchesSearch = u.username.toLowerCase().includes(searchVal);
+                const matchesRole = (roleVal === 'ALL') || (u.role === roleVal);
+                const matchesDept = (deptVal === 'ALL') || (u.department === deptVal);
+                return matchesSearch && matchesRole && matchesDept;
+            });
+
+            renderUsersTable(filtered);
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('userTableBody');
+            if (!tbody) return;
+
+            if (users.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #94a3b8; padding: 30px;">
+                            No user accounts found matching your filter criteria.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = users.map(u => {
+                const isSelf = (u.username.toLowerCase() === activeUser.username.toLowerCase());
+                const isRootAdmin = (u.username.toLowerCase() === 'admin');
+                
+                const roleBadge = (u.role === 'Admin') 
+                    ? `<span class="badge badge-admin">🛡️ Admin</span>`
+                    : `<span class="badge badge-staff">👤 Staff</span>`;
+                
+                let deptBadge = `<span class="badge badge-dept-all">All</span>`;
+                if (u.department === 'CS') deptBadge = `<span class="badge badge-dept-cs">CS Dept</span>`;
+                if (u.department === 'IT') deptBadge = `<span class="badge badge-dept-it">IT Dept</span>`;
+
+                const statusBadge = u.is_online 
+                    ? `<span class="badge badge-online">🟢 Online</span>` 
+                    : `<span class="badge badge-offline">⚪ Offline</span>`;
+
+                const selfTag = isSelf ? `<span class="badge badge-self">You</span>` : '';
+
+                return `
+                    <tr>
+                        <td>
+                            <strong style="color: #1e293b;">${escapeHtml(u.username)}</strong>
+                            ${selfTag}
+                        </td>
+                        <td>${roleBadge}</td>
+                        <td>${deptBadge}</td>
+                        <td>${statusBadge}</td>
+                        <td style="text-align: right;">
+                            <div class="action-btn-group" style="justify-content: flex-end;">
+                                <button class="action-btn" title="Edit Role & Dept" onclick="openEditUserModal(${u.id}, '${escapeHtml(u.username)}', '${u.role}', '${u.department}')">
+                                    ✏️
+                                </button>
+                                <button class="action-btn" title="Reset Password" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}')">
+                                    🔑
+                                </button>
+                                ${u.is_online ? `
+                                    <button class="action-btn btn-revoke" title="Revoke Session (Force Logout)" onclick="revokeUserSession(${u.id}, '${escapeHtml(u.username)}')">
+                                        🚪
+                                    </button>
+                                ` : ''}
+                                <button class="action-btn btn-delete" title="${isRootAdmin ? 'Root admin cannot be deleted' : isSelf ? 'Cannot delete your active account' : 'Delete Account'}" 
+                                        ${(isRootAdmin || isSelf) ? 'disabled' : ''} 
+                                        onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}')">
+                                    🗑️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- CREATE USER ---
+        function handleNewRoleChange() {
+            const role = document.getElementById('newRole').value;
+            const deptSelect = document.getElementById('newDepartment');
+            if (role === 'Admin') {
+                deptSelect.innerHTML = '<option value="All">All Scope</option>';
+                deptSelect.disabled = true;
+            } else {
+                deptSelect.innerHTML = `
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                `;
+                deptSelect.disabled = false;
+            }
+        }
+
+        function handleCreateUser(e) {
+            e.preventDefault();
+            if (activeUser.role !== 'Admin') return;
+
+            const usernameInput = document.getElementById('newUsername');
+            const username = usernameInput.value.trim();
+            const password = document.getElementById('newPassword').value;
+            const role = document.getElementById('newRole').value;
+            const department = (role === 'Admin') ? 'All' : document.getElementById('newDepartment').value;
+            
+            if (!handleUsernameInput(usernameInput)) {
+                showToast("Username must be between 8 and 30 characters long and contain only letters, numbers, and underscores.", "warning", "Invalid Username");
+                return;
+            }
+
+            const pwCheck = validatePasswordRequirements(password, null, username);
+            if (!pwCheck.hasMinLen) {
+                showToast("Password must be at least 8 characters long.", "warning", "Password Too Short");
+                return;
+            }
+            if (!pwCheck.hasAlphaNum) {
+                showToast("Password must contain at least one letter and one number.", "warning", "Weak Password");
+                return;
+            }
+            if (!pwCheck.notUsername) {
+                showToast("Password cannot be identical to the username.", "warning", "Insecure Password");
+                return;
+            }
+
+            const btn = document.getElementById('btnCreateUser');
+            btn.disabled = true;
+            btn.innerText = "Creating...";
+
+            fetch('/api/users/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, role, department })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || `Account '${username}' created successfully!`, "success", "User Created");
+                    document.getElementById('newUsername').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('newRole').value = 'Staff';
+                    handleUsernameInput(document.getElementById('newUsername'));
+                    handleNewRoleChange();
+                    fetchUsers();
+                } else {
+                    showToast(data.message || "Failed to create user.", "error", "Registration Failed");
+                }
+            })
+            .catch(err => {
+                console.error("Create user error:", err);
+                showToast("Network error creating user.", "error", "Network Error");
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = "Create Account";
+            });
+        }
+
+        // --- EDIT USER (ROLE & DEPT) ---
+        function openEditUserModal(id, username, role, department) {
+            document.getElementById('editUserId').value = id;
+            document.getElementById('editUsername').value = username;
+            document.getElementById('editRole').value = role;
+            
+            const deptSelect = document.getElementById('editDepartment');
+            if (role === 'Admin') {
+                deptSelect.innerHTML = '<option value="All">All Scope (Admin)</option>';
+                deptSelect.disabled = true;
+            } else {
+                deptSelect.innerHTML = `
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                `;
+                deptSelect.disabled = false;
+                deptSelect.value = department || 'CS';
+            }
+
+            document.getElementById('editUserModal').style.display = 'flex';
+        }
+
+        function handleEditRoleChange() {
+            const role = document.getElementById('editRole').value;
+            const deptSelect = document.getElementById('editDepartment');
+            if (role === 'Admin') {
+                deptSelect.innerHTML = '<option value="All">All Scope (Admin)</option>';
+                deptSelect.disabled = true;
+            } else {
+                deptSelect.innerHTML = `
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                `;
+                deptSelect.disabled = false;
+            }
+        }
+
+        function closeEditUserModal() {
+            document.getElementById('editUserModal').style.display = 'none';
+        }
+
+        function submitEditUser(e) {
+            e.preventDefault();
+            const id = document.getElementById('editUserId').value;
+            const role = document.getElementById('editRole').value;
+            const department = (role === 'Admin') ? 'All' : document.getElementById('editDepartment').value;
+            const btn = document.getElementById('btnSaveEditUser');
+
+            btn.disabled = true;
+            btn.innerText = "Saving...";
+
+            fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, department })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || "Account updated successfully!", "success", "User Updated");
+                    closeEditUserModal();
+                    fetchUsers();
+                } else {
+                    showToast(data.message || "Failed to update account.", "error", "Update Error");
+                }
+            })
+            .catch(err => {
+                console.error("Edit user error:", err);
+                showToast("Network error updating account.", "error", "Network Error");
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = "Save Changes";
+            });
+        }
+
+        // --- ADMIN RESET PASSWORD ---
+        function openAdminResetPwModal(id, username) {
+            document.getElementById('resetUserId').value = id;
+            document.getElementById('resetTargetUsername').innerText = username;
+            document.getElementById('adminNewPassword').value = '';
+            document.getElementById('adminConfirmPassword').value = '';
+            document.getElementById('adminResetPwModal').style.display = 'flex';
+        }
+
+        function closeAdminResetPwModal() {
+            document.getElementById('adminResetPwModal').style.display = 'none';
+        }
+
+        function submitAdminResetPw(e) {
+            e.preventDefault();
+            const id = document.getElementById('resetUserId').value;
+            const newPassword = document.getElementById('adminNewPassword').value;
+            const confirmPassword = document.getElementById('adminConfirmPassword').value;
+            const targetUser = document.getElementById('resetTargetUsername').innerText;
+            const btn = document.getElementById('btnSubmitAdminReset');
+
+            const pwCheck = validatePasswordRequirements(newPassword, confirmPassword, targetUser);
+            if (!pwCheck.hasMinLen) {
+                showToast("New password must be at least 8 characters long.", "warning", "Password Too Short");
+                return;
+            }
+            if (!pwCheck.hasAlphaNum) {
+                showToast("New password must contain at least one letter and one number.", "warning", "Weak Password");
+                return;
+            }
+            if (!pwCheck.notUsername) {
+                showToast("New password cannot be identical to the username.", "warning", "Insecure Password");
+                return;
+            }
+            if (!pwCheck.isMatch) {
+                showToast("Passwords do not match. Please re-enter identical passwords.", "warning", "Password Mismatch");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Updating...";
+
+            fetch(`/api/users/${id}/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_password: newPassword })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || "Password has been updated!", "success", "Password Reset");
+                    closeAdminResetPwModal();
+                    fetchUsers();
+                } else {
+                    showToast(data.message || "Failed to reset password.", "error", "Reset Error");
+                }
+            })
+            .catch(err => {
+                console.error("Reset password error:", err);
+                showToast("Network error resetting password.", "error", "Network Error");
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = "Update Password";
+            });
+        }
+
+        // --- SELF CHANGE PASSWORD ---
+        function openChangePasswordModal() {
+            document.getElementById('selfCurrentPassword').value = '';
+            document.getElementById('selfNewPassword').value = '';
+            document.getElementById('selfConfirmPassword').value = '';
+            document.getElementById('changePasswordModal').style.display = 'flex';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'none';
+        }
+
+        function submitSelfChangePassword(e) {
+            e.preventDefault();
+            const currentPassword = document.getElementById('selfCurrentPassword').value;
+            const newPassword = document.getElementById('selfNewPassword').value;
+            const confirmPassword = document.getElementById('selfConfirmPassword').value;
+            const btn = document.getElementById('btnSubmitSelfChange');
+
+            const pwCheck = validatePasswordRequirements(newPassword, confirmPassword, activeUser.username);
+            if (!pwCheck.hasMinLen) {
+                showToast("New password must be at least 8 characters long.", "warning", "Password Too Short");
+                return;
+            }
+            if (!pwCheck.hasAlphaNum) {
+                showToast("New password must contain at least one letter and one number.", "warning", "Weak Password");
+                return;
+            }
+            if (!pwCheck.notUsername) {
+                showToast("New password cannot be identical to your username.", "warning", "Insecure Password");
+                return;
+            }
+            if (newPassword === currentPassword) {
+                showToast("New password cannot be identical to your current password.", "warning", "Duplicate Password");
+                return;
+            }
+            if (!pwCheck.isMatch) {
+                showToast("New passwords do not match. Please ensure both fields are identical.", "warning", "Password Mismatch");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Saving...";
+
+            fetch('/api/users/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUser.username,
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || "Password changed successfully!", "success", "Security Updated");
+                    closeChangePasswordModal();
+                } else {
+                    showToast(data.message || "Failed to change password.", "error", "Verification Failed");
+                }
+            })
+            .catch(err => {
+                console.error("Self change password error:", err);
+                showToast("Network error saving new password.", "error", "Network Error");
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerText = "Save New Password";
+            });
+        }
+
+        // --- STAFF DIRECT CHANGE PASSWORD ---
+        function handleStaffChangePassword(e) {
+            e.preventDefault();
+            const currentPassword = document.getElementById('staffCurrentPassword').value;
+            const newPassword = document.getElementById('staffNewPassword').value;
+            const confirmPassword = document.getElementById('staffConfirmPassword').value;
+            const btn = document.getElementById('btnStaffChangePw');
+
+            const pwCheck = validatePasswordRequirements(newPassword, confirmPassword, activeUser.username);
+            if (!pwCheck.hasMinLen) {
+                showToast("New password must be at least 8 characters long.", "warning", "Password Too Short");
+                return;
+            }
+            if (!pwCheck.hasAlphaNum) {
+                showToast("New password must contain at least one letter and one number.", "warning", "Weak Password");
+                return;
+            }
+            if (!pwCheck.notUsername) {
+                showToast("New password cannot be identical to your username.", "warning", "Insecure Password");
+                return;
+            }
+            if (newPassword === currentPassword) {
+                showToast("New password cannot be identical to your current password.", "warning", "Duplicate Password");
+                return;
+            }
+            if (!pwCheck.isMatch) {
+                showToast("New passwords do not match. Please ensure both fields are identical.", "warning", "Password Mismatch");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = "<span>Saving...</span>";
+
+            fetch('/api/users/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUser.username,
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || "Password changed successfully!", "success", "Security Updated");
+                    document.getElementById('staffCurrentPassword').value = '';
+                    document.getElementById('staffNewPassword').value = '';
+                    document.getElementById('staffConfirmPassword').value = '';
+                } else {
+                    showToast(data.message || "Failed to change password.", "error", "Verification Failed");
+                }
+            })
+            .catch(err => {
+                console.error("Staff change password error:", err);
+                showToast("Network error saving new password.", "error", "Network Error");
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = "<span>Save New Password</span>";
+            });
+        }
+
+        // --- REVOKE ACTIVE SESSION ---
+        async function revokeUserSession(id, username) {
+            const confirmed = await showAppConfirm(
+                "Revoke Active Session",
+                `Are you sure you want to force logout <strong>${escapeHtml(username)}</strong>?<br><br>Their current device session will be terminated immediately.`
+            );
+            if (!confirmed) return;
+
+            fetch(`/api/users/${id}/revoke-session`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(data.message || "Session revoked.", "success", "Session Revoked");
+                        fetchUsers();
+                    } else {
+                        showToast(data.message || "Failed to revoke session.", "error", "Revocation Error");
+                    }
+                })
+                .catch(err => {
+                    console.error("Revoke error:", err);
+                    showToast("Network error revoking session.", "error", "Network Error");
+                });
+        }
+
+        // --- DELETE USER ---
+        async function confirmDeleteUser(id, username) {
+            const confirmed = await showAppConfirm(
+                "Delete User Account",
+                `Are you sure you want to permanently remove the account for <strong>${escapeHtml(username)}</strong>?<br><br><span style="color: #dc2626;">This action cannot be undone.</span>`
+            );
+            if (!confirmed) return;
+
+            fetch(`/api/users/${id}?current_user=${encodeURIComponent(activeUser.username)}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast(data.message || `Account '${username}' deleted.`, "success", "User Deleted");
+                        fetchUsers();
+                    } else {
+                        showToast(data.message || "Failed to delete user.", "error", "Deletion Blocked");
+                    }
+                })
+                .catch(err => {
+                    console.error("Delete user error:", err);
+                    showToast("Network error deleting user.", "error", "Network Error");
+                });
+        }
+
+        // --- CUSTOM IN-APP CONFIRM DIALOG ---
+        function showAppConfirm(title, message) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                titleEl.innerText = title;
+                msgEl.innerHTML = message;
+                modal.style.display = 'flex';
+
+                function cleanup() {
+                    modal.style.display = 'none';
+                    confirmBtn.onclick = null;
+                    cancelBtn.onclick = null;
+                }
+
+                confirmBtn.onclick = () => { cleanup(); resolve(true); };
+                cancelBtn.onclick = () => { cleanup(); resolve(false); };
+            });
+        }
+
+        // --- TOAST SYSTEM ---
+        function showToast(message, type = 'info', title = '') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'app-toast-item';
+
+            let icon = 'ℹ️';
+            let borderColor = '#3b82f6';
+            if (type === 'success') { icon = '✅'; borderColor = '#10b981'; }
+            else if (type === 'warning') { icon = '⚠️'; borderColor = '#f59e0b'; }
+            else if (type === 'error') { icon = '❌'; borderColor = '#ef4444'; }
+
+            toast.style.borderLeftColor = borderColor;
+            toast.innerHTML = `
+                <span style="font-size: 1.3rem;">${icon}</span>
+                <div style="flex: 1;">
+                    ${title ? `<div style="font-weight: 700; margin-bottom: 2px;">${escapeHtml(title)}</div>` : ''}
+                    <div style="color: #475569; font-size: 0.86rem; line-height: 1.4;">${escapeHtml(message)}</div>
+                </div>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // --- LAN REAL-TIME MUTATION SYNC ---
+        if (window.lanSync) {
+            window.lanSync.onUpdate((payload) => {
+                if (payload.event === "USER_UPDATED" && activeUser && activeUser.role === 'Admin') {
+                    fetchUsers();
+                }
+            });
+        }
+
+        // --- REAL-TIME SESSION POLLING ---
+        setInterval(() => {
+            const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+            if (currentUser && currentUser.session_token) {
+                fetch('/api/verify-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: activeUser.username })
-                }).then(() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                }).catch(() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                });
+                    body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== "valid") {
+                        alert("Session Expired: Your account was accessed from another device or revoked by an administrator.");
+                        localStorage.clear();
+                        window.location.href = '/login';
+                    }
+                }).catch(e => console.error("Session polling error:", e));
             }
+        }, 3000);
+
+        // --- UTILITY FUNCTIONS ---
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
-        // --- SIDEBAR TOGGLE ---
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
             const overlay = document.querySelector('.sidebar-overlay');
@@ -198,7 +1311,7 @@
             if(overlay) overlay.classList.toggle('active');
         }
 
-        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
+        // --- DECISION SUPPORT SYSTEM (DSS) ---
         fetch('/api/dss-alert')
             .then(response => response.json())
             .then(data => {
@@ -217,12 +1330,21 @@
                     }
                     
                     if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data.message, data.reams_needed);
+                        showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
                     }
                 } else {
                     badge.style.display = 'none';
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                    if (data.has_enrollments === false) {
+                        panel.style.borderLeftColor = '#64748b';
+                        if (activeUser && activeUser.role === 'Admin') {
+                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                        } else {
+                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                        }
+                    } else {
+                        panel.style.borderLeftColor = '#27ae60'; 
+                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                    }
                 }
             }).catch(e => console.error("DSS Alert error:", e));
     
@@ -231,15 +1353,42 @@
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
     
-        function showDSSModal(message, reams) {
+        function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+            let bCount = deficitBooklets;
+            let sCount = deficitSheets;
+            if (typeof message === 'object' && message !== null) {
+                reams = message.reams_needed;
+                bCount = message.deficit_booklets;
+                sCount = message.deficit_sheets;
+                message = message.message;
+            }
             const modalHtml = `
-                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                    <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                        <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                        <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                        <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                        
+                        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                                <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                                <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                                <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                            </div>
+                        </div>
+                        
+                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                            To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                        </p>
+                        
+                        <div style="display: flex; justify-content: center;">
+                            <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                                Acknowledge & Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -248,78 +1397,21 @@
     
         function dismissDSS() {
             sessionStorage.setItem('dss_acknowledged', 'true');
-            document.getElementById('dssModal').remove();
-            
+            const modal = document.getElementById('dssModal');
+            if (modal) modal.remove();
             const panel = document.getElementById('notifPanel');
-            panel.style.display = 'block'; 
-            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            if (panel) {
+                panel.style.display = 'block'; 
+                setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            }
         }
 
-        // --- CREATE USER LOGIC ---
-        function createUser() {
-            if (activeUser.role !== 'Admin') return; // Prevent unauthorized action
-
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
-            const role = document.getElementById('role').value;
-            
-            // If role is Admin, force department to "All", otherwise get value from dropdown
-            let department = document.getElementById('department').value;
-            if (role === 'Admin') {
-                department = 'All';
+        // Close modals on clicking overlay outside card
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal-overlay')) {
+                e.target.style.display = 'none';
             }
-            
-            const statusMsg = document.getElementById('statusMessage');
-
-            if(!username || !password) {
-                statusMsg.className = "message error";
-                statusMsg.innerText = "Please fill in all fields.";
-                return;
-            }
-
-            fetch('/api/users/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username, password: password, role: role, department: department })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === 'success') {
-                    statusMsg.className = "message success";
-                    statusMsg.innerText = data.message;
-                    document.getElementById('username').value = "";
-                    document.getElementById('password').value = "";
-                } else {
-                    statusMsg.className = "message error";
-                    statusMsg.innerText = data.message;
-                }
-            })
-            .catch(err => {
-                statusMsg.className = "message error";
-                statusMsg.innerText = "Server connection error.";
-            });
-        }
-
-        // --- REAL-TIME SESSION POLLING ---
-        setInterval(() => {
-            const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
-            if(currentUser && currentUser.session_token) {
-                fetch('/api/verify-session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status !== "valid") {
-                        alert("Session Expired: Your account was accessed from another device.");
-                        localStorage.clear();
-                        window.location.href = '/login';
-                    }
-                }).catch(e => console.error(e));
-            }
-        }, 3000); 
-
+        });
     </script>
 </body>
 </html>

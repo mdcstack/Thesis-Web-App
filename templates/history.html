@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audit Trail - Proposed System</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -13,6 +14,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Content */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
@@ -23,7 +27,11 @@
         .filter-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; align-items: center; }
         .filter-container select, .filter-container input[type="date"], .filter-container input[type="text"] { flex: 1; min-width: 180px; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; }
         .filter-container select, .filter-container input[type="date"] { cursor: pointer; }
-        .btn-refresh { background-color: #34495e; color: white; border: none; padding: 12px 15px; border-radius: 4px; cursor: pointer; font-size: 1.2rem; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
+        .btn-refresh { background-color: #34495e; color: white; border: none; width: 44px; height: 44px; border-radius: 4px; cursor: pointer; font-size: 1.2rem; transition: background 0.3s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .btn-refresh:hover { background-color: #2c3e50; }
+        .btn-toggle-range { background-color: #ecf0f1; color: #2c3e50; border: 1px solid #bdc3c7; height: 44px; padding: 0 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: all 0.2s ease; flex-shrink: 0; }
+        .btn-toggle-range:hover { background-color: #bdc3c7; }
+        .btn-toggle-range.active { background-color: #3498db; color: white; border-color: #2980b9; }
         
         /* Table Styles */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -62,6 +70,38 @@
 
         /* Auth Inputs */
         .auth-input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; text-align: center; }
+
+        /* App Custom Dialog Modal */
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .app-dialog-card {
+            background: #fff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #3498db;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
     
         /* Mobile Hamburger & Overlay Styles */
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
@@ -110,13 +150,18 @@
 
     <div class="sidebar">
         <!-- Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -124,8 +169,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link ">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a>
         <a href="/qr-registration" class="nav-link mobile-hide ">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -150,16 +195,34 @@
             <div class="filter-container">
                 <input type="text" id="filterRef" onkeyup="triggerDatabaseSearch()" placeholder="🔍 Find Ref No. (e.g. 0018)" style="flex: 1.5; font-family: monospace; border: 2px solid #3498db; outline: none; transition: 0.3s;">
 
-                <input type="date" id="filterDate" onchange="applyFilters()" title="Filter by exact date">
+                <!-- Date Filter with Dedicated Range Toggle -->
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;">
+                    <!-- Primary / From Date Box -->
+                    <div style="display: flex; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
+                        <label id="histDateLabel" for="filterDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">Date:</label>
+                        <input type="date" id="filterDate" onchange="onHistDateChange()" title="Filter by date" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
+                    </div>
+
+                    <!-- Optional To Date Box (Hidden by default, shown when Range is active) -->
+                    <div id="histToDateGroup" style="display: none; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
+                        <label for="filterToDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">To:</label>
+                        <input type="date" id="filterToDate" onchange="applyFilters()" title="End date (Optional)" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
+                    </div>
+
+                    <!-- Dedicated Range Toggle Button -->
+                    <button type="button" id="histToggleDateRangeBtn" onclick="toggleHistDateRangeMode()" class="btn-toggle-range" title="Toggle date range (From - To)">
+                        📅 Range
+                    </button>
+                </div>
 
                 <select id="filterTeacher" onchange="applyFilters()">
                     <option value="">-- All Instructors --</option>
                 </select>
                 
                 <select id="filterDept" onchange="onDeptChange()">
-                    <option value="">-- All Departments --</option>
-                    <option value="CS">Computer Science (CS)</option>
-                    <option value="IT">Information Technology (IT)</option>
+                    <option value="">All Programs (CS &amp; IT)</option>
+                    <option value="CS">Computer Science (BSCS)</option>
+                    <option value="IT">Information Technology (BSIT)</option>
                 </select>
 
                 <select id="filterSection" onchange="applyFilters()">
@@ -233,10 +296,9 @@
             
             <div class="form-group">
                 <label>Reason for Return:</label>
-                <select id="returnReason">
+                <select id="returnReason" onchange="onReturnReasonChange()">
                     <option value="Student Dropped Class">Student Dropped Class</option>
                     <option value="Misprint / Defect">Misprint / Defect</option>
-                    <option value="Excess Supply">Excess Supply Issued</option>
                 </select>
             </div>
 
@@ -252,7 +314,7 @@
             
             <div class="btn-group">
                 <button class="btn-cancel" onclick="closeReturnModal()">Cancel</button>
-                <button class="btn-execute" onclick="executeReturn()">Move to Loose Stock</button>
+                <button class="btn-execute" id="returnActionBtn" onclick="executeReturn()">Move to Loose Stock</button>
             </div>
         </div>
     </div>
@@ -266,6 +328,140 @@
     // Temporarily holds the target return data while waiting for Admin to login
     let pendingReturnAction = null; 
 
+    // --- IN-APP MODAL DIALOG SYSTEM ---
+    function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+        return new Promise(resolve => {
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                alert(`${title}\n\n${message}`);
+                resolve(true);
+                return;
+            }
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#3498db';
+            let icon = 'ℹ️';
+            let btnBg = '#3498db';
+
+            if (type === 'warning') {
+                borderCol = '#f59e0b';
+                icon = '⚠️';
+                btnBg = '#f59e0b';
+            } else if (type === 'error') {
+                borderCol = '#ef4444';
+                icon = '❌';
+                btnBg = '#ef4444';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                btnBg = '#10b981';
+            }
+
+            if (card) card.style.borderTopColor = borderCol;
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) {
+                if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<p'))) {
+                    msgEl.style.whiteSpace = 'normal';
+                    msgEl.innerHTML = message;
+                } else {
+                    msgEl.style.whiteSpace = 'pre-line';
+                    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                }
+            }
+
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = btnBg;
+            confirmBtn.style.color = '#ffffff';
+            cancelBtn.style.display = 'none';
+
+            confirmBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    function showAppConfirm(title, message, options = {}) {
+        return new Promise(resolve => {
+            const {
+                type = 'warning',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                confirmBg = null
+            } = options;
+
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                const res = confirm(`${title}\n\n${message}`);
+                resolve(res);
+                return;
+            }
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBg = '#3498db';
+
+            if (type === 'danger') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBg = '#ef4444';
+            } else if (type === 'question') {
+                borderCol = '#3b82f6';
+                icon = '❓';
+                defaultBg = '#3498db';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '🔁';
+                defaultBg = '#10b981';
+            }
+
+            if (card) card.style.borderTopColor = borderCol;
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) {
+                if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<p'))) {
+                    msgEl.style.whiteSpace = 'normal';
+                    msgEl.innerHTML = message;
+                } else {
+                    msgEl.style.whiteSpace = 'pre-line';
+                    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                }
+            }
+
+            confirmBtn.innerText = confirmText;
+            confirmBtn.style.background = confirmBg || defaultBg;
+            confirmBtn.style.color = '#ffffff';
+            cancelBtn.innerText = cancelText;
+            cancelBtn.style.display = 'inline-block';
+
+            confirmBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+
+            cancelBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(false);
+            };
+
+            modal.style.display = 'flex';
+        });
+    }
+
     // --- AUTHENTICATION INIT ---
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
     if (!activeUser || !activeUser.session_token) {
@@ -277,9 +473,9 @@
             body: JSON.stringify({ username: activeUser.username, session_token: activeUser.session_token })
         })
         .then(res => res.json())
-        .then(data => {
+        .then(async (data) => {
             if (data.status !== "valid") {
-                alert("Session Expired: Your account was accessed from another device.");
+                await showAppAlert("Session Expired", "Your account was accessed from another device.", "error");
                 localStorage.removeItem('bookletlog_user');
                 window.location.href = '/login';
             }
@@ -287,55 +483,134 @@
     }
     document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
     document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
-    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none'); const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
 
-    function logout() {
-        if(confirm("Are you sure you want to log out?")) {
-            fetch('/api/logout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: activeUser.username })
-            }).then(() => {
-                localStorage.clear();
-                window.location.href = '/login';
-            }).catch(() => {
-                localStorage.clear();
-                window.location.href = '/login';
-            });
-        }
+    async function logout() {
+        const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to log out of your session?", {
+            type: 'danger',
+            confirmText: 'Log Out',
+            cancelText: 'Stay',
+            confirmBg: '#e74c3c'
+        });
+        if (!confirmed) return;
+
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: activeUser.username })
+        }).then(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        }).catch(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        });
     }
 
     // --- DATA FETCHING & CHRONOLOGICAL SORTING ---
-    window.onload = function fetchData() {
+    function fetchData(isBackground = false) {
+        const returnModal = document.getElementById('returnModal');
+        const adminModal = document.getElementById('adminAuthModal');
+        if (isBackground && ((returnModal && returnModal.style.display === 'flex') || (adminModal && adminModal.style.display === 'flex'))) {
+            return;
+        }
+
         const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading records...</td></tr>';
+        if (!isBackground) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading records...</td></tr>';
+        }
         
-        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
-            const deptQuery = activeUser && activeUser.department ? `?department=${activeUser.department}` : "";
-            fetch(`/api/history-data${deptQuery}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === "success") {
-                    systemActivePeriod = data.active_period; 
-                    
-                    globalHistory = data.data.sort((a, b) => {
-                        let dateA = new Date(a.date.replace(/-/g, ' '));
-                        let dateB = new Date(b.date.replace(/-/g, ' '));
-                        return dateB - dateA; 
-                    });
-                    
-                    populateDropdowns();
-                    applyFilters();
-                }
-            })
-            .catch(err => {
+        fetch(`/api/history-data`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                systemActivePeriod = data.active_period; 
+                
+                globalHistory = data.data.sort((a, b) => {
+                    let dateA = new Date(a.date.replace(/-/g, ' '));
+                    let dateB = new Date(b.date.replace(/-/g, ' '));
+                    return dateB - dateA; 
+                });
+                
+                populateDropdowns();
+                applyFilters();
+            }
+        })
+        .catch(err => {
+            if (!isBackground) {
                 tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+            }
+        });
+    }
+
+    window.onload = function() {
+        fetchData(false);
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                fetchData(true);
             });
+        }
+    };
+
+    let isHistDateRangeActive = false;
+
+    function toggleHistDateRangeMode(forceState) {
+        if (typeof forceState === 'boolean') {
+            isHistDateRangeActive = forceState;
+        } else {
+            isHistDateRangeActive = !isHistDateRangeActive;
+        }
+
+        const btn = document.getElementById('histToggleDateRangeBtn');
+        const toDateGroup = document.getElementById('histToDateGroup');
+        const dateLabel = document.getElementById('histDateLabel');
+        const fromDateInput = document.getElementById('filterDate');
+        const toDateInput = document.getElementById('filterToDate');
+
+        if (isHistDateRangeActive) {
+            btn.classList.add('active');
+            btn.innerHTML = '📅 Range ✓';
+            btn.title = 'Switch to single date mode';
+            dateLabel.textContent = 'From:';
+            fromDateInput.title = 'Start issuance date';
+            toDateGroup.style.display = 'flex';
+            if (fromDateInput.value) {
+                toDateInput.min = fromDateInput.value;
+            }
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = '📅 Range';
+            btn.title = 'Toggle date range (From - To)';
+            dateLabel.textContent = 'Date:';
+            fromDateInput.title = 'Filter by date';
+            toDateGroup.style.display = 'none';
+            toDateInput.value = '';
+            toDateInput.removeAttribute('min');
+        }
+        applyFilters();
+    }
+
+    function onHistDateChange() {
+        const fromDateInput = document.getElementById('filterDate');
+        const toDateInput = document.getElementById('filterToDate');
+        if (isHistDateRangeActive && fromDateInput.value) {
+            toDateInput.min = fromDateInput.value;
+            if (toDateInput.value && toDateInput.value < fromDateInput.value) {
+                toDateInput.value = '';
+            }
+        }
+        applyFilters();
     }
 
     function refreshData() {
         document.getElementById('filterRef').value = ""; 
         document.getElementById('filterDate').value = "";
+        if (document.getElementById('filterToDate')) {
+            document.getElementById('filterToDate').value = "";
+        }
+        if (isHistDateRangeActive) {
+            toggleHistDateRangeMode(false);
+        }
         document.getElementById('filterTeacher').value = "";
         document.getElementById('filterDept').value = "";
         document.getElementById('filterSection').value = "";
@@ -411,9 +686,35 @@
             });
         }
         
-        if (targetDate) {
-            const selectedDateObj = new Date(targetDate);
-            filtered = filtered.filter(row => new Date(row.date).toDateString() === selectedDateObj.toDateString());
+        if (isHistDateRangeActive) {
+            const fromVal = document.getElementById('filterDate').value;
+            const toVal = document.getElementById('filterToDate') ? document.getElementById('filterToDate').value : "";
+            
+            if (fromVal || toVal) {
+                filtered = filtered.filter(row => {
+                    if (!row.date) return false;
+                    const rDate = new Date(row.date);
+                    if (isNaN(rDate.getTime())) return false;
+                    const year = rDate.getFullYear();
+                    const month = String(rDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(rDate.getDate()).padStart(2, '0');
+                    const rowIso = `${year}-${month}-${day}`;
+
+                    if (fromVal && toVal) {
+                        return rowIso >= fromVal && rowIso <= toVal;
+                    } else if (fromVal) {
+                        return rowIso >= fromVal;
+                    } else if (toVal) {
+                        return rowIso <= toVal;
+                    }
+                    return true;
+                });
+            }
+        } else {
+            if (targetDate) {
+                const selectedDateObj = new Date(targetDate);
+                filtered = filtered.filter(row => new Date(row.date).toDateString() === selectedDateObj.toDateString());
+            }
         }
         if (teacher) filtered = filtered.filter(row => row.teacher === teacher);
         if (dept === 'CS') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
@@ -494,6 +795,11 @@
                 `;
             }
             
+            let defectBadge = "";
+            if (row.defective_voided_qty && row.defective_voided_qty > 0) {
+                defectBadge = `<div style="margin-top: 4px;"><span class="badge" style="background-color: #d35400; font-size: 0.72rem; padding: 2px 6px;" title="${row.defective_voided_qty} defective booklet(s) returned and voided for this section">⚠️ ${row.defective_voided_qty} Defective Voided</span></div>`;
+            }
+
             tr.innerHTML = `
                 <td>${row.date}</td>
                 <td>
@@ -504,7 +810,7 @@
                 <td>${row.subject}</td>
                 <td><span class="badge" style="background-color: #34495e;">${row.qty}</span></td>
                 <td>${paymentHtml}</td>
-                <td class="ref-text">${row.refs}</td>
+                <td class="ref-text">${row.refs}${defectBadge}</td>
                 <td>${actionHtml}</td>
             `;
             tbody.appendChild(tr);
@@ -590,10 +896,25 @@
 
     // --- STANDARD RETURN LOGIC ---
 
+    function onReturnReasonChange() {
+        const reason = document.getElementById('returnReason').value;
+        const btn = document.getElementById('returnActionBtn');
+        if (btn) {
+            if (reason === "Misprint / Defect") {
+                btn.innerText = "Void & Prepare Replacement";
+                btn.style.backgroundColor = "#e74c3c";
+            } else {
+                btn.innerText = "Move to Loose Stock";
+                btn.style.backgroundColor = "#27ae60";
+            }
+        }
+    }
+
     function openReturnModal(enrollmentId, teacherName, examPeriod) {
         document.getElementById('pendingReturnEnrollmentId').value = enrollmentId;
         document.getElementById('modalTeacherName').innerText = teacherName;
         document.getElementById('returnReason').selectedIndex = 0;
+        onReturnReasonChange();
         document.getElementById('selectedCount').innerText = "0";
         document.getElementById('refSearchInput').value = ""; 
         
@@ -643,14 +964,65 @@
         document.getElementById('selectedCount').innerText = document.querySelectorAll('.ref-checkbox:checked').length;
     }
 
-    function executeReturn() {
+    async function executeReturn() {
         const enrollmentId = document.getElementById('pendingReturnEnrollmentId').value;
         const reason = document.getElementById('returnReason').value;
         const checkboxes = document.querySelectorAll('.ref-checkbox:checked');
-        if(checkboxes.length === 0) { alert("Please select at least one booklet to return."); return; }
+        if(checkboxes.length === 0) {
+            await showAppAlert("Selection Required", "Please select at least one booklet to return.", "warning");
+            return;
+        }
 
         const selectedRefs = Array.from(checkboxes).map(cb => cb.value);
-        if(!confirm(`Are you sure you want to move ${selectedRefs.length} booklet(s) back to Loose Stock?`)) return;
+        const countText = selectedRefs.length === 1 ? "1 Booklet" : `${selectedRefs.length} Booklets`;
+        const isDefective = reason === "Misprint / Defect";
+        const title = isDefective ? "Confirm Booklet Void" : "Confirm Move to Loose Stock";
+        const confirmText = isDefective ? "Void Defective Booklets" : "Move to Loose Stock";
+        const confirmBg = isDefective ? "#e74c3c" : "#27ae60";
+        const type = isDefective ? "danger" : "success";
+
+        const badgesHtml = selectedRefs.map(ref => 
+            `<span style="display: inline-block; background: #ffffff; color: #1e293b; padding: 4px 9px; border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.88rem; font-weight: 700; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">${ref}</span>`
+        ).join('');
+
+        const controlNumbersContainer = `
+            <div style="margin: 14px 0 16px; text-align: left; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>Booklet Control Number${selectedRefs.length > 1 ? 's' : ''} on Hand:</span>
+                    <span style="background: ${isDefective ? '#fee2e2' : '#dcfce7'}; color: ${isDefective ? '#991b1b' : '#166534'}; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">${countText}</span>
+                </div>
+                <div style="max-height: 125px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0;">
+                    ${badgesHtml}
+                </div>
+            </div>
+        `;
+
+        const message = isDefective
+            ? `<div style="text-align: center;">
+                <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Are you sure you want to void ${countText.toLowerCase()}?</p>
+                ${controlNumbersContainer}
+                <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">Please confirm that the physical booklet control number${selectedRefs.length > 1 ? 's' : ''} you have on hand match the selection above. This will permanently void these booklets and adjust the transaction balance. Replacement booklets will be available in Live Distribution.</p>
+               </div>`
+            : `<div style="text-align: center;">
+                <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Are you sure you want to move ${countText.toLowerCase()} back to Loose Stock?</p>
+                ${controlNumbersContainer}
+                <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">Please confirm that the physical booklet control number${selectedRefs.length > 1 ? 's' : ''} you have on hand match the selection above. These usable booklets will immediately return to active inventory for reissuing.</p>
+               </div>`;
+
+        const confirmed = await showAppConfirm(title, message, {
+            type: type,
+            confirmText: confirmText,
+            cancelText: "Keep in Record",
+            confirmBg: confirmBg
+        });
+        if (!confirmed) return;
+
+        const actionBtn = document.getElementById('returnActionBtn');
+        const originalText = actionBtn ? actionBtn.innerText : '';
+        if (actionBtn) {
+            actionBtn.disabled = true;
+            actionBtn.innerText = "Processing Return...";
+        }
 
         fetch('/api/process-return', {
             method: 'POST',
@@ -661,10 +1033,25 @@
                 reason: reason,
                 clerk_name: activeUser.username
             })
-        }).then(res => res.json()).then(data => {
-            if(data.status === "success") { alert(data.message); window.location.reload(); } 
-            else alert("Error: " + data.message); 
-        }).catch(err => alert("Network error. Could not process return."));
+        }).then(res => res.json()).then(async (data) => {
+            if(data.status === "success") {
+                closeReturnModal();
+                await showAppAlert("Return Processed", data.message, "success");
+                window.location.reload();
+            } else {
+                if (actionBtn) {
+                    actionBtn.disabled = false;
+                    actionBtn.innerText = originalText;
+                }
+                await showAppAlert("Processing Error", data.message || "Failed to process return.", "error");
+            }
+        }).catch(async (err) => {
+            if (actionBtn) {
+                actionBtn.disabled = false;
+                actionBtn.innerText = originalText;
+            }
+            await showAppAlert("Network Error", "Could not process return. Please check your network connection and try again.", "error");
+        });
     }
 
     // --- DSS ALERT ---
@@ -681,12 +1068,21 @@
                 panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
             }
             if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                showDSSModal(data.message, data.reams_needed);
+                showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
             }
         } else {
             badge.style.display = 'none';
-            panel.style.borderLeftColor = '#27ae60'; 
-            panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            if (data.has_enrollments === false) {
+                panel.style.borderLeftColor = '#64748b';
+                if (activeUser && activeUser.role === 'Admin') {
+                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                } else {
+                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                }
+            } else {
+                panel.style.borderLeftColor = '#27ae60'; 
+                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            }
         }
     });
 
@@ -695,15 +1091,42 @@
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
 
-    function showDSSModal(message, reams) {
+    function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+        let bCount = deficitBooklets;
+        let sCount = deficitSheets;
+        if (typeof message === 'object' && message !== null) {
+            reams = message.reams_needed;
+            bCount = message.deficit_booklets;
+            sCount = message.deficit_sheets;
+            message = message.message;
+        }
         const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                    <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                    <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                    <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                    <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                    <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                    
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                            <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                            <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                        To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                    </p>
+                    
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                            Acknowledge & Close
+                        </button>
+                    </div>
                 </div>
             </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
@@ -711,10 +1134,13 @@
 
     function dismissDSS() {
         sessionStorage.setItem('dss_acknowledged', 'true');
-        document.getElementById('dssModal').remove();
+        const modal = document.getElementById('dssModal');
+        if (modal) modal.remove();
         const panel = document.getElementById('notifPanel');
-        panel.style.display = 'block'; 
-        setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        if (panel) {
+            panel.style.display = 'block'; 
+            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        }
     }
 
     // --- REAL-TIME SESSION POLLING ---
@@ -728,9 +1154,9 @@
                 body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
             })
             .then(res => res.json())
-            .then(data => {
+            .then(async (data) => {
                 if (data.status !== "valid") {
-                    alert("Session Expired: Your account was accessed from another device.");
+                    await showAppAlert("Session Expired", "Your account was accessed from another device.", "error");
                     localStorage.clear();
                     window.location.href = '/login';
                 }
@@ -748,6 +1174,19 @@ function toggleSidebar() {
     if(overlay) overlay.classList.toggle('active');
 }
 </script>
+
+<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 2500;">
+    <div class="app-dialog-card">
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Notice</h3>
+        <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;"></div>
+        <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+            <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569; display: none;">Cancel</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #3498db; color: white;">OK</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

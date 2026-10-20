@@ -6,6 +6,7 @@
     <title>Executive Dashboard - BOOKLETLOG</title>
     <!-- Import Chart.js -->
     <script src="/static/chart.js"></script>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -15,6 +16,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
@@ -136,12 +140,17 @@
 
 
     <div class="sidebar no-print">
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -159,10 +168,11 @@
         <div style="text-align: left; margin-bottom: 20px;">
             <label style="font-weight: bold; color: #2c3e50; display: block; margin-bottom: 5px;">Select Current Term:</label>
             <select id="initTermSelect" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem;">
-                <option value="1st Sem - Midterms">1st Sem - Midterms</option>
-                <option value="1st Sem - Finals">1st Sem - Finals</option>
-                <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
-                <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+                <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
+                <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
+                <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
+                <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
+                <option value="Midyear - Exam">Midyear - Exam</option>
             </select>
         </div>
 
@@ -179,8 +189,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link ">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -232,6 +242,7 @@
                 <div class="value" id="kpi-reams-converted">0</div>
                 <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
                     <span id="kpi-total-generated">0</span> booklets total in system
+                    <div id="kpi-reams-converted-breakdown" style="margin-top: 4px; color: #2563eb; font-weight: 600; font-size: 0.78rem;">CS: 0R | IT: 0R</div>
                 </div>
             </div>
             <div class="kpi-card clickable-card" onclick="openIssuedModal()" title="Click to view Department Issue Breakdown">
@@ -240,6 +251,7 @@
                 <div class="value" id="kpi-reams-distributed">0</div>
                 <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
                     <span id="kpi-loose-distributed">0</span> paper sheets | <span id="kpi-issued">0</span> booklets
+                    <div id="kpi-reams-distributed-breakdown" style="margin-top: 4px; color: #059669; font-weight: 600; font-size: 0.78rem;">CS: 0R (0s) | IT: 0R (0s)</div>
                 </div>
             </div>
             <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defect Breakdown (CS & IT)">
@@ -253,24 +265,103 @@
         <div class="visual-card" style="border-left-color: #8e44ad; margin-bottom: 30px;">
             <h2 style="display: flex; align-items: center; justify-content: space-between;">
                 <span>Inventory Readiness & Reorder DSS</span>
-                <span style="font-size: 0.7rem; background: #8e44ad; color: white; padding: 4px 10px; border-radius: 12px; vertical-align: middle;">AI INFERENCE ENGINE</span>
+                <span style="font-size: 0.7rem; background: #8e44ad; color: white; padding: 4px 10px; border-radius: 12px; vertical-align: middle;">INFERENCE ENGINE</span>
             </h2>
             <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 15px;">Visualizing physical stock vs demand to generate knowledge-based heuristic reorder decisions.</p>
             
-            <!-- TOP HALF: Visual Progress -->
-            <div class="progress-container">
-                <div id="meter-bar" class="progress-bar" style="width: 0%; position: absolute; left: 0; z-index: 2;"></div>
+            <!-- COURSE-SPECIFIC DEMAND & PRODUCTION BREAKDOWN (CS vs IT) -->
+            <div id="course-breakdown-section" style="margin-top: 20px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div style="font-size: 0.88rem; color: #475569; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+                        🎯 Course Production & Ream Allocation Grid
+                    </div>
+                    <span id="course-buffer-rate-badge" style="background: #f3e8ff; color: #7e22ce; font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #e9d5ff;">
+                        +3% Safety Buffer (Configured in Settings)
+                    </span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;">
+                    <!-- CS Course Card -->
+                    <div id="course-card-cs" style="background: white; border: 2px solid #bfdbfe; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #eff6ff; padding-bottom: 8px;">
+                            <div style="font-weight: 700; color: #1e40af; font-size: 1.05rem; display: flex; align-items: center; gap: 6px;">
+                                💻 Computer Science (CS)
+                            </div>
+                            <span id="cs-status-badge" style="background: #fee2e2; color: #dc2626; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                                SHORTAGE: 29 REAMS
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155;">
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <strong id="cs-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / Vault Stock</span>
+                                <span id="cs-stock-dist" style="font-weight: 600;"><span id="cs-distributed" style="color: #0284c7;">-</span> / <span id="cs-vault" style="color: #059669;">- pcs</span></span>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Deficit (Unmet Demand)</span>
+                                <strong id="cs-deficit" style="font-size: 1.05rem; color: #dc2626;">- pcs</strong>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Safety Buffer (<span id="cs-buffer-pct-label">3%</span>)</span>
+                                <strong id="cs-buffer-booklets" style="color: #7e22ce;">- pcs</strong>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Production Target:</span>
+                                <strong id="cs-target-production" style="font-size: 1.15rem; color: #1e3a8a;">- Booklets</strong>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
+                                <strong id="cs-reams-needed" style="font-size: 1.25rem; color: #2563eb;">- Ream(s)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- IT Course Card -->
+                    <div id="course-card-it" style="background: white; border: 2px solid #ddd6fe; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f5f3ff; padding-bottom: 8px;">
+                            <div style="font-weight: 700; color: #5b21b6; font-size: 1.05rem; display: flex; align-items: center; gap: 6px;">
+                                🌐 Information Technology (IT)
+                            </div>
+                            <span id="it-status-badge" style="background: #fee2e2; color: #dc2626; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                                SHORTAGE: 33 REAMS
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155;">
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <strong id="it-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / Vault Stock</span>
+                                <span id="it-stock-dist" style="font-weight: 600;"><span id="it-distributed" style="color: #0284c7;">-</span> / <span id="it-vault" style="color: #059669;">- pcs</span></span>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Deficit (Unmet Demand)</span>
+                                <strong id="it-deficit" style="font-size: 1.05rem; color: #dc2626;">- pcs</strong>
+                            </div>
+                            <div>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Safety Buffer (<span id="it-buffer-pct-label">3%</span>)</span>
+                                <strong id="it-buffer-booklets" style="color: #7e22ce;">- pcs</strong>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Production Target:</span>
+                                <strong id="it-target-production" style="font-size: 1.15rem; color: #4c1d95;">- Booklets</strong>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
+                                <strong id="it-reams-needed" style="font-size: 1.25rem; color: #7c3aed;">- Ream(s)</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="progress-labels">
-                <span id="meter-stock-label" style="font-weight: bold;">Current Stock: Loading...</span>
-                <span id="meter-demand-label" style="color: #2c3e50; font-weight: bold;">Remaining Demand: Loading...</span>
-            </div>
-            
-            <!-- Dynamic inline alert for stock status -->
-            <div id="meter-alert" style="margin-top: 15px; padding: 10px; font-size: 0.85rem; font-weight: bold; display: none;"></div>
-        
-            <hr style="border: 0; height: 1px; background: #ecf0f1; margin: 20px 0;">
         
             <!-- BOTTOM HALF: Expert System Recommendation -->
             <div style="background: #f8f9fa; border: 1px solid #ecf0f1; border-radius: 6px; padding: 15px;">
@@ -347,10 +438,11 @@
             <h3 style="color: #2c3e50; margin-bottom: 10px;">🔍 Filter Dashboard Data</h3>
             <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">Select an exam period to view historical or future revenue and analytics.</p>
             <select id="filterTermSelect">
-                <option value="1st Sem - Midterms">1st Sem - Midterms</option>
-                <option value="1st Sem - Finals">1st Sem - Finals</option>
-                <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
-                <option value="2nd Sem - Finals">2nd Sem - Finals</option>
+                <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
+                <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
+                <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
+                <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
+                <option value="Midyear - Exam">Midyear - Exam</option>
             </select>
             <select id="filterAySelect"></select>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
@@ -390,78 +482,25 @@
             <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="defectiveModalPeriodLabel">Loading...</p>
             <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalDefectCS">0 pcs</span></div>
             <div class="breakdown-row" style="border-bottom: 2px solid #2c3e50; padding-bottom: 15px;"><span>🔌 Information Technology (IT)</span><span id="modalDefectIT">0 pcs</span></div>
-            <div class="breakdown-row" style="color: #d35400;"><span>Total Defective (CS & IT)</span><span id="modalDefectTotal">0 pcs</span></div>
-            <button class="btn-action" style="background-color: #f39c12;" onclick="closeModals()">Close</button>
+            <div class="breakdown-row" style="color: #d35400; font-weight: bold;"><span>Total Defective (CS & IT)</span><span id="modalDefectTotal">0 pcs</span></div>
+            <button class="btn-action" style="background-color: #f39c12; margin-top: 20px;" onclick="closeModals()">Close</button>
         </div>
     </div>
 
-    <!-- MANDATORY SEMESTER INITIALIZATION MODAL (ADMIN ONLY - NON-DISMISSIBLE) -->
-    <div class="modal-overlay" id="mandatoryPriceModal" style="background: rgba(15, 23, 42, 0.95); z-index: 10000; backdrop-filter: blur(4px);">
-        <div class="modal-card" style="border-top: 6px solid #e67e22; max-width: 520px; width: 92%; text-align: left; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <span style="font-size: 2.2rem;">⚙️</span>
-                <div>
-                    <h2 style="color: #2c3e50; font-size: 1.4rem; margin: 0;">Initialize Semester Settings</h2>
-                    <p style="color: #e67e22; font-size: 0.85rem; font-weight: bold; margin: 0;">Mandatory Setup Required Before Proceeding</p>
-                </div>
-            </div>
-            
-            <p style="color: #555; font-size: 0.92rem; line-height: 1.5; margin-bottom: 20px; background: #fff8f0; border-left: 4px solid #e67e22; padding: 10px 14px; border-radius: 4px;">
-                <strong>Welcome Administrator!</strong> Before any booklet distribution, payments, or reports can occur for this semester, you must establish the official <strong>Booklet Selling Price</strong> and semester parameters.
+    <!-- MANDATORY SEMESTER INITIALIZATION REDIRECTION MODAL (ADMIN ONLY) -->
+    <div class="modal-overlay" id="mandatorySetupModal" style="background: rgba(15, 23, 42, 0.95); z-index: 10000; backdrop-filter: blur(5px);">
+        <div class="modal-card" style="border-top: 6px solid #3498db; max-width: 480px; width: 92%; text-align: center; padding: 35px 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+            <div style="font-size: 3.5rem; margin-bottom: 12px;">⚙️</div>
+            <h2 style="color: #1e293b; font-size: 1.5rem; margin-bottom: 8px;">System Setup Required</h2>
+            <p style="color: #64748b; font-size: 0.95rem; line-height: 1.6; margin-bottom: 25px;">
+                
+                Please navigate to the <strong>Settings</strong> module to configure the official examination parameters before conducting operations.
             </p>
-
-            <div id="initModalAlert" style="display:none; padding: 10px 14px; margin-bottom: 15px; border-radius: 4px; font-weight: bold; font-size: 0.9rem;"></div>
-
-            <div style="margin-bottom: 14px;">
-                <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #2c3e50; margin-bottom: 5px;">Active Exam Period & Academic Year</label>
-                <div style="display: flex; gap: 10px;">
-                    <select id="init_period_select" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
-                        <option value="1st Sem - Midterms">1st Sem - Midterms</option>
-                        <option value="1st Sem - Finals">1st Sem - Finals</option>
-                        <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
-                        <option value="2nd Sem - Finals">2nd Sem - Finals</option>
-                    </select>
-                    <select id="init_ay_select" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
-                        <option value="AY 2026-2027">AY 2026-2027</option>
-                        <option value="AY 2027-2028">AY 2027-2028</option>
-                        <option value="AY 2025-2026">AY 2025-2026</option>
-                    </select>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 14px;">
-                <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #2c3e50; margin-bottom: 5px;">
-                    Booklet Selling Price (₱) <span style="color: #e74c3c;">*</span>
-                </label>
-                <input type="number" id="init_booklet_price" step="0.01" min="0.01" placeholder="e.g., 2.50" value="2.50" required
-                    style="width: 100%; padding: 11px; border: 2px solid #3498db; border-radius: 4px; font-size: 1.15rem; font-weight: bold; color: #2c3e50; box-sizing: border-box;">
-                <small style="display: block; color: #7f8c8d; margin-top: 4px; font-size: 0.8rem;">
-                    This price will be permanently stamped on newly distributed booklets and receipt records.
-                </small>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-                <div>
-                    <label style="display: block; font-weight: bold; font-size: 0.85rem; color: #2c3e50; margin-bottom: 5px;">Raw Ream Price (₱)</label>
-                    <input type="number" id="init_ream_price" step="0.01" min="1" value="250.00"
-                        style="width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-weight: bold; font-size: 0.85rem; color: #2c3e50; margin-bottom: 5px;">Sheets Per Booklet</label>
-                    <input type="number" id="init_sheets_per_booklet" min="1" value="6"
-                        style="width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; box-sizing: border-box;">
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <button type="button" onclick="submitMandatorySetup()" 
-                    style="flex: 2; background-color: #27ae60; color: white; border: none; padding: 13px; border-radius: 5px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s;">
-                    💾 Lock Price & Initialize System
-                </button>
-                <a href="/settings" 
-                    style="flex: 1.5; background-color: #f39c12; color: white; border: none; padding: 13px; border-radius: 5px; font-size: 0.95rem; font-weight: bold; text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center;">
-                    ⚙️ Go to Settings
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <a href="/settings" class="btn-action" style="background-color: #3498db; color: white; padding: 14px 20px; font-size: 1rem; font-weight: bold; text-decoration: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s;">
+                    ⚙️ Go to Settings to Initialize System
                 </a>
+                
             </div>
         </div>
     </div>
@@ -480,7 +519,7 @@
                 <a href="/settings" id="dashboardLockoutSettingsBtn" class="btn btn-warning" style="display: none; width: 100%; text-decoration: none; padding: 12px; font-weight: bold; font-size: 1rem; box-sizing: border-box; text-align: center; margin: 0; background-color: #f39c12; color: white; border-radius: 4px;">
                     ⚙️ Go to Settings to Initialize Price
                 </a>
-                <button class="btn btn-danger" id="dashboardLockoutLogoutBtn" onclick="logout()" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: bold; margin: 0;">Return to Login</button>
+                <button class="btn btn-danger" id="dashboardLockoutLogoutBtn" onclick="handleLockoutLogout()" style="width: 100%; padding: 12px; font-size: 1rem; font-weight: bold; margin: 0;">Return to Login</button>
             </div>
         </div>
     </div>
@@ -508,7 +547,7 @@
     document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
     document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
     
-    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none'); const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
 
     // Global Cache
     let currentDashboardPeriod = "";
@@ -557,6 +596,7 @@
         document.getElementById('modalDefectCS').innerText = `${statsData.defective.cs.toLocaleString()} pcs`;
         document.getElementById('modalDefectIT').innerText = `${statsData.defective.it.toLocaleString()} pcs`;
         document.getElementById('modalDefectTotal').innerText = `${statsData.defective.total.toLocaleString()} pcs`;
+        
         document.getElementById('defectiveModal').style.display = 'flex';
     }
     function closeModals() {
@@ -667,6 +707,16 @@
     // --- INIT & FETCH DATA ---
     window.onload = function() {
         checkSystemInitialization();
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                if (currentDashboardPeriod) {
+                    fetchDashboardData(currentDashboardPeriod);
+                }
+                if (typeof fetchExpertSystemData === 'function') {
+                    fetchExpertSystemData();
+                }
+            });
+        }
     };
 
     function checkSystemInitialization() {
@@ -677,17 +727,8 @@
                     if (!data.is_initialized) {
                         // System price is unset or active_period is UNSET!
                         if (activeUser.role === 'Admin') {
-                            const modal = document.getElementById('mandatoryPriceModal');
+                            const modal = document.getElementById('mandatorySetupModal');
                             if (modal) modal.style.display = 'flex';
-                            if (data.booklet_price > 0) {
-                                document.getElementById('init_booklet_price').value = data.booklet_price.toFixed(2);
-                            }
-                            if (data.ream_price > 0) {
-                                document.getElementById('init_ream_price').value = data.ream_price.toFixed(2);
-                            }
-                            if (data.sheets_per_booklet > 0) {
-                                document.getElementById('init_sheets_per_booklet').value = data.sheets_per_booklet;
-                            }
                         } else {
                             const lockout = document.getElementById('clerkLockoutModal');
                             if (lockout) lockout.style.display = 'flex';
@@ -712,71 +753,6 @@
             });
     }
 
-    function submitMandatorySetup() {
-        const periodPart = document.getElementById('init_period_select').value;
-        const ayPart = document.getElementById('init_ay_select').value;
-        const combinedPeriod = `${periodPart} | ${ayPart}`;
-
-        const bookletPrice = parseFloat(document.getElementById('init_booklet_price').value);
-        const reamPrice = parseFloat(document.getElementById('init_ream_price').value);
-        const sheetsPerBooklet = parseInt(document.getElementById('init_sheets_per_booklet').value);
-        const alertBox = document.getElementById('initModalAlert');
-
-        if (isNaN(bookletPrice) || bookletPrice <= 0) {
-            alertBox.style.display = 'block';
-            alertBox.style.background = '#fde8e8';
-            alertBox.style.color = '#c81e1e';
-            alertBox.innerText = '⚠️ Please enter a valid Selling Price per booklet (greater than ₱0.00).';
-            return;
-        }
-
-        if (isNaN(reamPrice) || reamPrice <= 0 || isNaN(sheetsPerBooklet) || sheetsPerBooklet <= 0) {
-            alertBox.style.display = 'block';
-            alertBox.style.background = '#fde8e8';
-            alertBox.style.color = '#c81e1e';
-            alertBox.innerText = '⚠️ Please ensure Raw Ream Price and Sheets Per Booklet are valid numbers.';
-            return;
-        }
-
-        alertBox.style.display = 'block';
-        alertBox.style.background = '#e1effe';
-        alertBox.style.color = '#1e429f';
-        alertBox.innerText = 'Saving semester settings & initializing system...';
-
-        fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                active_period: combinedPeriod,
-                booklet_price: bookletPrice,
-                ream_price: reamPrice,
-                sheets_per_booklet: sheetsPerBooklet
-            })
-        })
-        .then(res => res.json())
-        .then(result => {
-            if (result.status === 'success') {
-                alertBox.style.background = '#def7ec';
-                alertBox.style.color = '#03543f';
-                alertBox.innerText = '✅ System initialized successfully!';
-                setTimeout(() => {
-                    document.getElementById('mandatoryPriceModal').style.display = 'none';
-                    currentDashboardPeriod = combinedPeriod;
-                    fetchDashboardData(currentDashboardPeriod);
-                }, 1000);
-            } else {
-                alertBox.style.background = '#fde8e8';
-                alertBox.style.color = '#c81e1e';
-                alertBox.innerText = 'Error: ' + (result.message || 'Could not save settings.');
-            }
-        })
-        .catch(err => {
-            alertBox.style.background = '#fde8e8';
-            alertBox.style.color = '#c81e1e';
-            alertBox.innerText = 'Network error: ' + err.message;
-        });
-    }
-
     function fetchDashboardData(periodQuery) {
         document.getElementById('kpi-period').innerText = "Loading...";
         
@@ -794,67 +770,36 @@
                         
                         document.getElementById('kpi-reams-distributed').innerText = kpi.reams_distributed || 0;
                         document.getElementById('kpi-loose-distributed').innerText = kpi.loose_distributed || 0;
+
+                        if (document.getElementById('kpi-reams-converted-breakdown')) {
+                            const csConv = kpi.reams_converted_cs || 0;
+                            const itConv = kpi.reams_converted_it || 0;
+                            document.getElementById('kpi-reams-converted-breakdown').innerText = `CS: ${csConv} Ream(s) | IT: ${itConv} Ream(s)`;
+                        }
+                        if (document.getElementById('kpi-reams-distributed-breakdown')) {
+                            const csDistR = kpi.reams_distributed_cs || 0;
+                            const csDistS = kpi.loose_distributed_cs || 0;
+                            const itDistR = kpi.reams_distributed_it || 0;
+                            const itDistS = kpi.loose_distributed_it || 0;
+                            document.getElementById('kpi-reams-distributed-breakdown').innerText = `CS: ${csDistR}R (${csDistS}s) | IT: ${itDistR}R (${itDistS}s)`;
+                        }
+                    }
+
+                    if (data.course_production && data.course_production.courses) {
+                        updateCourseBreakdownUI(data.course_production);
                     }
 
                     document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
                     document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
                     
-                    // --- NEW: LIVE METER CALCULATION ---
-                    if (data.inventory) {
-                        const stock = data.inventory.available;
-                        const demand = data.inventory.remaining_demand;
-                        
-                        const bar = document.getElementById('meter-bar');
-                        const stockLbl = document.getElementById('meter-stock-label');
-                        const demandLbl = document.getElementById('meter-demand-label');
-                        const alertBox = document.getElementById('meter-alert');
-                        
-                        // Calculate percentage of demand fulfilled by current stock
-                        let percentage = 0;
-                        if (demand > 0) {
-                            percentage = (stock / demand) * 100;
-                            if (percentage > 100) percentage = 100;
-                        } else if (demand === 0) {
-                            percentage = 100; // Demand is fully met!
-                        }
-
-                        // Animate Bar
-                        bar.style.width = percentage + '%';
-                        stockLbl.innerText = `Current Stock: ${stock}`;
-                        demandLbl.innerText = `Remaining Demand: ${demand}`;
-                        alertBox.style.display = 'block';
-
-                        // Smart Status Coloring
-                        if (demand === 0) {
-                            bar.style.backgroundColor = '#27ae60';
-                            stockLbl.style.color = '#27ae60';
-                            alertBox.style.background = '#f0fdf4';
-                            alertBox.style.borderLeft = '4px solid #27ae60';
-                            alertBox.style.color = '#166534';
-                            alertBox.innerText = '✅ DISTRIBUTION COMPLETE: All sections have been fulfilled for this period!';
-                        } else if (stock < demand) {
-                            bar.style.backgroundColor = '#f39c12';
-                            stockLbl.style.color = '#f39c12';
-                            alertBox.style.background = '#fff3f3';
-                            alertBox.style.borderLeft = '4px solid #e74c3c';
-                            alertBox.style.color = '#c0392b';
-                            alertBox.innerText = `⚠️ INVENTORY DEFICIT: The system requires ${demand - stock} more booklets to fulfill all remaining classes.`;
-                        } else {
-                            bar.style.backgroundColor = '#27ae60';
-                            stockLbl.style.color = '#27ae60';
-                            alertBox.style.background = '#f0fdf4';
-                            alertBox.style.borderLeft = '4px solid #27ae60';
-                            alertBox.style.color = '#166534';
-                            alertBox.innerText = '✅ INVENTORY SUFFICIENT: You have enough physical stock to cover all remaining demand.';
-                        }
-                    }
+                    // Live inventory status is directly visualized in the Course Production Grid
 
                     // Existing Chart Renderers...
                     renderYearLevelChart(data.year_level_sales || { CS: {}, IT: {} });
                     
                     // We also ensure statsData gets populated for the modals!
                     statsData.issued.total = kpi.issued || 0;
-                    statsData.revenue.total = kpi.revenue || 0;
+                    statsData.revenue.total = (data.financials ? data.financials.gross_revenue : 0);
                     if (data.charts && data.charts.departments) {
                         if (data.financials) {
                             // Use dynamic booklet price if available
@@ -869,6 +814,19 @@
                         statsData.issued.cs = data.charts.departments.CS || 0;
                         statsData.issued.it = data.charts.departments.IT || 0;
                         renderAllocationChart(statsData.revenue.cs, statsData.revenue.it);
+                    }
+
+                    // Populate Defective Returns breakdown (CS vs IT) for the modal
+                    if (data.charts && data.charts.defective) {
+                        statsData.defective.cs = data.charts.defective.CS || 0;
+                        statsData.defective.it = data.charts.defective.IT || 0;
+                        statsData.defective.total = data.charts.defective.Total || (statsData.defective.cs + statsData.defective.it);
+                    } else if (kpi.defective_breakdown) {
+                        statsData.defective.cs = kpi.defective_breakdown.cs || 0;
+                        statsData.defective.it = kpi.defective_breakdown.it || 0;
+                        statsData.defective.total = kpi.defective_breakdown.total || 0;
+                    } else {
+                        statsData.defective.total = kpi.defective || 0;
                     }
 
                     computationsPayload = data.computations_data;
@@ -964,11 +922,16 @@
         const csGross = summ["CS"]["total"] || 0;
         const itGross = summ["IT"]["total"] || 0;
         
-        const csBooklets = csGross / 10;
-        const itBooklets = itGross / 10;
+        let csBooklets = 0;
+        let itBooklets = 0;
+        for (let y = 1; y <= 4; y++) {
+            (comp["CS"][y.toString()] || []).forEach(r => { csBooklets += r.headcount; });
+            (comp["IT"][y.toString()] || []).forEach(r => { itBooklets += r.headcount; });
+        }
         
-        const csSheets = csBooklets * 6;
-        const itSheets = itBooklets * 6;
+        const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 6;
+        const csSheets = csBooklets * sheetsPerBooklet;
+        const itSheets = itBooklets * sheetsPerBooklet;
         
         const csReams = Math.floor(csSheets / 500);
         const csLoose = csSheets % 500;
@@ -1099,6 +1062,28 @@
         }
     }
 
+    function handleLockoutLogout() {
+        const btn = document.getElementById('dashboardLockoutLogoutBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Returning to Login...';
+        }
+        const uname = (typeof activeUser !== 'undefined' && activeUser) ? activeUser.username : null;
+        localStorage.clear();
+        sessionStorage.clear();
+        if (uname) {
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: uname })
+            }).finally(() => {
+                window.location.href = '/login';
+            });
+        } else {
+            window.location.href = '/login';
+        }
+    }
+
     fetch('/api/dss-alert').then(response => response.json()).then(data => {
         const badge = document.getElementById('notifBadge');
         const panel = document.getElementById('notifPanel');
@@ -1113,8 +1098,17 @@
             }
         } else {
             badge.style.display = 'none';
-            panel.style.borderLeftColor = '#27ae60'; 
-            panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            if (data.has_enrollments === false) {
+                panel.style.borderLeftColor = '#64748b';
+                if (activeUser && activeUser.role === 'Admin') {
+                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                } else {
+                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                }
+            } else {
+                panel.style.borderLeftColor = '#27ae60'; 
+                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            }
         }
     });
 
@@ -1122,42 +1116,6 @@
         const panel = document.getElementById('notifPanel');
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
-
-    window.onload = function() {
-    fetch('/api/active-period')
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                if (data.active_period === "UNSET") {
-                    // Trigger Initialization Lockout
-                    const currentYear = new Date().getFullYear();
-                    document.getElementById('initAyDisplay').value = `AY ${currentYear}-${currentYear + 1}`;
-                    document.getElementById('initSetupModal').style.display = 'flex';
-                } else {
-                    currentDashboardPeriod = data.active_period;
-                    fetchDashboardData(currentDashboardPeriod);
-                }
-            }
-        });
-};
-
-function executeSystemInit() {
-    const term = document.getElementById('initTermSelect').value;
-    const ay = document.getElementById('initAyDisplay').value;
-    const combinedPeriod = `${term} | ${ay}`;
-    
-    fetch('/api/active-period', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active_period: combinedPeriod })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === "success") {
-            window.location.reload(); 
-        }
-    });
-}
 
     // --- REAL-TIME SESSION POLLING ---
     // This constantly checks if another device has logged in and instantly kicks this device out.
@@ -1193,18 +1151,86 @@ function toggleSidebar() {
 
 
 <script>
+    function updateCourseBreakdownUI(courseProd) {
+        if (!courseProd || !courseProd.courses) return;
+        const bufPct = courseProd.buffer_percent !== undefined ? courseProd.buffer_percent : 0;
+        const bufBadge = document.getElementById('course-buffer-rate-badge');
+        if (bufBadge) {
+            if (bufPct === 0) {
+                bufBadge.innerText = '0% Safety Buffer (Exact Headcount Demand)';
+                bufBadge.style.background = '#fef3c7';
+                bufBadge.style.color = '#b45309';
+                bufBadge.style.borderColor = '#fde68a';
+            } else {
+                bufBadge.innerText = `+${bufPct}% Safety Buffer (Configured in Settings)`;
+                bufBadge.style.background = '#f3e8ff';
+                bufBadge.style.color = '#7e22ce';
+                bufBadge.style.borderColor = '#e9d5ff';
+            }
+        }
+
+        ['CS', 'IT'].forEach(dept => {
+            const d = courseProd.courses[dept];
+            if (!d) return;
+            const prefix = dept.toLowerCase();
+
+            const headcountEl = document.getElementById(`${prefix}-headcount`);
+            if (headcountEl) headcountEl.innerText = (d.headcount || 0).toLocaleString();
+
+            const distEl = document.getElementById(`${prefix}-distributed`);
+            if (distEl) distEl.innerText = (d.distributed || 0).toLocaleString();
+
+            const vaultEl = document.getElementById(`${prefix}-vault`);
+            if (vaultEl) vaultEl.innerText = `${(d.available_stock || 0).toLocaleString()} pcs`;
+
+            const deficitEl = document.getElementById(`${prefix}-deficit`);
+            if (deficitEl) deficitEl.innerText = `${(d.deficit || 0).toLocaleString()} pcs`;
+
+            const bufPctLabel = document.getElementById(`${prefix}-buffer-pct-label`);
+            if (bufPctLabel) bufPctLabel.innerText = `${bufPct}%`;
+
+            const bufBookletsEl = document.getElementById(`${prefix}-buffer-booklets`);
+            if (bufBookletsEl) {
+                bufBookletsEl.innerText = (bufPct === 0) ? '+0 pcs (No Buffer)' : `+${(d.buffer_booklets || 0).toLocaleString()} pcs`;
+            }
+
+            const targetEl = document.getElementById(`${prefix}-target-production`);
+            if (targetEl) targetEl.innerText = `${(d.target_production || 0).toLocaleString()} Booklets`;
+
+            const reamsEl = document.getElementById(`${prefix}-reams-needed`);
+            if (reamsEl) reamsEl.innerText = `${d.reams_needed || 0} Ream(s)`;
+
+            const statusBadge = document.getElementById(`${prefix}-status-badge`);
+            if (statusBadge) {
+                if (d.is_satisfied) {
+                    statusBadge.innerText = 'DEMAND MET';
+                    statusBadge.style.background = '#dcfce7';
+                    statusBadge.style.color = '#15803d';
+                } else {
+                    statusBadge.innerText = `SHORTAGE: ${d.reams_needed} REAM(S)`;
+                    statusBadge.style.background = '#fee2e2';
+                    statusBadge.style.color = '#dc2626';
+                }
+            }
+        });
+    }
+
     function fetchExpertSystemData() {
         fetch('/api/reorder-decision-expert')
         .then(r => r.json())
         .then(data => {
-
-            
             const adviceBox = document.getElementById('expertAdviceBox');
-            adviceBox.innerText = data.advice;
-            adviceBox.style.backgroundColor = data.color;
+            if (adviceBox) {
+                adviceBox.innerText = data.advice;
+                adviceBox.style.backgroundColor = data.color;
+            }
+            if (data.course_production && data.course_production.courses) {
+                updateCourseBreakdownUI(data.course_production);
+            }
         }).catch(err => {
             console.error("Expert System Error:", err);
-            document.getElementById('expertAdviceBox').innerText = "Error loading expert system.";
+            const adviceBox = document.getElementById('expertAdviceBox');
+            if (adviceBox) adviceBox.innerText = "Error loading expert system.";
         });
     }
     

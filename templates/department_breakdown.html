@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Department Breakdown Computation - BOOKLETLOG</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -13,6 +14,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
@@ -79,11 +83,28 @@
 
     <!-- SIDEBAR -->
     <div class="sidebar no-print" id="sidebar">
+        <!-- Notification Bell & Panel -->
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
+            </div>
+            
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+                Loading alerts...
+            </div>
+        </div>
+
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -152,6 +173,7 @@
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Paper Ream Consumption</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.45rem; font-weight: 800;" id="kpiPaperUsage">0 Reams + 0 Sheets</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiPaperDetails">CS: 0R 0s | IT: 0R 0s</p>
+                    
                 </div>
             </div>
 
@@ -243,6 +265,7 @@
             document.getElementById('signClerkName').innerText = activeUser.username.toUpperCase();
             if (activeUser.role !== 'Admin') {
                 document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+        const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
             }
         }
 
@@ -262,9 +285,17 @@
                     console.error("Failed to fetch active period:", err);
                     loadDepartmentBreakdownData("");
                 });
+
+            if (window.lanSync) {
+                window.lanSync.onUpdate(() => {
+                    if (activePeriod) {
+                        loadDepartmentBreakdownData(activePeriod, true);
+                    }
+                });
+            }
         };
 
-        function loadDepartmentBreakdownData(period) {
+        function loadDepartmentBreakdownData(period, isBackground = false) {
             fetch(`/api/dashboard-stats?period=${encodeURIComponent(period)}`)
                 .then(res => res.json())
                 .then(data => {
@@ -272,13 +303,13 @@
                     if (data.status === "success" && data.computations_data) {
                         document.getElementById('breakdownContent').style.display = 'block';
                         renderBreakdown(data.computations_data, data.active_period || period);
-                    } else {
+                    } else if (!isBackground) {
                         alert("Could not load computation data: " + (data.message || "Unknown error"));
                     }
                 })
                 .catch(err => {
                     document.getElementById('loadingIndicator').style.display = 'none';
-                    alert("Error loading breakdown: " + err);
+                    if (!isBackground) alert("Error loading breakdown: " + err);
                 });
         }
 
@@ -290,10 +321,17 @@
 
             const csGross = summ["CS"]["total"] || 0;
             const itGross = summ["IT"]["total"] || 0;
-            const csBooklets = csGross / 10;
-            const itBooklets = itGross / 10;
-            const csSheets = csBooklets * 6;
-            const itSheets = itBooklets * 6;
+
+            let csBooklets = 0;
+            let itBooklets = 0;
+            for (let y = 1; y <= 4; y++) {
+                (comp["CS"][y.toString()] || []).forEach(r => { csBooklets += r.headcount; });
+                (comp["IT"][y.toString()] || []).forEach(r => { itBooklets += r.headcount; });
+            }
+
+            const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 6;
+            const csSheets = csBooklets * sheetsPerBooklet;
+            const itSheets = itBooklets * sheetsPerBooklet;
             const csReams = Math.floor(csSheets / 500);
             const csLoose = csSheets % 500;
             const itReams = Math.floor(itSheets / 500);
@@ -311,8 +349,8 @@
             // Populate Topline Cards
             document.getElementById('kpiGrossRevenue').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('kpiNetProfit').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('kpiPaperUsage').innerText = `${totalReams} Ream(s) + ${totalLoose} Sheets`;
-            document.getElementById('kpiPaperDetails').innerText = `CS: ${csReams}R ${csLoose}s | IT: ${itReams}R ${itLoose}s`;
+            document.getElementById('kpiPaperUsage').innerText = `${totalReams} Ream(s) and ${totalLoose} paper sheets`;
+            document.getElementById('kpiPaperDetails').innerText = `CS: ${csReams}R ${csLoose}s (${csSheets.toLocaleString()} sheets) | IT: ${itReams}R ${itLoose}s (${itSheets.toLocaleString()} sheets) [${sheetsPerBooklet} sheets/pc]`;
 
             // Populate Waterfall Ledger
             document.getElementById('wfGross').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
@@ -352,8 +390,8 @@
                             rostersHtml += `
                             <div style="margin-bottom: 25px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                    <h4 style="color: #334155; margin: 0; font-size: 1.05rem;">🎓 ${y} Year Sections</h4>
-                                    <span style="font-size: 0.9rem; font-weight: bold; color: #64748b;">Subtotal: ₱${summ[dept][y.toString()].toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                     <h4 style="color: #334155; margin: 0; font-size: 1.05rem;">🎓 ${y} Year Sections</h4>
+                                     <span style="font-size: 0.9rem; font-weight: bold; color: #64748b;">Subtotal: ₱${summ[dept][y.toString()].toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                                 </div>
                                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                                     <table>
@@ -362,19 +400,28 @@
                                                 <th>Teacher</th>
                                                 <th>Subject</th>
                                                 <th>Section</th>
-                                                <th style="text-align: center;">Headcount (Issued)</th>
+                                                <th style="text-align: center;">Booklets Issued</th>
+                                                <th style="text-align: center;">Paper Consumed (Reams & Sheets)</th>
                                                 <th style="text-align: right;">Total Amount</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                             `;
                             rows.forEach(r => {
+                                const sUsed = r.sheets_used || (r.headcount * sheetsPerBooklet);
+                                const rowReams = Math.floor(sUsed / 500);
+                                const rowLoose = sUsed % 500;
+                                const rowReamsDisplay = rowReams > 0 ? `${rowReams} Ream(s) + ${rowLoose} sheets` : `0 Reams + ${rowLoose} sheets`;
                                 rostersHtml += `
                                 <tr>
                                     <td style="font-weight: 600; color: #0f172a;">${r.teacher}</td>
                                     <td>${r.subject}</td>
                                     <td>${r.section}</td>
-                                    <td style="text-align: center; font-weight: bold;">${r.headcount}</td>
+                                    <td style="text-align: center; font-weight: bold;">${r.headcount} pcs</td>
+                                    <td style="text-align: center; color: #2c3e50; font-weight: 600;">
+                                        <div>${rowReamsDisplay}</div>
+                                        <div style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(${sUsed.toLocaleString()} sheets)</div>
+                                    </td>
                                     <td style="text-align: right; font-weight: 600;">₱${r.amount.toFixed(2)}</td>
                                 </tr>
                                 `;
@@ -403,6 +450,40 @@
             document.getElementById('sidebar').classList.toggle('active');
             document.getElementById('sidebarOverlay').classList.toggle('active');
         }
+
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        fetch('/api/dss-alert').then(response => response.json()).then(data => {
+            const badge = document.getElementById('notifBadge');
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBell');
+            if (!badge || !panel || !bell) return;
+            if (data.alert) {
+                badge.style.display = 'inline-block';
+                bell.style.color = 'white'; 
+                if (activeUser.role === 'Admin') {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                } else {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                }
+            } else {
+                badge.style.display = 'none';
+                if (data.has_enrollments === false) {
+                    panel.style.borderLeftColor = '#64748b';
+                    if (activeUser && activeUser.role === 'Admin') {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                    } else {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                    }
+                } else {
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            }
+        }).catch(err => console.log('Alert check error:', err));
 
         function logout() {
             if(confirm("Are you sure you want to log out?")) {

@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booklet Template & Alignment - BOOKLETLOG</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { display: flex; height: 100vh; background-color: #f4f6f9; }
+        
+        /* Sidebar */
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
+        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
+        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
+        
+        /* Main Layout */
+        .main-content { flex: 1; padding: 25px 30px; overflow-y: auto; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; flex-wrap: wrap; gap: 15px; }
+        
+        /* Header Actions */
+        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .btn-action { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; text-decoration: none; cursor: pointer; border: none; color: white; transition: all 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
+        .btn-action:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); filter: brightness(1.08); }
+        .btn-preview { background-color: #27ae60; }
+        .btn-save { background-color: #3498db; }
+        .btn-delete { background-color: #ef4444; }
+        .btn-delete:hover:not(:disabled) { background-color: #dc2626; }
+        .btn-delete:disabled { background-color: #cbd5e1; cursor: not-allowed; box-shadow: none; transform: none; filter: none; opacity: 0.6; }
+        
+        /* Two Column Layout */
+        .template-workspace { display: grid; grid-template-columns: 1.4fr 1fr; gap: 25px; align-items: start; }
+        
+        /* Canvas Card */
+        .canvas-card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 3px 12px rgba(0,0,0,0.06); border-top: 4px solid #3498db; }
+        .canvas-title { font-size: 1.15rem; color: #2c3e50; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .canvas-hint { font-size: 0.85rem; color: #7f8c8d; font-weight: normal; }
+        .canvas-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .btn-canvas-tool { background: #ecf0f1; border: 1px solid #bdc3c7; color: #2c3e50; font-size: 0.78rem; font-weight: bold; padding: 5px 11px; border-radius: 4px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-canvas-tool:hover { background: #d5dbdb; }
+        .btn-canvas-tool.active { background: #2c3e50; color: white; border-color: #2c3e50; }
+        
+        /* Interactive A4 Sheet Canvas */
+        .a4-canvas-container { position: relative; width: 100%; aspect-ratio: 1.4142; background: #ffffff; border: 2px dashed #bdc3c7; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); overflow: hidden; user-select: none; }
+        .a4-grid-overlay { position: absolute; inset: 0; background-size: 20px 20px; background-image: linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px); pointer-events: none; }
+        .a4-center-fold { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; border-left: 1px dashed rgba(231, 76, 60, 0.4); pointer-events: none; }
+        .a4-fold-label { position: absolute; top: 8px; left: 51%; font-size: 0.7rem; color: #e74c3c; opacity: 0.7; pointer-events: none; }
+        .a4-watermark { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: bold; color: rgba(44, 62, 80, 0.15); text-transform: uppercase; letter-spacing: 2px; pointer-events: none; text-align: center; line-height: 1.4; padding: 20px; }
+
+        /* Draggable Stamp Elements on Canvas */
+        .stamp-box { position: absolute; cursor: move; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: box-shadow 0.15s, border-color 0.15s; z-index: 10; backdrop-filter: blur(1px); }
+        .stamp-box:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.3); z-index: 20; }
+        .stamp-box.selected { outline: 2px solid #f39c12; outline-offset: 2px; }
+        
+        .stamp-control { background: rgba(255, 255, 255, 0.92); border: 2px solid #2980b9; color: #1a5276; white-space: nowrap; padding: 4px 10px; box-shadow: 0 2px 8px rgba(41, 128, 185, 0.3); }
+        .stamp-srn { background: rgba(255, 255, 255, 0.92); border: 2px solid #8e44ad; color: #512e5f; white-space: nowrap; padding: 3px 8px; box-shadow: 0 2px 8px rgba(142, 68, 173, 0.3); }
+        .stamp-qr { background: rgba(255, 255, 255, 0.92); border: 2px solid #27ae60; color: #196f3d; display: flex; flex-direction: column; box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3); }
+        
+        .stamp-label-badge { position: absolute; top: -18px; left: 0; font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; color: white; white-space: nowrap; pointer-events: none; }
+        .stamp-control .stamp-label-badge { background: #2980b9; }
+        .stamp-srn .stamp-label-badge { background: #8e44ad; }
+        .stamp-qr .stamp-label-badge { background: #27ae60; }
+        
+        /* Right Controls Column */
+        .controls-col { display: flex; flex-direction: column; gap: 18px; }
+        .control-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 3px 10px rgba(0,0,0,0.05); border-left: 4px solid #3498db; }
+        .control-card.srn-card { border-left-color: #8e44ad; }
+        .control-card.qr-card { border-left-color: #27ae60; }
+        .control-card.upload-card { border-left-color: #f39c12; }
+        
+        .card-header-toggle { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .card-header-toggle h3 { font-size: 1rem; color: #2c3e50; display: flex; align-items: center; gap: 8px; }
+        
+        .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .coord-field { display: flex; flex-direction: column; gap: 4px; }
+        .coord-field label { font-size: 0.8rem; font-weight: bold; color: #555; }
+        .dual-inputs { display: flex; align-items: center; gap: 6px; }
+        .dual-inputs input { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; text-align: right; }
+        .dual-inputs span { font-size: 0.75rem; color: #888; font-weight: bold; min-width: 22px; }
+        
+        .size-slider-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+        .size-slider-row label { font-size: 0.8rem; font-weight: bold; color: #555; min-width: 75px; }
+        .size-slider-row input[type="range"] { flex: 1; }
+        .size-slider-row .slider-val { font-size: 0.85rem; font-weight: bold; color: #2c3e50; min-width: 40px; text-align: right; }
+        
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 22px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #27ae60; }
+        input:checked + .slider:before { transform: translateX(18px); }
+        
+        /* File Upload Dropzone */
+        .dropzone { border: 2px dashed #bdc3c7; border-radius: 6px; padding: 20px; text-align: center; background: #fafafa; cursor: pointer; transition: all 0.2s; }
+        .dropzone:hover { border-color: #3498db; background: #f0f7fb; }
+        
+        /* Mobile */
+        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; font-weight: bold; font-size: 1.2rem; }
+        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
+        .sidebar-overlay.active { display: block; }
+        
+        @media (max-width: 1024px) {
+            .template-workspace { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 900px) {
+            body { flex-direction: column; overflow: hidden; }
+            .mobile-header { display: flex; flex-shrink: 0; }
+            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+            .sidebar.active { left: 0; }
+            .main-content { flex: 1; padding: 15px; }
+            .header-bar { flex-direction: column; text-align: center; gap: 12px; }
+            .header-actions { width: 100%; justify-content: center; }
+            .btn-action { width: 100%; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mobile-header no-print">
+        <div class="hamburger" onclick="toggleSidebar()">☰</div>
+        <div class="mobile-title">BOOKLETLOG</div>
+    </div>
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar no-print">
+        <!-- Notification Bell & Settings Icon Toolbar -->
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
+            </div>
+            
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+                Loading alerts...
+            </div>
+        </div>
+
+        <div class="sidebar-header">Proposed System</div>
+        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
+        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only active">📄 Booklet Template</a>
+        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
+        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
+        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
+        <a href="/history" class="nav-link">📜 Transaction Trail</a>
+        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
+
+        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
+            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
+            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
+            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <div class="header-bar">
+            <div>
+                <h2 style="color: #2c3e50; font-size: 1.6rem; display: flex; align-items: center; gap: 10px;">
+                    📄 Booklet Cover Template &amp; Calibration
+                </h2>
+                <p style="color: #7f8c8d; font-size: 0.95rem; margin-top: 4px;">
+                    Visually position and calibrate the Control Number, Sort Record Number (SRN), and QR Code stamped onto booklet covers.
+                </p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-action btn-preview" onclick="generateTestSamplePage()">
+                    📄 Generate Test Sample Page
+                </button>
+                <button class="btn-action btn-save" onclick="saveTemplateConfig(false, true)" title="Finalize and save as an active official template for batch printing">
+                    💾 Save Official Template
+                </button>
+                <button class="btn-action btn-delete" id="btnDeleteTemplate" onclick="openDeleteConfirmModal()" title="Permanently delete this template design and reset slot">
+                    🗑️ Delete Template
+                </button>
+            </div>
+        <!-- Department Switcher Tabs -->
+        <div class="dept-tabs-bar" style="width: 100%; display: flex; gap: 12px; margin-bottom: 12px; align-items: center; background: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
+            <span style="font-weight: 700; color: #2c3e50; font-size: 0.95rem; margin-right: 8px;">1. Select Course:</span>
+            <button type="button" class="dept-tab-btn" id="tabDeptCS" onclick="switchDepartment('CS')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; border: 2px solid #3498db; background: #3498db; color: white; cursor: pointer; transition: all 0.2s;">
+                💻 Computer Science (CS)
+                <span id="badgeDeptCS" style="background: rgba(255,255,255,0.25); font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">Checking...</span>
+            </button>
+            <button type="button" class="dept-tab-btn" id="tabDeptIT" onclick="switchDepartment('IT')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
+                🌐 Information Technology (IT)
+                <span id="badgeDeptIT" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">Checking...</span>
+            </button>
+            <div id="deptStatusBanner" style="margin-left: auto; font-size: 0.85rem; font-weight: 600; padding: 6px 14px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; color: #475569;">
+                <!-- Dynamic status description -->
+            </div>
+        </div>
+
+        <!-- Template Preset Slots Bar -->
+        <div class="preset-tabs-bar" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
+            <span style="font-weight: 700; color: #2c3e50; font-size: 0.95rem; margin-right: 8px;">2. Select Template Slot:</span>
+            <button type="button" class="preset-slot-btn" id="btnSlot1" onclick="switchSlot(1)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #3498db; background: #3498db; color: white; cursor: pointer; transition: all 0.2s;">
+                📄 <span id="labelSlot1">Template 1</span>
+                <span id="badgeSlot1" style="background: rgba(255,255,255,0.25); font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
+            </button>
+            <button type="button" class="preset-slot-btn" id="btnSlot2" onclick="switchSlot(2)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
+                📄 <span id="labelSlot2">Template 2</span>
+                <span id="badgeSlot2" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
+            </button>
+            <button type="button" class="preset-slot-btn" id="btnSlot3" onclick="switchSlot(3)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
+                📄 <span id="labelSlot3">Template 3</span>
+                <span id="badgeSlot3" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
+            </button>
+            <div id="slotStatusBanner" style="margin-left: auto; font-size: 0.85rem; font-weight: 600; padding: 6px 14px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; color: #475569;">
+                <!-- Slot status description -->
+            </div>
+        </div>
+
+        <div class="template-workspace">
+            <!-- Left: Interactive Visual Canvas -->
+            <div class="canvas-card">
+                <div class="canvas-title">
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="font-weight: bold;">Interactive Front-Cover Visual Workspace</span>
+                        <span class="canvas-hint">Drag any box to reposition over your uploaded cover layout</span>
+                    </div>
+                    <div class="canvas-toolbar">
+                        <button type="button" class="btn-canvas-tool" id="btnToggleProof" onclick="toggleCanvasProof()" title="Toggle real ReportLab stamped proof directly on canvas" style="font-weight: 700;">
+                            ⚡ Stamped Proof: OFF
+                        </button>
+                        <button type="button" class="btn-canvas-tool active" id="btnToggleBg" onclick="toggleCanvasBg()" title="Toggle visibility of the uploaded PDF template">
+                            👁️ Template: ON
+                        </button>
+                        <button type="button" class="btn-canvas-tool active" id="btnToggleGrid" onclick="toggleCanvasGrid()" title="Toggle 20px alignment grid">
+                            📐 Grid: ON
+                        </button>
+                    </div>
+                </div>
+
+                <div class="a4-canvas-container" id="canvasContainer">
+                    <!-- Real ReportLab Stamped Proof Image -->
+                    <img id="canvasProofImg" src="" alt="Real Stamped Proof" 
+                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; z-index: 15; border-radius: 4px; display: none;" />
+                    
+
+                    <!-- High-Resolution Live PDF Cover Background -->
+                    <img id="canvasBgImg" src="" alt="Active Cover Template Preview" 
+                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; z-index: 2; border-radius: 4px; display: none;" />
+                    
+                    <div class="a4-grid-overlay" id="gridOverlay" style="z-index: 3;"></div>
+                    <div class="a4-center-fold" id="centerFold" style="z-index: 4;"></div>
+                    <div class="a4-fold-label" id="foldLabel" style="z-index: 4;">Booklet Center Fold</div>
+                    
+                    <div class="a4-watermark" id="canvasWatermark" style="z-index: 1;">
+                        <div style="font-size: 3.2rem; margin-bottom: 8px; opacity: 0.35;">📄</div>
+                        <div style="font-size: 1.25rem; font-weight: 800; color: #475569; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase;">
+                            No Cover Template Uploaded
+                        </div>
+                        <div style="font-size: 0.9rem; font-weight: 600; color: #64748b; max-width: 400px; text-transform: none; letter-spacing: normal; line-height: 1.4;" id="watermarkHint">
+                            Upload your official front-cover PDF in the panel on the right to start visual calibration.
+                        </div>
+                    </div>
+
+                    <!-- Stamp 1: Control Number -->
+                    <div class="stamp-box stamp-control" id="stampControlBox" title="Click & Drag to reposition Control Number" style="z-index: 10;">
+                        <span class="stamp-label-badge">🏷️ Control No</span>
+                        <span id="stampControlText">1ST26-0001</span>
+                    </div>
+
+                    <!-- Stamp 2: Sort Record Number (SRN) -->
+                    <div class="stamp-box stamp-srn" id="stampSrnBox" title="Click & Drag to reposition Sort Record Number" style="z-index: 10;">
+                        <span class="stamp-label-badge">🏁 SRN</span>
+                        <span id="stampSrnText">SRN: SRN-000001</span>
+                    </div>
+
+                    <!-- Stamp 3: Individual Booklet QR Code -->
+                    <div class="stamp-box stamp-qr" id="stampQrBox" title="Click & Drag to reposition Booklet QR Code" style="z-index: 10;">
+                        <span class="stamp-label-badge">📱 QR Code</span>
+                        <div style="font-size: 1.8rem; line-height: 1;">▦</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 0.85rem; color: #7f8c8d;">
+                    <span>📐 Standard A4 Landscape: <strong>841.89 pt &times; 595.28 pt</strong></span>
+                    <span>Origin: <strong>Bottom-Left Corner (0, 0)</strong></span>
+                </div>
+            </div>
+
+            <!-- Right: Coordinate & Dimension Controls -->
+            <div class="controls-col">
+                <!-- Control Number Card -->
+                <div class="control-card">
+                    <div class="card-header-toggle">
+                        <h3>🏷️ Control Number</h3>
+                        <label class="switch" title="Toggle Control Number Stamping">
+                            <input type="checkbox" id="controlEnabledToggle" checked onchange="onControlToggle()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="coord-grid">
+                        <div class="coord-field">
+                            <label>X Position (Horizontal)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="controlXmm" oninput="onMmInput('control', 'x')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="controlXpt" oninput="onPtInput('control', 'x')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                        <div class="coord-field">
+                            <label>Y Position (Vertical)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="controlYmm" oninput="onMmInput('control', 'y')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="controlYpt" oninput="onPtInput('control', 'y')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="size-slider-row">
+                        <label>Font Size:</label>
+                        <input type="range" id="controlFontSizeSlider" min="10" max="28" value="18" oninput="onFontSizeChange('control')">
+                        <span class="slider-val" id="controlFontSizeVal">18 pt</span>
+                    </div>
+                </div>
+
+                <!-- Sort Record Number Card -->
+                <div class="control-card srn-card">
+                    <div class="card-header-toggle">
+                        <h3>🏁 Sort Record Number (SRN)</h3>
+                        <label class="switch" title="Toggle SRN Stamping">
+                            <input type="checkbox" id="srnEnabledToggle" checked onchange="onSrnToggle()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="coord-grid">
+                        <div class="coord-field">
+                            <label>X Position (Horizontal)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="srnXmm" oninput="onMmInput('srn', 'x')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="srnXpt" oninput="onPtInput('srn', 'x')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                        <div class="coord-field">
+                            <label>Y Position (Vertical)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="srnYmm" oninput="onMmInput('srn', 'y')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="srnYpt" oninput="onPtInput('srn', 'y')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="size-slider-row">
+                        <label>Font Size:</label>
+                        <input type="range" id="srnFontSizeSlider" min="8" max="20" value="11" oninput="onFontSizeChange('srn')">
+                        <span class="slider-val" id="srnFontSizeVal">11 pt</span>
+                    </div>
+                </div>
+
+                <!-- Individual Booklet QR Card -->
+                <div class="control-card qr-card">
+                    <div class="card-header-toggle">
+                        <h3>📱 Individual Booklet QR Code</h3>
+                        <label class="switch" title="Toggle QR Code Stamping">
+                            <input type="checkbox" id="qrEnabledToggle" checked onchange="onQrToggle()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="coord-grid">
+                        <div class="coord-field">
+                            <label>X Position (Horizontal)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="qrXmm" oninput="onMmInput('qr', 'x')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="qrXpt" oninput="onPtInput('qr', 'x')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                        <div class="coord-field">
+                            <label>Y Position (Vertical)</label>
+                            <div class="dual-inputs">
+                                <input type="number" step="0.5" id="qrYmm" oninput="onMmInput('qr', 'y')">
+                                <span>mm</span>
+                                <input type="number" step="1" id="qrYpt" oninput="onPtInput('qr', 'y')">
+                                <span>pt</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="size-slider-row">
+                        <label>QR Size:</label>
+                        <input type="range" id="qrSizeSlider" min="40" max="110" value="65" oninput="onQrSizeChange()">
+                        <span class="slider-val" id="qrSizeVal">65 pt</span>
+                    </div>
+                </div>
+
+                <!-- Base PDF Cover Uploader Card -->
+                <div class="control-card upload-card">
+                    <div class="card-header-toggle">
+                        <h3>📁 <span id="uploadCardTitle">CS</span> <span id="uploadSlotTitle">Template 1</span></h3>
+                        <span style="font-size: 0.8rem; color: #7f8c8d;" id="activePdfName">Loading...</span>
+                    </div>
+
+                    <!-- Custom Template Name Input -->
+                    <div style="margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px;">
+                        <label for="templateNameInput" style="display: block; font-size: 0.82rem; font-weight: bold; color: #334155; margin-bottom: 4px;">
+                            🏷️ Template Label / Name:
+                        </label>
+                        <input type="text" id="templateNameInput" maxlength="60" placeholder="e.g. Template 1"
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.92rem; font-weight: 600; color: #1e293b;"
+                               oninput="onTemplateNameInput()" />
+                        <span style="font-size: 0.72rem; color: #64748b; margin-top: 3px; display: block;">Identifies this cover layout in the PDF Generator.</span>
+                    </div>
+
+                    <p style="font-size: 0.85rem; color: #555; margin-bottom: 12px; line-height: 1.4;">
+                        Upload the official front-cover PDF for <strong id="uploadDeptNameText">Computer Science (CS)</strong> (<span id="uploadSlotNameText" style="font-weight: 600; color: #2563eb;">Template 1</span>).
+                    </p>
+                    <div class="dropzone" onclick="document.getElementById('pdfFileInput').click()">
+                        <div style="font-size: 2rem; margin-bottom: 6px;">📄</div>
+                        <div style="font-weight: bold; color: #2c3e50; font-size: 0.95rem;">Click to browse or drop replacement PDF</div>
+                        <div style="font-size: 0.75rem; color: #888; margin-top: 4px;">Accepts .pdf files only &bull; Uploads to <span id="uploadDeptBadgeText">CS</span> <span id="uploadSlotBadgeText">Template 1</span></div>
+                        <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="handleFileUpload(event)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- IN-APP TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
+
+    <!-- IN-APP DELETE TEMPLATE CONFIRMATION MODAL -->
+    <div id="deleteConfirmModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 1000000; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; width: 90%; max-width: 440px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3); border-top: 5px solid #ef4444;">
+            <div style="font-size: 2.8rem; margin-bottom: 8px;">🗑️</div>
+            <h3 style="color: #1e293b; font-size: 1.25rem; margin: 0 0 8px 0; font-weight: 700;">Delete Template Design?</h3>
+            <p style="color: #64748b; font-size: 0.92rem; line-height: 1.5; margin: 0 0 22px 0;" id="deleteConfirmMsg">
+                Are you sure you want to permanently delete this template? This will remove the uploaded PDF and deactivate it from batch printing.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button type="button" onclick="closeDeleteConfirmModal()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: background 0.15s;">
+                    Cancel
+                </button>
+                <button type="button" onclick="executeDeleteTemplate()" style="background: #e11d48; color: white; border: none; padding: 10px 22px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; cursor: pointer; box-shadow: 0 2px 6px rgba(225,29,72,0.3); transition: background 0.15s;">
+                    🗑️ Yes, Delete Template
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- IN-PAGE PRINT PREVIEW MODAL -->
+    <div id="printPreviewModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.82); backdrop-filter: blur(5px); z-index: 99999; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; width: 94vw; max-width: 1250px; height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 5px solid #3498db;">
+            
+            <!-- Modal Header -->
+            <div style="padding: 14px 22px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span id="previewModalDeptBadge" style="background: #2563eb; color: white; font-weight: 800; font-size: 0.78rem; padding: 4px 10px; border-radius: 4px;">CS</span>
+                    <div>
+                        <h3 id="previewModalTitle" style="color: #1e293b; font-size: 1.15rem; margin: 0; font-weight: 700;">
+                            Stamped Cover Print Preview
+                        </h3>
+                        <p id="previewModalSubtitle" style="color: #64748b; font-size: 0.8rem; margin: 2px 0 0 0;">
+                            Official ReportLab Stamped Output &bull; A4 Landscape (297 &times; 210 mm)
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Modal Actions Toolbar -->
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" onclick="printModalSample()" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 0.88rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(39,174,96,0.3); transition: background 0.15s;">
+                        🖨️ Print Test Page
+                    </button>
+                    <a id="previewModalDownloadBtn" href="#" download style="background: #3498db; color: white; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(52,152,219,0.3); transition: background 0.15s;">
+                        📥 Download PDF
+                    </a>
+                    <a id="previewModalNewTabBtn" href="#" target="_blank" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; text-decoration: none; padding: 7px 12px; border-radius: 6px; font-weight: 600; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 5px;" title="Open in external browser tab">
+                        ↗️ External Tab
+                    </a>
+                    <button type="button" onclick="closePrintPreviewModal()" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; width: 34px; height: 34px; border-radius: 6px; font-size: 1.1rem; font-weight: bold; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; margin-left: 6px;" title="Close (Esc)">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body (PDF Viewer / Loading State) -->
+            <div style="flex: 1; position: relative; background: #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <div id="previewModalLoading" style="position: absolute; display: flex; flex-direction: column; align-items: center; gap: 12px; color: #475569; font-weight: 600; font-size: 0.95rem; z-index: 5;">
+                    <div style="font-size: 2.5rem; animation: pulsePrint 1.5s infinite ease-in-out;">⚙️</div>
+                    <span>Rendering Stamped Proof with ReportLab Engine...</span>
+                </div>
+                <iframe id="previewModalIframe" src="" style="width: 100%; height: 100%; border: none; z-index: 10;" onload="document.getElementById('previewModalLoading').style.display='none';"></iframe>
+            </div>
+            
+            <!-- Modal Footer Info -->
+            <div style="padding: 10px 20px; background: white; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: #64748b;">
+                <span>💡 <strong>Tip:</strong> Press <kbd style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem;">Esc</kbd> anytime to return to the interactive workspace.</span>
+                <span id="previewModalTimestamp">Proof Generated: Just Now</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PT_TO_MM = 25.4 / 72; // 0.35277777778
+        const MM_TO_PT = 72 / 25.4; // 2.83464567
+
+        const PAGE_WIDTH_PT = 841.89;
+        const PAGE_HEIGHT_PT = 595.28;
+
+        let currentDept = 'CS';
+        let currentSlot = 1;
+
+        // Check URL parameter e.g. /booklet-template?dept=IT&slot=2
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const deptParam = urlParams.get('dept');
+            if (deptParam && ['CS', 'IT'].includes(deptParam.toUpperCase())) {
+                currentDept = deptParam.toUpperCase();
+            }
+            const slotParam = parseInt(urlParams.get('slot'));
+            if (slotParam && [1, 2, 3].includes(slotParam)) {
+                currentSlot = slotParam;
+            }
+        } catch (e) {}
+
+        let activeConfig = {
+            department: "CS",
+            slot_number: 1,
+            template_name: "Template 1",
+            is_configured: false,
+            control_x: 500.0,
+            control_y: 400.0,
+            control_font_size: 18,
+            control_enabled: true,
+            srn_x: 500.0,
+            srn_y: 375.0,
+            srn_font_size: 11,
+            srn_enabled: true,
+            qr_x: 680.0,
+            qr_y: 360.0,
+            qr_size: 65.0,
+            qr_enabled: true,
+            pdf_filename: "active_template_CS_slot1.pdf"
+        };
+
+        async function switchDepartment(dept) {
+            dept = (dept || 'CS').toUpperCase();
+            if (dept === currentDept && activeConfig && activeConfig.department === dept) {
+                return;
+            }
+            currentDept = dept;
+            updateDeptTabStyles();
+            updateSlotTabStyles();
+            await loadTemplateConfig(currentDept, currentSlot);
+            await refreshDeptStatuses();
+        }
+
+        async function switchSlot(slot) {
+            slot = parseInt(slot) || 1;
+            if (slot === currentSlot && activeConfig && activeConfig.slot_number === slot) {
+                return;
+            }
+            currentSlot = slot;
+            updateSlotTabStyles();
+            await loadTemplateConfig(currentDept, currentSlot);
+            await refreshDeptStatuses();
+        }
+
+        function updateDeptTabStyles() {
+            const csBtn = document.getElementById('tabDeptCS');
+            const itBtn = document.getElementById('tabDeptIT');
+            if (!csBtn || !itBtn) return;
+            if (currentDept === 'CS') {
+                csBtn.style.border = '2px solid #3498db';
+                csBtn.style.background = '#3498db';
+                csBtn.style.color = 'white';
+                itBtn.style.border = '2px solid #cbd5e1';
+                itBtn.style.background = '#f8fafc';
+                itBtn.style.color = '#64748b';
+            } else {
+                itBtn.style.border = '2px solid #3498db';
+                itBtn.style.background = '#3498db';
+                itBtn.style.color = 'white';
+                csBtn.style.border = '2px solid #cbd5e1';
+                csBtn.style.background = '#f8fafc';
+                csBtn.style.color = '#64748b';
+            }
+
+            const uploadCardTitle = document.getElementById('uploadCardTitle');
+            if (uploadCardTitle) uploadCardTitle.innerText = currentDept;
+            const uploadDeptNameText = document.getElementById('uploadDeptNameText');
+            if (uploadDeptNameText) uploadDeptNameText.innerText = currentDept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+            const uploadDeptBadgeText = document.getElementById('uploadDeptBadgeText');
+            if (uploadDeptBadgeText) uploadDeptBadgeText.innerText = currentDept;
+        }
+
+        function updateSlotTabStyles() {
+            for (let s = 1; s <= 3; s++) {
+                const btn = document.getElementById(`btnSlot${s}`);
+                if (!btn) continue;
+                if (s === currentSlot) {
+                    btn.style.border = '2px solid #3498db';
+                    btn.style.background = '#3498db';
+                    btn.style.color = 'white';
+                } else {
+                    btn.style.border = '2px solid #cbd5e1';
+                    btn.style.background = '#f8fafc';
+                    btn.style.color = '#64748b';
+                }
+            }
+            const name = activeConfig.template_name || `Template ${currentSlot}`;
+            const uploadSlotTitle = document.getElementById('uploadSlotTitle');
+            if (uploadSlotTitle) uploadSlotTitle.innerText = name;
+            const uploadSlotNameText = document.getElementById('uploadSlotNameText');
+            if (uploadSlotNameText) uploadSlotNameText.innerText = name;
+            const uploadSlotBadgeText = document.getElementById('uploadSlotBadgeText');
+            if (uploadSlotBadgeText) uploadSlotBadgeText.innerText = `Template ${currentSlot}`;
+        }
+
+        function onTemplateNameInput() {
+            const input = document.getElementById('templateNameInput');
+            if (!input) return;
+            const val = input.value.trim() || `Template ${currentSlot}`;
+            activeConfig.template_name = val;
+            const uploadSlotTitle = document.getElementById('uploadSlotTitle');
+            if (uploadSlotTitle) uploadSlotTitle.innerText = val;
+            const labelSlot = document.getElementById(`labelSlot${currentSlot}`);
+            if (labelSlot) labelSlot.innerText = val;
+        }
+
+        async function refreshDeptStatuses() {
+            try {
+                const res = await fetch('/api/booklet-template/status');
+                const data = await res.json();
+                
+                // Update CS badge
+                const csBadge = document.getElementById('badgeDeptCS');
+                if (csBadge && data.CS) {
+                    if (data.CS.is_configured) {
+                        csBadge.innerText = '✅ Configured';
+                        csBadge.style.background = currentDept === 'CS' ? 'rgba(255,255,255,0.3)' : '#dcfce7';
+                        csBadge.style.color = currentDept === 'CS' ? 'white' : '#166534';
+                    } else {
+                        csBadge.innerText = '⚠️ Not Set';
+                        csBadge.style.background = currentDept === 'CS' ? 'rgba(239,68,68,0.5)' : '#fee2e2';
+                        csBadge.style.color = currentDept === 'CS' ? 'white' : '#991b1b';
+                    }
+                }
+
+                // Update IT badge
+                const itBadge = document.getElementById('badgeDeptIT');
+                if (itBadge && data.IT) {
+                    if (data.IT.is_configured) {
+                        itBadge.innerText = '✅ Configured';
+                        itBadge.style.background = currentDept === 'IT' ? 'rgba(255,255,255,0.3)' : '#dcfce7';
+                        itBadge.style.color = currentDept === 'IT' ? 'white' : '#166534';
+                    } else {
+                        itBadge.innerText = '⚠️ Not Set';
+                        itBadge.style.background = currentDept === 'IT' ? 'rgba(239,68,68,0.5)' : '#fee2e2';
+                        itBadge.style.color = currentDept === 'IT' ? 'white' : '#991b1b';
+                    }
+                }
+
+                // Update slots 1..3 labels and badges for current department
+                if (data[currentDept] && data[currentDept].slots) {
+                    data[currentDept].slots.forEach(s => {
+                        const labelEl = document.getElementById(`labelSlot${s.slot}`);
+                        const badgeEl = document.getElementById(`badgeSlot${s.slot}`);
+                        if (labelEl) labelEl.innerText = s.template_name || `Template ${s.slot}`;
+                        if (badgeEl) {
+                            if (s.is_configured) {
+                                badgeEl.innerText = '✅ Ready';
+                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#dcfce7';
+                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#166534';
+                            } else if (s.has_pdf_file) {
+                                badgeEl.innerText = '🟡 Draft (Unsaved)';
+                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.35)' : '#fef3c7';
+                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#92400e';
+                            } else {
+                                badgeEl.innerText = '⚠️ Not Set';
+                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(239,68,68,0.5)' : '#fee2e2';
+                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#991b1b';
+                            }
+                        }
+                    });
+
+                    // Update slot status banner
+                    const curSlotInfo = data[currentDept].slots.find(s => s.slot === currentSlot);
+                    const slotBanner = document.getElementById('slotStatusBanner');
+                    if (slotBanner && curSlotInfo) {
+                        if (curSlotInfo.is_configured) {
+                            slotBanner.style.background = '#dcfce7';
+                            slotBanner.style.color = '#166534';
+                            slotBanner.innerHTML = `✅ <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> Official Template Saved &amp; Ready for Printing`;
+                        } else if (curSlotInfo.has_pdf_file) {
+                            slotBanner.style.background = '#fef3c7';
+                            slotBanner.style.color = '#92400e';
+                            slotBanner.innerHTML = `🟡 <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> PDF Uploaded (Draft). Calibrate stamp positions and click "Save Official Template" to activate for printing.`;
+                        } else {
+                            slotBanner.style.background = '#fee2e2';
+                            slotBanner.style.color = '#991b1b';
+                            slotBanner.innerHTML = `⚠️ <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> Not Configured Yet. Please upload a front-cover PDF first.`;
+                        }
+                    }
+                }
+
+                // Update department overall banner
+                const deptBanner = document.getElementById('deptStatusBanner');
+                if (deptBanner && data[currentDept]) {
+                    const cur = data[currentDept];
+                    if (cur.is_configured) {
+                        deptBanner.style.background = '#dcfce7';
+                        deptBanner.style.color = '#166534';
+                        deptBanner.innerHTML = `✅ ${currentDept}: <strong>Templates Active</strong>`;
+                    } else {
+                        deptBanner.style.background = '#fee2e2';
+                        deptBanner.style.color = '#991b1b';
+                        deptBanner.innerHTML = `⚠️ ${currentDept}: <strong>Setup Required</strong>`;
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load department statuses:", err);
+            }
+        }
+
+        // --- AUTHENTICATION GUARD & RBAC ---
+        let activeUser = null;
+        try {
+            activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+        } catch (e) {
+            activeUser = null;
+        }
+
+        if (!activeUser || !activeUser.username) {
+            window.location.href = '/login';
+        } else if (activeUser.role !== 'Admin') {
+            alert('Access Denied: Booklet Template management is restricted to Administrators.');
+            window.location.href = '/dashboard';
+        } else {
+            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
+            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || "DCS") + ")";
+
+            // Verify session token against backend (handles concurrent device access)
+            if (activeUser.session_token) {
+                fetch('/api/verify-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: activeUser.username, session_token: activeUser.session_token })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.status !== "valid") {
+                        alert("Session Expired: Your account was accessed from another device.");
+                        localStorage.removeItem('bookletlog_user');
+                        window.location.href = '/login';
+                    }
+                })
+                .catch(err => console.warn("Session verification warning:", err));
+            }
+        }
+
+        // --- LIVE TEMPLATE BACKGROUND & TOOLBAR CONTROLS ---
+        function setCanvasBackground(url) {
+            const bgImg = document.getElementById('canvasBgImg');
+            const watermark = document.getElementById('canvasWatermark');
+            if (!bgImg) return;
+            if (url) {
+                bgImg.src = url;
+                bgImg.style.display = 'block';
+                if (watermark) watermark.style.display = 'none';
+            } else {
+                bgImg.style.display = 'none';
+                if (watermark) watermark.style.display = 'flex';
+            }
+        }
+
+        let isBgVisible = true;
+        function toggleCanvasBg() {
+            const bgImg = document.getElementById('canvasBgImg');
+            const btn = document.getElementById('btnToggleBg');
+            if (!bgImg || !btn) return;
+            isBgVisible = !isBgVisible;
+            bgImg.style.visibility = isBgVisible ? 'visible' : 'hidden';
+            btn.classList.toggle('active', isBgVisible);
+            btn.innerHTML = isBgVisible ? '👁️ Template: ON' : '👁️ Template: OFF';
+        }
+
+        let isGridVisible = true;
+        function toggleCanvasGrid() {
+            const grid = document.getElementById('gridOverlay');
+            const btn = document.getElementById('btnToggleGrid');
+            if (!grid || !btn) return;
+            isGridVisible = !isGridVisible;
+            grid.style.display = isGridVisible ? 'block' : 'none';
+            btn.classList.toggle('active', isGridVisible);
+            btn.innerHTML = isGridVisible ? '📐 Grid: ON' : '📐 Grid: OFF';
+        }
+
+        // --- LOAD INITIAL CONFIGURATION ---
+        async function loadTemplateConfig(dept, slot) {
+            dept = (dept || currentDept || 'CS').toUpperCase();
+            slot = parseInt(slot || currentSlot || 1);
+            try {
+                const res = await fetch(`/api/booklet-template?department=${dept}&slot=${slot}`);
+                const data = await res.json();
+                activeConfig = data;
+                
+                const deptLabel = dept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+                const watermarkHint = document.getElementById('watermarkHint');
+                if (watermarkHint) {
+                    watermarkHint.innerText = `Upload your official ${deptLabel} (${data.template_name || `Template ${slot}`}) front-cover PDF to start visual calibration.`;
+                }
+
+                // Populate template name input
+                const nameInput = document.getElementById('templateNameInput');
+                if (nameInput) nameInput.value = data.template_name || `Template ${slot}`;
+
+                // Load live cover template background if PDF file exists on disk
+                if (data.has_pdf_file && data.preview_image_url) {
+                    const statusTag = data.is_configured ? ' (✅ Official)' : ' (🟡 Draft / Unsaved)';
+                    document.getElementById('activePdfName').innerText = (data.pdf_filename || `active_template_${dept}_slot${slot}.pdf`) + statusTag;
+                    setCanvasBackground(data.preview_image_url);
+                } else {
+                    document.getElementById('activePdfName').innerText = 'No template uploaded yet';
+                    setCanvasBackground(null);
+                }
+                
+                // Populate Inputs
+                updateInputsFromConfig();
+                updateSlotTabStyles();
+                
+                // Update Delete button state
+                const btnDelete = document.getElementById('btnDeleteTemplate');
+                if (btnDelete) {
+                    btnDelete.disabled = !data.has_pdf_file && !data.is_configured;
+                }
+                
+                // Reset proof overlay when loading slot
+                toggleCanvasProof(false);
+                
+                // Position Canvas Stamps
+                renderCanvas();
+            } catch (err) {
+                console.error("Failed to load template configuration:", err);
+            }
+        }
+
+        function updateInputsFromConfig() {
+            // Control Number
+            document.getElementById('controlEnabledToggle').checked = activeConfig.control_enabled;
+            document.getElementById('controlXpt').value = Math.round(activeConfig.control_x);
+            document.getElementById('controlYpt').value = Math.round(activeConfig.control_y);
+            document.getElementById('controlXmm').value = (activeConfig.control_x * PT_TO_MM).toFixed(1);
+            document.getElementById('controlYmm').value = (activeConfig.control_y * PT_TO_MM).toFixed(1);
+            document.getElementById('controlFontSizeSlider').value = activeConfig.control_font_size;
+            document.getElementById('controlFontSizeVal').innerText = activeConfig.control_font_size + ' pt';
+
+            // SRN
+            document.getElementById('srnEnabledToggle').checked = activeConfig.srn_enabled;
+            document.getElementById('srnXpt').value = Math.round(activeConfig.srn_x);
+            document.getElementById('srnYpt').value = Math.round(activeConfig.srn_y);
+            document.getElementById('srnXmm').value = (activeConfig.srn_x * PT_TO_MM).toFixed(1);
+            document.getElementById('srnYmm').value = (activeConfig.srn_y * PT_TO_MM).toFixed(1);
+            document.getElementById('srnFontSizeSlider').value = activeConfig.srn_font_size;
+            document.getElementById('srnFontSizeVal').innerText = activeConfig.srn_font_size + ' pt';
+
+            // QR Code
+            document.getElementById('qrEnabledToggle').checked = activeConfig.qr_enabled;
+            document.getElementById('qrXpt').value = Math.round(activeConfig.qr_x);
+            document.getElementById('qrYpt').value = Math.round(activeConfig.qr_y);
+            document.getElementById('qrXmm').value = (activeConfig.qr_x * PT_TO_MM).toFixed(1);
+            document.getElementById('qrYmm').value = (activeConfig.qr_y * PT_TO_MM).toFixed(1);
+            document.getElementById('qrSizeSlider').value = Math.round(activeConfig.qr_size);
+            document.getElementById('qrSizeVal').innerText = Math.round(activeConfig.qr_size) + ' pt (' + (activeConfig.qr_size * PT_TO_MM).toFixed(0) + ' mm)';
+        }
+
+        // --- RENDER STAMPS ON CANVAS ---
+        function renderCanvas() {
+            const container = document.getElementById('canvasContainer');
+            const cw = container.clientWidth;
+            const ch = container.clientHeight;
+            if (cw === 0 || ch === 0) return;
+
+            const scaleX = cw / PAGE_WIDTH_PT;
+            const scaleY = ch / PAGE_HEIGHT_PT;
+
+            // 1. Control Number
+            const controlBox = document.getElementById('stampControlBox');
+            if (!activeConfig.control_enabled) {
+                controlBox.style.display = 'none';
+            } else {
+                controlBox.style.display = 'flex';
+                // Centred horizontally in ReportLab
+                const left = (activeConfig.control_x * scaleX) - (controlBox.offsetWidth / 2);
+                const top = ((PAGE_HEIGHT_PT - activeConfig.control_y) * scaleY) - (controlBox.offsetHeight / 2);
+                controlBox.style.left = Math.max(0, left) + 'px';
+                controlBox.style.top = Math.max(0, top) + 'px';
+                controlBox.style.fontSize = (activeConfig.control_font_size * scaleY * 1.05) + 'px';
+            }
+
+            // 2. SRN
+            const srnBox = document.getElementById('stampSrnBox');
+            if (!activeConfig.srn_enabled) {
+                srnBox.style.display = 'none';
+            } else {
+                srnBox.style.display = 'flex';
+                const left = (activeConfig.srn_x * scaleX) - (srnBox.offsetWidth / 2);
+                const top = ((PAGE_HEIGHT_PT - activeConfig.srn_y) * scaleY) - (srnBox.offsetHeight / 2);
+                srnBox.style.left = Math.max(0, left) + 'px';
+                srnBox.style.top = Math.max(0, top) + 'px';
+                srnBox.style.fontSize = (activeConfig.srn_font_size * scaleY * 1.05) + 'px';
+            }
+
+            // 3. QR Code
+            const qrBox = document.getElementById('stampQrBox');
+            if (!activeConfig.qr_enabled) {
+                qrBox.style.display = 'none';
+            } else {
+                qrBox.style.display = 'flex';
+                const w = activeConfig.qr_size * scaleX;
+                const h = activeConfig.qr_size * scaleY;
+                qrBox.style.width = w + 'px';
+                qrBox.style.height = h + 'px';
+                const left = activeConfig.qr_x * scaleX;
+                const top = (PAGE_HEIGHT_PT - activeConfig.qr_y - activeConfig.qr_size) * scaleY;
+                qrBox.style.left = Math.max(0, left) + 'px';
+                qrBox.style.top = Math.max(0, top) + 'px';
+            }
+        }
+
+        window.addEventListener('resize', renderCanvas);
+
+        // --- INTERACTIVE DRAGGING ON CANVAS ---
+        function setupDraggable(elementId, type) {
+            const el = document.getElementById(elementId);
+            let isDragging = false;
+            let startX, startY;
+            let initialX, initialY;
+
+            el.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialX = activeConfig[type + '_x'];
+                initialY = activeConfig[type + '_y'];
+                el.classList.add('selected');
+                document.body.style.cursor = 'move';
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const container = document.getElementById('canvasContainer');
+                const scaleX = container.clientWidth / PAGE_WIDTH_PT;
+                const scaleY = container.clientHeight / PAGE_HEIGHT_PT;
+
+                const dx = (e.clientX - startX) / scaleX;
+                // PDF Y is inverted (from bottom)
+                const dy = (startY - e.clientY) / scaleY;
+
+                let newX = Math.round(initialX + dx);
+                let newY = Math.round(initialY + dy);
+
+                newX = Math.max(10, Math.min(PAGE_WIDTH_PT - 10, newX));
+                newY = Math.max(10, Math.min(PAGE_HEIGHT_PT - 10, newY));
+
+                activeConfig[type + '_x'] = newX;
+                activeConfig[type + '_y'] = newY;
+
+                updateInputsFromConfig();
+                renderCanvas();
+            });
+
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    el.classList.remove('selected');
+                    document.body.style.cursor = 'default';
+                }
+            });
+        }
+
+        setupDraggable('stampControlBox', 'control');
+        setupDraggable('stampSrnBox', 'srn');
+        setupDraggable('stampQrBox', 'qr');
+
+        // --- INPUT EVENT HANDLERS ---
+        function onPtInput(type, axis) {
+            const ptVal = parseFloat(document.getElementById(type + axis.toUpperCase() + 'pt').value) || 0;
+            activeConfig[type + '_' + axis] = ptVal;
+            document.getElementById(type + axis.toUpperCase() + 'mm').value = (ptVal * PT_TO_MM).toFixed(1);
+            renderCanvas();
+        }
+
+        function onMmInput(type, axis) {
+            const mmVal = parseFloat(document.getElementById(type + axis.toUpperCase() + 'mm').value) || 0;
+            const ptVal = mmVal * MM_TO_PT;
+            activeConfig[type + '_' + axis] = ptVal;
+            document.getElementById(type + axis.toUpperCase() + 'pt').value = Math.round(ptVal);
+            renderCanvas();
+        }
+
+        function onFontSizeChange(type) {
+            const size = parseInt(document.getElementById(type + 'FontSizeSlider').value);
+            activeConfig[type + '_font_size'] = size;
+            document.getElementById(type + 'FontSizeVal').innerText = size + ' pt';
+            renderCanvas();
+        }
+
+        function onQrSizeChange() {
+            const size = parseFloat(document.getElementById('qrSizeSlider').value);
+            activeConfig.qr_size = size;
+            document.getElementById('qrSizeVal').innerText = Math.round(size) + ' pt (' + (size * PT_TO_MM).toFixed(0) + ' mm)';
+            renderCanvas();
+        }
+
+        function onControlToggle() {
+            activeConfig.control_enabled = document.getElementById('controlEnabledToggle').checked;
+            renderCanvas();
+        }
+
+        function onSrnToggle() {
+            activeConfig.srn_enabled = document.getElementById('srnEnabledToggle').checked;
+            renderCanvas();
+        }
+
+        function onQrToggle() {
+            activeConfig.qr_enabled = document.getElementById('qrEnabledToggle').checked;
+            renderCanvas();
+        }
+
+        // --- IN-APP TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'success', title = null) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            let icon = '✅';
+            let borderColor = '#10b981';
+            let defaultTitle = 'Success';
+            if (type === 'error') {
+                icon = '❌';
+                borderColor = '#ef4444';
+                defaultTitle = 'Error';
+            } else if (type === 'warning') {
+                icon = '⚠️';
+                borderColor = '#f59e0b';
+                defaultTitle = 'Warning';
+            } else if (type === 'info') {
+                icon = 'ℹ️';
+                borderColor = '#3b82f6';
+                defaultTitle = 'Notice';
+            }
+
+            const toastTitle = title || defaultTitle;
+
+            toast.style.cssText = `
+                pointer-events: auto;
+                min-width: 300px;
+                max-width: 420px;
+                background: #ffffff;
+                color: #1e293b;
+                border-radius: 10px;
+                padding: 13px 16px;
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+                border-left: 5px solid ${borderColor};
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                opacity: 0;
+                transform: translateX(40px);
+                transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                font-family: inherit;
+            `;
+
+            toast.innerHTML = `
+                <div style="font-size: 1.25rem; line-height: 1; flex-shrink: 0; margin-top: 2px;">${icon}</div>
+                <div style="flex-grow: 1;">
+                    <div style="font-weight: 700; font-size: 0.9rem; color: #0f172a; margin-bottom: 2px;">${toastTitle}</div>
+                    <div style="font-size: 0.84rem; color: #475569; line-height: 1.4;">${message}</div>
+                </div>
+                <button type="button" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 0 0 0 6px; line-height: 1;" onclick="this.parentElement.remove()">&times;</button>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateX(0)';
+            });
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(40px)';
+                setTimeout(() => toast.remove(), 280);
+            }, 3800);
+        }
+
+        // --- SAVE LAYOUT CONFIGURATION ---
+        async function saveTemplateConfig(silent = false, isOfficial = false) {
+            try {
+                const nameInput = document.getElementById('templateNameInput');
+                const tName = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (activeConfig.template_name || `Template ${currentSlot}`);
+                activeConfig.template_name = tName;
+
+                const res = await fetch('/api/booklet-template', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        department: currentDept,
+                        slot_number: currentSlot,
+                        template_name: tName,
+                        control_x: activeConfig.control_x,
+                        control_y: activeConfig.control_y,
+                        control_font_size: activeConfig.control_font_size,
+                        control_enabled: activeConfig.control_enabled,
+                        srn_x: activeConfig.srn_x,
+                        srn_y: activeConfig.srn_y,
+                        srn_font_size: activeConfig.srn_font_size,
+                        srn_enabled: activeConfig.srn_enabled,
+                        qr_x: activeConfig.qr_x,
+                        qr_y: activeConfig.qr_y,
+                        qr_size: activeConfig.qr_size,
+                        qr_enabled: activeConfig.qr_enabled,
+                        is_official: isOfficial
+                    })
+                });
+                const data = await res.json();
+                if (res.ok && data.status === 'success') {
+                    if (isOfficial) {
+                        activeConfig.is_configured = true;
+                    }
+                    await refreshDeptStatuses();
+                    updateSlotTabStyles();
+                    if (!silent) {
+                        const toastTitle = isOfficial ? 'Official Template Saved' : 'Draft Saved';
+                        showToast(`[${currentDept} - ${tName}] ${data.message}`, 'success', toastTitle);
+                    }
+                } else {
+                    if (!silent) {
+                        showToast(data.detail || data.message || 'Error saving configuration', 'error', 'Save Failed');
+                    }
+                }
+            } catch (err) {
+                if (!silent) {
+                    showToast('Connection error while saving layout: ' + err.message, 'error', 'Network Error');
+                }
+            }
+        }
+
+        // --- DIRECT IN-PAGE PRINT PREVIEW MODAL ---
+        async function generateTestSamplePage() {
+            if (!activeConfig || !activeConfig.has_pdf_file) {
+                showToast(`No booklet cover template has been uploaded for ${currentDept} (${activeConfig.template_name || `Template ${currentSlot}`}) yet. Please upload a PDF cover template first.`, 'warning', 'Upload Needed');
+                return;
+            }
+            // Automatically save active coordinates silently in draft state so preview reflects latest calibration without activating template
+            await saveTemplateConfig(true, false);
+            await openPrintPreviewModal();
+        }
+
+        async function openPrintPreviewModal() {
+            const modal = document.getElementById('printPreviewModal');
+            const iframe = document.getElementById('previewModalIframe');
+            const loader = document.getElementById('previewModalLoading');
+            const dlBtn = document.getElementById('previewModalDownloadBtn');
+            const newTabBtn = document.getElementById('previewModalNewTabBtn');
+            const title = document.getElementById('previewModalTitle');
+            const subtitle = document.getElementById('previewModalSubtitle');
+            const badge = document.getElementById('previewModalDeptBadge');
+            const timestampEl = document.getElementById('previewModalTimestamp');
+
+            const deptLabel = currentDept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+            const tName = activeConfig.template_name || `Template ${currentSlot}`;
+
+            if (badge) {
+                badge.innerText = currentDept;
+                badge.style.background = currentDept === 'CS' ? '#2563eb' : '#7c3aed';
+            }
+            if (title) title.innerText = `Stamped Cover Print Preview — ${tName} (${currentDept})`;
+            if (subtitle) subtitle.innerText = `Official ReportLab Stamped Output for ${deptLabel} • A4 Landscape (297 × 210 mm)`;
+
+            if (loader) loader.style.display = 'flex';
+            if (iframe) iframe.src = 'about:blank';
+            if (modal) modal.style.display = 'flex';
+
+            try {
+                const res = await fetch(`/api/booklet-template/preview?department=${currentDept}&slot=${currentSlot}`);
+                const data = await res.json();
+                if (data.status === 'success' && data.preview_url) {
+                    if (dlBtn) dlBtn.href = data.preview_url;
+                    if (newTabBtn) newTabBtn.href = data.preview_url;
+                    if (timestampEl) timestampEl.innerText = `Proof Generated: ${new Date().toLocaleTimeString()}`;
+                    
+                    if (data.preview_image_url) {
+                        const proofImg = document.getElementById('canvasProofImg');
+                        if (proofImg) proofImg.src = data.preview_image_url;
+                    }
+
+                    if (iframe) iframe.src = data.preview_url;
+                } else {
+                    showToast('Failed to generate preview sample page.', 'error', 'Preview Failed');
+                    closePrintPreviewModal();
+                }
+            } catch (err) {
+                showToast('Error generating preview: ' + err.message, 'error', 'Preview Error');
+                closePrintPreviewModal();
+            }
+        }
+
+        function closePrintPreviewModal() {
+            const modal = document.getElementById('printPreviewModal');
+            const iframe = document.getElementById('previewModalIframe');
+            if (modal) modal.style.display = 'none';
+            if (iframe) iframe.src = 'about:blank';
+        }
+
+        function printModalSample() {
+            const iframe = document.getElementById('previewModalIframe');
+            if (!iframe || !iframe.contentWindow) return;
+            try {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+            } catch (e) {
+                const dlBtn = document.getElementById('previewModalDownloadBtn');
+                if (dlBtn && dlBtn.href) {
+                    const printWin = window.open(dlBtn.href, '_blank');
+                    if (printWin) {
+                        printWin.onload = function() { printWin.print(); };
+                    }
+                }
+            }
+        }
+
+        // Close preview modal on Escape key
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') {
+                const modal = document.getElementById('printPreviewModal');
+                if (modal && modal.style.display !== 'none') {
+                    closePrintPreviewModal();
+                }
+                const deleteModal = document.getElementById('deleteConfirmModal');
+                if (deleteModal && deleteModal.style.display !== 'none') {
+                    closeDeleteConfirmModal();
+                }
+            }
+        });
+
+        // --- IN-CANVAS QUICK STAMPED PROOF TOGGLE ---
+        let isProofActive = false;
+        async function toggleCanvasProof(forceState) {
+            if (forceState !== undefined) {
+                isProofActive = forceState;
+            } else {
+                if (!activeConfig || !activeConfig.has_pdf_file) {
+                    showToast(`No booklet cover template uploaded for ${currentDept} (${(activeConfig && activeConfig.template_name) ? activeConfig.template_name : 'Slot ' + currentSlot}) yet.`, 'info', 'Upload Needed');
+                    return;
+                }
+                isProofActive = !isProofActive;
+            }
+
+            // If template has no PDF file uploaded, silently ensure proof is OFF without popping up any alert
+            if (!activeConfig || !activeConfig.has_pdf_file) {
+                isProofActive = false;
+            }
+
+            const btn = document.getElementById('btnToggleProof');
+            const proofImg = document.getElementById('canvasProofImg');
+            const grid = document.getElementById('gridOverlay');
+            const controlBox = document.getElementById('stampControlBox');
+            const srnBox = document.getElementById('stampSrnBox');
+            const qrBox = document.getElementById('stampQrBox');
+
+            if (isProofActive) {
+                // First save draft coordinates silently and fetch latest proof image
+                try {
+                    await saveTemplateConfig(true, false);
+                    const res = await fetch(`/api/booklet-template/preview?department=${currentDept}&slot=${currentSlot}`);
+                    const data = await res.json();
+                    if (data.status === 'success' && data.preview_image_url) {
+                        if (proofImg) {
+                            proofImg.src = data.preview_image_url;
+                            proofImg.style.display = 'block';
+                        }
+                    }
+                } catch (e) {
+                    console.error("Live proof fetch error:", e);
+                }
+
+                if (proofImg) proofImg.style.display = 'block';
+                if (grid) grid.style.display = 'none';
+                if (controlBox) controlBox.style.display = 'none';
+                if (srnBox) srnBox.style.display = 'none';
+                if (qrBox) qrBox.style.display = 'none';
+
+                if (btn) {
+                    btn.classList.add('active');
+                    btn.innerHTML = '⚡ Stamped Proof: ON';
+                    btn.style.background = '#27ae60';
+                    btn.style.color = 'white';
+                    btn.style.borderColor = '#27ae60';
+                }
+            } else {
+                if (proofImg) proofImg.style.display = 'none';
+                if (grid && isGridVisible) grid.style.display = 'block';
+                if (controlBox && activeConfig.control_enabled) controlBox.style.display = 'flex';
+                if (srnBox && activeConfig.srn_enabled) srnBox.style.display = 'flex';
+                if (qrBox && activeConfig.qr_enabled) qrBox.style.display = 'flex';
+
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.innerHTML = '⚡ Stamped Proof: OFF';
+                    btn.style.background = '#f8fafc';
+                    btn.style.color = '#475569';
+                    btn.style.borderColor = '#cbd5e1';
+                }
+            }
+        }
+
+        // --- DELETE TEMPLATE DESIGN ---
+        function openDeleteConfirmModal() {
+            if (!activeConfig || (!activeConfig.has_pdf_file && !activeConfig.is_configured)) {
+                showToast(`No template design uploaded for ${currentDept} (Template ${currentSlot}) to delete.`, 'info', 'Slot Empty');
+                return;
+            }
+            const tName = activeConfig.template_name || `Template ${currentSlot}`;
+            const modal = document.getElementById('deleteConfirmModal');
+            const msg = document.getElementById('deleteConfirmMsg');
+            if (msg) {
+                msg.innerHTML = `Are you sure you want to permanently delete the template design for <strong>${currentDept} (${tName})</strong>?<br><br>This will permanently delete the uploaded PDF, clear its calibration coordinates, and deactivate it from batch printing.`;
+            }
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeDeleteConfirmModal() {
+            const modal = document.getElementById('deleteConfirmModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function executeDeleteTemplate() {
+            closeDeleteConfirmModal();
+            try {
+                const res = await fetch(`/api/booklet-template/delete?department=${currentDept}&slot=${currentSlot}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(`[${currentDept} - Template ${currentSlot}] Template deleted and reset successfully!`, 'success', 'Template Deleted');
+                    await loadTemplateConfig(currentDept, currentSlot);
+                    await refreshDeptStatuses();
+                } else {
+                    showToast('Failed to delete template: ' + (data.message || data.detail), 'error', 'Delete Failed');
+                }
+            } catch (err) {
+                showToast('Connection error deleting template: ' + err.message, 'error', 'Network Error');
+            }
+        }
+
+        // --- HANDLE BASE PDF FILE UPLOAD ---
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('Please select a valid PDF file (.pdf).', 'warning', 'Invalid File Type');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`/api/booklet-template/upload?department=${currentDept}&slot=${currentSlot}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (res.ok && data.status === 'success') {
+                    if (activeConfig) {
+                        activeConfig.has_pdf_file = true;
+                        activeConfig.is_configured = false;
+                    }
+                    document.getElementById('activePdfName').innerText = `active_template_${currentDept}_slot${currentSlot}.pdf (🟡 Draft / Unsaved)`;
+                    if (data.preview_image_url) {
+                        setCanvasBackground(data.preview_image_url);
+                    }
+                    await refreshDeptStatuses();
+                    showToast(`[${currentDept} - Template ${currentSlot}] ` + data.message, 'info', 'Template Staged in Draft');
+                } else {
+                    showToast('Upload failed: ' + (data.detail || data.message || 'Unknown error'), 'error', 'Upload Failed');
+                }
+            } catch (err) {
+                showToast('Network error uploading template: ' + err.message, 'error', 'Network Error');
+            }
+        }
+
+        // --- NOTIFICATION & POLLING ---
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        fetch('/api/dss-alert').then(response => response.json()).then(data => {
+            const badge = document.getElementById('notifBadge');
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBell');
+            if (!badge || !panel || !bell) return;
+            if (data.alert) {
+                badge.style.display = 'inline-block';
+                bell.style.color = 'white'; 
+                if (activeUser && activeUser.role === 'Admin') {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                } else {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                }
+            } else {
+                badge.style.display = 'none';
+                if (data.has_enrollments === false) {
+                    panel.style.borderLeftColor = '#64748b';
+                    if (activeUser && activeUser.role === 'Admin') {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                    } else {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                    }
+                } else {
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            }
+        }).catch(err => console.log('Alert check error:', err));
+
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.querySelector('.sidebar-overlay').classList.toggle('active');
+        }
+
+        function logout() {
+            if(confirm("Are you sure you want to log out?")) {
+                fetch('/api/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: activeUser ? activeUser.username : '' })
+                }).then(() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }).catch(() => {
+                    localStorage.clear();
+                    window.location.href = '/login';
+                });
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            updateDeptTabStyles();
+            updateSlotTabStyles();
+            await loadTemplateConfig(currentDept, currentSlot);
+            await refreshDeptStatuses();
+        });
+    </script>
+</body>
+</html>
+

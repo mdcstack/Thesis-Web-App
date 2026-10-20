@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global Settings - Proposed System</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -13,9 +14,12 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .main-content { flex: 1; padding: 30px; overflow: auto; }
         .header-bar { margin-bottom: 25px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
         
         .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); max-width: 600px; margin-bottom: 20px; border-left: 5px solid #e74c3c; }
@@ -23,11 +27,81 @@
         
         .form-group { margin-bottom: 20px; }
         .form-group label { display: block; font-weight: bold; color: #34495e; margin-bottom: 8px; }
-        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 1rem; }
+        .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
         .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
+        .form-group input:disabled, .form-group select:disabled {
+            background-color: #f8fafc !important;
+            color: #94a3b8 !important;
+            border-color: #cbd5e1 !important;
+            cursor: not-allowed !important;
+            box-shadow: none !important;
+        }
         
+        /* Strict Validation Highlighting & Error Messages */
+        .form-group input.invalid, .form-group select.invalid, #ay_input_group.invalid { border-color: #e74c3c !important; background-color: #fdf2f2 !important; box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2); }
+        #ay_input_group.invalid input { background-color: #fdf2f2 !important; }
+        .field-error { color: #e74c3c; font-size: 0.82rem; font-weight: bold; margin-top: 6px; display: none; line-height: 1.3; }
+        .field-error.visible { display: block; animation: shake 0.2s ease-in-out; }
+
+        /* Audit History Section matching history.html mechanics */
+        .audit-card {
+            width: max-content !important;
+            min-width: 100% !important;
+            max-width: none !important;
+            background: white;
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            margin-top: 30px;
+            border-left: 5px solid #27ae60;
+            box-sizing: border-box;
+        }
+
+        /* Ever-Extending Table sitting directly inside the card */
+        .audit-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+            white-space: nowrap;
+            margin-top: 10px;
+        }
+
+        .audit-table th {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 13px 18px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 0.82rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #334155;
+            white-space: nowrap;
+        }
+
+        .audit-table td {
+            padding: 12px 18px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .audit-table tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .badge-active { background: #dcfce7; color: #166534; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; display: inline-block; border: 1px solid #bbf7d0; }
+        .badge-archived { background: #f1f5f9; color: #64748b; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; display: inline-block; border: 1px solid #e2e8f0; }
+
         .btn-save { background-color: #3498db; color: white; border: none; padding: 12px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; width: 100%; }
-        .btn-save:hover { background-color: #2980b9; }
+        .btn-save:hover:not(:disabled) { background-color: #2980b9; }
+        .btn-save:disabled {
+            background-color: #bdc3c7 !important;
+            cursor: not-allowed !important;
+            opacity: 0.7;
+            box-shadow: none !important;
+        }
 
         .alert { padding: 15px; border-radius: 4px; margin-bottom: 20px; display: none; }
         .alert.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
@@ -52,6 +126,25 @@
             .main-content { flex: 1; overflow-y: auto; padding: 15px; }
             .card { max-width: 100%; }
         }
+
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.92); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+
+        @keyframes pulseGreen {
+            0% { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.35); }
+            100% { border-color: #cbd5e1; box-shadow: none; }
+        }
+        .applied-pulse {
+            animation: pulseGreen 1.5s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -64,13 +157,18 @@
 
     <div class="sidebar">
         <!-- Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn active" id="sidebarSettingsBtn" title="System Settings" style="color: #ffffff; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -78,8 +176,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only active">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -105,45 +203,289 @@
             <h2>Financial & Production Settings</h2>
             <div class="form-group">
                 <label>Generated Control Number Prefix</label>
-                <div id="generated_prefix_badge" style="padding: 12px; background: #ecf0f1; border-left: 4px solid #3498db; font-family: monospace; font-weight: bold; font-size: 1.2rem; color: #2c3e50;">
-                    1ST26
+                <div id="generated_prefix_badge" style="padding: 12px; background: #ecf0f1; border-left: 4px solid #3498db; font-family: monospace; font-weight: bold; font-size: 1.2rem; color: #94a3b8;">
+                    --
                 </div>
             </div>
             
             <div class="form-group">
-                <label>Active Evaluation Period</label>
-                <div style="display: flex; gap: 10px;">
-                    <select id="active_period" style="flex: 1;">
-                        <option value="1st Sem - Midterms">1st Sem - Midterms</option>
-                        <option value="1st Sem - Finals">1st Sem - Finals</option>
-                        <option value="2nd Sem - Midterms">2nd Sem - Midterms</option>
-                        <option value="2nd Sem - Finals">2nd Sem - Finals</option>
-                    </select>
-                    <select id="ay_select" style="flex: 1;"></select>
+                <label>Active Examination Period & Academic Year</label>
+                <div style="display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+                    <div style="flex: 1.2; min-width: 220px;">
+                        <select id="active_period" style="width: 100%; box-sizing: border-box;" onchange="clearFieldError('active_period'); onPeriodChange();">
+                            <option value="" disabled selected>-- Select Examination Period --</option>
+                            <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
+                            <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
+                            <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
+                            <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
+                            <option value="Midyear - Exam">Midyear - Exam</option>
+                        </select>
+                        <div class="field-error" id="error_active_period">⚠️ Please select an examination period.</div>
+                    </div>
+                    
+                    <div style="flex: 1; min-width: 210px;">
+                        <div id="ay_input_group" style="display: flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 10px; gap: 8px; box-sizing: border-box; min-height: 45px; transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;">
+                            <span style="font-weight: 700; color: #475569; font-size: 0.9rem; letter-spacing: 0.5px;">AY</span>
+                            <input type="number" id="ay_start_year" min="2000" max="2099" placeholder="2026"
+                                   style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; color: #1e293b; width: 60px; background: transparent;"
+                                   oninput="clearFieldError('ay_start_year'); onAyStartYearInput();"
+                                   onchange="onPeriodChange();">
+                            <span style="font-weight: 700; color: #94a3b8;">–</span>
+                            <input type="text" id="ay_end_year" placeholder="2027" readonly
+                                   style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px; width: 60px;"
+                                   title="Automatically calculated as Start Year + 1">
+                        </div>
+                        <div class="field-error" id="error_ay_start_year">⚠️ Please enter a valid 4-digit academic start year (e.g., 2026).</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>A4 Sheets Required Per Booklet</label>
-                <input type="number" id="sheets_per_booklet" placeholder="e.g., 6" required>
+            
+
+            <!-- Downstream Dependent Parameters Section -->
+            <div id="dependent_settings_section" style="transition: opacity 0.25s ease;">
+                <div class="form-group">
+                    <label>Bond Paper Sheets Consumed Per Booklet</label>
+                    <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
+                    <div class="field-error" id="error_sheets_per_booklet">⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).</div>
+                    <div id="yield_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #3498db; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
+                        ⚡ <strong>Production Rate:</strong> 1 Ream (500 sheets) ÷ <span id="preview_sheets" style="font-weight:bold;">6</span> sheets = <strong id="preview_yield" style="color:#27ae60;">83</strong> booklets/ream (<span id="preview_leftover">2</span> leftover sheets).
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Price per Raw Bond Paper Ream (₱)</label>
+                    <input type="number" id="ream_price" step="0.01" min="1" placeholder="e.g., 250.00" required oninput="clearFieldError('ream_price'); updateRecommendationBox();">
+                    <div class="field-error" id="error_ream_price">⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Selling Price per Booklet (₱)</label>
+                    <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="clearFieldError('booklet_price');">
+                    <div class="field-error" id="error_booklet_price">⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Department Ream Budget (Cash Allocation in ₱)</label>
+                    <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="clearFieldError('department_ream_budget');">
+                    <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental budget allocation (₱).</div>
+                    
+                    <!-- Clean, Structured Intelligent Recommendation Advisory Card -->
+                    <div id="budget_recommendation_card" style="margin-top: 10px; background: #ffffff; border: 1px solid #d1fae5; border-left: 5px solid #10b981; border-radius: 8px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.25s ease;">
+                        <!-- Top Row: Status Title Badge & Apply Button -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+                            <div id="rec_card_title" style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.92rem; color: #065f46;">
+                                <span>⚡</span> <span>Demand-Driven Budget Recommendation</span>
+                            </div>
+                            <button type="button" id="btn_apply_recommended" onclick="applyRecommendedBudget()" style="display: none; background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(5,150,105,0.25);" title="Click to fill budget with the recommended calculation">
+                                ⚡ Use Recommendation
+                            </button>
+                        </div>
+
+                        <!-- State 1: Active Demand Detected & Parameters Provided -->
+                        <div id="rec_active_container" style="display: none;">
+                            <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px;">
+                                <div style="font-size: 1.8rem; font-weight: 800; color: #065f46; letter-spacing: -0.5px;">
+                                    ₱<span id="rec_budget_amount">0.00</span>
+                                </div>
+                                <div style="color: #64748b; font-size: 0.85rem;">
+                                    Estimated allocation required to cover enrolled classes
+                                </div>
+                            </div>
+
+                            <!-- Detailed Metrics Grid -->
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.82rem;">
+                                <div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Student Headcount</div>
+                                    <div id="rec_metric_students" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">0 students</div>
+                                </div>
+                                <div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Yield per Ream</div>
+                                    <div id="rec_metric_yield" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">83 booklets</div>
+                                </div>
+                                <div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Reams Required</div>
+                                    <div id="rec_metric_reams" style="font-weight: 700; color: #2563eb; font-size: 0.95rem; margin-top: 2px;">0 reams</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- State 2: Enrolled Demand Detected, Awaiting Parameter Inputs -->
+                        <div id="rec_pending_container" style="display: none; padding: 4px 0; color: #334155; font-size: 0.85rem; line-height: 1.5;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                                <span style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 0.85rem; font-weight: 700; padding: 4px 10px; border-radius: 6px;">
+                                    👥 <span id="rec_pending_count">0</span> Enrolled Students Detected
+                                </span>
+                            </div>
+                            <p style="margin: 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
+                                The system has recognized class enrollments for this academic period. Please input <strong>Bond Paper Sheets Consumed Per Booklet</strong> and <strong>Price per Raw Bond Paper Ream (₱)</strong> above to automatically calculate your required paper reams and recommended cash allocation.
+                            </p>
+                        </div>
+
+                        <!-- State 3: Truly Zero Enrolled Students -->
+                        <div id="rec_zero_container" style="display: none; padding: 4px 0; color: #475569; font-size: 0.85rem; line-height: 1.5;">
+                            <p style="margin: 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
+                                No enrolled classes have been uploaded yet. Please enter your department's initial allocated cash fund above (e.g., ₱5,000.00). Once classes are uploaded in <strong>Manage Classes</strong>, the demand-driven ream recommendation will automatically populate here.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Reorder Buffer Safety Margin (%)</label>
+                    <input type="number" id="reorder_buffer_percent" min="0" max="50" step="1" placeholder="e.g., 15" required oninput="clearFieldError('reorder_buffer_percent'); updateBufferPreview();">
+                    <div class="field-error" id="error_reorder_buffer_percent">⚠️ This field cannot be empty. Please enter a buffer margin between 0% and 50%.</div>
+                    <div id="buffer_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #8e44ad; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
+                        🛡️ <strong>Heuristic Buffer:</strong> Applies a <strong id="preview_buffer_pct" style="color:#8e44ad;">15%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Price per Raw A4 Ream (₱)</label>
-                <input type="number" id="ream_price" step="0.01" placeholder="e.g., 250.00" required>
+            <div style="display: flex; gap: 12px; margin-top: 10px;">
+                <button type="button" class="btn-clear" onclick="clearAllSettingsFields()" style="background-color: #64748b; color: white; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 0.95rem;" title="Wipe all input fields to enter parameters from scratch">
+                    🧹 Clear All Fields
+                </button>
+                <button type="button" class="btn-save" onclick="saveSettings()" style="flex: 1;" disabled>
+                    Save Configuration
+                </button>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Selling Price per Booklet (₱)</label>
-                <input type="number" id="booklet_price" step="0.01" placeholder="e.g., 2.50" required>
-                <small style="display: block; color: #7f8c8d; margin-top: 6px; line-height: 1.4;">
-                    ℹ️ <em>Price changes automatically grandfather all <strong>Fully Paid</strong> transactions. Only new transactions, <strong>Unpaid</strong> accounts, and the total order of <strong>Partially Paid</strong> accounts are adjusted to this rate (with past payments credited).</em>
-                </small>
+        <!-- EXAM PERIOD CONFIGURATION HISTORY & AUDIT LOG SECTION -->
+        <div class="card audit-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h2 style="margin-bottom: 4px; color: #1e293b;">Exam Period History &amp; Log</h2>
+                    <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 0;">
+                        Immutable historical trail preserving departmental prices, paper yields, and cash allocations across academic periods.
+                    </p>
+                </div>
+                <button onclick="loadPeriodConfigurationsHistory()" style="background: none; border: 1px solid #cbd5e1; padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: #334155; font-weight: bold; transition: all 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='none'">
+                    🔄 Refresh Log
+                </button>
             </div>
-
-            <button class="btn-save" onclick="saveSettings()">Save Configuration</button>
+            
+            <table class="audit-table">
+                <thead>
+                    <tr>
+                        <th style="min-width: 260px;">Academic Period</th>
+                        <th style="min-width: 100px;">Prefix</th>
+                        <th style="min-width: 120px;">Ream Price</th>
+                        <th style="min-width: 120px;">Booklet Price</th>
+                        <th style="min-width: 130px;">Sheets/Booklet</th>
+                        <th style="min-width: 110px;">Yield</th>
+                        <th style="min-width: 140px;">Ream Budget</th>
+                        <th style="min-width: 110px;">Safety %</th>
+                        <th style="min-width: 130px;">Configured By</th>
+                        <th style="min-width: 160px;">Last Updated</th>
+                        <th style="min-width: 110px;">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="periodArchiveTableBody">
+                    <tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 24px;">Loading archive history...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
+
+    <!-- Save Success Popup Modal -->
+    <div id="saveSuccessModal" onclick="if(event.target === this) closeSaveSuccessModal()" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px);">
+        <div style="background: white; border-radius: 12px; width: 90%; max-width: 480px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
+            
+            <!-- Close Button Icon -->
+            <button onclick="closeSaveSuccessModal()" style="position: absolute; top: 12px; right: 14px; background: rgba(0,0,0,0.15); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;" title="Close">✕</button>
+
+            <!-- Modal Header -->
+            <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 26px 20px 20px; text-align: center; color: white;">
+                <div style="width: 54px; height: 54px; background: rgba(255, 255, 255, 0.22); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 26px; border: 2px solid rgba(255,255,255,0.4);">
+                    ✓
+                </div>
+                <h2 style="margin: 0; font-size: 1.35rem; font-weight: bold; letter-spacing: -0.01em;">Configurations Saved</h2>
+                <p style="margin: 5px 0 0; font-size: 0.9rem; opacity: 0.92;">System parameters updated &amp; synchronized across terminals</p>
+            </div>
+            
+            <!-- Modal Body -->
+            <div style="padding: 22px 24px;">
+                <div id="saveModalServerMsg" style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 12px; border-radius: 6px; font-size: 0.88rem; line-height: 1.45; margin-bottom: 16px;">
+                    Settings updated successfully.
+                </div>
+
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; font-size: 0.88rem; color: #334155;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Active Period:</span>
+                        <strong id="modalSummaryPeriod" style="color: #0f172a; text-align: right;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Control Prefix:</span>
+                        <strong id="modalSummaryPrefix" style="color: #2563eb; font-family: monospace;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Paper Sheets Per Booklet:</span>
+                        <strong id="modalSummarySheets" style="color: #0f172a;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Booklet Selling Price:</span>
+                        <strong id="modalSummaryBookletPrice" style="color: #0f172a;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Ream Paper Price:</span>
+                        <strong id="modalSummaryReamPrice" style="color: #0f172a;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Department Ream Budget:</span>
+                        <strong id="modalSummaryBudget" style="color: #059669;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #64748b;">Reorder Buffer:</span>
+                        <strong id="modalSummaryBuffer" style="color: #8e44ad;">-</strong>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button onclick="closeSaveSuccessModal()" style="width: 100%; background: #059669; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        Done
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ZERO BUFFER SAFETY MARGIN CONFIRMATION MODAL -->
+    <div id="zeroBufferModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 10001; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; width: 90%; max-width: 520px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); animation: fadeIn 0.2s ease;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                <div style="width: 44px; height: 44px; border-radius: 50%; background: #fef3c7; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #d97706;">
+                    ⚠️
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #0f172a; font-size: 1.15rem; font-weight: 700;">Zero Buffer Safety Margin (0%)</h3>
+                    <span style="color: #64748b; font-size: 0.85rem;">Heuristic Decision Support Notice</span>
+                </div>
+            </div>
+
+            <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin-bottom: 16px; font-size: 0.88rem; color: #92400e; line-height: 1.5;">
+                You are setting the <strong>Reorder Buffer Safety Margin to 0%</strong>. This alters how demand and ream procurement are calculated across the entire platform:
+                <ul style="margin: 8px 0 0 18px; padding: 0;">
+                    <li><strong>Exact Demand Only:</strong> Production targets will strictly equal the exact student headcount without any buffer copies (+0 booklets).</li>
+                    <li><strong>Zero Leeway:</strong> No spare booklets will be allocated for late enrollees, section transfers, or misprinted/spoiled copies during binding.</li>
+                    <li><strong>Downstream Systems:</strong> The <strong>Dashboard DSS</strong> and <strong>PDF Generator</strong> will compute recommended reams strictly to satisfy existing headcount with zero surplus.</li>
+                </ul>
+            </div>
+
+            <div style="font-size: 0.85rem; color: #475569; margin-bottom: 20px;">
+                Are you sure you want to proceed with saving a <strong>0% safety buffer</strong>?
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button type="button" onclick="closeZeroBufferModal()" style="flex: 1; background: #e2e8f0; color: #334155; border: none; padding: 12px; border-radius: 6px; font-weight: 600; font-size: 0.92rem; cursor: pointer; transition: background 0.2s;">
+                    Cancel
+                </button>
+                <button type="button" onclick="confirmZeroBufferSave()" style="flex: 1.5; background: #d97706; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.2s;">
+                    ⚠️ Proceed with 0% Buffer
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <script>
         // --- AUTHENTICATION GUARD & RBAC ---
@@ -186,14 +528,18 @@
                 const panel = document.getElementById('notifPanel');
                 const bell = document.getElementById('notifBell');
 
-                if (data.alert) {
+                if (data.has_enrollments === false) {
+                    badge.style.display = 'none';
+                    panel.style.borderLeftColor = '#64748b';
+                    panel.innerHTML = '📋 <strong>Awaiting Enrollments:</strong><br>No classes enrolled yet. Add or import classes in Manage Classes to activate decision support forecasts.';
+                } else if (data.alert) {
                     badge.style.display = 'inline-block';
                     bell.style.color = 'white'; 
                     
                     panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
                     
                     if (!sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data.message, data.reams_needed);
+                        showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
                     }
                 } else {
                     badge.style.display = 'none';
@@ -207,15 +553,42 @@
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
 
-        function showDSSModal(message, reams) {
+        function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+            let bCount = deficitBooklets;
+            let sCount = deficitSheets;
+            if (typeof message === 'object' && message !== null) {
+                reams = message.reams_needed;
+                bCount = message.deficit_booklets;
+                sCount = message.deficit_sheets;
+                message = message.message;
+            }
             const modalHtml = `
-                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                    <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                        <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                        <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                        <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                        
+                        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                                <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                                <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                                <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                            </div>
+                        </div>
+                        
+                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                            To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                        </p>
+                        
+                        <div style="display: flex; justify-content: center;">
+                            <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                                Acknowledge & Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -224,54 +597,540 @@
 
         function dismissDSS() {
             sessionStorage.setItem('dss_acknowledged', 'true');
-            document.getElementById('dssModal').remove();
+            const modal = document.getElementById('dssModal');
+            if (modal) modal.remove();
             
             const panel = document.getElementById('notifPanel');
-            panel.style.display = 'block'; 
-            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            if (panel) {
+                panel.style.display = 'block'; 
+                setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            }
         }
 
         // --- CORE SETTINGS LOGIC ---
-        
-        function updateGeneratedPrefix() {
-            const period = document.getElementById('active_period').value;
-            const ay = document.getElementById('ay_select').value;
-            
-            // Expected format: "AY 2026-2027"
-            const match = ay.match(/AY\s+(\d{4})-(\d{4})/);
-            if (match) {
-                const startYear = match[1].slice(-2);
-                const endYear = match[2].slice(-2);
-                const prefix = period.includes("1st Sem") ? `1ST${startYear}` : `2ND${endYear}`;
-                document.getElementById('generated_prefix_badge').innerText = prefix;
+        let currentTotalDemand = 0;
+        let computedRecommendedBudget = 0;
+
+        function updateDependentFieldsState() {
+            const periodEl = document.getElementById('active_period');
+            const period = periodEl ? periodEl.value : '';
+            const isPeriodValid = Boolean(period && period !== "" && !period.includes('UNSET') && !period.includes('-- Select'));
+
+            const startVal = document.getElementById('ay_start_year') ? document.getElementById('ay_start_year').value.trim() : '';
+            const startYear = parseInt(startVal, 10);
+            const isYearValid = !isNaN(startYear) && startYear >= 2000 && startYear <= 2099 && startVal.length === 4;
+
+            const isUnlocked = isPeriodValid && isYearValid;
+
+            // Target downstream dependent input elements
+            const dependentIds = [
+                'sheets_per_booklet',
+                'ream_price',
+                'booklet_price',
+                'department_ream_budget',
+                'reorder_buffer_percent'
+            ];
+
+            dependentIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.disabled = !isUnlocked;
+                }
+            });
+
+            // Save Configuration button
+            const saveBtn = document.querySelector('.btn-save');
+            if (saveBtn) {
+                saveBtn.disabled = !isUnlocked;
+            }
+
+            // Recommendation Apply button (if present)
+            const recBtn = document.getElementById('btn_apply_recommended');
+            if (recBtn) {
+                recBtn.disabled = !isUnlocked;
+            }
+
+            // Visual notice banner & container opacity
+            const noticeEl = document.getElementById('locked_settings_notice');
+            const sectionEl = document.getElementById('dependent_settings_section');
+
+            if (noticeEl) {
+                noticeEl.style.display = isUnlocked ? 'none' : 'flex';
+            }
+            if (sectionEl) {
+                sectionEl.style.opacity = isUnlocked ? '1' : '0.55';
             }
         }
 
-        // Attach event listeners for real-time updates
-        document.getElementById('active_period').addEventListener('change', updateGeneratedPrefix);
-        document.getElementById('ay_select').addEventListener('change', updateGeneratedPrefix);
-        
-        function populateAcademicYears(selectedAy) {
-            const aySelect = document.getElementById('ay_select');
-            aySelect.innerHTML = ''; 
-            const currentYear = new Date().getFullYear(); 
-            for (let i = 0; i <= 3; i++) {
-                const startYear = currentYear + i;
-                const endYear = startYear + 1;
-                const ayString = `AY ${startYear}-${endYear}`;
-                let opt = document.createElement('option');
-                opt.value = ayString;
-                opt.text = ayString;
-                if (selectedAy === ayString) { opt.selected = true; }
-                aySelect.appendChild(opt);
+        function clearFieldError(fieldId) {
+            const input = document.getElementById(fieldId);
+            if (input) input.classList.remove('invalid');
+            if (fieldId === 'ay_start_year') {
+                const group = document.getElementById('ay_input_group');
+                if (group) group.classList.remove('invalid');
             }
-            const existingOptions = Array.from(aySelect.options).map(opt => opt.value);
-            if (selectedAy && !existingOptions.includes(selectedAy)) {
-                let legacyOpt = document.createElement('option');
-                legacyOpt.value = selectedAy;
-                legacyOpt.text = selectedAy + " (Current)";
-                legacyOpt.selected = true;
-                aySelect.insertBefore(legacyOpt, aySelect.firstChild);
+            const err = document.getElementById('error_' + fieldId);
+            if (err) err.classList.remove('visible');
+        }
+
+        function showFieldError(fieldId, customMsg) {
+            const input = document.getElementById(fieldId);
+            if (input) input.classList.add('invalid');
+            if (fieldId === 'ay_start_year') {
+                const group = document.getElementById('ay_input_group');
+                if (group) group.classList.add('invalid');
+            }
+            const err = document.getElementById('error_' + fieldId);
+            if (err) {
+                if (customMsg) err.innerText = customMsg;
+                err.classList.add('visible');
+            }
+        }
+
+        function validateSettingsForm() {
+            let isValid = true;
+            let firstInvalidEl = null;
+
+            // 1. Active Examination Period
+            const period = document.getElementById('active_period').value;
+            const isPeriodValid = period && period !== "" && !period.includes('UNSET');
+            if (!isPeriodValid) {
+                showFieldError('active_period', '⚠️ Please select an examination period.');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = document.getElementById('active_period');
+            } else {
+                clearFieldError('active_period');
+            }
+
+            // 2. Academic Examination Start Year (4-digit format)
+            const startVal = document.getElementById('ay_start_year').value.trim();
+            const startYear = parseInt(startVal, 10);
+            const isYearValid = !isNaN(startYear) && startYear >= 2000 && startYear <= 2099 && startVal.length === 4;
+            if (!isYearValid) {
+                showFieldError('ay_start_year', '⚠️ Please enter a valid 4-digit academic start year (e.g., 2026).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = document.getElementById('ay_start_year');
+            } else {
+                clearFieldError('ay_start_year');
+            }
+
+            // 2. Sheets per booklet
+            const sheetsInput = document.getElementById('sheets_per_booklet');
+            const sheetsVal = sheetsInput.value.trim();
+            const sheets = parseInt(sheetsVal);
+            if (sheetsVal === "" || isNaN(sheets) || sheets < 1 || sheets > 50) {
+                showFieldError('sheets_per_booklet', '⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = sheetsInput;
+            } else {
+                clearFieldError('sheets_per_booklet');
+            }
+
+            // 3. Ream price
+            const reamInput = document.getElementById('ream_price');
+            const reamVal = reamInput.value.trim();
+            const reamPrice = parseFloat(reamVal);
+            if (reamVal === "" || isNaN(reamPrice) || reamPrice <= 0) {
+                showFieldError('ream_price', '⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = reamInput;
+            } else {
+                clearFieldError('ream_price');
+            }
+
+            // 4. Booklet price
+            const bookletInput = document.getElementById('booklet_price');
+            const bookletVal = bookletInput.value.trim();
+            const bookletPrice = parseFloat(bookletVal);
+            if (bookletVal === "" || isNaN(bookletPrice) || bookletPrice <= 0) {
+                showFieldError('booklet_price', '⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = bookletInput;
+            } else {
+                clearFieldError('booklet_price');
+            }
+
+            // 5. Department Ream Budget (Strict Non-Blank Validation)
+            const budgetInput = document.getElementById('department_ream_budget');
+            const budgetVal = budgetInput.value.trim();
+            const budget = parseFloat(budgetVal);
+            if (budgetVal === "" || isNaN(budget) || budget <= 0) {
+                showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental budget allocation (₱).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = budgetInput;
+            } else {
+                clearFieldError('department_ream_budget');
+            }
+
+            // 6. Reorder Buffer Safety Margin
+            const bufferInput = document.getElementById('reorder_buffer_percent');
+            const bufferVal = bufferInput.value.trim();
+            const buffer = parseFloat(bufferVal);
+            if (bufferVal === "" || isNaN(buffer) || buffer < 0 || buffer > 50) {
+                showFieldError('reorder_buffer_percent', '⚠️ This field cannot be empty. Please enter a buffer margin between 0% and 50%.');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = bufferInput;
+            } else {
+                clearFieldError('reorder_buffer_percent');
+            }
+
+            if (!isValid && firstInvalidEl) {
+                firstInvalidEl.focus();
+            }
+
+            return isValid;
+        }
+
+        function updateRecommendationBox() {
+            const sheetsEl = document.getElementById('sheets_per_booklet');
+            const reamEl = document.getElementById('ream_price');
+            const sheetsVal = sheetsEl ? sheetsEl.value.trim() : '';
+            const reamVal = reamEl ? reamEl.value.trim() : '';
+            const sheets = parseInt(sheetsVal) || 0;
+            const reamPrice = parseFloat(reamVal) || 0.0;
+            const yieldPerReam = sheets > 0 ? Math.floor(500 / sheets) : 0;
+
+            const card = document.getElementById('budget_recommendation_card');
+            const cardTitle = document.getElementById('rec_card_title');
+            const recActiveEl = document.getElementById('rec_active_container');
+            const recPendingEl = document.getElementById('rec_pending_container');
+            const recZeroEl = document.getElementById('rec_zero_container');
+            const recAmountEl = document.getElementById('rec_budget_amount');
+            const applyBtn = document.getElementById('btn_apply_recommended');
+            const pendingCountEl = document.getElementById('rec_pending_count');
+
+            // Check if settings are unlocked by active period & start year
+            const periodEl = document.getElementById('active_period');
+            const period = periodEl ? periodEl.value : '';
+            const isPeriodValid = Boolean(period && period !== "" && !period.includes('UNSET') && !period.includes('-- Select'));
+            const startVal = document.getElementById('ay_start_year') ? document.getElementById('ay_start_year').value.trim() : '';
+            const startYear = parseInt(startVal, 10);
+            const isYearValid = !isNaN(startYear) && startYear >= 2000 && startYear <= 2099 && startVal.length === 4;
+            const isUnlocked = isPeriodValid && isYearValid;
+
+            if (currentTotalDemand > 0 && yieldPerReam > 0 && reamPrice > 0) {
+                // --- STATE 1: ACTIVE RECOMMENDATION READY ---
+                const reamsNeeded = Math.ceil(currentTotalDemand / yieldPerReam);
+                computedRecommendedBudget = Math.round((reamsNeeded * reamPrice + Number.EPSILON) * 100) / 100;
+
+                if (card) {
+                    card.style.borderLeft = '5px solid #10b981';
+                    card.style.borderColor = '#d1fae5';
+                    card.style.background = '#ffffff';
+                }
+                if (cardTitle) {
+                    cardTitle.innerHTML = '<span style="color: #059669;">⚡</span> <span>Demand-Driven Budget Recommendation</span>';
+                    cardTitle.style.color = '#065f46';
+                }
+
+                if (recAmountEl) {
+                    recAmountEl.innerText = computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+                
+                const metricStudents = document.getElementById('rec_metric_students');
+                const metricYield = document.getElementById('rec_metric_yield');
+                const metricReams = document.getElementById('rec_metric_reams');
+
+                if (metricStudents) metricStudents.innerText = `${currentTotalDemand.toLocaleString()} students`;
+                if (metricYield) metricYield.innerText = `${yieldPerReam} booklets / ream`;
+                if (metricReams) metricReams.innerText = `${reamsNeeded} whole ream${reamsNeeded !== 1 ? 's' : ''}`;
+
+                if (recActiveEl) recActiveEl.style.display = 'block';
+                if (recPendingEl) recPendingEl.style.display = 'none';
+                if (recZeroEl) recZeroEl.style.display = 'none';
+
+                if (applyBtn) {
+                    applyBtn.style.display = 'inline-block';
+                    applyBtn.disabled = !isUnlocked;
+                    applyBtn.innerText = `⚡ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                }
+            } else if (currentTotalDemand > 0) {
+                // --- STATE 2: ENROLLED HEADCOUNT DETECTED, AWAITING PARAMETERS ---
+                computedRecommendedBudget = 0.0;
+                
+                if (card) {
+                    card.style.borderLeft = '5px solid #3b82f6';
+                    card.style.borderColor = '#bfdbfe';
+                    card.style.background = '#f8fafc';
+                }
+                if (cardTitle) {
+                    cardTitle.innerHTML = '<span style="color: #2563eb;">⏳</span> <span>Enrolled Headcount Detected — Awaiting Parameters</span>';
+                    cardTitle.style.color = '#1e40af';
+                }
+                if (pendingCountEl) {
+                    pendingCountEl.innerText = currentTotalDemand.toLocaleString();
+                }
+
+                if (recActiveEl) recActiveEl.style.display = 'none';
+                if (recPendingEl) recPendingEl.style.display = 'block';
+                if (recZeroEl) recZeroEl.style.display = 'none';
+                if (applyBtn) {
+                    applyBtn.style.display = 'none';
+                    applyBtn.disabled = true;
+                }
+            } else {
+                // --- STATE 3: TRULY ZERO ENROLLED STUDENTS ---
+                computedRecommendedBudget = 0.0;
+                
+                if (card) {
+                    card.style.borderLeft = '5px solid #94a3b8';
+                    card.style.borderColor = '#e2e8f0';
+                    card.style.background = '#ffffff';
+                }
+                if (cardTitle) {
+                    cardTitle.innerHTML = '<span style="color: #64748b;">ℹ️</span> <span>No Class Headcount Enrolled Yet</span>';
+                    cardTitle.style.color = '#475569';
+                }
+
+                if (recActiveEl) recActiveEl.style.display = 'none';
+                if (recPendingEl) recPendingEl.style.display = 'none';
+                if (recZeroEl) recZeroEl.style.display = 'block';
+                if (applyBtn) {
+                    applyBtn.style.display = 'none';
+                    applyBtn.disabled = true;
+                }
+            }
+        }
+
+        function applyRecommendedBudget() {
+            if (computedRecommendedBudget > 0) {
+                const budgetInput = document.getElementById('department_ream_budget');
+                if (budgetInput) {
+                    budgetInput.value = computedRecommendedBudget.toFixed(2);
+                    clearFieldError('department_ream_budget');
+                    
+                    // Visual confirmation
+                    budgetInput.classList.remove('applied-pulse');
+                    void budgetInput.offsetWidth; // trigger reflow for animation restart
+                    budgetInput.classList.add('applied-pulse');
+                    setTimeout(() => budgetInput.classList.remove('applied-pulse'), 1500);
+
+                    const applyBtn = document.getElementById('btn_apply_recommended');
+                    if (applyBtn) {
+                        applyBtn.innerText = '✅ Applied (₱' + computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ')';
+                        setTimeout(() => {
+                            if (computedRecommendedBudget > 0 && applyBtn) {
+                                applyBtn.innerText = `⚡ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                            }
+                        }, 2000);
+                    }
+                }
+            }
+        }
+        
+        function getAcademicYearString() {
+            const startVal = document.getElementById('ay_start_year') ? document.getElementById('ay_start_year').value.trim() : "";
+            const startYear = parseInt(startVal);
+            if (!isNaN(startYear) && startYear >= 2000 && startYear <= 2099 && startVal.length === 4) {
+                return `AY ${startYear}-${startYear + 1}`;
+            }
+            return "";
+        }
+
+        function getFullAcademicPeriod() {
+            const period = document.getElementById('active_period') ? document.getElementById('active_period').value : "";
+            const ayStr = getAcademicYearString();
+            if (!period || period === "" || period.includes('UNSET') || !ayStr) {
+                return "";
+            }
+            return `${period} | ${ayStr}`;
+        }
+
+        function onAyStartYearInput() {
+            const startVal = document.getElementById('ay_start_year').value.trim();
+            const endYearEl = document.getElementById('ay_end_year');
+            
+            if (startVal.length === 4) {
+                const startYear = parseInt(startVal, 10);
+                if (!isNaN(startYear) && startYear >= 2000 && startYear <= 2099) {
+                    if (endYearEl) endYearEl.value = (startYear + 1).toString();
+                    updateGeneratedPrefix();
+                    updateDependentFieldsState();
+                    onPeriodChange();
+                    return;
+                }
+            }
+            
+            if (endYearEl) endYearEl.value = '';
+            updateGeneratedPrefix();
+            updateDependentFieldsState();
+        }
+        
+        function updateGeneratedPrefix() {
+            const period = document.getElementById('active_period').value;
+            const ayStr = getAcademicYearString();
+            const badge = document.getElementById('generated_prefix_badge');
+            
+            if (!period || !ayStr || period === "" || period.includes('UNSET')) {
+                if (badge) {
+                    badge.innerText = "--";
+                    badge.style.color = "#94a3b8";
+                }
+                return;
+            }
+
+            // Expected format: "AY 2026-2027"
+            const match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
+            if (match) {
+                const startYear = match[1].slice(-2);
+                const endYear = match[2].slice(-2);
+                let prefix = "";
+                if (period.includes("1st Sem")) {
+                    prefix = `1ST${startYear}`;
+                } else if (period.includes("Midyear")) {
+                    prefix = `MID${endYear}`;
+                } else {
+                    prefix = `2ND${endYear}`;
+                }
+                if (badge) {
+                    badge.innerText = prefix;
+                    badge.style.color = "#2c3e50";
+                }
+            }
+        }
+
+        async function onPeriodChange() {
+            updateGeneratedPrefix();
+            updateDependentFieldsState();
+            const period = document.getElementById('active_period').value;
+            const ayStr = getAcademicYearString();
+            if (!period || !ayStr || period === "" || period.includes('UNSET')) {
+                updateYieldPreview();
+                updateBufferPreview();
+                updateRecommendationBox();
+                return;
+            }
+            const fullPeriod = `${period} | ${ayStr}`;
+
+            try {
+                const res = await fetch(`/api/period-configuration?period=${encodeURIComponent(fullPeriod)}`);
+                const data = await res.json();
+                
+                if (data.total_demand !== undefined) currentTotalDemand = data.total_demand;
+
+                if (data.found) {
+                    // Populate archived parameters for this period
+                    document.getElementById('sheets_per_booklet').value = (data.sheets_per_booklet !== null && data.sheets_per_booklet > 0) ? data.sheets_per_booklet : '';
+                    document.getElementById('ream_price').value = (data.ream_price !== null && data.ream_price > 0) ? data.ream_price : '';
+                    document.getElementById('booklet_price').value = (data.booklet_price !== null && data.booklet_price > 0) ? data.booklet_price : '';
+                    document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
+                    document.getElementById('department_ream_budget').value = (data.department_ream_budget !== null && data.department_ream_budget > 0) ? data.department_ream_budget : '';
+                } else {
+                    // Unconfigured period: clear fields to empty to force user to enter parameters!
+                    document.getElementById('sheets_per_booklet').value = '';
+                    document.getElementById('ream_price').value = '';
+                    document.getElementById('booklet_price').value = '';
+                    document.getElementById('reorder_buffer_percent').value = '';
+                    document.getElementById('department_ream_budget').value = '';
+                }
+                updateYieldPreview();
+                updateBufferPreview();
+                updateRecommendationBox();
+                updateDependentFieldsState();
+            } catch(err) {
+                console.error("Error loading period configuration:", err);
+            }
+        }
+
+        function updateYieldPreview() {
+            const sheetsVal = document.getElementById('sheets_per_booklet').value.trim();
+            const sheets = parseInt(sheetsVal) || 0;
+            const previewEl = document.getElementById('yield_preview_badge');
+            if (sheetsVal !== "" && sheets > 0) {
+                const yieldVal = Math.floor(500 / sheets);
+                const leftover = 500 % sheets;
+                document.getElementById('preview_sheets').innerText = sheets;
+                document.getElementById('preview_yield').innerText = yieldVal;
+                document.getElementById('preview_leftover').innerText = leftover;
+                if (previewEl) previewEl.style.display = 'block';
+            } else {
+                if (previewEl) previewEl.style.display = 'none';
+            }
+        }
+
+        function updateBufferPreview() {
+            const bufferVal = document.getElementById('reorder_buffer_percent').value.trim();
+            const badge = document.getElementById('buffer_preview_badge');
+            const previewPct = document.getElementById('preview_buffer_pct');
+            if (bufferVal !== "" && !isNaN(bufferVal)) {
+                const num = parseFloat(bufferVal);
+                if (badge) badge.style.display = 'block';
+                if (num === 0) {
+                    badge.style.background = '#fffbeb';
+                    badge.style.borderLeft = '4px solid #d97706';
+                    badge.style.color = '#92400e';
+                    badge.innerHTML = '⚠️ <strong>Zero Buffer Mode:</strong> Production targets and ream procurement across Dashboard and PDF Generator will strictly match enrolled headcount with 0 spare copies.';
+                } else {
+                    badge.style.background = '#eef2f7';
+                    badge.style.borderLeft = '4px solid #8e44ad';
+                    badge.style.color = '#2c3e50';
+                    badge.innerHTML = `🛡️ <strong>Heuristic Buffer:</strong> Applies a <strong style="color:#8e44ad;">${num}%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.`;
+                }
+            } else {
+                if (badge) badge.style.display = 'none';
+            }
+        }
+
+        function clearAllSettingsFields() {
+            document.getElementById('active_period').value = '';
+            document.getElementById('ay_start_year').value = '';
+            document.getElementById('ay_end_year').value = '';
+            document.getElementById('sheets_per_booklet').value = '';
+            document.getElementById('ream_price').value = '';
+            document.getElementById('booklet_price').value = '';
+            document.getElementById('department_ream_budget').value = '';
+            document.getElementById('reorder_buffer_percent').value = '';
+            
+            // Clear any active validation error states
+            ['active_period', 'ay_start_year', 'sheets_per_booklet', 'ream_price', 'booklet_price', 'department_ream_budget', 'reorder_buffer_percent'].forEach(clearFieldError);
+            
+            updateGeneratedPrefix();
+            updateYieldPreview();
+            updateBufferPreview();
+            updateRecommendationBox();
+            updateDependentFieldsState();
+        }
+
+        async function loadPeriodConfigurationsHistory() {
+            const tbody = document.getElementById('periodArchiveTableBody');
+            if (!tbody) return;
+
+            try {
+                const res = await fetch('/api/period-configurations');
+                const list = await res.json();
+
+                if (!list || list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 24px;">No archived period configurations found.</td></tr>';
+                    return;
+                }
+
+                const activePeriod = getFullAcademicPeriod();
+
+                tbody.innerHTML = list.map(item => {
+                    const isActive = item.academic_period === activePeriod;
+                    const statusBadge = isActive
+                        ? '<span class="badge-active">ACTIVE</span>'
+                        : '<span class="badge-archived">ARCHIVED</span>';
+
+                    return `
+                        <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}">
+                            <td><strong>${item.academic_period}</strong></td>
+                            <td><code style="background:#eef2f7; padding:3px 8px; border-radius:4px; font-weight:bold; color:#2563eb; font-family:monospace;">${item.semester_prefix || '-'}</code></td>
+                            <td>₱${Number(item.ream_price).toFixed(2)}</td>
+                            <td>₱${Number(item.booklet_price).toFixed(2)}</td>
+                            <td>${item.sheets_per_booklet} sheets</td>
+                            <td>${item.yield_per_ream} pcs/ream</td>
+                            <td style="color:#059669; font-weight:bold;">₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                            <td>${item.reorder_buffer_percent}%</td>
+                            <td>${item.configured_by || 'Admin'}</td>
+                            <td style="color:#64748b; font-size:0.84rem;">${item.updated_at || '-'}</td>
+                            <td>${statusBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch(err) {
+                console.error("Error fetching period history:", err);
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #e74c3c; padding: 24px;">Error loading configuration audit log.</td></tr>';
             }
         }
 
@@ -280,29 +1139,140 @@
                 let res = await fetch('/api/settings');
                 let data = await res.json();
                 
-                document.getElementById('generated_prefix_badge').innerText = data.current_semester_name || "1STXX";
-                document.getElementById('ream_price').value = data.ream_price;
-                document.getElementById('sheets_per_booklet').value = data.sheets_per_booklet;
-                document.getElementById('booklet_price').value = data.booklet_price;
+                currentTotalDemand = data.total_demand || 0;
                 
-                let fullPeriod = data.active_period || "1st Sem - Midterms | AY 2026-2027";
-                let parts = fullPeriod.split(" | ");
-                document.getElementById('active_period').value = parts[0] || "1st Sem - Midterms";
-                let currentAy = parts[1] || `AY ${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
-                populateAcademicYears(currentAy);
-                updateGeneratedPrefix();
+                const isUnset = !data.active_period || data.active_period === "UNSET" || data.active_period.includes("UNSET") || !data.is_initialized;
+                
+                if (isUnset) {
+                    // Truly uninitialized / clean-slate state: keep all fields completely blank to force active user input
+                    document.getElementById('generated_prefix_badge').innerText = "--";
+                    document.getElementById('generated_prefix_badge').style.color = "#94a3b8";
+                    
+                    document.getElementById('active_period').value = '';
+                    document.getElementById('ay_start_year').value = '';
+                    document.getElementById('ay_end_year').value = '';
+                    
+                    document.getElementById('ream_price').value = '';
+                    document.getElementById('sheets_per_booklet').value = '';
+                    document.getElementById('booklet_price').value = '';
+                    document.getElementById('reorder_buffer_percent').value = '';
+                    document.getElementById('department_ream_budget').value = '';
+                } else {
+                    document.getElementById('generated_prefix_badge').innerText = data.current_semester_name || "--";
+                    document.getElementById('generated_prefix_badge').style.color = "#2c3e50";
+                    
+                    document.getElementById('ream_price').value = data.ream_price && data.ream_price > 0 ? data.ream_price : '';
+                    document.getElementById('sheets_per_booklet').value = data.sheets_per_booklet && data.sheets_per_booklet > 0 ? data.sheets_per_booklet : '';
+                    document.getElementById('booklet_price').value = data.booklet_price && data.booklet_price > 0 ? data.booklet_price : '';
+                    document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
+                    document.getElementById('department_ream_budget').value = data.department_ream_budget && data.department_ream_budget > 0 ? data.department_ream_budget : '';
+                    
+                    let fullPeriod = data.active_period || "";
+                    let parts = fullPeriod.split(" | ");
+                    let periodTerm = parts[0] || "";
+                    if (periodTerm === "1st Sem - Midterms") periodTerm = "1st Sem - Midterm Exam";
+                    else if (periodTerm === "1st Sem - Finals") periodTerm = "1st Sem - Final Exam";
+                    else if (periodTerm === "2nd Sem - Midterms") periodTerm = "2nd Sem - Midterm Exam";
+                    else if (periodTerm === "2nd Sem - Finals") periodTerm = "2nd Sem - Final Exam";
+                    document.getElementById('active_period').value = periodTerm;
+                    
+                    let ayStr = parts[1] || "";
+                    let match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
+                    if (match) {
+                        document.getElementById('ay_start_year').value = match[1];
+                        document.getElementById('ay_end_year').value = match[2];
+                    } else {
+                        document.getElementById('ay_start_year').value = '';
+                        document.getElementById('ay_end_year').value = '';
+                    }
+                    updateGeneratedPrefix();
+                }
+
+                updateYieldPreview();
+                updateBufferPreview();
+                updateRecommendationBox();
+                updateDependentFieldsState();
+
+                loadPeriodConfigurationsHistory();
     
             } catch (err) {
                 console.error("Error loading settings", err);
+                updateDependentFieldsState();
             }
         }
 
+        let hasConfirmedZeroBuffer = false;
+
+        function showZeroBufferConfirmationModal() {
+            const modal = document.getElementById('zeroBufferModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeZeroBufferModal() {
+            const modal = document.getElementById('zeroBufferModal');
+            if (modal) modal.style.display = 'none';
+            hasConfirmedZeroBuffer = false;
+            const input = document.getElementById('reorder_buffer_percent');
+            if (input) input.focus();
+        }
+
+        function confirmZeroBufferSave() {
+            hasConfirmedZeroBuffer = true;
+            const modal = document.getElementById('zeroBufferModal');
+            if (modal) modal.style.display = 'none';
+            saveSettings();
+        }
+
+        function useRecommendedBufferAndSave(recVal = 15) {
+            hasConfirmedZeroBuffer = true;
+            const modal = document.getElementById('zeroBufferModal');
+            if (modal) modal.style.display = 'none';
+            const input = document.getElementById('reorder_buffer_percent');
+            if (input) {
+                input.value = recVal;
+                clearFieldError('reorder_buffer_percent');
+                updateBufferPreview();
+            }
+            saveSettings();
+        }
+
         async function saveSettings() {
+            // Strict Validation Before Submitting
+            if (!validateSettingsForm()) {
+                return;
+            }
+
+            const btn = document.querySelector('.btn-save');
+            const originalBtnText = btn ? btn.innerText : 'Save Configuration';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = 'Saving Configuration...';
+            }
+
+            const rawBufferVal = document.getElementById('reorder_buffer_percent').value.trim();
+            const parsedBuffer = parseFloat(rawBufferVal);
+            const bufferPercent = (!isNaN(parsedBuffer) && parsedBuffer >= 0) ? parsedBuffer : 15.0;
+
+            // Intercept if 0% buffer and not yet confirmed by the user
+            if (bufferPercent === 0 && !hasConfirmedZeroBuffer) {
+                showZeroBufferConfirmationModal();
+                return;
+            }
+
+            // Reset flag after verification
+            hasConfirmedZeroBuffer = false;
+
+            const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+            const configuredBy = activeUser ? activeUser.username : 'Administrator';
+
             let payload = {
                 ream_price: parseFloat(document.getElementById('ream_price').value),
                 sheets_per_booklet: parseInt(document.getElementById('sheets_per_booklet').value),
                 booklet_price: parseFloat(document.getElementById('booklet_price').value),
-                active_period: document.getElementById('active_period').value + ' | ' + document.getElementById('ay_select').value
+                active_period: document.getElementById('active_period').value + ' | ' + getAcademicYearString(),
+                department_ream_budget: parseFloat(document.getElementById('department_ream_budget').value),
+                reorder_buffer_percent: bufferPercent,
+                configured_by: configuredBy
             };
 
             try {
@@ -315,19 +1285,91 @@
                 let data = await res.json();
                 let alertBox = document.getElementById('alertBox');
                 if (data.status === 'success') {
-                    alertBox.className = 'alert success';
-                    alertBox.innerText = data.message;
+                    if (alertBox) {
+                        alertBox.className = 'alert success';
+                        alertBox.innerText = data.message;
+                        alertBox.style.display = 'block';
+                        setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+                    }
+                    showSaveSuccessModal(data.message, payload);
+                    loadPeriodConfigurationsHistory();
                 } else {
-                    alertBox.className = 'alert error';
-                    alertBox.innerText = 'Error saving settings.';
+                    if (alertBox) {
+                        alertBox.className = 'alert error';
+                        alertBox.innerText = data.message || 'Error saving settings.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.message || 'Error saving settings.');
                 }
-                alertBox.style.display = 'block';
-                setTimeout(() => { alertBox.style.display = 'none'; }, 3000);
             } catch(e) {
                 console.error(e);
+                alert('Connection error occurred while saving configuration.');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = originalBtnText;
+                }
             }
         }
 
+        function showSaveSuccessModal(serverMessage, payload) {
+            const modal = document.getElementById('saveSuccessModal');
+            if (!modal) return;
+
+            const msgEl = document.getElementById('saveModalServerMsg');
+            if (msgEl) msgEl.innerText = serverMessage || "Settings updated successfully.";
+
+            const periodEl = document.getElementById('modalSummaryPeriod');
+            if (periodEl) periodEl.innerText = payload.active_period;
+
+            const prefixEl = document.getElementById('modalSummaryPrefix');
+            const currentPrefix = document.getElementById('generated_prefix_badge');
+            if (prefixEl && currentPrefix) prefixEl.innerText = currentPrefix.innerText.trim();
+
+            const sheetsEl = document.getElementById('modalSummarySheets');
+            if (sheetsEl && payload.sheets_per_booklet) {
+                const yieldPerReam = Math.floor(500 / payload.sheets_per_booklet);
+                sheetsEl.innerText = `${payload.sheets_per_booklet} sheets (${yieldPerReam} booklets/ream)`;
+            }
+
+            const bookletPriceEl = document.getElementById('modalSummaryBookletPrice');
+            if (bookletPriceEl) bookletPriceEl.innerText = `₱${payload.booklet_price.toFixed(2)} / pc`;
+
+            const reamPriceEl = document.getElementById('modalSummaryReamPrice');
+            if (reamPriceEl) reamPriceEl.innerText = `₱${payload.ream_price.toFixed(2)} / ream`;
+
+            const budgetEl = document.getElementById('modalSummaryBudget');
+            if (budgetEl) budgetEl.innerText = `₱${payload.department_ream_budget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            const bufferEl = document.getElementById('modalSummaryBuffer');
+            if (bufferEl) {
+                if (payload.reorder_buffer_percent === 0) {
+                    bufferEl.innerHTML = `<span style="color: #d97706; font-weight: bold;">0% (Exact Demand, No Buffer)</span>`;
+                } else {
+                    bufferEl.innerHTML = `<span style="color: #8e44ad; font-weight: bold;">${payload.reorder_buffer_percent}%</span>`;
+                }
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeSaveSuccessModal() {
+            const modal = document.getElementById('saveSuccessModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        // Close modal on Escape or Enter key
+        window.addEventListener('keydown', function(e) {
+            const modal = document.getElementById('saveSuccessModal');
+            if (modal && modal.style.display === 'flex') {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                    closeSaveSuccessModal();
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', updateDependentFieldsState);
+        updateDependentFieldsState();
         window.onload = fetchSettings;
 
         // --- REAL-TIME SESSION POLLING ---
@@ -349,6 +1391,20 @@
                 }).catch(e => console.error(e));
             }
         }, 3000); 
+
+        // --- REAL-TIME LAN OFFLINE SYNCHRONIZATION ---
+        if (window.lanSync) {
+            window.lanSync.onUpdate((payload) => {
+                if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET") {
+                    fetch('/api/settings').then(r => r.json()).then(data => {
+                        if (data && data.total_demand !== undefined) {
+                            currentTotalDemand = data.total_demand;
+                            updateRecommendationBox();
+                        }
+                    }).catch(e => console.error("LAN sync settings refresh error:", e));
+                }
+            });
+        }
 
         // --- SIDEBAR TOGGLE LOGIC ---
         function toggleSidebar() {

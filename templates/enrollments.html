@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Enrollments - Proposed System</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -13,6 +14,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; scroll-behavior: smooth; }
@@ -21,11 +25,116 @@
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
         
         /* Form Layout */
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 10px; align-items: end; }
-        input { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 12px; align-items: start; }
+        .form-field-group { display: flex; flex-direction: column; }
+        .form-field-header { display: flex; justify-content: space-between; align-items: center; height: 20px; margin-bottom: 6px; }
+        .form-field-header label { font-size: 0.8rem; color: #7f8c8d; font-weight: bold; margin: 0; line-height: 1; }
+        .form-grid input { width: 100%; height: 42px; box-sizing: border-box; padding: 10px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.9rem; color: #1e293b; transition: border-color 0.2s, box-shadow 0.2s; }
+        .form-grid input:focus { border-color: #3498db; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15); outline: none; }
+        .form-grid .btn-primary { height: 42px; box-sizing: border-box; padding: 0 22px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; border-radius: 6px; white-space: nowrap; }
+        input { width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; box-sizing: border-box; }
         .btn-primary { background-color: #3498db; color: white; border: none; cursor: pointer; font-weight: bold; padding: 11px 20px; border-radius: 4px; transition: 0.3s; }
-        .btn-primary:hover { background-color: #2980b9; }
+        .btn-primary:hover:not(:disabled) { background-color: #2980b9; }
+        .btn-primary:disabled, .btn-primary[disabled] {
+            background-color: #bdc3c7 !important;
+            color: #7f8c8d !important;
+            cursor: not-allowed !important;
+            opacity: 0.7;
+            box-shadow: none !important;
+            transform: none !important;
+        }
         .btn-danger { background-color: #e74c3c; color: white; border: none; cursor: pointer; padding: 10px 15px; font-weight: bold; border-radius: 4px; }
+        .btn-danger:disabled, .btn-danger[disabled] {
+            background-color: #bdc3c7 !important;
+            color: #7f8c8d !important;
+            cursor: not-allowed !important;
+            opacity: 0.7;
+        }
+
+        /* App Custom Dialog Modal */
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .app-dialog-card {
+            background: #fff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #3498db;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+
+        /* Modal Cancel Button (Solid Navy/Slate theme matching card headers and sidebar) */
+        .btn-cancel-modal {
+            background-color: #34495e;
+            color: #ffffff;
+            border: 1px solid #2c3e50;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 11px 20px;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+        .btn-cancel-modal:hover {
+            background-color: #2c3e50;
+            border-color: #1a252f;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+        .btn-cancel-modal:active {
+            background-color: #1a252f;
+            transform: translateY(1px);
+        }
+
+        /* Toast Notifications */
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .app-toast-item {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #ffffff;
+            color: #1e293b;
+            padding: 12px 18px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-left: 4px solid #10b981;
+            font-size: 0.9rem;
+            animation: toastSlideIn 0.25s ease-out;
+            max-width: 360px;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
         
         /* Instructor Cards Grid */
         .instructor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
@@ -35,8 +144,22 @@
         .card-subtitle { font-size: 0.8rem; color: #7f8c8d; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         
         /* Edit Buttons */
-        .card-action-btn { background: none; border: 1px solid #bdc3c7; color: #34495e; padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-left: 5px; }
-        .card-action-btn:hover { background: #ecf0f1; }
+        .card-action-btn { 
+            background: #f8fafc; 
+            border: 1px solid #cbd5e1; 
+            color: #34495e; 
+            padding: 4px 8px; 
+            border-radius: 5px; 
+            font-size: 0.85rem; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .card-action-btn:hover { background: #e2e8f0; border-color: #94a3b8; }
         .card-action-btn.active { background: #34495e; color: white; border-color: #34495e; }
 
         /* Class Items */
@@ -54,12 +177,51 @@
         .instructor-card.edit-mode .action-group { display: flex; }
         .instructor-card.edit-mode .class-headcount { display: none; }
 
+        /* Instructor Card Total Footer */
+        .instructor-total-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 14px;
+            padding-top: 10px;
+            border-top: 1px dashed #e2e8f0;
+            font-size: 0.85rem;
+        }
+        .instructor-total-label {
+            color: #64748b;
+            font-weight: 600;
+        }
+        .instructor-total-badge {
+            background: #f1f5f9;
+            color: #1e293b;
+            border: 1px solid #cbd5e1;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
         /* Modal Styles */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; }
         .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 400px; width: 100%; }
         .modal-card h3 { margin-bottom: 20px; color: #2c3e50; border-bottom: 1px solid #ecf0f1; padding-bottom: 10px; }
         .modal-card label { display: block; font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-bottom: 5px; }
         .modal-card input { margin-bottom: 15px; }
+
+        /* Bulk Import Modal Styles */
+        .bulk-modal-card { background: #fff; padding: 25px 30px; border-radius: 10px; max-width: 820px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .bulk-tab-btn { padding: 10px 20px; font-weight: bold; border: none; background: #e2e8f0; color: #475569; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .bulk-tab-btn.active { background: #3498db; color: white; }
+        .upload-dropzone { border: 2px dashed #3498db; border-radius: 8px; padding: 25px 20px; text-align: center; background: #f8fafc; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+        .upload-dropzone:hover, .upload-dropzone.dragover { background: #ebf5fb; border-color: #2980b9; }
+        .preview-table-container { max-height: 250px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; background: #ffffff; }
+        .preview-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .preview-table th { background: #f1f5f9; color: #334155; padding: 8px 10px; text-align: left; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #cbd5e1; }
+        .preview-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+        .badge-dept { padding: 2px 8px; border-radius: 12px; font-weight: bold; font-size: 0.75rem; display: inline-block; }
+        .badge-cs { background: #e0f2fe; color: #0369a1; }
+        .badge-it { background: #fef3c7; color: #b45309; }
+        .badge-err { background: #fee2e2; color: #b91c1c; font-size: 0.75rem; font-weight: bold; }
     
         /* Mobile Hamburger & Overlay Styles */
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
@@ -108,14 +270,19 @@
     <div class="sidebar">
 
         <!-- NEW: Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
             <!-- Hidden Dropdown Panel -->
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -123,8 +290,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link active">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -141,31 +308,45 @@
 
     <div class="main-content" id="mainView">
         
-        <div class="header-action">
+        <div class="header-action" style="flex-wrap: wrap; gap: 10px;">
             <h1 style="color: #2c3e50; font-size: 1.5rem;">Semester Masterfile</h1>
-            <button class="btn-danger" onclick="resetSemester()">⚠️ End of Semester Reset</button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn-primary admin-only" style="background-color: #27ae60;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
+            </div>
         </div>
 
         <!-- INLINE ADD FORM -->
         <div class="card" style="padding: 20px;">
-            <form id="addForm" onsubmit="submitClass(event, 'POST', null)" class="form-grid">
-                <div>
-                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Instructor</label>
+            <form id="addForm" onsubmit="submitClass(event)" class="form-grid">
+                <div class="form-field-group">
+                    <div class="form-field-header">
+                        <label for="teacher">Instructor</label>
+                    </div>
                     <input type="text" id="teacher" placeholder="e.g., Grace S. Ibañez" required>
                 </div>
-                <div>
-                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Section</label>
+                <div class="form-field-group">
+                    <div class="form-field-header">
+                        <label for="section">Section</label>
+                        <span id="section-dept-badge" style="font-size: 0.72rem; font-weight: 700; line-height: 1;"></span>
+                    </div>
                     <input type="text" id="section" placeholder="e.g., BSCS-1E" required>
                 </div>
-                <div>
-                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Subject</label>
+                <div class="form-field-group">
+                    <div class="form-field-header">
+                        <label for="subject">Subject</label>
+                    </div>
                     <input type="text" id="subject" placeholder="e.g., COSC 105" required>
                 </div>
-                <div>
-                    <label style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">Headcount</label>
-                    <input type="number" id="headcount" min="1" required>
+                <div class="form-field-group">
+                    <div class="form-field-header">
+                        <label for="headcount">Headcount</label>
+                    </div>
+                    <input type="number" id="headcount" min="1" placeholder="e.g., 40" required>
                 </div>
-                <button type="submit" class="btn-primary" id="addBtn">Add Class</button>
+                <div class="form-field-group">
+                    <div class="form-field-header"></div>
+                    <button type="submit" class="btn-primary" id="addBtn" disabled>Add Class</button>
+                </div>
             </form>
         </div>
 
@@ -177,10 +358,14 @@
                     👨‍🏫 {{ teacher }}
                 </h3>
                 <div class="card-subtitle">
-                    <span>{{ classes|length }} Classes Assigned</span>
-                    <div>
-                        <button class="card-action-btn" onclick="quickAdd('{{ teacher }}')">+ Add Class</button>
-                        <button class="card-action-btn" id="btn-{{ loop.index }}" onclick="toggleEditMode('{{ loop.index }}')">Edit Load</button>
+                    <span style="font-size: 0.8rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px;">
+                        {{ classes|length }} {{ 'Class' if classes|length == 1 else 'Classes' }}
+                        <span style="color: #cbd5e1; margin: 0 4px;">•</span> 
+                        <strong style="color: #1e293b;">{{ classes|sum(attribute='student_headcount') }} Students</strong>
+                    </span>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                        <button class="card-action-btn" onclick="quickAdd('{{ teacher }}')" title="Add Class for {{ teacher }}">➕</button>
+                        <button class="card-action-btn" id="btn-{{ loop.index }}" onclick="toggleEditMode('{{ loop.index }}')" title="Edit Load">✏️</button>
                     </div>
                 </div>
                 
@@ -196,12 +381,31 @@
                         
                         <!-- These appear when "Edit Load" is clicked -->
                         <div class="action-group">
-                            <button class="edit-btn" onclick="openEditModal({{ c.id }}, '{{ teacher }}', '{{ c.section }}', '{{ c.subject }}', {{ c.student_headcount }})">✏️</button>
-                            <button class="delete-btn" onclick="deleteClass({{ c.id }})">🗑️</button>
+                            <button class="edit-btn" 
+                                    data-id="{{ c.id }}"
+                                    data-teacher="{{ teacher }}"
+                                    data-section="{{ c.section }}"
+                                    data-subject="{{ c.subject }}"
+                                    data-headcount="{{ c.student_headcount }}"
+                                    onclick="handleEditClick(this)">✏️</button>
+                            <button class="delete-btn" 
+                                    data-id="{{ c.id }}"
+                                    data-teacher="{{ teacher }}"
+                                    data-section="{{ c.section }}"
+                                    data-subject="{{ c.subject }}"
+                                    onclick="handleDeleteClick(this)">🗑️</button>
                         </div>
                     </div>
                 </div>
                 {% endfor %}
+
+                <!-- Instructor Total Student Headcount Footer -->
+                <div class="instructor-total-footer">
+                    <span class="instructor-total-label">Total Student Headcount</span>
+                    <span class="instructor-total-badge">
+                        👥 <strong>{{ classes|sum(attribute='student_headcount') }}</strong> Pax Total
+                    </span>
+                </div>
             </div>
             {% else %}
             <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: 8px;">
@@ -221,6 +425,7 @@
                 
                 <label>Section</label>
                 <input type="text" id="edit-section" required>
+                <div id="edit-section-dept-badge" style="font-size: 0.75rem; margin-top: -8px; margin-bottom: 12px; font-weight: 600; min-height: 18px;"></div>
                 
                 <label>Subject</label>
                 <input type="text" id="edit-subject" required>
@@ -230,9 +435,117 @@
                 
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
                     <button type="submit" class="btn-primary" style="flex: 1;" id="updateBtn">Save Changes</button>
-                    <button type="button" class="btn-primary" style="flex: 1; background: #95a5a6;" onclick="closeEditModal()">Cancel</button>
+                    <button type="button" class="btn-cancel-modal" style="flex: 1;" onclick="closeEditModal()">Cancel</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- BULK CLASS ONBOARDING MODAL -->
+    <div class="modal-overlay" id="bulkImportModal">
+        <div class="bulk-modal-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #ecf0f1; padding-bottom: 12px; margin-bottom: 15px;">
+                <div>
+                    <h3 style="margin: 0; color: #2c3e50; font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+                        📥 Batch Class Onboarding
+                    </h3>
+                    <p style="margin: 4px 0 0 0; color: #7f8c8d; font-size: 0.8rem;">
+                        Quickly onboard departmental classes from a spreadsheet or CSV. System auto-deduplicates existing loads and infers department.
+                    </p>
+                </div>
+                <button onclick="closeBulkImportModal()" style="background: none; border: none; font-size: 1.6rem; color: #7f8c8d; cursor: pointer; line-height: 1; padding: 0 5px;">&times;</button>
+            </div>
+
+            <!-- TAB SWITCHER -->
+            <div style="display: flex; gap: 5px; border-bottom: 2px solid #e2e8f0; margin-bottom: 15px;">
+                <button type="button" class="bulk-tab-btn active" id="tabUploadBtn" onclick="switchImportTab('upload')">📁 Upload CSV File</button>
+                <button type="button" class="bulk-tab-btn" id="tabPasteBtn" onclick="switchImportTab('paste')">📋 Paste from Excel / Sheets</button>
+            </div>
+
+            <!-- TAB 1: CSV FILE UPLOAD -->
+            <div id="tabUploadContent">
+                <div class="upload-dropzone" id="dropZone" onclick="document.getElementById('csvFileInput').click()">
+                    <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display: none;" onchange="handleFileSelect(event)">
+                    <div style="font-size: 2.2rem; margin-bottom: 6px;">📄</div>
+                    <div style="font-weight: bold; color: #2c3e50; font-size: 0.95rem;">Click to browse or drag & drop a .CSV file here</div>
+                    <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">Expected columns: <code>Instructor, Section, Subject, Headcount</code></div>
+                </div>
+
+                <!-- Loaded File Card (Shown when file is selected) -->
+                <div id="fileLoadedCard" style="display: none; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 6px; padding: 10px 14px; margin-top: 10px; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.4rem;">📊</span>
+                        <div>
+                            <strong id="loadedFileName" style="color: #0369a1; font-size: 0.88rem;">classes.csv</strong>
+                            <div id="loadedFileInfo" style="color: #0284c7; font-size: 0.75rem;">12.4 KB • 15 rows parsed</div>
+                        </div>
+                    </div>
+                    <button type="button" class="card-action-btn" onclick="clearSelectedFile(event)" style="color: #e74c3c; border-color: #fca5a5; font-size: 0.75rem;">✕ Change File</button>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-size: 0.75rem; color: #64748b;">Works 100% offline — files are processed locally in your browser.</span>
+                    <button type="button" class="card-action-btn" onclick="downloadOfflineTemplate()" style="background: #f1f5f9; color: #0284c7; border-color: #cbd5e1; font-size: 0.8rem; padding: 6px 12px;">
+                        📥 Download Sample Template (.csv)
+                    </button>
+                </div>
+            </div>
+
+            <!-- TAB 2: COPY-PASTE FROM EXCEL -->
+            <div id="tabPasteContent" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label style="font-size: 0.8rem; color: #64748b; font-weight: bold;">
+                        Copy columns from Excel / Google Sheets and paste them below:
+                    </label>
+                    <button type="button" onclick="autoFillSamplePaste()" style="background: none; border: none; color: #3498db; cursor: pointer; font-size: 0.78rem; text-decoration: underline; font-weight: bold;">
+                        ✨ Paste Sample Data
+                    </button>
+                </div>
+                <textarea id="pasteInput" rows="5" placeholder="Instructor&#9;Section&#9;Subject&#9;Headcount&#10;Dr. Maria Santos&#9;BSCS-1A&#9;Introduction to Computing&#9;37&#10;Engr. Mark Bautista&#9;BSIT-1A&#9;Intro to IT&#9;44" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 0.85rem; resize: vertical;"></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                    <span id="pasteCounter" style="font-size: 0.8rem; color: #7f8c8d; font-weight: bold;">0 line(s) entered</span>
+                    <button type="button" class="btn-primary" id="parsePasteBtn" onclick="handlePasteParse()" disabled style="padding: 8px 16px; font-size: 0.85rem;">🔍 Parse Pasted Data</button>
+                </div>
+            </div>
+
+            <!-- PREVIEW & VALIDATION SECTION -->
+            <div id="previewSection" style="display: none; margin-top: 15px; flex: 1; min-height: 0; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                    <span id="previewSummary" style="font-size: 0.85rem; font-weight: bold; color: #334155;"></span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <label style="font-size: 0.8rem; color: #475569; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                            <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)" checked> Select All Valid
+                        </label>
+                    </div>
+                </div>
+
+                <div class="preview-table-container">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 35px; text-align: center;"></th>
+                                <th style="width: 45px;">Row</th>
+                                <th>Instructor</th>
+                                <th>Section</th>
+                                <th>Subject</th>
+                                <th style="text-align: right;">Count</th>
+                                <th style="text-align: center;">Dept</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- MODAL ACTIONS -->
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; padding-top: 12px; border-top: 1px solid #ecf0f1;">
+                <button type="button" class="btn-cancel-modal" onclick="closeBulkImportModal()">Cancel</button>
+                <button type="button" class="btn-primary" id="confirmImportBtn" style="background-color: #27ae60;" onclick="submitBulkImport()" disabled>
+                    🚀 Import Classes into Masterfile
+                </button>
+            </div>
         </div>
     </div>
 
@@ -250,11 +563,19 @@
             if (activeUser.role !== 'Admin') {
                 const adminLinks = document.querySelectorAll('.admin-only');
                 adminLinks.forEach(link => link.style.display = 'none');
+                const navUsers = document.getElementById('navManageUsers');
+                if (navUsers) navUsers.innerHTML = '👤 My Account';
             }
         }
     
-        function logout() {
-        if(confirm("Are you sure you want to log out?")) {
+        async function logout() {
+            const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+                type: 'info',
+                confirmText: 'Log Out',
+                cancelText: 'Cancel'
+            });
+            if (!confirmed) return;
+
             fetch('/api/logout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -267,7 +588,6 @@
                 window.location.href = '/login';
             });
         }
-    }
     
         // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
         fetch('/api/dss-alert')
@@ -288,12 +608,21 @@
                     }
                     
                     if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data.message, data.reams_needed);
+                        showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
                     }
                 } else {
                     badge.style.display = 'none';
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                    if (data.has_enrollments === false) {
+                        panel.style.borderLeftColor = '#64748b';
+                        if (activeUser && activeUser.role === 'Admin') {
+                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                        } else {
+                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                        }
+                    } else {
+                        panel.style.borderLeftColor = '#27ae60'; 
+                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                    }
                 }
             });
     
@@ -302,15 +631,42 @@
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
     
-        function showDSSModal(message, reams) {
+        function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+            let bCount = deficitBooklets;
+            let sCount = deficitSheets;
+            if (typeof message === 'object' && message !== null) {
+                reams = message.reams_needed;
+                bCount = message.deficit_booklets;
+                sCount = message.deficit_sheets;
+                message = message.message;
+            }
             const modalHtml = `
-                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                    <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                        <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                        <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                        <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                        
+                        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                                <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                                <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                                <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                            </div>
+                        </div>
+                        
+                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                            To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                        </p>
+                        
+                        <div style="display: flex; justify-content: center;">
+                            <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                                Acknowledge & Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -319,18 +675,307 @@
     
         function dismissDSS() {
             sessionStorage.setItem('dss_acknowledged', 'true');
-            document.getElementById('dssModal').remove();
+            const modal = document.getElementById('dssModal');
+            if (modal) modal.remove();
             
             const panel = document.getElementById('notifPanel');
-            panel.style.display = 'block'; 
-            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            if (panel) {
+                panel.style.display = 'block'; 
+                setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            }
         }
     
+        if (window.lanSync) {
+            window.lanSync.onUpdate((payload) => {
+                if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET") {
+                    const editModal = document.getElementById('editModal');
+                    const bulkModal = document.getElementById('bulkImportModal');
+                    if ((editModal && editModal.style.display === 'flex') || (bulkModal && bulkModal.style.display === 'flex')) {
+                        return;
+                    }
+                    window.location.reload();
+                }
+            });
+        }
+        // --- IN-APP MODAL DIALOG SYSTEM (Replaces crude browser alert & confirm) ---
+        function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    alert(`${title}\n\n${message}`);
+                    resolve(true);
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#3498db';
+                let icon = 'ℹ️';
+                let btnBg = '#3498db';
+
+                if (type === 'warning') {
+                    borderCol = '#f59e0b';
+                    icon = '⚠️';
+                    btnBg = '#f59e0b';
+                } else if (type === 'error') {
+                    borderCol = '#ef4444';
+                    icon = '❌';
+                    btnBg = '#ef4444';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    btnBg = '#10b981';
+                }
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) {
+                    if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<p') || message.includes('<strong>') || message.includes('<br>'))) {
+                        msgEl.style.whiteSpace = 'normal';
+                        msgEl.innerHTML = message;
+                    } else {
+                        msgEl.style.whiteSpace = 'pre-line';
+                        msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                    }
+                }
+
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = btnBg;
+                confirmBtn.style.color = '#ffffff';
+                if (cancelBtn) cancelBtn.style.display = 'none';
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        function showAppConfirm(title, message, options = {}) {
+            return new Promise(resolve => {
+                const {
+                    type = 'warning',
+                    confirmText = 'Confirm',
+                    cancelText = 'Cancel',
+                    confirmBg = null
+                } = options;
+
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    const res = confirm(`${title}\n\n${message}`);
+                    resolve(res);
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#f59e0b';
+                let icon = '⚠️';
+                let defaultBg = '#3498db';
+
+                if (type === 'danger') {
+                    borderCol = '#ef4444';
+                    icon = '🛑';
+                    defaultBg = '#e74c3c';
+                } else if (type === 'info') {
+                    borderCol = '#3498db';
+                    icon = '🔒';
+                    defaultBg = '#34495e';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    defaultBg = '#10b981';
+                }
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) {
+                    if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<p') || message.includes('<strong>') || message.includes('<br>'))) {
+                        msgEl.style.whiteSpace = 'normal';
+                        msgEl.innerHTML = message;
+                    } else {
+                        msgEl.style.whiteSpace = 'pre-line';
+                        msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                    }
+                }
+
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = confirmBg || defaultBg;
+                confirmBtn.style.color = '#ffffff';
+
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'inline-block';
+                    cancelBtn.innerText = cancelText;
+                    cancelBtn.onclick = () => {
+                        modal.style.display = 'none';
+                        resolve(false);
+                    };
+                }
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        // --- IN-APP TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'success', title = null) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            let icon = '✅';
+            let borderColor = '#10b981';
+            let defaultTitle = 'Success';
+            if (type === 'error') {
+                icon = '❌';
+                borderColor = '#ef4444';
+                defaultTitle = 'Error';
+            } else if (type === 'warning') {
+                icon = '⚠️';
+                borderColor = '#f59e0b';
+                defaultTitle = 'Warning';
+            } else if (type === 'info') {
+                icon = 'ℹ️';
+                borderColor = '#3b82f6';
+                defaultTitle = 'Notice';
+            }
+
+            const toastTitle = title || defaultTitle;
+
+            toast.style.cssText = `
+                pointer-events: auto;
+                min-width: 300px;
+                max-width: 420px;
+                background: #ffffff;
+                color: #1e293b;
+                border-radius: 10px;
+                padding: 13px 16px;
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+                border-left: 5px solid ${borderColor};
+                display: flex;
+                align-items: flex-start;
+                gap: 12px;
+                opacity: 0;
+                transform: translateX(40px);
+                transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                font-family: inherit;
+            `;
+
+            toast.innerHTML = `
+                <div style="font-size: 1.25rem; line-height: 1; flex-shrink: 0; margin-top: 2px;">${icon}</div>
+                <div style="flex-grow: 1;">
+                    <div style="font-weight: 700; font-size: 0.9rem; color: #0f172a; margin-bottom: 2px;">${toastTitle}</div>
+                    <div style="font-size: 0.84rem; color: #475569; line-height: 1.4;">${message}</div>
+                </div>
+                <button type="button" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; padding: 0 0 0 6px; line-height: 1;" onclick="this.parentElement.remove()">&times;</button>
+            `;
+
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateX(0)';
+            });
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(40px)';
+                setTimeout(() => toast.remove(), 280);
+            }, 3800);
+        }
+
+        // --- DEPARTMENT BADGE HELPER ---
+        function updateSectionDeptBadge(inputId, badgeId) {
+            const inputEl = document.getElementById(inputId);
+            const badgeEl = document.getElementById(badgeId);
+            if (!inputEl || !badgeEl) return;
+            const val = inputEl.value.trim().toUpperCase();
+            if (!val) {
+                badgeEl.innerHTML = '';
+                return;
+            }
+            if (val.includes('BSIT') || val.includes('IT-')) {
+                badgeEl.innerHTML = '<span style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 10px; display: inline-block;">🏷️ Information Technology (IT)</span>';
+            } else if (val.includes('BSCS') || val.includes('CS-')) {
+                badgeEl.innerHTML = '<span style="background: #ecfdf5; color: #16a34a; padding: 2px 8px; border-radius: 10px; display: inline-block;">🏷️ Computer Science (CS)</span>';
+            } else {
+                badgeEl.innerHTML = '<span style="background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 10px; display: inline-block;">🏷️ Default: CS Program</span>';
+            }
+        }
+
+        // --- FORM VALIDATION: ADD CLASS ---
+        function validateAddForm() {
+            const teacherEl = document.getElementById('teacher');
+            const sectionEl = document.getElementById('section');
+            const subjectEl = document.getElementById('subject');
+            const headcountEl = document.getElementById('headcount');
+            const btn = document.getElementById('addBtn');
+            
+            updateSectionDeptBadge('section', 'section-dept-badge');
+
+            if (!btn) return;
+
+            const teacher = (teacherEl ? teacherEl.value : '').trim();
+            const section = (sectionEl ? sectionEl.value : '').trim();
+            const subject = (subjectEl ? subjectEl.value : '').trim();
+            const headcountVal = (headcountEl ? headcountEl.value : '').trim();
+            const headcountNum = parseInt(headcountVal, 10);
+
+            const isValid = teacher.length > 0 && 
+                            section.length > 0 && 
+                            subject.length > 0 && 
+                            headcountVal.length > 0 && 
+                            !isNaN(headcountNum) && 
+                            headcountNum > 0;
+
+            btn.disabled = !isValid;
+        }
+
+        // Attach validation listeners once DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            ['teacher', 'section', 'subject', 'headcount'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', validateAddForm);
+                    el.addEventListener('change', validateAddForm);
+                }
+            });
+            const editSecEl = document.getElementById('edit-section');
+            if (editSecEl) {
+                editSecEl.addEventListener('input', () => updateSectionDeptBadge('edit-section', 'edit-section-dept-badge'));
+                editSecEl.addEventListener('change', () => updateSectionDeptBadge('edit-section', 'edit-section-dept-badge'));
+            }
+            validateAddForm();
+
+            // Bind pasteInput live row counter & parse button toggle
+            const pasteArea = document.getElementById('pasteInput');
+            if (pasteArea) {
+                pasteArea.addEventListener('input', handlePasteInput);
+            }
+        });
+
         // --- QUICK ADD HELPER ---
         function quickAdd(teacherName) {
             document.getElementById('teacher').value = teacherName;
             document.getElementById('mainView').scrollTop = 0; 
             document.getElementById('section').focus(); 
+            validateAddForm();
         }
     
         // --- ADD NEW RECORD ---
@@ -339,11 +984,15 @@
             const btn = document.getElementById('addBtn');
             btn.innerText = "Adding..."; btn.disabled = true;
     
+            const secVal = document.getElementById('section').value.trim().toUpperCase();
+            const inferredDept = (secVal.includes('BSIT') || secVal.includes('IT-')) ? 'IT' : 'CS';
+
             const payload = {
-                teacher_name: document.getElementById('teacher').value,
-                section: document.getElementById('section').value,
-                subject: document.getElementById('subject').value,
-                student_headcount: parseInt(document.getElementById('headcount').value)
+                teacher_name: document.getElementById('teacher').value.trim(),
+                section: secVal,
+                subject: document.getElementById('subject').value.trim(),
+                student_headcount: parseInt(document.getElementById('headcount').value),
+                department: inferredDept
             };
     
             fetch('/api/enrollments', {
@@ -351,13 +1000,19 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             })
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to add class");
+                return res.json().catch(() => ({}));
+            })
             .then(() => {
-                // Automatically refresh the page unconditionally once the fetch is complete
-                window.location.reload(); 
+                showToast("Class enrolled successfully!", "success", "Class Added");
+                setTimeout(() => window.location.reload(), 600);
             })
             .catch(err => {
                 console.error("Error adding class:", err);
+                showToast("Failed to add class. Please check your network and fields.", "error", "Add Failed");
                 btn.innerText = "Add Class"; btn.disabled = false;
+                validateAddForm();
             });
         }
     
@@ -368,15 +1023,34 @@
             
             card.classList.toggle('edit-mode');
             if (card.classList.contains('edit-mode')) {
-                btn.innerText = "Done Editing";
+                btn.innerHTML = "✅";
+                btn.title = "Done Editing";
                 btn.classList.add('active');
             } else {
-                btn.innerText = "Edit Load";
+                btn.innerHTML = "✏️";
+                btn.title = "Edit Load";
                 btn.classList.remove('active');
             }
         }
     
         // --- UPDATE RECORD (MODAL LOGIC) ---
+        function handleEditClick(btn) {
+            const id = btn.getAttribute('data-id');
+            const teacher = btn.getAttribute('data-teacher') || '';
+            const section = btn.getAttribute('data-section') || '';
+            const subject = btn.getAttribute('data-subject') || '';
+            const headcount = parseInt(btn.getAttribute('data-headcount') || '0', 10);
+            openEditModal(id, teacher, section, subject, headcount);
+        }
+
+        function handleDeleteClick(btn) {
+            const id = btn.getAttribute('data-id');
+            const teacher = btn.getAttribute('data-teacher') || '';
+            const section = btn.getAttribute('data-section') || '';
+            const subject = btn.getAttribute('data-subject') || '';
+            deleteClass(id, teacher, section, subject);
+        }
+
         function openEditModal(id, teacher, section, subject, headcount) {
             document.getElementById('edit-id').value = id;
             document.getElementById('edit-teacher').value = teacher;
@@ -384,6 +1058,7 @@
             document.getElementById('edit-subject').value = subject;
             document.getElementById('edit-headcount').value = headcount;
             
+            updateSectionDeptBadge('edit-section', 'edit-section-dept-badge');
             document.getElementById('editModal').style.display = 'flex';
         }
     
@@ -397,11 +1072,15 @@
             btn.innerText = "Saving..."; btn.disabled = true;
     
             const id = document.getElementById('edit-id').value;
+            const secVal = document.getElementById('edit-section').value.trim().toUpperCase();
+            const inferredDept = (secVal.includes('BSIT') || secVal.includes('IT-')) ? 'IT' : 'CS';
+
             const payload = {
-                teacher_name: document.getElementById('edit-teacher').value,
-                section: document.getElementById('edit-section').value,
-                subject: document.getElementById('edit-subject').value,
-                student_headcount: parseInt(document.getElementById('edit-headcount').value)
+                teacher_name: document.getElementById('edit-teacher').value.trim(),
+                section: secVal,
+                subject: document.getElementById('edit-subject').value.trim(),
+                student_headcount: parseInt(document.getElementById('edit-headcount').value),
+                department: inferredDept
             };
     
             fetch(`/api/enrollments/${id}`, {
@@ -413,31 +1092,510 @@
                 // Automatically refresh the page unconditionally once the update is complete
                 window.location.reload();
             })
-            .catch(err => console.error("Error updating class:", err));
+            .catch(err => {
+                console.error("Error updating class:", err);
+                showToast("Failed to update class record.", "error", "Update Failed");
+                btn.innerText = "Save Changes"; btn.disabled = false;
+            });
         }
     
         // --- DELETE RECORD ---
-        function deleteClass(id) {
-            if(confirm("Are you sure you want to remove this class from the instructor's load?")) {
-                fetch(`/api/enrollments/${id}`, { method: 'DELETE' })
-                .then(() => {
-                    // Automatically refresh the page unconditionally once the deletion is complete
-                    window.location.reload(); 
-                })
-                .catch(err => console.error("Error deleting class:", err));
+        async function deleteClass(id, teacher, section, subject) {
+            const confirmed = await showAppConfirm(
+                "Remove Class Record",
+                `Are you sure you want to remove <strong>${section || 'this section'}</strong> (${subject || 'class'}) from <strong>${teacher || 'the instructor'}</strong>'s teaching load?<br><br><span style="font-size: 0.85rem; color: #64748b;">Note: Classes with distributed booklets cannot be removed to preserve historical transaction records.</span>`,
+                {
+                    type: "danger",
+                    confirmText: "Remove Class",
+                    cancelText: "Cancel"
+                }
+            );
+            if (!confirmed) return;
+
+            fetch(`/api/enrollments/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    showToast(data.message || "Class removed successfully.", "success", "Class Removed");
+                    setTimeout(() => window.location.reload(), 600);
+                } else {
+                    showAppAlert("Cannot Delete Class", data.message || "Failed to remove class.", "error");
+                }
+            })
+            .catch(err => {
+                console.error("Error deleting class:", err);
+                showAppAlert("Network Error", "A network error occurred while attempting to remove the class.", "error");
+            });
+        }
+
+        // ==========================================
+        // --- BULK CLASS ONBOARDING MODULE (OFFLINE) ---
+        // ==========================================
+        let parsedBulkRecords = [];
+
+        function openBulkImportModal() {
+            document.getElementById('bulkImportModal').style.display = 'flex';
+            switchImportTab('upload');
+            resetBulkImportData();
+            initDropZone();
+        }
+
+        function closeBulkImportModal() {
+            document.getElementById('bulkImportModal').style.display = 'none';
+        }
+
+        function switchImportTab(tab) {
+            const uploadBtn = document.getElementById('tabUploadBtn');
+            const pasteBtn = document.getElementById('tabPasteBtn');
+            const uploadContent = document.getElementById('tabUploadContent');
+            const pasteContent = document.getElementById('tabPasteContent');
+
+            if (tab === 'upload') {
+                uploadBtn.classList.add('active');
+                pasteBtn.classList.remove('active');
+                uploadContent.style.display = 'block';
+                pasteContent.style.display = 'none';
+            } else {
+                pasteBtn.classList.add('active');
+                uploadBtn.classList.remove('active');
+                pasteContent.style.display = 'block';
+                uploadContent.style.display = 'none';
+                setTimeout(() => document.getElementById('pasteInput').focus(), 50);
             }
         }
-    
-        // --- SEMESTER RESET ---
-        function resetSemester() {
-            if(confirm("🚨 WARNING: Are you sure you want to wipe ALL class records? This prepares the system for a new semester and cannot be undone.")) {
-                fetch(`/api/enrollments/reset-semester`, { method: 'DELETE' })
-                .then(() => {
-                    window.location.reload(); 
-                });
+
+        function resetBulkImportData() {
+            parsedBulkRecords = [];
+            const fileInput = document.getElementById('csvFileInput');
+            if (fileInput) fileInput.value = '';
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) dropZone.style.display = 'block';
+            const loadedCard = document.getElementById('fileLoadedCard');
+            if (loadedCard) loadedCard.style.display = 'none';
+
+            const pasteInput = document.getElementById('pasteInput');
+            if (pasteInput) pasteInput.value = '';
+            const pasteCounter = document.getElementById('pasteCounter');
+            if (pasteCounter) {
+                pasteCounter.innerText = '0 line(s) entered';
+                pasteCounter.style.color = '#7f8c8d';
+            }
+            const parsePasteBtn = document.getElementById('parsePasteBtn');
+            if (parsePasteBtn) parsePasteBtn.disabled = true;
+
+            const previewSection = document.getElementById('previewSection');
+            if (previewSection) previewSection.style.display = 'none';
+
+            const confirmBtn = document.getElementById('confirmImportBtn');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = '🚀 Import Classes into Masterfile';
             }
         }
-    
+
+        function initDropZone() {
+            const dropZone = document.getElementById('dropZone');
+            if (!dropZone || dropZone.dataset.initialized) return;
+            dropZone.dataset.initialized = 'true';
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+            });
+
+            dropZone.addEventListener('drop', e => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    processUploadedFile(files[0]);
+                }
+            }, false);
+        }
+
+        function downloadOfflineTemplate() {
+            const csvContent = "Instructor,Section,Subject,Headcount\r\n" +
+                "Dr. Maria Santos,BSCS-1A,Introduction to Computing,37\r\n" +
+                "Dr. Maria Santos,BSCS-1B,Computer Programming 1,42\r\n" +
+                "Engr. Mark Bautista,BSIT-1A,Introduction to Information Technology,44\r\n" +
+                "Engr. Mark Bautista,BSIT-1B,Computer Programming 1,43\r\n" +
+                "Prof. Juan Reyes,BSCS-2A,Data Structures and Algorithms,38\r\n";
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "class_enrollment_template.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Class enrollment CSV template downloaded successfully.", "success", "Template Downloaded");
+        }
+
+        function showFileLoadedCard(name, size, rowCount) {
+            const card = document.getElementById('fileLoadedCard');
+            const fileName = document.getElementById('loadedFileName');
+            const fileInfo = document.getElementById('loadedFileInfo');
+            const dropZone = document.getElementById('dropZone');
+
+            if (fileName) fileName.innerText = name;
+            if (fileInfo) {
+                const sizeKb = (size / 1024).toFixed(1);
+                fileInfo.innerText = `${sizeKb} KB • ${rowCount} row(s) parsed`;
+            }
+            if (dropZone) dropZone.style.display = 'none';
+            if (card) card.style.display = 'flex';
+        }
+
+        function clearSelectedFile(event) {
+            if (event) event.stopPropagation();
+            const fileInput = document.getElementById('csvFileInput');
+            if (fileInput) fileInput.value = '';
+            const dropZone = document.getElementById('dropZone');
+            if (dropZone) dropZone.style.display = 'block';
+            const card = document.getElementById('fileLoadedCard');
+            if (card) card.style.display = 'none';
+
+            parsedBulkRecords = [];
+            const previewSection = document.getElementById('previewSection');
+            if (previewSection) previewSection.style.display = 'none';
+            updateConfirmButton();
+            showToast("File selection cleared. You can drop or browse another CSV.", "info", "File Cleared");
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                processUploadedFile(file);
+            }
+        }
+
+        function processUploadedFile(file) {
+            if (!file.name.toLowerCase().endsWith('.csv') && file.type && !file.type.includes('csv') && !file.type.includes('text')) {
+                showToast("Please select a valid .CSV spreadsheet file.", "error", "Invalid File Type");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parsedBulkRecords = parseDelimitedText(text);
+                if (parsedBulkRecords && parsedBulkRecords.length > 0) {
+                    showFileLoadedCard(file.name, file.size, parsedBulkRecords.length);
+                    renderValidationGrid();
+                    const validCount = parsedBulkRecords.filter(r => r.isValid).length;
+                    showToast(`Loaded ${parsedBulkRecords.length} row(s) (${validCount} valid) from ${file.name}. Review below before importing.`, "success", "CSV Parsed");
+                }
+            };
+            reader.onerror = function() {
+                showToast("Error reading file offline. Please try selecting it again.", "error", "File Read Error");
+            };
+            reader.readAsText(file);
+        }
+
+        function handlePasteInput() {
+            const textarea = document.getElementById('pasteInput');
+            const text = textarea ? textarea.value : '';
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            const count = lines.length;
+            const counter = document.getElementById('pasteCounter');
+            const parseBtn = document.getElementById('parsePasteBtn');
+            if (counter) {
+                counter.innerText = `${count} line${count === 1 ? '' : 's'} entered`;
+                counter.style.color = count > 0 ? '#16a34a' : '#7f8c8d';
+            }
+            if (parseBtn) {
+                parseBtn.disabled = count === 0;
+            }
+        }
+
+        function autoFillSamplePaste() {
+            const sampleData = 
+                "Instructor\tSection\tSubject\tHeadcount\n" +
+                "Dr. Maria Santos\tBSCS-1A\tIntroduction to Computing\t37\n" +
+                "Dr. Maria Santos\tBSCS-1B\tComputer Programming 1\t42\n" +
+                "Engr. Mark Bautista\tBSIT-1A\tIntroduction to Information Technology\t44\n" +
+                "Engr. Mark Bautista\tBSIT-1B\tComputer Programming 1\t43\n" +
+                "Prof. Juan Reyes\tBSCS-2A\tData Structures and Algorithms\t38";
+            const textarea = document.getElementById('pasteInput');
+            if (textarea) {
+                textarea.value = sampleData;
+                handlePasteInput();
+                textarea.focus();
+                showToast("Sample class records loaded into paste area. Click 'Parse Pasted Data' to validate.", "info", "Sample Pasted");
+            }
+        }
+
+        function handlePasteParse() {
+            const text = document.getElementById('pasteInput').value;
+            if (!text || !text.trim()) {
+                showToast("Please paste tabular data from your spreadsheet into the text box.", "warning", "Empty Paste Area");
+                return;
+            }
+            parsedBulkRecords = parseDelimitedText(text);
+            if (parsedBulkRecords && parsedBulkRecords.length > 0) {
+                renderValidationGrid();
+                const validCount = parsedBulkRecords.filter(r => r.isValid).length;
+                showToast(`Parsed ${parsedBulkRecords.length} row(s) (${validCount} valid). Review below before importing.`, "success", "Data Parsed");
+            }
+        }
+
+        function parseCsvLine(text) {
+            const result = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"' || char === "'") {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(cur.trim());
+                    cur = '';
+                } else {
+                    cur += char;
+                }
+            }
+            result.push(cur.trim());
+            return result;
+        }
+
+        function parseDelimitedText(rawText) {
+            const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+            if (rawLines.length === 0) {
+                showToast("No data rows found in the provided input.", "warning", "Empty Input");
+                return [];
+            }
+
+            let startIndex = 0;
+            const firstLineLower = rawLines[0].toLowerCase();
+            if (
+                firstLineLower.includes('instructor') ||
+                firstLineLower.includes('teacher') ||
+                firstLineLower.includes('section') ||
+                firstLineLower.includes('subject') ||
+                firstLineLower.includes('headcount')
+            ) {
+                startIndex = 1;
+            }
+
+            const results = [];
+            for (let i = startIndex; i < rawLines.length; i++) {
+                const line = rawLines[i];
+                let parts = [];
+                if (line.includes('\t')) {
+                    parts = line.split('\t').map(p => p.trim());
+                } else {
+                    parts = parseCsvLine(line);
+                }
+
+                if (parts.length >= 4) {
+                    const teacher = parts[0];
+                    const section = parts[1].toUpperCase();
+                    const subject = parts[2];
+                    const rawCount = parts[3];
+                    const headcount = parseInt(rawCount, 10);
+
+                    let isValid = true;
+                    let errorMsg = "";
+
+                    if (!teacher) { isValid = false; errorMsg = "Missing Instructor"; }
+                    else if (!section) { isValid = false; errorMsg = "Missing Section"; }
+                    else if (!subject) { isValid = false; errorMsg = "Missing Subject"; }
+                    else if (isNaN(headcount) || headcount < 1) { isValid = false; errorMsg = `Invalid Headcount ("${rawCount}")`; }
+
+                    const dept = (section.includes("BSIT") || section.includes("IT-")) ? "IT" : "CS";
+
+                    results.push({
+                        rowNum: i + 1,
+                        teacher: teacher || "—",
+                        section: section || "—",
+                        subject: subject || "—",
+                        headcount: isNaN(headcount) ? 0 : headcount,
+                        rawCount: rawCount || "—",
+                        dept: dept,
+                        isValid: isValid,
+                        errorMsg: errorMsg,
+                        selected: isValid
+                    });
+                } else if (line.trim().length > 0) {
+                    results.push({
+                        rowNum: i + 1,
+                        teacher: parts[0] || "—",
+                        section: parts[1] || "—",
+                        subject: parts[2] || "—",
+                        headcount: 0,
+                        rawCount: parts[3] || "—",
+                        dept: "—",
+                        isValid: false,
+                        errorMsg: `Found ${parts.length} columns (expected 4)`,
+                        selected: false
+                    });
+                }
+            }
+
+            return results;
+        }
+
+        function renderValidationGrid() {
+            const previewSection = document.getElementById('previewSection');
+            const tbody = document.getElementById('previewTableBody');
+            const summarySpan = document.getElementById('previewSummary');
+            tbody.innerHTML = '';
+
+            if (parsedBulkRecords.length === 0) {
+                previewSection.style.display = 'none';
+                return;
+            }
+
+            let validCount = 0;
+            let invalidCount = 0;
+            let csCount = 0;
+            let itCount = 0;
+
+            parsedBulkRecords.forEach((r, idx) => {
+                if (r.isValid) {
+                    validCount++;
+                    if (r.dept === 'IT') itCount++;
+                    else csCount++;
+                } else {
+                    invalidCount++;
+                }
+
+                const tr = document.createElement('tr');
+                if (!r.isValid) {
+                    tr.style.backgroundColor = '#fef2f2';
+                }
+
+                tr.innerHTML = `
+                    <td style="text-align: center;">
+                        <input type="checkbox" ${r.isValid ? (r.selected ? 'checked' : '') : 'disabled'} onchange="toggleRowSelection(${idx}, this.checked)">
+                    </td>
+                    <td style="font-size: 0.8rem; color: #64748b;">${r.rowNum}</td>
+                    <td style="font-weight: 600; color: #1e293b;">${escapeHtml(r.teacher)}</td>
+                    <td><code>${escapeHtml(r.section)}</code></td>
+                    <td>${escapeHtml(r.subject)}</td>
+                    <td style="text-align: right; font-weight: bold; color: ${r.isValid ? '#0369a1' : '#b91c1c'};">${r.isValid ? r.headcount : escapeHtml(r.rawCount)}</td>
+                    <td style="text-align: center;">
+                        ${r.isValid ? `<span class="badge-dept ${r.dept === 'IT' ? 'badge-it' : 'badge-cs'}">${r.dept}</span>` : '—'}
+                    </td>
+                    <td>
+                        ${r.isValid ? '<span style="color: #16a34a; font-weight: bold; font-size: 0.8rem;">Ready</span>' : `<span class="badge-dept badge-err">${escapeHtml(r.errorMsg)}</span>`}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            summarySpan.innerHTML = `
+                📊 <strong>${parsedBulkRecords.length}</strong> row(s) parsed: 
+                <span style="color: #16a34a;">${validCount} valid</span>
+                ${invalidCount > 0 ? `| <span style="color: #dc2626;">${invalidCount} error(s)</span>` : ''} 
+                | <span style="color: #0369a1;">${csCount} CS</span> 
+                | <span style="color: #b45309;">${itCount} IT</span>
+            `;
+
+            previewSection.style.display = 'flex';
+            updateConfirmButton();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function toggleSelectAll(checked) {
+            parsedBulkRecords.forEach((r, idx) => {
+                if (r.isValid) {
+                    r.selected = checked;
+                }
+            });
+            const tbody = document.getElementById('previewTableBody');
+            const checkboxes = tbody.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                if (!cb.disabled) cb.checked = checked;
+            });
+            updateConfirmButton();
+        }
+
+        function toggleRowSelection(index, checked) {
+            if (parsedBulkRecords[index]) {
+                parsedBulkRecords[index].selected = checked;
+            }
+            updateConfirmButton();
+        }
+
+        function updateConfirmButton() {
+            const selectedValid = parsedBulkRecords.filter(r => r.isValid && r.selected);
+            const btn = document.getElementById('confirmImportBtn');
+            if (selectedValid.length > 0) {
+                btn.disabled = false;
+                btn.innerText = `🚀 Import ${selectedValid.length} Class(es) into Masterfile`;
+            } else {
+                btn.disabled = true;
+                btn.innerText = '🚀 Import Classes into Masterfile';
+            }
+        }
+
+        function submitBulkImport() {
+            const selectedValid = parsedBulkRecords.filter(r => r.isValid && r.selected);
+            if (selectedValid.length === 0) {
+                showToast("No valid classes are selected for import. Please ensure at least one valid row is checked.", "warning", "No Classes Selected");
+                return;
+            }
+
+            const btn = document.getElementById('confirmImportBtn');
+            btn.disabled = true;
+            btn.innerText = "⏳ Importing classes into masterfile...";
+
+            const payload = {
+                records: selectedValid.map(r => ({
+                    teacher_name: r.teacher,
+                    section: r.section,
+                    subject: r.subject,
+                    student_headcount: r.headcount,
+                    department: r.dept
+                }))
+            };
+
+            fetch('/api/enrollments/bulk-import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    btn.innerText = "✅ Successfully Imported!";
+                    showToast(data.message || `Successfully imported ${selectedValid.length} classes!`, "success", "Import Succeeded");
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1200);
+                } else {
+                    showToast(`Import failed: ${data.detail || 'Unknown error'}`, "error", "Import Failed");
+                    btn.disabled = false;
+                    updateConfirmButton();
+                }
+            })
+            .catch(err => {
+                console.error("Bulk import error:", err);
+                showToast("An error occurred while importing classes. Please check the network connection to your local server.", "error", "Network Error");
+                btn.disabled = false;
+                updateConfirmButton();
+            });
+        }
+
     // --- REAL-TIME SESSION POLLING ---
     // This constantly checks if another device has logged in and instantly kicks this device out.
     setInterval(() => {
@@ -451,9 +1609,10 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status !== "valid") {
-                    alert("Session Expired: Your account was accessed from another device.");
-                    localStorage.clear();
-                    window.location.href = '/login';
+                    showAppAlert("Session Expired", "Your account was accessed from another device.", "warning").then(() => {
+                        localStorage.clear();
+                        window.location.href = '/login';
+                    });
                 }
             }).catch(e => console.error(e));
         }
@@ -469,6 +1628,22 @@ function toggleSidebar() {
     if(overlay) overlay.classList.toggle('active');
 }
 </script>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer"></div>
+
+<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 2500;">
+    <div class="app-dialog-card">
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Notice</h3>
+        <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;"></div>
+        <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+            <button id="appDialogCancelBtn" class="dialog-btn" style="background: #34495e; color: #ffffff; display: none;">Cancel</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #3498db; color: white;">OK</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>

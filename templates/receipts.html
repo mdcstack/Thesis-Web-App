@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Public Receipt Portal</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; flex-direction: column; min-height: 100vh; }
@@ -250,11 +251,20 @@
 
     window.onload = function() {
         fetchData();
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                const modal = document.getElementById('receiptModal');
+                if (modal && modal.style.display === 'flex') return;
+                fetchData(true);
+            });
+        }
     };
 
-    function fetchData() {
+    function fetchData(isBackground = false) {
         const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>';
+        if (!isBackground) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>';
+        }
 
         fetch('/api/public-receipts')
             .then(response => response.json())
@@ -274,7 +284,9 @@
                 }
             })
             .catch(err => {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+                if (!isBackground) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+                }
             });
     }
 

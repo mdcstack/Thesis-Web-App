@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Registration - Proposed System</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -12,6 +13,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         .main-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
         .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); width: 100%; max-width: 600px; text-align: center; margin-top: 20px; }
@@ -73,7 +77,73 @@
             .kpi-grid { grid-template-columns: 1fr; }
         }
 
-            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
+        @media (max-width: 900px) { .mobile-hide { display: none !important; } }
+
+        /* Modals & In-App Dialogs */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+        
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes toastSlideIn {
+            0% { transform: translateX(100%); opacity: 0; }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+
+        .app-dialog-card {
+            background: #fff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #3498db;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .app-toast-item {
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #ffffff;
+            color: #1e293b;
+            padding: 12px 18px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            border-left: 4px solid #10b981;
+            font-size: 0.9rem;
+            animation: toastSlideIn 0.25s ease-out;
+            max-width: 360px;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -87,13 +157,18 @@
 
     <div class="sidebar">
         <!-- Notification Bell & Panel -->
-        <div style="padding: 15px 20px; border-bottom: 1px solid #34495e; position: relative;">
-            <div id="notifBell" onclick="toggleNotifPanel()" style="cursor: pointer; color: #bdc3c7; display: flex; align-items: center; justify-content: space-between; font-weight: bold; transition: color 0.3s;">
-                <span>🔔 Alerts</span>
-                <span id="notifBadge" style="display: none; background: #e74c3c; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem;">1</span>
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
             </div>
             
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 15px; padding: 12px; border-radius: 4px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4;">
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
                 Loading alerts...
             </div>
         </div>
@@ -101,8 +176,8 @@
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
         <a href="/qr-registration" class="nav-link mobile-hide active">📥 QR Registration</a>
         <a href="/distribution" class="nav-link ">🛒 Point of Distribution</a>
@@ -126,19 +201,34 @@
             
             <div class="input-group">
                 <input type="text" id="batchIdInput" placeholder="Enter BATCH ID..." autocomplete="off">
-                <button class="btn-add" onclick="addBatch()">Add</button>
+                <button class="btn-add" id="btnAddBatch" onclick="addBatch()">Add</button>
             </div>
             
+            <!-- Active Bundle Target Course Banner -->
+            <div id="bundleCourseBanner" style="display: none; margin-bottom: 15px; padding: 10px 14px; border-radius: 6px; background: #eff6ff; border: 1px solid #bfdbfe; text-align: left; font-size: 0.88rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: bold; color: #1e40af;">🎯 Pack Target Course:</span>
+                        <span id="targetCourseBadge" style="padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; background: #2563eb; color: white;">CS</span>
+                        <span id="targetCourseName" style="color: #1e3a8a; font-weight: 600;">Computer Science</span>
+                    </div>
+                    <span id="targetTemplateName" style="font-size: 0.8rem; color: #64748b; font-style: italic;">Template 1</span>
+                </div>
+            </div>
+
             <ul class="batch-list" id="batchListUI"></ul>
             
             <button class="btn-primary" id="submitBtn" onclick="activateBatches()">Combine & Generate Label</button>
             <p id="statusMsg" style="margin-top: 15px; font-weight: bold;"></p>
 
             <div class="qr-label-container" id="printableLabel">
-                <h3 style="font-size: 1.2rem; margin-bottom: 5px;">BOOKLETLOG SUPPLY PACK</h3>
-                <p id="labelPackId" style="font-family: monospace; font-size: 1rem; color: #333; font-weight: bold;"></p>
-                <p id="labelBookletCount" style="color: #555; font-size: 0.9rem; margin-bottom: 5px;"></p>
+                <h3 style="font-size: 1.2rem; margin-bottom: 6px;">BOOKLETLOG SUPPLY PACK</h3>
+                <div id="labelDeptBadge" style="display: inline-block; padding: 4px 14px; border-radius: 20px; font-weight: bold; font-size: 0.85rem; margin-bottom: 10px; background: #2563eb; color: white; letter-spacing: 0.5px;">CS - COMPUTER SCIENCE</div>
+                <p id="labelPackId" style="font-family: monospace; font-size: 1.15rem; color: #166534; font-weight: bold; margin-bottom: 4px;"></p>
+                <p id="labelBookletCount" style="color: #1e293b; font-size: 0.95rem; font-weight: bold; margin-bottom: 3px;"></p>
+                <p id="labelRanges" style="font-family: monospace; font-size: 0.85rem; color: #475569; margin-bottom: 8px;"></p>
                 <img id="qrImage" src="" alt="Pack QR Code">
+                <p id="labelTemplateName" style="font-size: 0.82rem; color: #64748b; font-style: italic; margin-top: 4px; margin-bottom: 6px;"></p>
                 <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
                 <button class="btn-print" onclick="window.print()">🖨️ Print Pack Label</button>
             </div>
@@ -158,15 +248,185 @@
             if (activeUser.role !== 'Admin') {
                 const adminLinks = document.querySelectorAll('.admin-only');
                 adminLinks.forEach(link => link.style.display = 'none');
+                const navUsers = document.getElementById('navManageUsers');
+                if (navUsers) navUsers.innerHTML = '👤 My Account';
             }
         }
 
-        function logout() {
-        if(confirm("Are you sure you want to log out?")) {
+        // --- IN-APP MODAL DIALOG & TOAST SYSTEM ---
+        function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    alert(`${title}\n\n${message}`);
+                    resolve(true);
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#3498db';
+                let icon = 'ℹ️';
+                let btnBg = '#3498db';
+
+                if (type === 'warning') {
+                    borderCol = '#f59e0b';
+                    icon = '⚠️';
+                    btnBg = '#f59e0b';
+                } else if (type === 'error') {
+                    borderCol = '#ef4444';
+                    icon = '❌';
+                    btnBg = '#ef4444';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    btnBg = '#10b981';
+                }
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = btnBg;
+                confirmBtn.style.color = '#ffffff';
+                cancelBtn.style.display = 'none';
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        function showAppConfirm(title, message, options = {}) {
+            return new Promise(resolve => {
+                const {
+                    type = 'warning',
+                    confirmText = 'Confirm',
+                    cancelText = 'Cancel',
+                    confirmBg = null
+                } = options;
+
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    const res = confirm(`${title}\n\n${message}`);
+                    resolve(res);
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#f59e0b';
+                let icon = '⚠️';
+                let defaultBg = '#3498db';
+
+                if (type === 'danger') {
+                    borderCol = '#ef4444';
+                    icon = '🛑';
+                    defaultBg = '#ef4444';
+                } else if (type === 'question') {
+                    borderCol = '#3b82f6';
+                    icon = '❓';
+                    defaultBg = '#3498db';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    defaultBg = '#10b981';
+                }
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = confirmBg || defaultBg;
+                confirmBtn.style.color = '#ffffff';
+                cancelBtn.innerText = cancelText;
+                cancelBtn.style.display = 'inline-block';
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                cancelBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        function showToast(message, type = 'success', title = null) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'app-toast-item';
+
+            let icon = '✅';
+            let borderColor = '#10b981';
+            let defaultTitle = 'Success';
+
+            if (type === 'error') {
+                icon = '❌';
+                borderColor = '#ef4444';
+                defaultTitle = 'Error';
+            } else if (type === 'warning') {
+                icon = '⚠️';
+                borderColor = '#f59e0b';
+                defaultTitle = 'Notice';
+            } else if (type === 'info') {
+                icon = 'ℹ️';
+                borderColor = '#3b82f6';
+                defaultTitle = 'Info';
+            }
+
+            toast.style.borderLeftColor = borderColor;
+            toast.innerHTML = `
+                <div style="font-size: 1.3rem;">${icon}</div>
+                <div style="flex: 1;">
+                    <strong style="display: block; font-size: 0.85rem; color: #1e293b; margin-bottom: 2px;">${title || defaultTitle}</strong>
+                    <span style="font-size: 0.85rem; color: #475569;">${message}</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        async function logout() {
+            const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to log out of your session?", {
+                type: 'danger',
+                confirmText: 'Log Out',
+                cancelText: 'Stay',
+                confirmBg: '#e74c3c'
+            });
+            if (!confirmed) return;
+
             fetch('/api/logout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: activeUser.username })
+                body: JSON.stringify({ username: activeUser ? activeUser.username : '' })
             }).then(() => {
                 localStorage.clear();
                 window.location.href = '/login';
@@ -175,50 +435,85 @@
                 window.location.href = '/login';
             });
         }
-    }
 
         // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
-        fetch('/api/dss-alert')
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('notifBadge');
-                const panel = document.getElementById('notifPanel');
-                const bell = document.getElementById('notifBell');
+        function fetchDSSAlert() {
+            fetch('/api/dss-alert')
+                .then(response => response.json())
+                .then(data => {
+                    const badge = document.getElementById('notifBadge');
+                    const panel = document.getElementById('notifPanel');
+                    const bell = document.getElementById('notifBell');
+                    if (!badge || !panel || !bell) return;
 
-                if (data.alert) {
-                    badge.style.display = 'inline-block';
-                    bell.style.color = 'white'; 
-                    
-                    if (activeUser.role === 'Admin') {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                    if (data.has_enrollments === false) {
+                        badge.style.display = 'none';
+                        panel.style.borderLeftColor = '#64748b';
+                        panel.innerHTML = '📋 <strong>Awaiting Enrollments:</strong><br>No classes enrolled yet. Add or import classes in Manage Classes to activate decision support forecasts.';
+                    } else if (data.alert) {
+                        badge.style.display = 'inline-block';
+                        bell.style.color = 'white'; 
+                        
+                        if (activeUser.role === 'Admin') {
+                            panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                        } else {
+                            panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                        }
+                        
+                        if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
+                            showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
+                        }
                     } else {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                        badge.style.display = 'none';
+                        panel.style.borderLeftColor = '#27ae60'; 
+                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
                     }
-                    
-                    if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data.message, data.reams_needed);
-                    }
-                } else {
-                    badge.style.display = 'none';
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                }
-            });
+                })
+                .catch(e => console.error("DSS alert error:", e));
+        }
+        fetchDSSAlert();
 
         function toggleNotifPanel() {
             const panel = document.getElementById('notifPanel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
 
-        function showDSSModal(message, reams) {
+        function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
+            let bCount = deficitBooklets;
+            let sCount = deficitSheets;
+            if (typeof message === 'object' && message !== null) {
+                reams = message.reams_needed;
+                bCount = message.deficit_booklets;
+                sCount = message.deficit_sheets;
+                message = message.message;
+            }
             const modalHtml = `
-                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center;">
-                    <div style="background: white; padding: 30px; border-radius: 8px; max-width: 450px; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-                        <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ Decision Support Alert</h2>
-                        <p style="color: #2c3e50; font-size: 1.1rem; margin-bottom: 5px;"><strong>CRITICAL SHORTAGE DETECTED</strong></p>
-                        <p style="color: #7f8c8d; margin-bottom: 25px;">${message} Please procure and print exactly <strong>${reams} more ream(s)</strong> of A4 paper to fulfill all upcoming midterm exams.</p>
-                        <a href="/generator" style="display: inline-block; background-color: #3498db; color: white; text-decoration: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; margin-right: 10px; transition: background 0.3s;">Go to PDF Generator</a>
-                        <button onclick="dismissDSS()" style="background-color: #bdc3c7; color: #2c3e50; border: none; padding: 12px 20px; border-radius: 4px; font-weight: bold; cursor: pointer;">Acknowledge</button>
+                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                    <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                        <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                        <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                        <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                        
+                        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                                <span style="font-weight: 600;">📦 Inventory Deficit:</span>
+                                <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600;">🛒 Procurement Demand:</span>
+                                <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                            </div>
+                        </div>
+                        
+                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                            To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                        </p>
+                        
+                        <div style="display: flex; justify-content: center;">
+                            <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                                Acknowledge & Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -227,8 +522,20 @@
 
         function dismissDSS() {
             sessionStorage.setItem('dss_acknowledged', 'true');
-            document.getElementById('dssModal').remove();
-            setTimeout(() => { document.getElementById('notifPanel').style.display = 'none'; }, 2500);
+            const modal = document.getElementById('dssModal');
+            if (modal) modal.remove();
+            const panel = document.getElementById('notifPanel');
+            if (panel) {
+                panel.style.display = 'block'; 
+                setTimeout(() => { panel.style.display = 'none'; }, 2500);
+            }
+        }
+
+        // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                fetchDSSAlert();
+            });
         }
 
 
@@ -241,36 +548,155 @@
             }
         });
 
-        function addBatch() {
-            const input = document.getElementById('batchIdInput');
-            const val = input.value.trim();
-            if (val && !batchesToActivate.includes(val)) {
-                batchesToActivate.push(val);
-                renderList();
-            }
-            input.value = '';
-            input.focus();
+        function showCourseMismatchModal(currentDept, incomingDept, incomingBatchId) {
+            const currentLabel = currentDept === 'IT' ? 'Information Technology (IT)' : 'Computer Science (CS)';
+            const incomingLabel = incomingDept === 'IT' ? 'Information Technology (IT)' : 'Computer Science (CS)';
+            document.getElementById('modalCurrentDept').innerText = currentLabel;
+            document.getElementById('modalIncomingDept').innerText = incomingLabel;
+            document.getElementById('modalIncomingBatchId').innerText = `Attempted Batch: ${incomingBatchId}`;
+            const modal = document.getElementById('courseMismatchModal');
+            modal.style.display = 'flex';
         }
 
-        function removeBatch(val) {
-            batchesToActivate = batchesToActivate.filter(b => b !== val);
+        function closeMismatchModal() {
+            const modal = document.getElementById('courseMismatchModal');
+            modal.style.display = 'none';
+            document.getElementById('batchIdInput').focus();
+        }
+
+        async function addBatch() {
+            const input = document.getElementById('batchIdInput');
+            const val = input.value.trim();
+            if (!val) return;
+
+            if (batchesToActivate.some(b => b.batch_id === val)) {
+                showToast(`Batch "${val}" is already added to the bundle list.`, "warning", "Duplicate Batch");
+                input.value = '';
+                input.focus();
+                return;
+            }
+
+            const msg = document.getElementById('statusMsg');
+            const btnAdd = document.getElementById('btnAddBatch');
+            msg.style.color = '#334155';
+            msg.innerText = "Verifying batch...";
+            if (btnAdd) btnAdd.disabled = true;
+
+            try {
+                const res = await fetch(`/api/batch-info/${encodeURIComponent(val)}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    msg.style.color = "red";
+                    msg.innerText = `❌ ${data.detail || 'Batch not found.'}`;
+                    showToast(data.detail || 'Batch not found.', "error", "Batch Not Found");
+                    return;
+                }
+
+                if (data.batch_status === 'active') {
+                    msg.style.color = "#d97706";
+                    msg.innerText = `⚠️ Batch ${data.batch_id} is already active in Supply Pack ${data.pack_qr_id || ''}.`;
+                    showToast(`Batch ${data.batch_id} is already active in Supply Pack ${data.pack_qr_id || ''}.`, "warning", "Batch Already Active");
+                    return;
+                }
+
+                // Course & Template Homogeneity Check
+                if (batchesToActivate.length > 0) {
+                    const activeDept = batchesToActivate[0].department;
+                    if (data.department !== activeDept) {
+                        msg.innerText = "";
+                        showCourseMismatchModal(activeDept, data.department, data.batch_id);
+                        input.value = '';
+                        return;
+                    }
+
+                    if (data.template_slot !== batchesToActivate[0].template_slot) {
+                        msg.style.color = "red";
+                        msg.innerText = `❌ Template Design Mismatch: Batch ${data.batch_id} uses "${data.template_name}", but current bundle is locked to "${batchesToActivate[0].template_name}".`;
+                        showToast(`Template Mismatch: Batch ${data.batch_id} uses "${data.template_name}", but bundle requires "${batchesToActivate[0].template_name}".`, "error", "Template Mismatch");
+                        return;
+                    }
+                }
+
+                batchesToActivate.push(data);
+                msg.innerText = "";
+                input.value = '';
+                renderList();
+                showToast(`Batch ${data.batch_id} added (${data.total_yield} booklets).`, "info", "Batch Staged");
+            } catch (err) {
+                console.error(err);
+                msg.style.color = "red";
+                msg.innerText = "❌ Network error verifying batch.";
+                showToast("Network error verifying batch.", "error", "Network Error");
+            } finally {
+                if (btnAdd) btnAdd.disabled = false;
+                input.focus();
+            }
+        }
+
+        function removeBatch(batchId) {
+            batchesToActivate = batchesToActivate.filter(b => b.batch_id !== batchId);
             renderList();
+            showToast(`Batch ${batchId} removed from bundle.`, "info", "Batch Removed");
         }
 
         function renderList() {
             const ul = document.getElementById('batchListUI');
+            const banner = document.getElementById('bundleCourseBanner');
             ul.innerHTML = '';
+
+            if (batchesToActivate.length === 0) {
+                if (banner) banner.style.display = 'none';
+                return;
+            }
+
+            // Update Course Target Banner
+            const primary = batchesToActivate[0];
+            if (banner) {
+                banner.style.display = 'block';
+                const badge = document.getElementById('targetCourseBadge');
+                const name = document.getElementById('targetCourseName');
+                const tpl = document.getElementById('targetTemplateName');
+                
+                badge.innerText = primary.department;
+                badge.style.background = primary.department === 'IT' ? '#7c3aed' : '#2563eb';
+                name.innerText = primary.department_label;
+                tpl.innerText = primary.template_name || `Template ${primary.template_slot}`;
+            }
+
             batchesToActivate.forEach(b => {
                 const li = document.createElement('li');
                 li.className = 'batch-item';
-                li.innerHTML = `<span>${b}</span> <button class="remove-btn" onclick="removeBatch('${b}')">×</button>`;
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                li.style.padding = '10px 14px';
+                li.style.background = '#f8fafc';
+                li.style.border = '1px solid #e2e8f0';
+                li.style.borderRadius = '6px';
+                li.style.marginBottom = '8px';
+
+                li.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="background: ${b.department === 'IT' ? '#7c3aed' : '#2563eb'}; color: white; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">
+                            ${b.department}
+                        </span>
+                        <div>
+                            <div style="font-weight: bold; font-family: monospace; color: #1e293b; font-size: 0.95rem;">${b.batch_id}</div>
+                            <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
+                                ${b.total_yield} Booklets | Ctrl: ${b.start_control_num} - ${b.end_control_num}
+                            </div>
+                        </div>
+                    </div>
+                    <button class="remove-btn" onclick="removeBatch('${b.batch_id}')" title="Remove Batch" style="color: #ef4444; background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 8px;">×</button>
+                `;
                 ul.appendChild(li);
             });
         }
 
         async function activateBatches() {
             if (batchesToActivate.length === 0) {
-                alert("Please add at least one Batch ID to combine.");
+                await showAppAlert("Batch List Empty", "Please add at least one Batch ID to combine.", "warning");
                 return;
             }
 
@@ -284,10 +710,11 @@
             labelContainer.style.display = 'none';
 
             try {
+                const batchIds = batchesToActivate.map(b => b.batch_id);
                 const response = await fetch('/api/activate-batch', { 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ batch_ids: batchesToActivate })
+                    body: JSON.stringify({ batch_ids: batchIds })
                 });
                 
                 const data = await response.json();
@@ -295,78 +722,131 @@
                 if (response.ok) {
                     msg.style.color = "green";
                     msg.innerText = data.message;
+                    showToast(`Pack ${data.pack_id} created with ${data.total_booklets} booklets!`, "success", "Pack Activated");
                     
                     document.getElementById('labelPackId').innerText = data.pack_id;
+                    const deptBadge = document.getElementById('labelDeptBadge');
+                    if (deptBadge) {
+                        deptBadge.innerText = `${data.department} - ${data.department_label}`;
+                        deptBadge.style.background = data.department === 'IT' ? '#7c3aed' : '#2563eb';
+                    }
+                    if (data.template_name) {
+                        document.getElementById('labelTemplateName').innerText = `Cover Template: ${data.template_name}`;
+                    }
                     document.getElementById('labelBookletCount').innerText = `Contains ${data.total_booklets} Booklets`;
+                    let rangeParts = [];
+                    if (data.start_control_num && data.end_control_num) {
+                        rangeParts.push(`Ctrl: ${data.start_control_num} - ${data.end_control_num}`);
+                    }
+                    if (data.start_srn && data.end_srn && data.start_srn !== 'N/A') {
+                        rangeParts.push(`SRN: ${data.start_srn} - ${data.end_srn}`);
+                    }
+                    document.getElementById('labelRanges').innerText = rangeParts.join(' | ');
                     document.getElementById('qrImage').src = data.qr_code_base64;
                     labelContainer.style.display = 'block';
                     
-                    // --- ENHANCED: HTML5 CANVAS STICKER GENERATOR ---
-                    generateAndDownloadSticker(data.pack_id, data.total_booklets, data.qr_code_base64);
+                    // --- ENHANCED: HTML5 CANVAS STICKER GENERATOR WITH COURSE BADGE ---
+                    generateAndDownloadSticker(
+                        data.pack_id, 
+                        data.total_booklets, 
+                        data.qr_code_base64, 
+                        data.start_control_num, 
+                        data.end_control_num, 
+                        data.start_srn, 
+                        data.end_srn,
+                        data.department,
+                        data.department_label,
+                        data.template_name
+                    );
                     
                     batchesToActivate = []; 
                     renderList(); 
                 } else {
                     msg.style.color = "red";
                     msg.innerText = `❌ Error: ${data.detail}`;
+                    showToast(data.detail || "Failed to activate batches.", "error", "Activation Failed");
                 }
             } catch (error) {
                 msg.style.color = "red";
                 msg.innerText = "❌ Network error connecting to database.";
+                showToast("Network error connecting to database.", "error", "Network Error");
             } finally {
                 btn.disabled = false;
             }
         }
 
-        // Function to draw a proper physical box label and trigger the download
-        function generateAndDownloadSticker(packId, bookletCount, base64QR) {
+        // Function to draw a proper physical box label with course badge and trigger the download
+        function generateAndDownloadSticker(packId, bookletCount, base64QR, startCtrl, endCtrl, startSrn, endSrn, dept, deptLabel, tplName) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Set canvas size (e.g., 400x500 pixels for a nice rectangular sticker)
+            // Set canvas size (400x550 pixels for a clean rectangular sticker)
             canvas.width = 400;
-            canvas.height = 500;
+            canvas.height = 550;
             
             // Draw white background
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Draw a subtle border for cutting/printing
+            // Draw border
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = 2;
             ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
             
-            // Set up text alignment
             ctx.textAlign = "center";
-            ctx.fillStyle = "#000000";
             
             // Draw Title
-            ctx.font = "bold 24px Arial";
-            ctx.fillText("BOOKLETLOG SUPPLY PACK", canvas.width / 2, 60);
+            ctx.font = "bold 20px Arial";
+            ctx.fillStyle = "#000000";
+            ctx.fillText("BOOKLETLOG SUPPLY PACK", canvas.width / 2, 38);
             
+            // Draw Department Banner / Badge
+            const department = dept || "CS";
+            const departmentText = deptLabel ? deptLabel.toUpperCase() : (department === 'IT' ? "INFORMATION TECHNOLOGY (IT)" : "COMPUTER SCIENCE (CS)");
+            ctx.font = "bold 13px Arial";
+            ctx.fillStyle = department === 'IT' ? "#6d28d9" : "#1d4ed8";
+            ctx.fillText(`[ ${departmentText} ]`, canvas.width / 2, 60);
+
             // Draw Pack ID
-            ctx.font = "bold 20px monospace";
-            ctx.fillText(packId, canvas.width / 2, 100);
+            ctx.font = "bold 17px monospace";
+            ctx.fillStyle = "#166534";
+            ctx.fillText(packId, canvas.width / 2, 86);
             
             // Draw Booklet Count
-            ctx.font = "18px Arial";
-            ctx.fillText(`Contains ${bookletCount} Booklets`, canvas.width / 2, 135);
+            ctx.font = "bold 15px Arial";
+            ctx.fillStyle = "#1e293b";
+            ctx.fillText(`Contains ${bookletCount} Booklets`, canvas.width / 2, 112);
+
+            // Draw Control and SRN Ranges
+            ctx.font = "bold 12px monospace";
+            ctx.fillStyle = "#334155";
+            if (startCtrl && endCtrl) {
+                ctx.fillText(`Ctrl: ${startCtrl} to ${endCtrl}`, canvas.width / 2, 134);
+            }
+            if (startSrn && endSrn && startSrn !== 'N/A') {
+                ctx.fillStyle = "#2563eb";
+                ctx.fillText(`SRN: ${startSrn} to ${endSrn}`, canvas.width / 2, 152);
+            }
             
             // Load and draw the QR Code image asynchronously
             const qrImg = new Image();
             qrImg.onload = function() {
-                // Determine square QR size and perfectly center it
-                const qrSize = 250;
+                const qrSize = 240;
                 const xPos = (canvas.width - qrSize) / 2;
-                const yPos = 160;
+                const yPos = 170;
                 ctx.drawImage(qrImg, xPos, yPos, qrSize, qrSize);
                 
-                // Draw Footer Instructions
-                ctx.font = "italic 16px Arial";
-                ctx.fillStyle = "#555555";
-                ctx.fillText("Scan this label during distribution.", canvas.width / 2, 450);
+                // Draw Footer Instructions & Template Name
+                if (tplName) {
+                    ctx.font = "italic 11px Arial";
+                    ctx.fillStyle = "#64748b";
+                    ctx.fillText(`Cover: ${tplName}`, canvas.width / 2, 435);
+                }
+
+                ctx.font = "bold 13px Arial";
+                ctx.fillStyle = "#333333";
+                ctx.fillText("Scan this label during distribution.", canvas.width / 2, 460);
                 
-                // Trigger the final download of the composed Canvas
                 const finalImageURL = canvas.toDataURL("image/png");
                 
                 fetch('/api/save-qr', {
@@ -387,7 +867,9 @@
     
     // --- REAL-TIME SESSION POLLING ---
     // This constantly checks if another device has logged in and instantly kicks this device out.
+    let isSessionExpiredHandled = false;
     setInterval(() => {
+        if (isSessionExpiredHandled) return;
         const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         if(currentUser && currentUser.session_token) {
             fetch('/api/verify-session', {
@@ -396,13 +878,14 @@
                 body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
             })
             .then(res => res.json())
-            .then(data => {
-                if (data.status !== "valid") {
-                    alert("Session Expired: Your account was accessed from another device.");
+            .then(async data => {
+                if (data && data.status !== "valid" && !isSessionExpiredHandled) {
+                    isSessionExpiredHandled = true;
+                    await showAppAlert("Session Expired", "Your account was accessed from another device or your session has expired.", "error");
                     localStorage.clear();
                     window.location.href = '/login';
                 }
-            }).catch(e => console.error(e));
+            }).catch(e => console.error("Session verification error:", e));
         }
     }, 3000); // Checks every 3 seconds
 
@@ -416,6 +899,51 @@ function toggleSidebar() {
     if(overlay) overlay.classList.toggle('active');
 }
 </script>
+
+<!-- COURSE & TEMPLATE MISMATCH WARNING MODAL -->
+<div id="courseMismatchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: white; border-radius: 12px; width: 90%; max-width: 480px; padding: 25px 25px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; text-align: center;">
+        <div style="font-size: 2.8rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+        <h3 style="color: #c0392b; margin-bottom: 6px; font-size: 1.3rem;">Cannot Combine Different Covers</h3>
+        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 18px;">Course Template Mismatch Detected</p>
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; text-align: left; font-size: 0.9rem; margin-bottom: 18px;">
+            <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #3b82f6; color: white;">CURRENT BUNDLE</span>
+                <span id="modalCurrentDept" style="color: #1e293b; font-weight: bold;">Computer Science (CS)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #ef4444; color: white;">INCOMING BATCH</span>
+                <span id="modalIncomingDept" style="color: #1e293b; font-weight: bold;">Information Technology (IT)</span>
+            </div>
+            <div id="modalIncomingBatchId" style="font-family: monospace; font-size: 0.8rem; color: #64748b; padding-top: 4px; border-top: 1px dashed #cbd5e1;">BATCH-XXXX</div>
+        </div>
+
+        <p style="color: #475569; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px; text-align: left; background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 12px; border-radius: 0 4px 4px 0;">
+            A physical supply box must only contain booklets with identical course templates. Combining different booklet covers inside one box causes distribution errors during exam issuing.
+        </p>
+
+        <button onclick="closeMismatchModal()" style="background: #2c3e50; color: white; border: none; padding: 11px 30px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;">
+            Understood
+        </button>
+    </div>
+</div>
+
+<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 2000;">
+    <div class="app-dialog-card">
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Notice</h3>
+        <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;"></div>
+        <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+            <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569; display: none;">Cancel</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #3498db; color: white;">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- IN-APP TOAST NOTIFICATION CONTAINER -->
+<div id="toastContainer"></div>
 
 </body>
 </html>

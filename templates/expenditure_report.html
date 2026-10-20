@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expenditure &amp; ROI Report - BOOKLETLOG</title>
+    <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -13,6 +14,9 @@
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
+        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
+        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
         
         /* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
@@ -79,11 +83,28 @@
 
     <!-- SIDEBAR -->
     <div class="sidebar no-print" id="sidebar">
+        <!-- Notification Bell & Panel -->
+        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
+            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    🔔
+                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
+                </div>
+                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
+                    ⚙️
+                </a>
+            </div>
+            
+            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+                Loading alerts...
+            </div>
+        </div>
+
         <div class="sidebar-header">Proposed System</div>
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link admin-only">👥 Manage Users</a>
-        <a href="/settings" class="nav-link admin-only">⚙️ Settings</a>
+        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
+        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -168,33 +189,47 @@
                         <thead>
                             <tr>
                                 <th>Balance Sheet Account</th>
-                                <th>Classification</th>
                                 <th style="text-align: right;">Amount (PHP)</th>
                                 <th>Status / Explanation</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td style="font-weight: bold; color: #0f172a;">Beginning Balance</td>
-                                <td><span class="badge" style="background: #edf2f7; color: #475569;">Equity</span></td>
+                                <td style="font-weight: bold; color: #0f172a;">Beginning Balance (Department Budget)</td>
                                 <td style="text-align: right; font-weight: bold;" id="bsBeginning">₱0.00</td>
-                                <td style="color: #64748b; font-size: 0.85rem;">Opening inventory equity for active semester</td>
+                                <td style="color: #64748b; font-size: 0.85rem;" id="bsBeginningNote">Opening inventory equity for active semester</td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold; color: #0f172a;">Accounts Receivable (Unpaid)</td>
-                                <td><span class="badge" style="background: #fee2e2; color: #b91c1c;">Current Asset</span></td>
-                                <td style="text-align: right; font-weight: bold; color: #e74c3c;" id="bsAR">₱0.00</td>
-                                <td style="color: #64748b; font-size: 0.85rem;">Pending collections owed by faculty/instructors</td>
+                                <td style="color: #0f172a; padding-left: 20px;">└ Accounts Receivable - Computer Science (CS)</td>
+                                <td style="text-align: right; font-weight: 600; color: #0284c7;">
+                                    <div id="bsAR_CS">₱0.00</div>
+                                    <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-top: 2px;" id="bsAR_CS_Sub">Billed: ₱0.00 | Paid: ₱0.00</div>
+                                </td>
+                                <td style="color: #64748b; font-size: 0.85rem;" id="bsAR_CS_Note">Pending collections from CS faculty/sections</td>
+                            </tr>
+                            <tr>
+                                <td style="color: #0f172a; padding-left: 20px;">└ Accounts Receivable - Information Technology (IT)</td>
+                                <td style="text-align: right; font-weight: 600; color: #d97706;">
+                                    <div id="bsAR_IT">₱0.00</div>
+                                    <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-top: 2px;" id="bsAR_IT_Sub">Billed: ₱0.00 | Paid: ₱0.00</div>
+                                </td>
+                                <td style="color: #64748b; font-size: 0.85rem;" id="bsAR_IT_Note">Pending collections from IT faculty/sections</td>
+                            </tr>
+                            <tr style="background-color: #f8fafc;">
+                                <td style="font-weight: bold; color: #0f172a;">Total Accounts Receivable (Unpaid)</td>
+                                <td style="text-align: right; font-weight: bold; color: #e74c3c;">
+                                    <div id="bsAR">₱0.00</div>
+                                    <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-top: 2px;" id="bsAR_Sub">Total Billed: ₱0.00 | Paid: ₱0.00</div>
+                                </td>
+                                <td style="color: #64748b; font-size: 0.85rem;" id="bsAR_Note">Combined pending collections owed by faculty/instructors</td>
                             </tr>
                             <tr>
                                 <td style="font-weight: bold; color: #0f172a;">Accounts Payable (University IGP)</td>
-                                <td><span class="badge" style="background: #fef3c7; color: #b45309;">Current Liability</span></td>
                                 <td style="text-align: right; font-weight: bold; color: #d97706;" id="bsAP">₱0.00</td>
                                 <td style="color: #64748b; font-size: 0.85rem;">20% Institutional remittance share owed to campus IGP</td>
                             </tr>
                             <tr style="background-color: #f8fafc;">
                                 <td style="font-weight: bold; color: #0f172a;">Material Capital Invested</td>
-                                <td><span class="badge" style="background: #e0f2fe; color: #0369a1;">Direct Expense</span></td>
                                 <td style="text-align: right; font-weight: bold; color: #0284c7;" id="bsProdCost">₱0.00</td>
                                 <td style="color: #64748b; font-size: 0.85rem;">Total paper reams converted for examination printing</td>
                             </tr>
@@ -229,7 +264,7 @@
                             <tr>
                                 <td style="font-weight: 600;">Total Booklets Yielded</td>
                                 <td style="text-align: center;" id="prodBookletsYield">0 pcs</td>
-                                <td style="text-align: right; color: #64748b;">(500 sheets ÷ 6 sheets per booklet)</td>
+                                <td style="text-align: right; color: #64748b;" id="prodBookletsNote">(500 sheets ÷ 6 sheets per booklet)</td>
                             </tr>
                             <tr style="background-color: #f8fafc;">
                                 <td style="font-weight: 600;">Selling Price per Booklet</td>
@@ -334,6 +369,7 @@
             document.getElementById('signClerkName').innerText = activeUser.username.toUpperCase();
             if (activeUser.role !== 'Admin') {
                 document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+        const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
             }
         }
 
@@ -353,9 +389,17 @@
                     console.error("Failed to fetch active period:", err);
                     loadExpenditureData("");
                 });
+
+            if (window.lanSync) {
+                window.lanSync.onUpdate(() => {
+                    if (activePeriod) {
+                        loadExpenditureData(activePeriod, true);
+                    }
+                });
+            }
         };
 
-        function loadExpenditureData(period) {
+        function loadExpenditureData(period, isBackground = false) {
             fetch(`/api/dashboard-stats?period=${encodeURIComponent(period)}`)
                 .then(res => res.json())
                 .then(data => {
@@ -363,13 +407,13 @@
                     if (data.status === "success" && data.financials) {
                         document.getElementById('financialContent').style.display = 'block';
                         renderExpenditureReport(data);
-                    } else {
+                    } else if (!isBackground) {
                         alert("Could not load financial data: " + (data.message || "Unknown error"));
                     }
                 })
                 .catch(err => {
                     document.getElementById('loadingIndicator').style.display = 'none';
-                    alert("Error loading expenditure report: " + err);
+                    if (!isBackground) alert("Error loading expenditure report: " + err);
                 });
         }
 
@@ -411,13 +455,84 @@
             document.getElementById('kpiMargin').innerText = `Profit Margin: ${marginPct.toFixed(1)}%`;
 
             // 2. Balance Sheet
+            const arCS = fin.accounts_receivable_cs || 0;
+            const arIT = fin.accounts_receivable_it || 0;
+            const csBilled = fin.cs_billed || 0;
+            const itBilled = fin.it_billed || 0;
+            const csPaid = fin.cs_collected || 0;
+            const itPaid = fin.it_collected || 0;
+            const totalBilled = fin.total_billed || 0;
+            const totalPaid = fin.total_collected || 0;
+            const deptBudgetCash = fin.department_ream_budget || 0;
+            const reamsPurchasingPower = fin.reams_purchasing_power !== undefined ? fin.reams_purchasing_power : (reamPrice > 0 ? Math.floor(deptBudgetCash / reamPrice) : 0);
+
             document.getElementById('bsBeginning').innerText = `₱${beginning.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            const bsBegNote = document.getElementById('bsBeginningNote');
+            if (bsBegNote) {
+                bsBegNote.innerText = deptBudgetCash > 0 ? `Opening cash allocation (sufficient for ${reamsPurchasingPower} reams @ ₱${reamPrice.toFixed(2)}/ream)` : "Opening cash allocation for active semester";
+            }
+
+            // CS Accounts Receivable
+            if (document.getElementById('bsAR_CS')) {
+                document.getElementById('bsAR_CS').innerText = `₱${arCS.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('bsAR_CS_Sub')) {
+                document.getElementById('bsAR_CS_Sub').innerText = `Billed: ₱${csBilled.toLocaleString(undefined, {minimumFractionDigits: 2})} | Paid: ₱${csPaid.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('bsAR_CS_Note')) {
+                if (arCS === 0 && csBilled > 0) {
+                    document.getElementById('bsAR_CS_Note').innerHTML = `<span style="color: #166534; font-weight: 600;">✅ 100% Collected</span> (All ₱${csBilled.toFixed(2)} billed on account has been settled)`;
+                } else if (arCS > 0) {
+                    document.getElementById('bsAR_CS_Note').innerHTML = `<span style="color: #b91c1c; font-weight: 600;">⚠️ ₱${arCS.toFixed(2)} Pending</span> (Outstanding uncollected balance from CS faculty)`;
+                } else {
+                    document.getElementById('bsAR_CS_Note').innerText = "No CS transactions recorded for this period";
+                }
+            }
+
+            // IT Accounts Receivable
+            if (document.getElementById('bsAR_IT')) {
+                document.getElementById('bsAR_IT').innerText = `₱${arIT.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('bsAR_IT_Sub')) {
+                document.getElementById('bsAR_IT_Sub').innerText = `Billed: ₱${itBilled.toLocaleString(undefined, {minimumFractionDigits: 2})} | Paid: ₱${itPaid.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('bsAR_IT_Note')) {
+                if (arIT === 0 && itBilled > 0) {
+                    document.getElementById('bsAR_IT_Note').innerHTML = `<span style="color: #166534; font-weight: 600;">✅ 100% Collected</span> (All ₱${itBilled.toFixed(2)} billed on account has been settled)`;
+                } else if (arIT > 0) {
+                    document.getElementById('bsAR_IT_Note').innerHTML = `<span style="color: #b91c1c; font-weight: 600;">⚠️ ₱${arIT.toFixed(2)} Pending</span> (Outstanding uncollected balance from IT faculty)`;
+                } else {
+                    document.getElementById('bsAR_IT_Note').innerText = "No IT transactions recorded for this period";
+                }
+            }
+
+            // Total Accounts Receivable
             document.getElementById('bsAR').innerText = `₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            if (document.getElementById('bsAR_Sub')) {
+                document.getElementById('bsAR_Sub').innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2})} | Total Paid: ₱${totalPaid.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('bsAR_Note')) {
+                if (ar === 0 && totalBilled > 0) {
+                    document.getElementById('bsAR_Note').innerHTML = `<span style="color: #166534; font-weight: 600;">✅ 100% Settled</span> (All faculty debts cleared; total ₱${totalBilled.toFixed(2)} collected)`;
+                } else if (ar > 0) {
+                    document.getElementById('bsAR_Note').innerHTML = `<span style="color: #b91c1c; font-weight: 600;">⚠️ ₱${ar.toFixed(2)} Total Pending</span> (Uncollected balance owed by faculty/instructors)`;
+                } else {
+                    document.getElementById('bsAR_Note').innerText = "Combined pending collections owed by faculty/instructors";
+                }
+            }
+
             document.getElementById('bsAP').innerText = `₱${ap.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('bsProdCost').innerText = `₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
 
             // 3. Cost of Production
-            document.getElementById('prodReamsCount').innerText = `${reamsConverted} Reams`;
+            const sheetsPerBooklet = data.sheets_per_booklet || 6;
+            const yieldPerReam = data.yield_per_ream || Math.floor(500 / sheetsPerBooklet);
+            const noteEl = document.getElementById('prodBookletsNote');
+            if (noteEl) {
+                noteEl.innerText = `(500 sheets ÷ ${sheetsPerBooklet} sheets/booklet = ${yieldPerReam} pcs/ream)`;
+            }
+
+            document.getElementById('prodReamsCount').innerText = `${reamsConverted} Whole Reams (${(reamsConverted * 500).toLocaleString()} paper sheets)`;
             document.getElementById('prodReamsTotal').innerText = `₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('prodReamPrice').innerText = `₱${reamPrice.toFixed(2)} / ream`;
             document.getElementById('prodBookletsYield').innerText = `${totalGenerated.toLocaleString()} pcs`;
@@ -442,6 +557,40 @@
             document.getElementById('sidebar').classList.toggle('active');
             document.getElementById('sidebarOverlay').classList.toggle('active');
         }
+
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        fetch('/api/dss-alert').then(response => response.json()).then(data => {
+            const badge = document.getElementById('notifBadge');
+            const panel = document.getElementById('notifPanel');
+            const bell = document.getElementById('notifBell');
+            if (!badge || !panel || !bell) return;
+            if (data.alert) {
+                badge.style.display = 'inline-block';
+                bell.style.color = 'white'; 
+                if (activeUser.role === 'Admin') {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+                } else {
+                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+                }
+            } else {
+                badge.style.display = 'none';
+                if (data.has_enrollments === false) {
+                    panel.style.borderLeftColor = '#64748b';
+                    if (activeUser && activeUser.role === 'Admin') {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
+                    } else {
+                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
+                    }
+                } else {
+                    panel.style.borderLeftColor = '#27ae60'; 
+                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                }
+            }
+        }).catch(err => console.log('Alert check error:', err));
 
         function logout() {
             if(confirm("Are you sure you want to log out?")) {
