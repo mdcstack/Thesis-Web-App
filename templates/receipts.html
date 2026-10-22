@@ -81,8 +81,13 @@
             .no-print { display: none !important; } 
         }
 
+        .mobile-only { display: none !important; }
+        .desktop-only { display: inline-block !important; }
+
         /* --- MOBILE HEADER SWAP & FIX --- */
         @media (max-width: 900px) {
+            .mobile-only { display: inline-block !important; }
+            .desktop-only { display: none !important; }
             /* 1. Hide the old desktop header entirely */
             .header { display: none !important; }
             
@@ -90,7 +95,8 @@
             .mobile-top-bar { display: flex; align-items: center; justify-content: flex-start; }
             
             /* 3. Push the rest of the page down so it doesn't hide behind the new fixed bar */
-            body { padding-top: 60px; }
+            body { padding-top: 60px; min-height: 100vh; min-height: 100dvh; }
+            .container { padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; }
             
             /* Keeping your exact original card size rules */
             .card { width: max-content; margin: 0 auto; }
@@ -238,7 +244,10 @@
             </div>
 
             <div class="no-print">
-                <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+                <button class="btn-print" onclick="window.print()">
+                    <span class="desktop-only">🖨️ Print / Save as PDF</span>
+                    <span class="mobile-only">📱 Save Receipt to Phone (PDF)</span>
+                </button>
                 <button class="btn-close" onclick="closeReceipt()">Close</button>
             </div>
         </div>

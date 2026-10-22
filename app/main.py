@@ -387,6 +387,21 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
             detail=f"Booklet cover {slot_label} for {department} is not configured yet. Please configure the template layout and upload the cover PDF under Booklet Template before generating booklet batches."
         )
 
+    # Strict Class Enrollment Guard: Prevent batch generation when no enrollments exist in Manage Classes
+    all_enrollments = db.query(models.Enrollment).all()
+    if not all_enrollments:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot generate booklet batch: No class sections have been enrolled in Manage Classes yet. Please enroll class sections before initiating batch production."
+        )
+
+    dept_enrollments = [e for e in all_enrollments if resolve_enrollment_department(e, db=db) == department]
+    if not dept_enrollments:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot generate booklet batch for {department}: No class sections are enrolled for {department} in Manage Classes. Please add {department} enrollments first."
+        )
+
     ream_count = request_data.ream_count
     # Deterministic yield logic based on Admin settings
     yield_per_ream = 500 // settings.sheets_per_booklet
@@ -950,6 +965,7 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     new_token = str(uuid.uuid4())
     user.session_token = new_token
     db.commit()
+    notify_lan_mutation("USER_UPDATED", {"action": "login", "username": user.username, "id": user.id}, db=db)
     
     # Return user details so the browser knows what role they are
     return {
@@ -989,6 +1005,7 @@ def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
         # Release any active Master Packs held by this user so others can use them
         db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == user.username).update({models.MasterBatch.claimed_by: None})
         db.commit()
+        notify_lan_mutation("USER_UPDATED", {"action": "logout", "username": user.username, "id": user.id}, db=db)
     return {"status": "success"}
 
 @app.get("/api/dss-alert")
@@ -2195,6 +2212,9 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
     yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
 
     enrollments = db.query(models.Enrollment).all()
+    total_enrollments = len(enrollments)
+    total_headcount = sum(e.student_headcount for e in enrollments)
+    has_system_enrollments = bool(total_enrollments > 0 and total_headcount > 0)
 
     def get_dept(e):
         sec = (e.section or '').upper()
@@ -2205,7 +2225,9 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
     data = {}
     for dept in ["CS", "IT"]:
         dept_enrollments = [e for e in enrollments if get_dept(e) == dept]
+        dept_enrollment_count = len(dept_enrollments)
         headcount = sum(e.student_headcount for e in dept_enrollments)
+        dept_has_enrollments = bool(dept_enrollment_count > 0 and headcount > 0)
         
         # Distributed in active period
         distributed = db.query(models.Booklet).join(models.MasterBatch).filter(
@@ -2230,6 +2252,8 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         
         data[dept] = {
             "headcount": headcount,
+            "enrollment_count": dept_enrollment_count,
+            "has_enrollments": dept_has_enrollments,
             "distributed": distributed,
             "remaining_demand": remaining_demand,
             "available_stock": available,
@@ -2244,6 +2268,9 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
 
     return {
         "status": "success",
+        "has_enrollments": has_system_enrollments,
+        "total_enrollments": total_enrollments,
+        "total_headcount": total_headcount,
         "active_period": active_period,
         "sheets_per_booklet": sheets_per_b,
         "yield_per_ream": yield_per_r,
@@ -2652,7 +2679,10 @@ def manage_users_page(request: Request):
     return templates.TemplateResponse("manage_user.html", {"request": request})
 
 @app.get("/api/users")
-def get_all_users(db: Session = Depends(get_db)):
+def get_all_users(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     users = db.query(models.User).order_by(models.User.id.asc()).all()
     user_list = []
     for u in users:
@@ -2669,10 +2699,16 @@ def validate_username(username: str, db: Session) -> tuple[bool, str]:
     if not username:
         return False, "Username is required."
     clean_username = username.strip()
-    if len(clean_username) < 8 or len(clean_username) > 30:
-        return False, "Username must be between 8 and 30 characters long."
-    if not re.match(r'^[a-zA-Z0-9_]+$', clean_username):
-        return False, "Username can only contain letters, numbers, and underscores (no spaces or special characters)."
+    if " " in clean_username:
+        return False, "Username cannot contain spaces. Use underscores (_) or dots (.) instead."
+    if len(clean_username) < 3 or len(clean_username) > 30:
+        return False, "Username must be between 3 and 30 characters long."
+    if not re.match(r'^[a-zA-Z0-9_.]+$', clean_username):
+        return False, "Username can only contain letters, numbers, underscores (_), and periods (.)."
+    if clean_username.startswith(('.', '_')) or clean_username.endswith(('.', '_')):
+        return False, "Username cannot start or end with a period or underscore."
+    if ".." in clean_username:
+        return False, "Username cannot contain consecutive periods."
     reserved_words = {"root", "system", "superuser", "null", "undefined", "anonymous"}
     if clean_username.lower() in reserved_words:
         return False, f"Username '{clean_username}' is reserved and cannot be used."

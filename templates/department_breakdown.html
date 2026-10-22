@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Department Breakdown Computation - BOOKLETLOG</title>
+    <title>Departmental Revenue &amp; Cost Allocation Statement - BOOKLETLOG</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
         
         /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
@@ -57,21 +57,79 @@
         }
 
         /* Mobile Adjustments */
+        .mobile-only { display: none !important; }
+        .desktop-only { display: inline-block !important; }
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
         .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
         .sidebar-overlay.active { display: block; }
 
         @media (max-width: 900px) {
+            .mobile-only { display: inline-block !important; }
+            .desktop-only { display: none !important; }
             .mobile-hide { display: none !important; }
-            body { flex-direction: column; overflow: hidden; }
+            body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
             .mobile-header { display: flex; flex-shrink: 0; }
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
             .sidebar.active { left: 0; }
-            .main-content { flex: 1; overflow-y: auto; padding: 15px; }
-            .header-bar { flex-direction: column; align-items: stretch; }
+            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
+            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+            .header-bar { flex-direction: column; align-items: stretch; gap: 12px; }
+            .header-bar > div:last-child { display: flex; width: 100%; gap: 8px; }
+            .header-bar > div:last-child .btn-action { flex: 1; text-align: center; justify-content: center; font-size: 0.88rem; padding: 10px 8px; }
         }
-    </style>
+    
+        /* App Custom Dialog Modal */
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            z-index: 3000;
+            justify-content: center;
+            align-items: center;
+        }
+        .app-dialog-card {
+            background: #ffffff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #ef4444;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            filter: brightness(0.92);
+            transform: translateY(-1px);
+        }
+        .sidebar-logout-btn:hover {
+            background-color: #c0392b !important;
+            transform: translateY(-1px);
+        }
+        .sidebar-logout-btn:active {
+            transform: translateY(0);
+        }
+
+</style>
 </head>
 <body>
 
@@ -104,7 +162,7 @@
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
+        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -116,7 +174,9 @@
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
             <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
+                <span style="font-size: 1rem;">🚪</span> Log Out
+            </button>
         </div>
     </div>
 
@@ -126,7 +186,7 @@
         <div class="print-header">
             <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
             <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
-            <h3 style="margin: 10px 0 0 0; font-size: 1.4rem;">Department Breakdown &amp; Transparent Computations Report</h3>
+            <h3 style="margin: 10px 0 0 0; font-size: 1.4rem;">Departmental Revenue Allocation &amp; Material Cost Statement</h3>
             <p style="margin-top: 10px; font-weight: bold;" id="printDateLabel">Generated on: </p>
             <p style="margin-top: 5px; font-weight: bold;"><strong>Exam Period:</strong> <span class="activePeriodText">Loading...</span></p>
         </div>
@@ -134,7 +194,7 @@
         <!-- Top Header Navigation Bar (On-Screen) -->
         <div class="header-bar no-print">
             <div>
-                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">📑 Department Breakdown Computation</h2>
+                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">📑 Departmental Revenue &amp; Cost Allocation Statement</h2>
                 <p style="color: #7f8c8d; margin-top: 5px; font-size: 0.95rem;">
                     <strong>Active Period:</strong> <span class="activePeriodText">Loading...</span>
                 </p>
@@ -144,7 +204,8 @@
                     ← Back to Dashboard
                 </button>
                 <button class="btn-action btn-print" onclick="printOfficialReport()">
-                    🖨️ Print Official Report
+                    <span class="desktop-only">🖨️ Print Official Report</span>
+                    <span class="mobile-only">📱 Save to Phone (PDF)</span>
                 </button>
             </div>
         </div>
@@ -160,17 +221,17 @@
             <!-- Summary Metric Cards -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
                 <div class="card" style="border-left-color: #8e44ad;">
-                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Total Combined Gross Revenue</span>
+                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Gross Sales Revenue</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGrossRevenue">₱0.00</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Sum of all distributed examination booklets</p>
+                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Total combined examination booklet revenue billed</p>
                 </div>
                 <div class="card" style="border-left-color: #27ae60;">
-                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Final DCS Net Profit</span>
+                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Net Operating Surplus (DCS)</span>
                     <h2 style="color: #27ae60; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiNetProfit">₱0.00</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">After 1% Department &amp; 20% University allocations</p>
+                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Retained departmental share after institutional transfers</p>
                 </div>
                 <div class="card" style="border-left-color: #3498db;">
-                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Paper Ream Consumption</span>
+                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Direct Material Consumption</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.45rem; font-weight: 800;" id="kpiPaperUsage">0 Reams + 0 Sheets</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiPaperDetails">CS: 0R 0s | IT: 0R 0s</p>
                     
@@ -182,35 +243,35 @@
 
             <!-- Executive Revenue Waterfall Card -->
             <div class="card" style="border-left-color: #27ae60;">
-                <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Executive Financial Waterfall &amp; Revenue Distribution</h3>
+                <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Income Statement &amp; Revenue Allocation Waterfall</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
                         <tbody>
                             <tr style="background-color: #2c3e50; color: white;">
-                                <th style="padding: 14px 18px; text-align: left; font-weight: bold;">Total Combined Gross Revenue</th>
+                                <th style="padding: 14px 18px; text-align: left; font-weight: bold;">Gross Sales Revenue</th>
                                 <th style="padding: 14px 18px; text-align: right; font-weight: 800; font-size: 1.15rem;" id="wfGross">₱0.00</th>
                             </tr>
                             <tr style="background-color: #f8fafc;">
-                                <td colspan="2" style="padding: 10px 18px; font-weight: bold; color: #64748b; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Institutional Deductions &amp; Allocations</td>
+                                <td colspan="2" style="padding: 10px 18px; font-weight: bold; color: #64748b; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Operating Deductions &amp; Transfers</td>
                             </tr>
                             <tr>
-                                <td style="padding: 12px 18px; color: #334155;">Less: CS Department Budget Allocation (1%)</td>
+                                <td style="padding: 12px 18px; color: #334155;">Less: CS Program Allocation (1%)</td>
                                 <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfCSShare">- ₱0.00</td>
                             </tr>
                             <tr>
-                                <td style="padding: 12px 18px; color: #334155;">Less: IT Department Budget Allocation (1%)</td>
+                                <td style="padding: 12px 18px; color: #334155;">Less: IT Program Allocation (1%)</td>
                                 <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfITShare">- ₱0.00</td>
                             </tr>
                             <tr style="background-color: #edf2f7; font-weight: bold;">
-                                <td style="padding: 12px 18px; color: #1e293b;">Subtotal Balance</td>
+                                <td style="padding: 12px 18px; color: #1e293b;">Adjusted Gross Revenue</td>
                                 <td style="padding: 12px 18px; text-align: right; color: #1e293b;" id="wfSubtotal">₱0.00</td>
                             </tr>
                             <tr>
-                                <td style="padding: 12px 18px; color: #334155;">Less: University Remittance Share (20% of Subtotal)</td>
+                                <td style="padding: 12px 18px; color: #334155;">Less: Campus IGP Remittance (20%)</td>
                                 <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfUniShare">- ₱0.00</td>
                             </tr>
                             <tr style="background-color: #27ae60; color: white;">
-                                <th style="padding: 16px 18px; text-align: left; font-size: 1.2rem; font-weight: 800;">Final DCS Net Profit</th>
+                                <th style="padding: 16px 18px; text-align: left; font-size: 1.2rem; font-weight: 800;">Net Operating Surplus (DCS)</th>
                                 <th style="padding: 16px 18px; text-align: right; font-size: 1.35rem; font-weight: 800;" id="wfNetProfit">₱0.00</th>
                             </tr>
                         </tbody>
@@ -223,22 +284,17 @@
                 <div style="display: flex; justify-content: space-around; margin-top: 50px;">
                     <div style="text-align: center;">
                         <p style="border-top: 1px solid #000; padding-top: 5px; width: 250px; margin: 0 auto; font-weight: bold;" id="signClerkName">Name</p>
-                        <p style="font-size: 0.9rem;">Distribution Clerk</p>
+                        <p style="font-size: 0.9rem;">Distribution In-Charge</p>
                     </div>
                     <div style="text-align: center;">
-                        <p style="border-top: 1px solid #000; padding-top: 5px; width: 250px; margin: 0 auto; font-weight: bold;">University Cashier</p>
+                        <p style="border-top: 1px solid #000; padding-top: 5px; width: 250px; margin: 0 auto; font-weight: bold;">University IGP Collecting Officer</p>
                         <p style="font-size: 0.9rem;">Received By</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Back to Dashboard Footer Button (On-Screen) -->
-        <div class="no-print" style="text-align: center; margin: 30px 0 20px;">
-            <button class="btn-action btn-back" style="padding: 12px 24px; font-size: 1rem;" onclick="window.location.href='/dashboard'">
-                ← Back to Dashboard Overview
-            </button>
-        </div>
+        
     </div>
 
     <!-- SCRIPT LOGIC -->
@@ -376,7 +432,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
                         <h3 style="color: #0f172a; margin: 0; font-size: 1.3rem;">${deptIcon} ${deptNames[dept]}</h3>
                         <span style="font-size: 1rem; font-weight: bold; background: #f8fafc; padding: 6px 14px; border-radius: 20px; border: 1px solid #e2e8f0; color: ${deptColor};">
-                            Gross Revenue: ₱${(summ[dept]["total"] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            Gross Sales Revenue: ₱${(summ[dept]["total"] || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                         </span>
                     </div>
                 `;
@@ -391,18 +447,18 @@
                             <div style="margin-bottom: 25px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                                      <h4 style="color: #334155; margin: 0; font-size: 1.05rem;">🎓 ${y} Year Sections</h4>
-                                     <span style="font-size: 0.9rem; font-weight: bold; color: #64748b;">Subtotal: ₱${summ[dept][y.toString()].toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                     <span style="font-size: 0.9rem; font-weight: bold; color: #64748b;">Section Revenue Subtotal: ₱${summ[dept][y.toString()].toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                                 </div>
                                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th>Teacher</th>
-                                                <th>Subject</th>
-                                                <th>Section</th>
-                                                <th style="text-align: center;">Booklets Issued</th>
-                                                <th style="text-align: center;">Paper Consumed (Reams & Sheets)</th>
-                                                <th style="text-align: right;">Total Amount</th>
+                                                <th>Faculty In-Charge</th>
+                                                <th>Course Code / Subject</th>
+                                                <th>Class Section</th>
+                                                <th style="text-align: center;">Booklet Units Issued</th>
+                                                <th style="text-align: center;">Raw Material Consumption</th>
+                                                <th style="text-align: right;">Total Sales Revenue (PHP)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -485,22 +541,138 @@
             }
         }).catch(err => console.log('Alert check error:', err));
 
-        function logout() {
-            if(confirm("Are you sure you want to log out?")) {
-                fetch('/api/logout', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: activeUser.username })
-                }).then(() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                }).catch(() => {
-                    localStorage.clear();
-                    window.location.href = '/login';
-                });
+        
+    // --- IN-APP CONFIRMATION DIALOG SYSTEM ---
+    function showAppConfirm(title, message, options = {}) {
+        return new Promise(resolve => {
+            const {
+                type = 'warning',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                confirmBg = null
+            } = options;
+
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                resolve(window.confirm(`${title}\n\n${message}`));
+                return;
             }
-        }
+
+            const card = modal.querySelector('.app-dialog-card') || modal.querySelector('.modal-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBg = '#3498db';
+
+            if (type === 'danger') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBg = '#e74c3c';
+            } else if (type === 'info') {
+                borderCol = '#3498db';
+                icon = '🔒';
+                defaultBg = '#34495e';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                defaultBg = '#10b981';
+            }
+
+            if (card) {
+                if (card.classList.contains('app-dialog-card')) {
+                    card.style.borderTopColor = borderCol;
+                } else {
+                    card.style.borderTop = `5px solid ${borderCol}`;
+                }
+            }
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) {
+                msgEl.innerHTML = typeof message === 'string' ? message : String(message);
+            }
+
+            if (confirmBtn) {
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = confirmBg || defaultBg;
+                confirmBtn.style.color = '#ffffff';
+            }
+
+            if (cancelBtn) {
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.innerText = cancelText;
+            }
+
+            function cleanup(result) {
+                modal.style.display = 'none';
+                if (confirmBtn) confirmBtn.onclick = null;
+                if (cancelBtn) cancelBtn.onclick = null;
+                document.removeEventListener('keydown', handleKey);
+                modal.onclick = null;
+                resolve(result);
+            }
+
+            function handleKey(e) {
+                if (e.key === 'Escape') {
+                    cleanup(false);
+                }
+            }
+
+            if (confirmBtn) confirmBtn.onclick = () => cleanup(true);
+            if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
+
+            modal.onclick = (e) => {
+                if (e.target === modal) cleanup(false);
+            };
+            document.addEventListener('keydown', handleKey);
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    async function logout() {
+        const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+            type: 'danger',
+            confirmText: 'Log Out',
+            cancelText: 'Cancel',
+            confirmBg: '#e74c3c'
+        });
+        if (!confirmed) return;
+
+        const username = (typeof activeUser !== 'undefined' && activeUser && activeUser.username) ? activeUser.username : '';
+
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        }).then(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        }).catch(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        });
+    }
+
     </script>
+
+<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
+    <div class="app-dialog-card">
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">🛑</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Confirm Logout</h3>
+        <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
+        <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+            <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: white;">Log Out</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
 

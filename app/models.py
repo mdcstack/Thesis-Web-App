@@ -75,7 +75,7 @@ class Booklet(Base):
     distributed_by = Column(String(255), nullable=True, default="System Clerk")
     return_reason = Column(String(255), nullable=True)
     exam_period = Column(String(50), nullable=True)
-    unit_price = Column(Float, default=2.50)
+    unit_price = Column(Float, nullable=True)
 
 class User(Base):
     __tablename__ = "users"

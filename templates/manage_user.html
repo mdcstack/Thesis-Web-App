@@ -10,7 +10,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
         
         /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
         .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
         .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
         .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
@@ -85,12 +85,62 @@
         /* Password Input Wrapper & Visibility Eye Toggle */
         .password-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
         .password-input-wrapper input { padding-right: 42px; width: 100%; }
-        .toggle-password-btn { position: absolute; right: 8px; background: none; border: none; font-size: 1.15rem; cursor: pointer; color: #64748b; padding: 4px; display: inline-flex; align-items: center; justify-content: center; transition: color 0.2s, transform 0.1s; user-select: none; }
-        .toggle-password-btn:hover { color: #1e293b; transform: scale(1.1); }
-        .toggle-password-btn:focus { outline: none; }
+        .toggle-password-btn {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: #64748b;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: color 0.2s, background-color 0.2s;
+            user-select: none;
+        }
+        .toggle-password-btn:hover {
+            color: #1e293b;
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        .toggle-password-btn:focus {
+            outline: none;
+            color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.08);
+        }
+        .toggle-password-btn svg {
+            display: block;
+            pointer-events: none;
+        }
 
-        /* Input Hint */
-        .input-hint { font-size: 0.78rem; color: #64748b; margin-top: 4px; transition: color 0.2s; line-height: 1.4; }
+        /* Input Hint & Suggestion Chip */
+        .input-hint { font-size: 0.78rem; color: #64748b; margin-top: 4px; transition: color 0.2s; line-height: 1.4; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .btn-suggest-chip {
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+            text-decoration: none;
+        }
+        .btn-suggest-chip:hover {
+            background: #dbeafe;
+            color: #1d4ed8;
+            border-color: #93c5fd;
+            transform: translateY(-1px);
+        }
         
         .btn-primary { width: 100%; padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-primary:hover { background-color: #2563eb; }
@@ -114,9 +164,35 @@
         .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
         /* Toast Notifications */
-        #toastContainer { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .app-toast-item { pointer-events: auto; display: flex; align-items: center; gap: 12px; background: #ffffff; color: #1e293b; padding: 12px 18px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); border-left: 4px solid #10b981; font-size: 0.9rem; animation: toastSlideIn 0.25s ease-out; max-width: 360px; }
-        @keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        #toastContainer {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            transition: top 0.25s ease, bottom 0.25s ease;
+        }
+        .app-toast-item {
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: #ffffff;
+            color: #1e293b;
+            padding: 12px 18px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+            border-left: 5px solid #10b981;
+            font-size: 0.9rem;
+            min-width: 300px;
+            max-width: 420px;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        }
 
         /* Mobile Hamburger & Overlay */
         .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
@@ -128,12 +204,73 @@
             .user-layout-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 900px) {
-            body { flex-direction: column; overflow: hidden; }
+            body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
             .mobile-header { display: flex; flex-shrink: 0; }
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
+            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
             .sidebar.active { left: 0; }
-            .main-content { padding: 15px; }
+            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
+            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
             .mobile-hide { display: none !important; }
+            
+            /* Mobile Top-Floating Dynamic Pill */
+            #toastContainer {
+                top: 12px !important;
+                bottom: auto !important;
+                left: 12px !important;
+                right: 12px !important;
+                align-items: center !important;
+                pointer-events: none !important;
+                z-index: 99999 !important;
+            }
+            .app-toast-item {
+                min-width: 0 !important;
+                width: 100% !important;
+                max-width: 420px !important;
+                padding: 10px 14px !important;
+                border-radius: 8px !important;
+                box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.22), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+                font-size: 0.84rem !important;
+            }
+        }
+
+        /* App Custom Dialog Modal */
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .app-dialog-card {
+            background: #ffffff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+            border-top: 5px solid #ef4444;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            filter: brightness(0.92);
+            transform: translateY(-1px);
+        }
+        .dialog-btn:active {
+            transform: translateY(0);
+        }
+        .sidebar-logout-btn:hover {
+            background-color: #c0392b !important;
+            transform: translateY(-1px);
+        }
+        .sidebar-logout-btn:active {
+            transform: translateY(0);
         }
     </style>
 </head>
@@ -172,7 +309,7 @@
         <a href="/dashboard" class="nav-link">📊 Dashboard</a>
         <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
         <a href="/manage_users" class="nav-link active" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only">📄 Booklet Template</a>
+        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
         <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
         <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
         <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
@@ -182,7 +319,9 @@
         <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
             <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
             <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" style="background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold;">Log Out</button>
+            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
+                <span style="font-size: 1rem;">🚪</span> Log Out
+            </button>
         </div>
     </div>
 
@@ -238,22 +377,28 @@
                     <div class="form-group">
                         <label>Current Password</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="staffCurrentPassword" placeholder="Enter current password" required>
-                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffCurrentPassword', this)" title="Show/Hide Password">👁️</button>
+                            <input type="password" id="staffCurrentPassword" placeholder="Enter current password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffCurrentPassword', this)" title="Show password" aria-label="Show password">
+                                <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label>New Password</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="staffNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
-                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffNewPassword', this)" title="Show/Hide Password">👁️</button>
+                            <input type="password" id="staffNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffNewPassword', this)" title="Show password" aria-label="Show password">
+                                <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
                         </div>
                     </div>
                     <div class="form-group">
                         <label>Confirm New Password</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="staffConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72">
-                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                            <input type="password" id="staffConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72" autocomplete="new-password">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffConfirmPassword', this)" title="Show password" aria-label="Show password">
+                                <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
                         </div>
                     </div>
                     <button type="submit" class="btn-primary" id="btnStaffChangePw">
@@ -354,15 +499,17 @@
                         <form onsubmit="handleCreateUser(event)">
                             <div class="form-group">
                                 <label>Username</label>
-                                <input type="text" id="newUsername" placeholder="e.g., clerk_it_01" required autocomplete="off" minlength="8" maxlength="30" oninput="handleUsernameInput(this)">
-                                <div id="newUsernameHint" class="input-hint">Allowed: letters, numbers, underscores (8–30 chars).</div>
+                                <input type="text" id="newUsername" placeholder="e.g., clerk_it_01" required autocomplete="off" minlength="3" maxlength="30" oninput="handleUsernameInput(this)">
+                                <div id="newUsernameHint" class="input-hint">Allowed: letters, numbers, underscores, dots (3–30 chars, no spaces).</div>
                             </div>
                             
                             <div class="form-group">
                                 <label>Password</label>
                                 <div class="password-input-wrapper">
-                                    <input type="password" id="newPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
-                                    <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('newPassword', this)" title="Show/Hide Password">👁️</button>
+                                    <input type="password" id="newPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                                    <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('newPassword', this)" title="Show password" aria-label="Show password">
+                                        <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                    </button>
                                 </div>
                             </div>
                             
@@ -473,15 +620,19 @@
                 <div class="form-group">
                     <label>New Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="adminNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminNewPassword', this)" title="Show/Hide Password">👁️</button>
+                        <input type="password" id="adminNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminNewPassword', this)" title="Show password" aria-label="Show password">
+                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Confirm New Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="adminConfirmPassword" placeholder="Repeat new password" required minlength="8" maxlength="72">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                        <input type="password" id="adminConfirmPassword" placeholder="Repeat new password" required minlength="8" maxlength="72" autocomplete="new-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminConfirmPassword', this)" title="Show password" aria-label="Show password">
+                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="modal-actions">
@@ -503,22 +654,28 @@
                 <div class="form-group">
                     <label>Current Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="selfCurrentPassword" placeholder="Enter current password" required>
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfCurrentPassword', this)" title="Show/Hide Password">👁️</button>
+                        <input type="password" id="selfCurrentPassword" placeholder="Enter current password" required autocomplete="current-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfCurrentPassword', this)" title="Show password" aria-label="Show password">
+                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>New Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="selfNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfNewPassword', this)" title="Show/Hide Password">👁️</button>
+                        <input type="password" id="selfNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfNewPassword', this)" title="Show password" aria-label="Show password">
+                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Confirm New Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="selfConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfConfirmPassword', this)" title="Show/Hide Password">👁️</button>
+                        <input type="password" id="selfConfirmPassword" placeholder="Confirm new password" required minlength="8" maxlength="72" autocomplete="new-password">
+                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfConfirmPassword', this)" title="Show password" aria-label="Show password">
+                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
                     </div>
                 </div>
                 <div class="modal-actions">
@@ -530,16 +687,17 @@
     </div>
 
     <!-- CUSTOM APP CONFIRM DIALOG MODAL -->
-    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 2500;">
-        <div class="modal-card" style="text-align: center; max-width: 400px;">
-            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">⚠️</div>
-            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Confirm Action</h3>
-            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px;"></div>
-            <div style="display: flex; gap: 10px; justify-content: center;">
-                <button id="appDialogCancelBtn" class="btn-secondary">Cancel</button>
-                <button id="appDialogConfirmBtn" class="btn-primary" style="width: auto;">Confirm</button>
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
+        <div class="app-dialog-card">
+            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">🛑</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Confirm Logout</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
+            <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
+                <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
+                <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Log Out</button>
             </div>
         </div>
+    </div>
     </div>
 
     <!-- TOAST CONTAINER -->
@@ -605,80 +763,130 @@
         let allUsers = [];
 
         // --- FETCH USERS DIRECTORY ---
-        function fetchUsers() {
+        function fetchUsers(isSilent = false) {
             if (activeUser.role !== 'Admin') return;
 
-            fetch('/api/users')
+            fetch('/api/users', { cache: 'no-store' })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'success') {
                         allUsers = data.users || [];
                         updateKpis(allUsers);
                         filterUsers();
-                    } else {
+                    } else if (!isSilent) {
                         showToast(data.message || "Failed to load users directory.", "error", "Directory Error");
                     }
                 })
                 .catch(err => {
                     console.error("Error fetching users:", err);
-                    showToast("Network error connecting to local server.", "error", "Network Error");
+                    if (!isSilent) {
+                        showToast("Network error connecting to local server.", "error", "Network Error");
+                    }
                 });
         }
 
-        // --- PASSWORD VISIBILITY TOGGLE ---
+        // --- PASSWORD VISIBILITY TOGGLE (SVG VECTOR ICONS) ---
+        const EYE_OPEN_SVG = `<svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        const EYE_OFF_SVG = `<svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
         function togglePasswordVisibility(inputId, btn) {
             const input = document.getElementById(inputId);
             if (!input) return;
-            if (input.type === 'password') {
-                input.type = 'text';
-                btn.innerText = '🙈';
-                btn.title = 'Hide password';
-            } else {
-                input.type = 'password';
-                btn.innerText = '👁️';
-                btn.title = 'Show password';
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            btn.innerHTML = isPassword ? EYE_OFF_SVG : EYE_OPEN_SVG;
+            btn.title = isPassword ? 'Hide password' : 'Show password';
+            btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            input.focus();
+        }
+
+        // --- USERNAME LIVE VALIDATION & SMART AUTO-SUGGESTION ---
+        function applyUsernameSuggestion(suggested) {
+            const input = document.getElementById('newUsername');
+            if (input) {
+                input.value = suggested;
+                handleUsernameInput(input);
+                input.focus();
             }
         }
 
-        // --- USERNAME LIVE VALIDATION ---
         function handleUsernameInput(el) {
             const hint = document.getElementById('newUsernameHint');
-            const val = el.value.trim();
-            const regex = /^[a-zA-Z0-9_]+$/;
+            const rawVal = el.value;
+            const cleanVal = rawVal.trim();
 
-            if (val.length === 0) {
+            if (cleanVal.length === 0) {
                 if (hint) {
                     hint.style.color = '#64748b';
-                    hint.innerText = 'Allowed: letters, numbers, underscores (8–30 chars).';
+                    hint.innerHTML = 'Allowed: letters, numbers, underscores, dots (3–30 chars, no spaces).';
                 }
                 return false;
             }
 
-            if (!regex.test(val)) {
+            // 1. Space detection & smart conversion suggestion (e.g. "instructor 2" -> "instructor_2")
+            if (rawVal.includes(' ')) {
+                const suggested = rawVal.trim().replace(/\s+/g, '_').toLowerCase();
                 if (hint) {
                     hint.style.color = '#dc2626';
-                    hint.innerText = '❌ Invalid characters! Only letters, numbers, and underscores allowed.';
+                    let suggestionHtml = '';
+                    if (suggested.length >= 3) {
+                        suggestionHtml = `<button type="button" class="btn-suggest-chip" onclick="applyUsernameSuggestion('${suggested}')" title="Convert spaces to underscores">Use "${suggested}"</button>`;
+                    }
+                    hint.innerHTML = `⚠️ <span>Usernames cannot contain spaces.</span> ${suggestionHtml}`;
                 }
                 return false;
-            } else if (val.length < 8) {
+            }
+
+            // 2. Disallowed symbols check (identifying exact invalid character)
+            const invalidCharMatch = cleanVal.match(/[^a-zA-Z0-9_.]/);
+            if (invalidCharMatch) {
+                const badChar = invalidCharMatch[0];
+                if (hint) {
+                    hint.style.color = '#dc2626';
+                    hint.innerHTML = `❌ Special character '<strong>${badChar}</strong>' is not allowed. Only letters, numbers, underscores (_), and dots (.).`;
+                }
+                return false;
+            }
+
+            // 3. Consecutive dots check
+            if (cleanVal.includes('..')) {
+                if (hint) {
+                    hint.style.color = '#dc2626';
+                    hint.innerHTML = '❌ Cannot contain consecutive periods (..).';
+                }
+                return false;
+            }
+
+            // 4. Starting / ending with period or underscore
+            if (cleanVal.startsWith('.') || cleanVal.startsWith('_') || cleanVal.endsWith('.') || cleanVal.endsWith('_')) {
                 if (hint) {
                     hint.style.color = '#f59e0b';
-                    hint.innerText = `⚠️ Too short (${val.length}/8 min characters).`;
+                    hint.innerHTML = '⚠️ Cannot begin or end with a dot (.) or underscore (_).';
                 }
                 return false;
-            } else if (val.length > 30) {
+            }
+
+            // 5. Length checks (3 to 30 characters)
+            if (cleanVal.length < 3) {
+                if (hint) {
+                    hint.style.color = '#f59e0b';
+                    hint.innerHTML = `⚠️ Too short (${cleanVal.length}/3 min characters).`;
+                }
+                return false;
+            } else if (cleanVal.length > 30) {
                 if (hint) {
                     hint.style.color = '#dc2626';
-                    hint.innerText = '❌ Exceeds 30 maximum characters.';
+                    hint.innerHTML = `❌ Exceeds 30 maximum characters (${cleanVal.length}/30).`;
                 }
                 return false;
-            } else {
-                if (hint) {
-                    hint.style.color = '#16a34a';
-                    hint.innerText = '✅ Valid username format (ready for registration).';
-                }
-                return true;
             }
+
+            // 6. Valid format
+            if (hint) {
+                hint.style.color = '#16a34a';
+                hint.innerHTML = '✅ Valid username format (ready for registration).';
+            }
+            return true;
         }
 
         // --- PASSWORD VALIDATION LOGIC ---
@@ -832,7 +1040,7 @@
             const department = (role === 'Admin') ? 'All' : document.getElementById('newDepartment').value;
             
             if (!handleUsernameInput(usernameInput)) {
-                showToast("Username must be between 8 and 30 characters long and contain only letters, numbers, and underscores.", "warning", "Invalid Username");
+                showToast("Please enter a valid username (3–30 characters, letters, numbers, underscores, or dots, no spaces).", "warning", "Invalid Username");
                 return;
             }
 
@@ -963,8 +1171,15 @@
         function openAdminResetPwModal(id, username) {
             document.getElementById('resetUserId').value = id;
             document.getElementById('resetTargetUsername').innerText = username;
-            document.getElementById('adminNewPassword').value = '';
-            document.getElementById('adminConfirmPassword').value = '';
+            const p1 = document.getElementById('adminNewPassword');
+            const p2 = document.getElementById('adminConfirmPassword');
+            if (p1) { p1.value = ''; p1.type = 'password'; }
+            if (p2) { p2.value = ''; p2.type = 'password'; }
+            document.querySelectorAll('#adminResetPwModal .toggle-password-btn').forEach(b => {
+                b.innerHTML = EYE_OPEN_SVG;
+                b.title = 'Show password';
+                b.setAttribute('aria-label', 'Show password');
+            });
             document.getElementById('adminResetPwModal').style.display = 'flex';
         }
 
@@ -1028,9 +1243,17 @@
 
         // --- SELF CHANGE PASSWORD ---
         function openChangePasswordModal() {
-            document.getElementById('selfCurrentPassword').value = '';
-            document.getElementById('selfNewPassword').value = '';
-            document.getElementById('selfConfirmPassword').value = '';
+            const p1 = document.getElementById('selfCurrentPassword');
+            const p2 = document.getElementById('selfNewPassword');
+            const p3 = document.getElementById('selfConfirmPassword');
+            if (p1) { p1.value = ''; p1.type = 'password'; }
+            if (p2) { p2.value = ''; p2.type = 'password'; }
+            if (p3) { p3.value = ''; p3.type = 'password'; }
+            document.querySelectorAll('#changePasswordModal .toggle-password-btn').forEach(b => {
+                b.innerHTML = EYE_OPEN_SVG;
+                b.title = 'Show password';
+                b.setAttribute('aria-label', 'Show password');
+            });
             document.getElementById('changePasswordModal').style.display = 'flex';
         }
 
@@ -1209,35 +1432,132 @@
                 });
         }
 
-        // --- CUSTOM IN-APP CONFIRM DIALOG ---
-        function showAppConfirm(title, message) {
-            return new Promise(resolve => {
-                const modal = document.getElementById('appDialogModal');
-                const titleEl = document.getElementById('appDialogTitle');
-                const msgEl = document.getElementById('appDialogMsg');
-                const confirmBtn = document.getElementById('appDialogConfirmBtn');
-                const cancelBtn = document.getElementById('appDialogCancelBtn');
+        
+    // --- IN-APP CONFIRMATION DIALOG SYSTEM ---
+    function showAppConfirm(title, message, options = {}) {
+        return new Promise(resolve => {
+            const {
+                type = 'warning',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                confirmBg = null,
+                confirmClass = null
+            } = options;
 
-                titleEl.innerText = title;
-                msgEl.innerHTML = message;
-                modal.style.display = 'flex';
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                resolve(window.confirm(`${title}
 
-                function cleanup() {
-                    modal.style.display = 'none';
-                    confirmBtn.onclick = null;
-                    cancelBtn.onclick = null;
+${message}`));
+                return;
+            }
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBg = '#3498db';
+
+            if (type === 'danger') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBg = '#e74c3c';
+            } else if (type === 'question') {
+                borderCol = '#3b82f6';
+                icon = '❓';
+                defaultBg = '#3498db';
+            } else if (type === 'info') {
+                borderCol = '#3b82f6';
+                icon = 'ℹ️';
+                defaultBg = '#3b82f6';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                defaultBg = '#10b981';
+            }
+
+            if (card) card.style.borderTopColor = borderCol;
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) {
+                if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<strong') || message.includes('<p'))) {
+                    msgEl.style.whiteSpace = 'normal';
+                    msgEl.innerHTML = message;
+                } else {
+                    msgEl.style.whiteSpace = 'pre-line';
+                    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
                 }
+            }
 
-                confirmBtn.onclick = () => { cleanup(); resolve(true); };
-                cancelBtn.onclick = () => { cleanup(); resolve(false); };
-            });
-        }
+            if (confirmBtn) {
+                confirmBtn.innerText = confirmText;
+                if (confirmClass) {
+                    confirmBtn.className = confirmClass;
+                    confirmBtn.style.background = '';
+                    confirmBtn.style.color = '';
+                } else {
+                    confirmBtn.className = 'dialog-btn';
+                    confirmBtn.style.background = confirmBg || defaultBg;
+                    confirmBtn.style.color = '#ffffff';
+                }
+            }
+
+            if (cancelBtn) {
+                cancelBtn.className = 'dialog-btn';
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.style.background = '#e2e8f0';
+                cancelBtn.style.color = '#475569';
+                cancelBtn.innerText = cancelText;
+            }
+
+            confirmBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(true);
+            };
+
+            cancelBtn.onclick = () => {
+                modal.style.display = 'none';
+                resolve(false);
+            };
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    async function logout() {
+        const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+            type: 'danger',
+            confirmText: 'Log Out',
+            cancelText: 'Cancel',
+            confirmBg: '#e74c3c'
+        });
+        if (!confirmed) return;
+
+        const username = (typeof activeUser !== 'undefined' && activeUser && activeUser.username) ? activeUser.username : '';
+
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        }).then(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        }).catch(() => {
+            localStorage.clear();
+            window.location.href = '/login';
+        });
+    }
 
         // --- TOAST SYSTEM ---
-        function showToast(message, type = 'info', title = '') {
+        function showToast(message, type = 'info', title = '', displayDuration = 3500) {
             const container = document.getElementById('toastContainer');
             if (!container) return;
 
+            const isMobile = window.innerWidth <= 900;
             const toast = document.createElement('div');
             toast.className = 'app-toast-item';
 
@@ -1259,19 +1579,33 @@
             container.appendChild(toast);
             setTimeout(() => {
                 toast.style.opacity = '0';
-                toast.style.transform = 'translateX(100%)';
+                toast.style.transform = isMobile ? 'translateY(-10px)' : 'translateX(100%)';
                 setTimeout(() => toast.remove(), 300);
-            }, 3500);
+            }, displayDuration);
         }
 
         // --- LAN REAL-TIME MUTATION SYNC ---
         if (window.lanSync) {
             window.lanSync.onUpdate((payload) => {
-                if (payload.event === "USER_UPDATED" && activeUser && activeUser.role === 'Admin') {
-                    fetchUsers();
+                if ((payload.event === "USER_UPDATED" || payload.event === "VERSION_DESYNC_DETECTED") && activeUser && (activeUser.role === 'Admin' || activeUser.role?.toLowerCase() === 'admin')) {
+                    fetchUsers(true);
                 }
             });
         }
+
+        // --- REAL-TIME TAB FOCUS / VISIBILITY SYNC ---
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && activeUser && (activeUser.role === 'Admin' || activeUser.role?.toLowerCase() === 'admin')) {
+                fetchUsers(true);
+            }
+        });
+
+        // --- REAL-TIME USER PRESENCE HEARTBEAT (4s) ---
+        setInterval(() => {
+            if (document.visibilityState === 'visible' && activeUser && (activeUser.role === 'Admin' || activeUser.role?.toLowerCase() === 'admin')) {
+                fetchUsers(true);
+            }
+        }, 4000);
 
         // --- REAL-TIME SESSION POLLING ---
         setInterval(() => {
