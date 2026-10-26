@@ -10,17 +10,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
-        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
-        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
-        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-        
-        /* Main Layout */
+/* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; }
         
@@ -98,13 +88,7 @@
             filter: brightness(0.92);
             transform: translateY(-1px);
         }
-        .sidebar-logout-btn:hover {
-            background-color: #c0392b !important;
-            transform: translateY(-1px);
-        }
-        .sidebar-logout-btn:active {
-            transform: translateY(0);
-        }
+
         
         .breakdown-row { display: flex; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #ecf0f1; font-size: 1.15rem; }
         .breakdown-row:last-child { border-bottom: none; font-weight: bold; font-size: 1.35rem; }
@@ -131,25 +115,12 @@
             body.print-computations-mode #print-computations-area { display: block !important; width: 100%; font-family: 'Times New Roman', Times, serif; }
             .page-break { page-break-before: always; }
         }
-    
-        /* Mobile Hamburger & Overlay Styles */
-        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-        .sidebar-overlay.active { display: block; }
+
 
         /* Responsive Mobile Layout Fixes */
         @media (max-width: 900px) {
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-            
-            .mobile-header { display: flex; flex-shrink: 0; }
-            
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-            .sidebar.active { left: 0; }
-            .mobile-hide { display: none !important; }
-            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
-            
-            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+.main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
             
             .pos-grid { flex-direction: column; }
             .control-panel { max-width: 100%; flex: auto; }
@@ -173,31 +144,9 @@
 </head>
 <body>
 
-<div class="mobile-header no-print">
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="mobile-title">BOOKLETLOG</div>
-</div>
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+{% include 'sidebar.html' %}
 
-
-    <div class="sidebar no-print">
-        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                    🔔
-                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-                </div>
-                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                    ⚙️
-                </a>
-            </div>
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-                Loading alerts...
-            </div>
-        </div>
-
-
-        <!-- FORCED INITIALIZATION MODAL (ADMIN ONLY) -->
+<!-- FORCED INITIALIZATION MODAL (ADMIN ONLY) -->
 <div class="modal-overlay" id="initSetupModal" style="background: rgba(44, 62, 80, 0.95); z-index: 9999;">
     <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 500px;">
         <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ System Not Initialized</h2>
@@ -226,29 +175,6 @@
     </div>
 </div>
 
-
-        <div class="sidebar-header">Proposed System</div>
-        <a href="/dashboard" class="nav-link active">📊 Dashboard</a>
-        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
-        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
-        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
-        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
-        <a href="/history" class="nav-link">📜 Transaction Trail</a>
-        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
-        
-        
-        
-
-        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-        </div>
-    </div>
 
     <div class="main-content">
         <div class="print-header">
@@ -279,28 +205,29 @@
                 <h3>📌 Viewing Period</h3>
                 <div class="value" id="kpi-period" style="font-size: 1.3rem; margin-top: 10px;">Loading...</div>
             </div>
-            <div class="kpi-card revenue clickable-card" title="Click to view Ream Usage Breakdown">
+            <div class="kpi-card revenue clickable-card" onclick="openConvertedModal()" title="Click to view Reams Converted Breakdown">
                 <div class="clickable-icon">📦</div>
                 <h3>Raw Reams Converted</h3>
                 <div class="value" id="kpi-reams-converted">0</div>
                 <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
                     <span id="kpi-total-generated">0</span> booklets total in system
-                    <div id="kpi-reams-converted-breakdown" style="margin-top: 4px; color: #2563eb; font-weight: 600; font-size: 0.78rem;">CS: 0R | IT: 0R</div>
                 </div>
             </div>
-            <div class="kpi-card clickable-card" onclick="openIssuedModal()" title="Click to view Department Issue Breakdown">
+            <div class="kpi-card clickable-card" onclick="openIssuedModal()" title="Click to view Booklets Issued Breakdown">
                 <div class="clickable-icon">📦</div>
                 <h3>Reams Distributed</h3>
                 <div class="value" id="kpi-reams-distributed">0</div>
                 <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
                     <span id="kpi-loose-distributed">0</span> paper sheets | <span id="kpi-issued">0</span> booklets
-                    <div id="kpi-reams-distributed-breakdown" style="margin-top: 4px; color: #059669; font-weight: 600; font-size: 0.78rem;">CS: 0R (0s) | IT: 0R (0s)</div>
                 </div>
             </div>
-            <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defect Breakdown (CS & IT)">
+            <div class="kpi-card warning clickable-card" onclick="openDefectiveModal()" title="Click to view Defective Returns Breakdown by Course">
                 <div class="clickable-icon">⚠️</div>
                 <h3>Defective Returns</h3>
                 <div class="value" id="kpi-defective">0</div>
+                <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 5px; font-weight: bold;">
+                    <span id="kpi-defective-sub">0</span> misprinted booklets
+                </div>
             </div>
         </div>
 
@@ -323,15 +250,15 @@
                     </span>
                 </div>
 
-                <div class="course-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px;">
+                <div id="courses-breakdown-grid" class="course-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px;">
                     <!-- CS Course Card -->
                     <div id="course-card-cs" style="background: white; border: 2px solid #bfdbfe; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-width: 0; box-sizing: border-box; overflow: hidden;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #eff6ff; padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
                             <div style="font-weight: 700; color: #1e40af; font-size: 1.05rem; display: flex; align-items: center; gap: 6px;">
                                 💻 Computer Science (CS)
                             </div>
-                            <span id="cs-status-badge" style="background: #fee2e2; color: #dc2626; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">
-                                SHORTAGE: 29 REAMS
+                            <span id="cs-status-badge" style="background: #f1f5f9; color: #475569; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">
+                                ANALYZING DEMAND
                             </span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
@@ -340,7 +267,7 @@
                                 <strong id="cs-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
                             </div>
                             <div style="min-width: 0;">
-                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / Vault Stock</span>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / In Stock</span>
                                 <span id="cs-stock-dist" style="font-weight: 600;"><span id="cs-distributed" style="color: #0284c7;">-</span> / <span id="cs-vault" style="color: #059669;">- pcs</span></span>
                             </div>
                             <div style="min-width: 0;">
@@ -359,7 +286,7 @@
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
-                                <strong id="cs-reams-needed" style="font-size: 1.25rem; color: #2563eb;">- Ream(s)</strong>
+                                <strong id="cs-reams-needed" style="font-size: 1.15rem; color: #2563eb;">- Ream(s) &amp; - Sheet(s)</strong>
                             </div>
                         </div>
                     </div>
@@ -370,8 +297,8 @@
                             <div style="font-weight: 700; color: #5b21b6; font-size: 1.05rem; display: flex; align-items: center; gap: 6px;">
                                 🌐 Information Technology (IT)
                             </div>
-                            <span id="it-status-badge" style="background: #fee2e2; color: #dc2626; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">
-                                SHORTAGE: 33 REAMS
+                            <span id="it-status-badge" style="background: #f1f5f9; color: #475569; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">
+                                ANALYZING DEMAND
                             </span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
@@ -380,7 +307,7 @@
                                 <strong id="it-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
                             </div>
                             <div style="min-width: 0;">
-                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / Vault Stock</span>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / In Stock</span>
                                 <span id="it-stock-dist" style="font-weight: 600;"><span id="it-distributed" style="color: #0284c7;">-</span> / <span id="it-vault" style="color: #059669;">- pcs</span></span>
                             </div>
                             <div style="min-width: 0;">
@@ -399,7 +326,7 @@
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
-                                <strong id="it-reams-needed" style="font-size: 1.25rem; color: #7c3aed;">- Ream(s)</strong>
+                                <strong id="it-reams-needed" style="font-size: 1.15rem; color: #7c3aed;">- Ream(s) &amp; - Sheet(s)</strong>
                             </div>
                         </div>
                     </div>
@@ -407,10 +334,19 @@
             </div>
         
             <!-- BOTTOM HALF: Expert System Recommendation -->
-            <div style="background: #f8f9fa; border: 1px solid #ecf0f1; border-radius: 6px; padding: 15px;">
-                <div style="font-size: 0.85rem; color: #7f8c8d; text-transform: uppercase; font-weight: bold; margin-bottom: 8px;">Automated Reorder Action Plan:</div>
-                <div id="expertAdviceBox" style="padding: 15px; border-radius: 6px; font-weight: bold; font-size: 1.1rem; color: white; background: #34495e;">
-                    Analyzing active period and inventory variables...
+            <div id="expertAdviceWrapper" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                    <div style="font-size: 0.88rem; color: #475569; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+                        Automated Reorder & Production Recommendation
+                    </div>
+                    <span id="expertSystemStatusBadge" style="background: #e2e8f0; color: #475569; font-size: 0.78rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px;">
+                        Analyzing system...
+                    </span>
+                </div>
+                <div id="expertAdviceBox">
+                    <div style="padding: 20px; text-align: center; color: #64748b; font-size: 0.95rem;">
+                        Analyzing active period and inventory variables...
+                    </div>
                 </div>
             </div>
         </div>
@@ -418,7 +354,7 @@
         <div class="charts-grid">
             <!-- Left: Grouped Bar Chart -->
             <div class="chart-container" style="margin-bottom: 0;">
-                <h3>Revenue by Year Level (CS vs IT)</h3>
+                <h3 id="yearLevelChartTitle">Revenue by Year Level (<span id="yearLevelCoursesLabel">All Courses</span>)</h3>
                 <!-- STRICT WRAPPER: Prevents infinite resizing -->
                 <div style="position: relative; height: 300px; width: 100%; margin-top: 10px;">
                     <canvas id="yearLevelChart"></canvas>
@@ -444,15 +380,7 @@
                         <span style="color: #7f8c8d; font-weight: bold;">⚪ Uni Remittance (20%)</span>
                         <strong style="color: #7f8c8d;" id="alloc-uni">₱0.00</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #e74c3c; font-weight: bold;">🔴 CS Dept Budget (1%)</span>
-                        <strong style="color: #e74c3c;" id="alloc-cs-budget">₱0.00</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="color: #f39c12; font-weight: bold;">🟠 IT Dept Budget (1%)</span>
-                        <strong style="color: #f39c12;" id="alloc-it-budget">₱0.00</strong>
-                    </div>
-                </div>
+                    <div id="alloc-dept-budgets-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
         </div>
         
@@ -496,37 +424,55 @@
     </div>
 
     <div class="modal-overlay" id="revenueModal">
-        <div class="modal-card" style="border-top: 6px solid #27ae60;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px;">💰 Gross Revenue Breakdown</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="revModalPeriodLabel">Loading...</p>
-            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalRevCS">₱0.00</span></div>
-            <div class="breakdown-row"><span>🔌 Information Technology (IT)</span><span id="modalRevIT">₱0.00</span></div>
-            
-            <div class="breakdown-row" style="color: #27ae60;"><span>Total Combined Revenue</span><span id="modalRevTotal">₱0.00</span></div>
-            <button class="btn-action" style="background-color: #27ae60;" onclick="closeModals()">Close</button>
+        <div class="modal-card" style="border-top: 6px solid #27ae60; max-width: 480px;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">💵 Gross Revenue Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 16px;" id="revModalPeriodLabel">Loading...</p>
+            <div id="modalRevenueRowsContainer" style="max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #27ae60; font-weight: bold; border-top: 2px solid #e2e8f0; padding-top: 12px; font-size: 1rem; margin-top: 6px;">
+                <span>Total Combined Revenue</span>
+                <span id="modalRevTotal">₱0.00</span>
+            </div>
+            <button class="btn-action" style="background-color: #27ae60; margin-top: 16px; width: 100%;" onclick="closeModals()">Close</button>
+        </div>
+    </div>
+
+    <!-- CONVERTED REAMS BREAKDOWN MODAL -->
+    <div class="modal-overlay" id="convertedModal">
+        <div class="modal-card" style="border-top: 6px solid #2563eb; max-width: 480px;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">📦 Raw Reams Converted Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 16px;" id="convertedModalPeriodLabel">Loading...</p>
+            <div id="modalConvertedRowsContainer" style="max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #2563eb; font-weight: bold; border-top: 2px solid #e2e8f0; padding-top: 12px; font-size: 1rem; margin-top: 6px;">
+                <span>Total Reams Converted</span>
+                <span id="modalConvertedTotal">0 Ream(s)</span>
+            </div>
+            <button class="btn-action" style="background-color: #2563eb; margin-top: 16px; width: 100%;" onclick="closeModals()">Close</button>
         </div>
     </div>
 
     <div class="modal-overlay" id="issuedModal">
-        <div class="modal-card" style="border-top: 6px solid #3498db;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px;">📦 Booklets Issued Breakdown</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="issuedModalPeriodLabel">Loading...</p>
-            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalIssuedCS">0 pcs</span></div>
-            <div class="breakdown-row"><span>🔌 Information Technology (IT)</span><span id="modalIssuedIT">0 pcs</span></div>
-            
-            <div class="breakdown-row" style="color: #2980b9;"><span>Total Booklets Issued</span><span id="modalIssuedTotal">0 pcs</span></div>
-            <button class="btn-action" style="background-color: #3498db;" onclick="closeModals()">Close</button>
+        <div class="modal-card" style="border-top: 6px solid #3498db; max-width: 480px;">
+            <h3 style="color: #2c3e50; margin-bottom: 10px;">📋 Booklets Issued Breakdown</h3>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 16px;" id="issuedModalPeriodLabel">Loading...</p>
+            <div id="modalIssuedRowsContainer" style="max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #2980b9; font-weight: bold; border-top: 2px solid #e2e8f0; padding-top: 12px; font-size: 1rem; margin-top: 6px;">
+                <span>Total Booklets Issued</span>
+                <span id="modalIssuedTotal">0 pcs</span>
+            </div>
+            <button class="btn-action" style="background-color: #3498db; margin-top: 16px; width: 100%;" onclick="closeModals()">Close</button>
         </div>
     </div>
 
     <div class="modal-overlay" id="defectiveModal">
-        <div class="modal-card" style="border-top: 6px solid #f39c12;">
+        <div class="modal-card" style="border-top: 6px solid #f39c12; max-width: 480px;">
             <h3 style="color: #2c3e50; margin-bottom: 10px;">⚠️ Defective Returns Breakdown</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;" id="defectiveModalPeriodLabel">Loading...</p>
-            <div class="breakdown-row"><span>💻 Computer Science (CS)</span><span id="modalDefectCS">0 pcs</span></div>
-            <div class="breakdown-row" style="border-bottom: 2px solid #2c3e50; padding-bottom: 15px;"><span>🔌 Information Technology (IT)</span><span id="modalDefectIT">0 pcs</span></div>
-            <div class="breakdown-row" style="color: #d35400; font-weight: bold;"><span>Total Defective (CS & IT)</span><span id="modalDefectTotal">0 pcs</span></div>
-            <button class="btn-action" style="background-color: #f39c12; margin-top: 20px;" onclick="closeModals()">Close</button>
+            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 16px;" id="defectiveModalPeriodLabel">Loading...</p>
+            <div id="modalDefectiveRowsContainer" style="max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; color: #d35400; font-weight: bold; border-top: 2px solid #e2e8f0; padding-top: 12px; font-size: 1rem; margin-top: 6px;">
+                <span>Total Defective Booklets</span>
+                <span id="modalDefectTotal">0 pcs</span>
+            </div>
+            <button class="btn-action" style="background-color: #f39c12; margin-top: 16px; width: 100%;" onclick="closeModals()">Close</button>
         </div>
     </div>
 
@@ -590,7 +536,11 @@
     document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
     document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
     
-    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none'); const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
+    if (activeUser.role !== 'Admin') {
+        document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+        const navUsers = document.getElementById('navManageUsers');
+        if (navUsers) navUsers.innerHTML = '👤 My Account';
+    }
 
     // Global Cache
     let currentDashboardPeriod = "";
@@ -617,36 +567,140 @@
 
     // --- MODAL CONTROLS ---
     function openFilterModal() { populateFilterYears(); document.getElementById('filterModal').style.display = 'flex'; }
+    let dashboardPrograms = [];
+
+    function getProgDisplayMeta(code) {
+        const found = dashboardPrograms.find(p => p.code === code);
+        if (found) return found;
+        if (code === 'CS') return { code: 'CS', name: 'Computer Science', color: '#3498db' };
+        if (code === 'IT') return { code: 'IT', name: 'Information Technology', color: '#e67e22' };
+        return { code: code, name: code, color: '#3498db' };
+    }
+
+    function getCourseColor(deptCode) {
+        if (!deptCode) return '#475569';
+        const prog = (dashboardPrograms || []).find(p => (p.code || '').toUpperCase() === (deptCode || '').toUpperCase());
+        if (prog && prog.color) return prog.color;
+        if (prog && prog.color_hex) return prog.color_hex;
+        const fallbackColors = {
+            'CS': '#3498db',
+            'IT': '#e67e22',
+            'IE': '#9a1919',
+            'PE': '#10b981',
+            'NS': '#059669',
+            'CE': '#d97706',
+            'IM': '#0891b2'
+        };
+        return fallbackColors[deptCode.toUpperCase()] || '#3b82f6';
+    }
+
     function openRevenueModal() {
         document.getElementById('revModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
-        document.getElementById('modalRevCS').innerText = `₱${statsData.revenue.cs.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-        document.getElementById('modalRevIT').innerText = `₱${statsData.revenue.it.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-        
-        document.getElementById('modalRevTotal').innerText = `₱${statsData.revenue.total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        const container = document.getElementById('modalRevenueRowsContainer');
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#3498db' },
+            { code: 'IT', name: 'Information Technology', color: '#e67e22' }
+        ];
+        container.innerHTML = progs.map(p => {
+            const val = (statsData.revenue_by_dept && statsData.revenue_by_dept[p.code] !== undefined)
+                ? statsData.revenue_by_dept[p.code]
+                : (p.code === 'CS' ? (statsData.revenue.cs || 0) : (p.code === 'IT' ? (statsData.revenue.it || 0) : 0));
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#3498db'};"></span>
+                        <strong style="color: #2c3e50; font-size: 0.92rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
+                    </span>
+                    <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">₱${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('modalRevTotal').innerText = `₱${Number(statsData.revenue.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('revenueModal').style.display = 'flex';
     }
+
+    function openConvertedModal() {
+        if (!document.getElementById('convertedModal')) return;
+        document.getElementById('convertedModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
+        const container = document.getElementById('modalConvertedRowsContainer');
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#3498db' },
+            { code: 'IT', name: 'Information Technology', color: '#e67e22' }
+        ];
+        const convMap = statsData.reams_converted_by_dept || {};
+        container.innerHTML = progs.map(p => {
+            const val = (convMap[p.code] !== undefined)
+                ? convMap[p.code]
+                : (p.code === 'CS' ? (convMap.CS || convMap.cs || 0) : (p.code === 'IT' ? (convMap.IT || convMap.it || 0) : 0));
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#2563eb'};"></span>
+                        <strong style="color: #2c3e50; font-size: 0.92rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
+                    </span>
+                    <span style="font-weight: 700; color: #2563eb; font-size: 0.95rem;">${Number(val).toLocaleString()} Ream(s)</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('modalConvertedTotal').innerText = `${Number(statsData.reams_converted_total || 0).toLocaleString()} Ream(s)`;
+        document.getElementById('convertedModal').style.display = 'flex';
+    }
+
     function openIssuedModal() {
         document.getElementById('issuedModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
-        document.getElementById('modalIssuedCS').innerText = `${statsData.issued.cs.toLocaleString()} pcs`;
-        document.getElementById('modalIssuedIT').innerText = `${statsData.issued.it.toLocaleString()} pcs`;
-        
-        document.getElementById('modalIssuedTotal').innerText = `${statsData.issued.total.toLocaleString()} pcs`;
+        const container = document.getElementById('modalIssuedRowsContainer');
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#3498db' },
+            { code: 'IT', name: 'Information Technology', color: '#e67e22' }
+        ];
+        container.innerHTML = progs.map(p => {
+            const val = (statsData.issued_by_dept && statsData.issued_by_dept[p.code] !== undefined)
+                ? statsData.issued_by_dept[p.code]
+                : (p.code === 'CS' ? (statsData.issued.cs || 0) : (p.code === 'IT' ? (statsData.issued.it || 0) : 0));
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#3498db'};"></span>
+                        <strong style="color: #2c3e50; font-size: 0.92rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
+                    </span>
+                    <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${Number(val).toLocaleString()} pcs</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('modalIssuedTotal').innerText = `${Number(statsData.issued.total || 0).toLocaleString()} pcs`;
         document.getElementById('issuedModal').style.display = 'flex';
     }
 
     function openDefectiveModal() {
         document.getElementById('defectiveModalPeriodLabel').innerText = `Period: ${currentDashboardPeriod}`;
-        document.getElementById('modalDefectCS').innerText = `${statsData.defective.cs.toLocaleString()} pcs`;
-        document.getElementById('modalDefectIT').innerText = `${statsData.defective.it.toLocaleString()} pcs`;
-        document.getElementById('modalDefectTotal').innerText = `${statsData.defective.total.toLocaleString()} pcs`;
-        
+        const container = document.getElementById('modalDefectiveRowsContainer');
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#3498db' },
+            { code: 'IT', name: 'Information Technology', color: '#e67e22' }
+        ];
+        container.innerHTML = progs.map(p => {
+            const val = (statsData.defective_by_dept && statsData.defective_by_dept[p.code] !== undefined)
+                ? statsData.defective_by_dept[p.code]
+                : (p.code === 'CS' ? (statsData.defective.cs || 0) : (p.code === 'IT' ? (statsData.defective.it || 0) : 0));
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
+                    <span style="display: inline-flex; align-items: center; gap: 8px;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#f39c12'};"></span>
+                        <strong style="color: #2c3e50; font-size: 0.92rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
+                    </span>
+                    <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">${Number(val).toLocaleString()} pcs</span>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('modalDefectTotal').innerText = `${Number(statsData.defective.total || 0).toLocaleString()} pcs`;
         document.getElementById('defectiveModal').style.display = 'flex';
     }
     function closeModals() {
-        document.getElementById('filterModal').style.display = 'none';
-        document.getElementById('revenueModal').style.display = 'none';
-        document.getElementById('issuedModal').style.display = 'none';
-        document.getElementById('defectiveModal').style.display = 'none';
+        if (document.getElementById('filterModal')) document.getElementById('filterModal').style.display = 'none';
+        if (document.getElementById('revenueModal')) document.getElementById('revenueModal').style.display = 'none';
+        if (document.getElementById('convertedModal')) document.getElementById('convertedModal').style.display = 'none';
+        if (document.getElementById('issuedModal')) document.getElementById('issuedModal').style.display = 'none';
+        if (document.getElementById('defectiveModal')) document.getElementById('defectiveModal').style.display = 'none';
     }
 
     window.onclick = function(event) { if (event.target.classList.contains('modal-overlay')) closeModals(); };
@@ -666,17 +720,36 @@
         const ctx = canvas.getContext('2d');
         if (yearLevelChartInstance) yearLevelChartInstance.destroy();
 
-        const csData = [(yearSalesData?.CS?.["1"]||0), (yearSalesData?.CS?.["2"]||0), (yearSalesData?.CS?.["3"]||0), (yearSalesData?.CS?.["4"]||0)];
-        const itData = [(yearSalesData?.IT?.["1"]||0), (yearSalesData?.IT?.["2"]||0), (yearSalesData?.IT?.["3"]||0), (yearSalesData?.IT?.["4"]||0)];
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#2ecc71' },
+            { code: 'IT', name: 'Information Technology', color: '#f1c40f' }
+        ];
+
+        const coursesLabel = document.getElementById('yearLevelCoursesLabel');
+        if (coursesLabel) {
+            coursesLabel.innerText = progs.map(p => p.code).join(' vs ');
+        }
+
+        const datasets = progs.map(p => {
+            const pData = [
+                (yearSalesData?.[p.code]?.["1"] || 0),
+                (yearSalesData?.[p.code]?.["2"] || 0),
+                (yearSalesData?.[p.code]?.["3"] || 0),
+                (yearSalesData?.[p.code]?.["4"] || 0)
+            ];
+            return {
+                label: `${p.code} Revenue (PHP)`,
+                data: pData,
+                backgroundColor: p.color || '#3498db',
+                borderRadius: 4
+            };
+        });
 
         yearLevelChartInstance = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-                datasets: [
-                    { label: 'CS Revenue (PHP)', data: csData, backgroundColor: '#2ecc71', borderRadius: 4 },
-                    { label: 'IT Revenue (PHP)', data: itData, backgroundColor: '#f1c40f', borderRadius: 4 }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -690,32 +763,79 @@
         });
     }
 
-    function renderAllocationChart(csGross, itGross) {
-    const combinedGross = csGross + itGross;
-    const csDeptBudget = csGross * 0.01;
-    const itDeptBudget = itGross * 0.01;
-    const totalDeptBudget = csDeptBudget + itDeptBudget;
-    
-    const subtotalBalance = combinedGross - totalDeptBudget;
-    const universityShare = subtotalBalance * 0.20;
-    const dcsNetProfit = subtotalBalance - universityShare;
+    function renderAllocationChart(deptGrossMap = {}, deptSharesMap = {}) {
+        const progs = (dashboardPrograms && dashboardPrograms.length > 0) ? dashboardPrograms : [
+            { code: 'CS', name: 'Computer Science', color: '#e74c3c' },
+            { code: 'IT', name: 'Information Technology', color: '#f39c12' }
+        ];
 
-    // Update Text Metrics dynamically
-    document.getElementById('alloc-net').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('alloc-uni').innerText = `₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('alloc-cs-budget').innerText = `₱${csDeptBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-    document.getElementById('alloc-it-budget').innerText = `₱${itDeptBudget.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        let combinedGross = 0;
+        let totalDeptBudget = 0;
+        const deptShareValues = {};
 
-    const canvas = document.getElementById('allocationChart');
-    if (!canvas) return;
+        progs.forEach(p => {
+            const gross = deptGrossMap[p.code] !== undefined ? deptGrossMap[p.code] : ((statsData.revenue_by_dept && statsData.revenue_by_dept[p.code]) || 0);
+            combinedGross += gross;
+            const share = deptSharesMap[p.code] !== undefined ? deptSharesMap[p.code] : (gross * 0.01);
+            deptShareValues[p.code] = share;
+            totalDeptBudget += share;
+        });
+
+        const subtotalBalance = Math.max(0, combinedGross - totalDeptBudget);
+        const universityShare = subtotalBalance * 0.20;
+        const dcsNetProfit = subtotalBalance - universityShare;
+
+        // Update Text Metrics dynamically
+        if (document.getElementById('alloc-net')) {
+            document.getElementById('alloc-net').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+        if (document.getElementById('alloc-uni')) {
+            document.getElementById('alloc-uni').innerText = `₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        }
+
+        const budgetsContainer = document.getElementById('alloc-dept-budgets-container');
+        if (budgetsContainer) {
+            budgetsContainer.innerHTML = progs.map(p => {
+                const share = deptShareValues[p.code] || 0;
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="color: ${p.color || '#64748b'}; font-weight: bold; font-size: 0.88rem;">
+                            ${p.code} Dept Share (1%)
+                        </span>
+                        <strong style="color: ${p.color || '#1e293b'}; font-size: 0.95rem;">
+                            ₱${share.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </strong>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        const canvas = document.getElementById('allocationChart');
+        if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (allocationChartInstance) allocationChartInstance.destroy();
 
         // Render Doughnut Graphic
         const hasData = combinedGross > 0;
-        const dataValues = hasData ? [dcsNetProfit, universityShare, csDeptBudget, itDeptBudget] : [1];
-        const bgColors = hasData ? ['#27ae60', '#95a5a6', '#e74c3c', '#f39c12'] : ['#ecf0f1'];
-        const labels = hasData ? ['DCS Net Profit', 'University Remittance', 'CS Dept Budget', 'IT Dept Budget'] : ['No Data'];
+        const dataValues = [];
+        const bgColors = [];
+        const labels = [];
+
+        if (hasData) {
+            dataValues.push(dcsNetProfit, universityShare);
+            bgColors.push('#27ae60', '#95a5a6');
+            labels.push('DCS Net Profit', 'University Remittance');
+
+            progs.forEach(p => {
+                dataValues.push(deptShareValues[p.code] || 0);
+                bgColors.push(p.color || getCourseColor(p.code));
+                labels.push(`${p.code} Dept Share`);
+            });
+        } else {
+            dataValues.push(1);
+            bgColors.push('#ecf0f1');
+            labels.push('No Data');
+        }
 
         allocationChartInstance = new Chart(ctx, {
             type: 'doughnut',
@@ -815,18 +935,20 @@
                         document.getElementById('kpi-loose-distributed').innerText = kpi.loose_distributed || 0;
 
                         if (document.getElementById('kpi-reams-converted-breakdown')) {
-                            const csConv = kpi.reams_converted_cs || 0;
-                            const itConv = kpi.reams_converted_it || 0;
-                            document.getElementById('kpi-reams-converted-breakdown').innerText = `CS: ${csConv} Ream(s) | IT: ${itConv} Ream(s)`;
+                            const convMap = kpi.reams_converted_per_dept || { CS: kpi.reams_converted_cs || 0, IT: kpi.reams_converted_it || 0 };
+                            const convStr = Object.entries(convMap).map(([c, v]) => `${c}: ${v} Ream(s)`).join(' | ');
+                            document.getElementById('kpi-reams-converted-breakdown').innerText = convStr || '0 Ream(s)';
                         }
                         if (document.getElementById('kpi-reams-distributed-breakdown')) {
-                            const csDistR = kpi.reams_distributed_cs || 0;
-                            const csDistS = kpi.loose_distributed_cs || 0;
-                            const itDistR = kpi.reams_distributed_it || 0;
-                            const itDistS = kpi.loose_distributed_it || 0;
-                            document.getElementById('kpi-reams-distributed-breakdown').innerText = `CS: ${csDistR}R (${csDistS}s) | IT: ${itDistR}R (${itDistS}s)`;
+                            const distMap = kpi.reams_distributed_per_dept || { CS: kpi.reams_distributed_cs || 0, IT: kpi.reams_distributed_it || 0 };
+                            const looseMap = kpi.loose_distributed_per_dept || { CS: kpi.loose_distributed_cs || 0, IT: kpi.loose_distributed_it || 0 };
+                            const distStr = Object.keys(distMap).map(c => `${c}: ${distMap[c] || 0}R (${looseMap[c] || 0}s)`).join(' | ');
+                            document.getElementById('kpi-reams-distributed-breakdown').innerText = distStr || '0R (0s)';
                         }
                     }
+
+                    // Synchronize dynamic active programs FIRST so all charts have full course metadata
+                    dashboardPrograms = data.programs || (data.computations_data ? data.computations_data.programs : []) || [];
 
                     if (data.course_production && data.course_production.courses) {
                         updateCourseBreakdownUI(data.course_production);
@@ -834,43 +956,40 @@
 
                     document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
                     document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
+                    if (document.getElementById('kpi-defective-sub')) {
+                        document.getElementById('kpi-defective-sub').innerText = (kpi.defective || 0).toLocaleString();
+                    }
                     
                     // Live inventory status is directly visualized in the Course Production Grid
 
-                    // Existing Chart Renderers...
-                    renderYearLevelChart(data.year_level_sales || { CS: {}, IT: {} });
-                    
-                    // We also ensure statsData gets populated for the modals!
+                    // Multi-course Chart Renderers
+                    renderYearLevelChart(data.year_level_sales || {});
+
+                    // Populate statsData for dynamic modals
+                    statsData.reams_converted_total = kpi.reams_converted || 0;
+                    statsData.reams_converted_by_dept = kpi.reams_converted_per_dept || { CS: kpi.reams_converted_cs || 0, IT: kpi.reams_converted_it || 0 };
                     statsData.issued.total = kpi.issued || 0;
                     statsData.revenue.total = (data.financials ? data.financials.gross_revenue : 0);
-                    if (data.charts && data.charts.departments) {
-                        if (data.financials) {
-                            // Use dynamic booklet price if available
-                            statsData.revenue.cs = (data.charts.departments.CS || 0) * (data.financials.booklet_price || 10);
-                            statsData.revenue.it = (data.charts.departments.IT || 0) * (data.financials.booklet_price || 10);
-                        } else {
-                            // Fallback if backend hasn't provided financials yet
-                            statsData.revenue.cs = (data.charts.departments.CS || 0) * 10;
-                            statsData.revenue.it = (data.charts.departments.IT || 0) * 10;
-                        }
+                    statsData.issued_by_dept = data.issued_by_dept || kpi.issued_per_dept || {};
+                    statsData.defective_by_dept = data.defective_by_dept || kpi.defective_breakdown || (data.charts ? data.charts.defective : {}) || {};
+                    statsData.revenue_by_dept = data.revenue_by_dept || (data.financials ? data.financials.dept_gross : {}) || {};
 
+                    if (data.charts && data.charts.departments) {
+                        const price = (data.financials ? data.financials.booklet_price : 10) || 10;
+                        statsData.revenue.cs = (data.charts.departments.CS || 0) * price;
+                        statsData.revenue.it = (data.charts.departments.IT || 0) * price;
                         statsData.issued.cs = data.charts.departments.CS || 0;
                         statsData.issued.it = data.charts.departments.IT || 0;
-                        renderAllocationChart(statsData.revenue.cs, statsData.revenue.it);
                     }
 
-                    // Populate Defective Returns breakdown (CS vs IT) for the modal
-                    if (data.charts && data.charts.defective) {
-                        statsData.defective.cs = data.charts.defective.CS || 0;
-                        statsData.defective.it = data.charts.defective.IT || 0;
-                        statsData.defective.total = data.charts.defective.Total || (statsData.defective.cs + statsData.defective.it);
-                    } else if (kpi.defective_breakdown) {
-                        statsData.defective.cs = kpi.defective_breakdown.cs || 0;
-                        statsData.defective.it = kpi.defective_breakdown.it || 0;
-                        statsData.defective.total = kpi.defective_breakdown.total || 0;
-                    } else {
-                        statsData.defective.total = kpi.defective || 0;
-                    }
+                    statsData.defective.cs = (statsData.defective_by_dept.CS || statsData.defective_by_dept.cs || 0);
+                    statsData.defective.it = (statsData.defective_by_dept.IT || statsData.defective_by_dept.it || 0);
+                    statsData.defective.total = kpi.defective || 0;
+
+                    // Render dynamic financial allocation chart & budget breakdown
+                    const grossMap = statsData.revenue_by_dept;
+                    const sharesMap = (data.financials && data.financials.dept_shares) ? data.financials.dept_shares : {};
+                    renderAllocationChart(grossMap, sharesMap);
 
                     computationsPayload = data.computations_data;
                     } catch(e) { alert('JS Crash: ' + e.message + ' at ' + e.stack); }
@@ -891,8 +1010,10 @@
         const area = document.getElementById('print-computations-area');
         const comp = computationsPayload.records;
         const summ = computationsPayload.summary;
-        const depts = ["CS", "IT"];
-        const deptNames = {"CS": "Computer Science (CS)", "IT": "Information Technology (IT)"};
+        const progs = computationsPayload.programs || [{ code: "CS", name: "Computer Science" }, { code: "IT", name: "Information Technology" }];
+        const depts = progs.map(p => p.code);
+        const deptNames = {};
+        progs.forEach(p => { deptNames[p.code] = `${p.name} (${p.code})`; });
 
         let html = `
             <div style="text-align: center; margin-bottom: 30px;">
@@ -961,36 +1082,45 @@
             }
         });
 
-        // Calculations for Final Page
-        const csGross = summ["CS"]["total"] || 0;
-        const itGross = summ["IT"]["total"] || 0;
-        
-        let csBooklets = 0;
-        let itBooklets = 0;
-        for (let y = 1; y <= 4; y++) {
-            (comp["CS"][y.toString()] || []).forEach(r => { csBooklets += r.headcount; });
-            (comp["IT"][y.toString()] || []).forEach(r => { itBooklets += r.headcount; });
-        }
-        
-        const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 6;
-        const csSheets = csBooklets * sheetsPerBooklet;
-        const itSheets = itBooklets * sheetsPerBooklet;
-        
-        const csReams = Math.floor(csSheets / 500);
-        const csLoose = csSheets % 500;
-        
-        const itReams = Math.floor(itSheets / 500);
-        const itLoose = itSheets % 500;
-        
-        const totalSheets = csSheets + itSheets;
+        // Calculations for Final Page dynamically across all active academic courses
+        let combinedGross = 0;
+        let totalDeptBudget = 0;
+        let totalSheets = 0;
+        const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 5;
+
+        const paperBreakdownRows = depts.map(dept => {
+            const gross = (summ[dept] && summ[dept]["total"]) || 0;
+            combinedGross += gross;
+            const deptBudget = gross * 0.01;
+            totalDeptBudget += deptBudget;
+
+            let deptBooklets = 0;
+            for (let y = 1; y <= 4; y++) {
+                (comp[dept] && comp[dept][y.toString()] || []).forEach(r => { deptBooklets += r.headcount; });
+            }
+            const deptSheets = deptBooklets * sheetsPerBooklet;
+            totalSheets += deptSheets;
+            const r = Math.floor(deptSheets / 500);
+            const l = deptSheets % 500;
+            return `<tr><td style="padding: 10px; font-weight: bold;">${deptNames[dept]}</td><td style="padding: 10px; text-align: right;">${r} Ream(s) and ${l} paper sheets</td></tr>`;
+        }).join('');
+
         const totalReams = Math.floor(totalSheets / 500);
         const totalLoose = totalSheets % 500;
-        const combinedGross = csGross + itGross;
-        const csDeptBudget = csGross * 0.01;
-        const itDeptBudget = itGross * 0.01;
-        const subtotalBalance = combinedGross - csDeptBudget - itDeptBudget;
+        const subtotalBalance = Math.max(0, combinedGross - totalDeptBudget);
         const universityShare = subtotalBalance * 0.20;
         const dcsNetProfit = subtotalBalance - universityShare;
+
+        const budgetDeductionRows = depts.map(dept => {
+            const gross = (summ[dept] && summ[dept]["total"]) || 0;
+            const share = gross * 0.01;
+            return `
+                <tr>
+                    <td style="padding: 10px; padding-left: 30px;">Less: ${deptNames[dept]} Budget Allocation (1%)</td>
+                    <td style="padding: 10px; text-align: right; color: black;">- ₱${share.toFixed(2)}</td>
+                </tr>
+            `;
+        }).join('');
 
         html += `
             <div class="page-break">
@@ -1007,8 +1137,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td style="padding: 10px; font-weight: bold;">Computer Science (CS)</td><td style="padding: 10px; text-align: right;">${csReams} Ream(s) and ${csLoose} paper sheets</td></tr>
-                        <tr><td style="padding: 10px; font-weight: bold;">Information Technology (IT)</td><td style="padding: 10px; text-align: right;">${itReams} Ream(s) and ${itLoose} paper sheets</td></tr>
+                        ${paperBreakdownRows}
                         <tr style="background-color: #f8f9fa;"><th style="padding: 10px; text-align: right; font-style: italic;">Total Department Consumption</th><th style="padding: 10px; text-align: right; color: #000;">${totalReams} Ream(s) and ${totalLoose} paper sheets</th></tr>
                     </tbody>
                 </table>
@@ -1044,14 +1173,7 @@
                         <tr>
                             <td colspan="2" style="padding: 12px; background-color: #f8f9fa; font-weight: bold; text-align: center;">Deductions & Allocations</td>
                         </tr>
-                        <tr>
-                            <td style="padding: 10px; padding-left: 30px;">Less: CS Department Budget Allocation (1%)</td>
-                            <td style="padding: 10px; text-align: right; color: black;">- ₱${csDeptBudget.toFixed(2)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; padding-left: 30px;">Less: IT Department Budget Allocation (1%)</td>
-                            <td style="padding: 10px; text-align: right; color: black;">- ₱${itDeptBudget.toFixed(2)}</td>
-                        </tr>
+                        ${budgetDeductionRows}
                         <tr>
                             <th style="padding: 10px; text-align: right; background-color: #e9ecef;">Subtotal Balance</th>
                             <th style="padding: 10px; text-align: right; background-color: #e9ecef;">₱${subtotalBalance.toFixed(2)}</th>
@@ -1243,7 +1365,14 @@
             }
         } else {
             badge.style.display = 'none';
-            if (data.has_enrollments === false) {
+            if (data.is_configured === false || data.status === 'awaiting_settings') {
+                panel.style.borderLeftColor = '#f59e0b';
+                if (activeUser && activeUser.role === 'Admin') {
+                    panel.innerHTML = '⚙️ <strong>Awaiting System Configuration:</strong><br>Academic period and booklet parameters have not been established yet.<br><br><a href="/settings" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to System Settings ➔</a>';
+                } else {
+                    panel.innerHTML = '⚙️ <strong>Awaiting System Configuration:</strong><br>Academic period and booklet parameters have not been established yet. Awaiting Administrator setup in Settings.';
+                }
+            } else if (data.has_enrollments === false) {
                 panel.style.borderLeftColor = '#64748b';
                 if (activeUser && activeUser.role === 'Admin') {
                     panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
@@ -1286,19 +1415,20 @@
 </script>
 
 <script>
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
-    if(sidebar) sidebar.classList.toggle('active');
-    if(overlay) overlay.classList.toggle('active');
-}
+
 </script>
 
 
 <script>
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function updateCourseBreakdownUI(courseProd) {
         if (!courseProd || !courseProd.courses) return;
         const bufPct = courseProd.buffer_percent !== undefined ? courseProd.buffer_percent : 0;
+        const sheetsPerB = courseProd.sheets_per_booklet || 5;
         const bufBadge = document.getElementById('course-buffer-rate-badge');
         if (bufBadge) {
             if (bufPct === 0) {
@@ -1314,68 +1444,242 @@ function toggleSidebar() {
             }
         }
 
-        ['CS', 'IT'].forEach(dept => {
-            const d = courseProd.courses[dept];
-            if (!d) return;
-            const prefix = dept.toLowerCase();
+        const gridContainer = document.getElementById('courses-breakdown-grid');
+        const courseKeys = Object.keys(courseProd.courses);
 
-            const headcountEl = document.getElementById(`${prefix}-headcount`);
-            if (headcountEl) headcountEl.innerText = (d.headcount || 0).toLocaleString();
+        if (gridContainer && courseKeys.length > 0) {
+            gridContainer.innerHTML = courseKeys.map(deptCode => {
+                const d = courseProd.courses[deptCode];
+                const color = d.color || '#3498db';
+                const name = d.name || (deptCode === 'CS' ? 'Computer Science' : (deptCode === 'IT' ? 'Information Technology' : deptCode));
+                const prefix = d.prefix || deptCode;
+                const isSatisfied = d.is_satisfied;
+                
+                const statusBadgeHtml = isSatisfied
+                    ? `<span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">DEMAND MET</span>`
+                    : `<span style="background: #fee2e2; color: #dc2626; font-size: 0.75rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap;">DEFICIT: ${(d.target_production || 0).toLocaleString()} BOOKLETS</span>`;
 
-            const distEl = document.getElementById(`${prefix}-distributed`);
-            if (distEl) distEl.innerText = (d.distributed || 0).toLocaleString();
+                const bufferText = (bufPct === 0) ? '+0 pcs (No Buffer)' : `+${(d.buffer_booklets || 0).toLocaleString()} pcs`;
+                const sheetsNeeded = d.sheets_needed !== undefined ? d.sheets_needed : ((d.target_production || 0) * sheetsPerB);
+                const paperText = d.paper_required_text || (d.target_production === 0 ? '0 Sheets (Demand Met)' : `${Math.floor(sheetsNeeded / 500)} Ream(s) & ${sheetsNeeded % 500} Sheet(s)`);
+                const totalSheetsSubtext = (d.target_production > 0) ? `(${sheetsNeeded.toLocaleString()} sheets total)` : '(Demand Met)';
 
-            const vaultEl = document.getElementById(`${prefix}-vault`);
-            if (vaultEl) vaultEl.innerText = `${(d.available_stock || 0).toLocaleString()} pcs`;
+                return `
+                    <div id="course-card-${deptCode.toLowerCase()}" style="background: white; border: 2px solid ${color}40; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-width: 0; box-sizing: border-box; overflow: hidden; border-top: 4px solid ${color};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                            <div style="font-weight: 700; color: #0f172a; font-size: 1.05rem; display: flex; align-items: center; gap: 6px;">
+                                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${color};"></span>
+                                ${escapeHtml(name)} (${escapeHtml(deptCode)})
+                                <span style="font-size: 0.75rem; color: #64748b; font-weight: normal; font-family: monospace;">[${escapeHtml(prefix)}]</span>
+                            </div>
+                            ${statusBadgeHtml}
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
+                            <div style="min-width: 0;">
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <strong style="font-size: 1.1rem; color: #0f172a;">${(d.headcount || 0).toLocaleString()}</strong>
+                            </div>
+                            <div style="min-width: 0;">
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / In Stock</span>
+                                <span style="font-weight: 600;"><span style="color: #0284c7;">${(d.distributed || 0).toLocaleString()}</span> / <span style="color: #059669;">${(d.available_stock || 0).toLocaleString()} pcs</span></span>
+                            </div>
+                            <div style="min-width: 0;">
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Deficit (Unmet Demand)</span>
+                                <strong style="font-size: 1.05rem; color: #dc2626;">${(d.deficit || 0).toLocaleString()} pcs</strong>
+                            </div>
+                            <div style="min-width: 0;">
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Safety Buffer (${bufPct}%)</span>
+                                <strong style="color: #7e22ce;">${bufferText}</strong>
+                            </div>
+                        </div>
+                        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed #cbd5e1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Production Target:</span>
+                                <strong style="font-size: 1.15rem; color: #1e3a8a;">${(d.target_production || 0).toLocaleString()} Booklets</strong>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
+                                <strong style="font-size: 1.15rem; color: ${color};">${escapeHtml(paperText)}</strong>
+                                <small style="display: block; color: #64748b; font-size: 0.75rem;">${escapeHtml(totalSheetsSubtext)}</small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
 
-            const deficitEl = document.getElementById(`${prefix}-deficit`);
-            if (deficitEl) deficitEl.innerText = `${(d.deficit || 0).toLocaleString()} pcs`;
+    function renderExpertRecommendation(rec, advice, color) {
+        const box = document.getElementById('expertAdviceBox');
+        const badge = document.getElementById('expertSystemStatusBadge');
+        if (!box) return;
 
-            const bufPctLabel = document.getElementById(`${prefix}-buffer-pct-label`);
-            if (bufPctLabel) bufPctLabel.innerText = `${bufPct}%`;
+        if (!rec) {
+            box.innerHTML = `<div style="padding: 16px; border-radius: 6px; font-weight: bold; font-size: 1rem; color: white; background: ${color || '#34495e'};">${escapeHtml(advice || 'System analyzing...')}</div>`;
+            return;
+        }
 
-            const bufBookletsEl = document.getElementById(`${prefix}-buffer-booklets`);
-            if (bufBookletsEl) {
-                bufBookletsEl.innerText = (bufPct === 0) ? '+0 pcs (No Buffer)' : `+${(d.buffer_booklets || 0).toLocaleString()} pcs`;
-            }
+        if (badge) {
+            badge.innerText = rec.status_title || 'Status';
+            badge.style.background = `${rec.badge_color || '#3498db'}20`;
+            badge.style.color = rec.badge_color || '#3498db';
+            badge.style.border = `1px solid ${rec.badge_color || '#3498db'}40`;
+        }
 
-            const targetEl = document.getElementById(`${prefix}-target-production`);
-            if (targetEl) targetEl.innerText = `${(d.target_production || 0).toLocaleString()} Booklets`;
+        const isHealthy = rec.total_target_production === 0 && rec.status_type === 'success';
+        const isStandby = rec.status_type === 'standby';
 
-            const reamsEl = document.getElementById(`${prefix}-reams-needed`);
-            if (reamsEl) reamsEl.innerText = `${d.reams_needed || 0} Ream(s)`;
+        if (isStandby) {
+            box.innerHTML = `
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-left: 5px solid #64748b; border-radius: 6px; padding: 16px;">
+                    <h4 style="margin: 0 0 6px 0; color: #334155; font-size: 1.05rem;">📋 ${escapeHtml(rec.status_title)}</h4>
+                    <p style="margin: 0 0 12px 0; color: #64748b; font-size: 0.92rem; line-height: 1.5;">${escapeHtml(rec.summary)}</p>
+                    <div style="font-size: 0.85rem; color: #475569;">
+                        <strong>Recommended Steps:</strong>
+                        <ul style="margin: 6px 0 0 20px; line-height: 1.5;">
+                            ${(rec.action_steps || []).map(step => `<li>${escapeHtml(step)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+            return;
+        }
 
-            const statusBadge = document.getElementById(`${prefix}-status-badge`);
-            if (statusBadge) {
-                if (d.is_satisfied) {
-                    statusBadge.innerText = 'DEMAND MET';
-                    statusBadge.style.background = '#dcfce7';
-                    statusBadge.style.color = '#15803d';
-                } else {
-                    statusBadge.innerText = `SHORTAGE: ${d.reams_needed} REAM(S)`;
-                    statusBadge.style.background = '#fee2e2';
-                    statusBadge.style.color = '#dc2626';
-                }
-            }
-        });
+        if (isHealthy) {
+            box.innerHTML = `
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 6px; padding: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                        <div style="font-weight: 700; color: #15803d; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                            <span>✅</span> ${escapeHtml(rec.status_title)}
+                        </div>
+                        <span style="background: #dcfce7; color: #166534; font-weight: 700; font-size: 0.8rem; padding: 4px 10px; border-radius: 6px;">
+                            0 Reams Needed (Demand Met)
+                        </span>
+                    </div>
+                    <p style="margin: 0 0 14px 0; color: #166534; font-size: 0.95rem; line-height: 1.5;">
+                        ${escapeHtml(rec.summary)}
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                        ${(rec.course_allocations || []).map(c => `
+                            <div style="background: white; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: 600; color: #0f172a; font-size: 0.9rem;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${c.color || '#3498db'}; margin-right: 6px;"></span>
+                                    ${escapeHtml(c.name)} (${escapeHtml(c.code)})
+                                </span>
+                                <span style="color: #15803d; font-weight: bold; font-size: 0.85rem;">${(c.available_stock || 0).toLocaleString()} pcs stock</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Shortage / Production Needed View:
+        const totalReams = rec.total_reams_to_procure || 0;
+        const totalSheetsNum = rec.total_sheets_needed || 0;
+        const exactReams = Math.floor(totalSheetsNum / 500);
+        const looseSheets = totalSheetsNum % 500;
+        const paperMainDisplay = (looseSheets === 0)
+            ? `${exactReams} Ream(s)`
+            : `${exactReams} Ream(s) & ${looseSheets} Sheet(s)`;
+        const totalSheets = totalSheetsNum.toLocaleString();
+        const procuredSheets = (rec.total_sheets_procured || 0).toLocaleString();
+        const excessSheets = (rec.excess_sheets || 0).toLocaleString();
+        const excessBooklets = (rec.excess_booklets_yield || 0).toLocaleString();
+        const targetBooklets = (rec.total_target_production || 0).toLocaleString();
+        const totalDeficit = (rec.total_deficit || 0).toLocaleString();
+        const bufferBooklets = (rec.total_buffer_booklets || 0).toLocaleString();
+
+        box.innerHTML = `
+            <div style="background: #fafafa; border: 1px solid #e5e7eb; border-left: 5px solid ${rec.badge_color || '#c0392b'}; border-radius: 6px; padding: 18px;">
+                <!-- Summary Banner -->
+                <div style="margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+                        <div style="font-weight: 700; color: #1e293b; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+                            <span>⚡</span> ${escapeHtml(rec.status_title)}
+                        </div>
+                        <span style="background: #f1f5f9; color: #475569; font-size: 0.8rem; font-weight: 600; padding: 3px 8px; border-radius: 4px;">
+                            ${escapeHtml(rec.active_period || '')}
+                        </span>
+                    </div>
+                    <p style="margin: 0; color: #475569; font-size: 0.95rem; line-height: 1.55;">
+                        ${escapeHtml(rec.summary)}
+                    </p>
+                </div>
+
+                <!-- Hero Metric Cards Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                    <!-- Reams to Procure -->
+                    <div style="background: white; border: 2px solid #3b82f630; border-top: 3px solid #2563eb; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                        <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
+                            📦 Recommended Reams to Procure
+                        </span>
+                        <strong style="font-size: 1.5rem; color: #1d4ed8; display: block; line-height: 1.2;">
+                            ${totalReams} Ream(s)
+                        </strong>
+                        <span style="font-size: 0.78rem; color: #64748b;">${procuredSheets} sheets (@ 500 sheets/ream)</span>
+                    </div>
+
+                    <!-- Exact Paper Demand -->
+                    <div style="background: white; border: 2px solid #e2e8f0; border-top: 3px solid #0284c7; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                        <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
+                            📄 Net Paper Required
+                        </span>
+                        <strong style="font-size: 1.35rem; color: #0369a1; display: block; line-height: 1.25;">
+                            ${escapeHtml(paperMainDisplay)}
+                        </strong>
+                        <span style="font-size: 0.78rem; color: #64748b; display: block; margin-top: 4px;">
+                             For ${targetBooklets} booklets (${totalDeficit} deficit + ${bufferBooklets} buffer)
+                        </span>
+                    </div>
+
+                    <!-- Reserve Stock Surplus -->
+                    <div style="background: white; border: 2px solid #e2e8f0; border-top: 3px solid #10b981; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                        <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
+                            🛡️ Safety Buffer & Yield Reserve
+                        </span>
+                        <strong style="font-size: 1.5rem; color: #047857; display: block; line-height: 1.2;">
+                            +${excessSheets} Sheets
+                        </strong>
+                        <span style="font-size: 0.78rem; color: #64748b;">Yields ~+${excessBooklets} extra reserve booklets</span>
+                    </div>
+                </div>
+
+                
+
+                <!-- Action Steps Checklist -->
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px;">
+                    <div style="font-size: 0.82rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+                        📋 Administrator Action Steps:
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${(rec.action_steps || []).map((step, idx) => `
+                            <div style="display: flex; align-items: flex-start; gap: 8px; font-size: 0.88rem; color: #334155; line-height: 1.45;">
+                                <span style="background: #3b82f6; color: white; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; justify-content: center; align-items: center; font-size: 0.72rem; font-weight: bold; flex-shrink: 0; margin-top: 1px;">
+                                    ${idx + 1}
+                                </span>
+                                <span>${escapeHtml(step)}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     function fetchExpertSystemData() {
         fetch('/api/reorder-decision-expert')
         .then(r => r.json())
         .then(data => {
-            const adviceBox = document.getElementById('expertAdviceBox');
-            if (adviceBox) {
-                adviceBox.innerText = data.advice;
-                adviceBox.style.backgroundColor = data.color;
-            }
+            renderExpertRecommendation(data.recommendation, data.advice, data.color);
             if (data.course_production && data.course_production.courses) {
                 updateCourseBreakdownUI(data.course_production);
             }
         }).catch(err => {
             console.error("Expert System Error:", err);
-            const adviceBox = document.getElementById('expertAdviceBox');
-            if (adviceBox) adviceBox.innerText = "Error loading expert system.";
+            const box = document.getElementById('expertAdviceBox');
+            if (box) box.innerHTML = `<div style="padding: 12px; color: #ef4444; font-weight: bold;">Error loading expert system recommendation.</div>`;
         });
     }
     

@@ -23,6 +23,14 @@ class Enrollment(Base):
     
     # Relationship to track which booklets were given to this class
     distributed_booklets = relationship("Booklet", back_populates="enrollment")
+    
+    # Audit trail of individual installment payments
+    payment_records = relationship(
+        "PaymentRecord", 
+        back_populates="enrollment", 
+        order_by="PaymentRecord.payment_date.asc()", 
+        cascade="all, delete-orphan"
+    )
 
 class MasterBatch(Base):
     __tablename__ = "master_batches"
@@ -86,6 +94,7 @@ class User(Base):
     role = Column(String(20))
     department = Column(String(10))
     session_token = Column(String(255), nullable=True)
+    updated_by = Column(String(50), nullable=True)
 
 class SystemSettings(Base):
     __tablename__ = "system_settings"
@@ -93,15 +102,18 @@ class SystemSettings(Base):
     # Changed from "1st Sem - Midterms" to "UNSET"
     active_period = Column(String(50), default="UNSET")
     
-    # Global Semester Configurations
-    current_semester_name = Column(String(50), default="1ST26")
-    ream_price = Column(Float, default=250.00)
-    sheets_per_booklet = Column(Integer, default=6)
-    booklet_price = Column(Float, default=0.0)
-    department_ream_budget = Column(Float, default=0.0)
+    # Global Semester Configurations - All nullable and None until configured by Admin
+    current_semester_name = Column(String(50), nullable=True, default=None)
+    ream_price = Column(Float, nullable=True, default=None)
+    sheets_per_booklet = Column(Integer, nullable=True, default=None)
+    booklet_price = Column(Float, nullable=True, default=None)
+    department_ream_budget = Column(Float, nullable=True, default=None)
     budget_is_manual = Column(Boolean, default=False)
-    reorder_buffer_percent = Column(Float, default=15.0)
+    reorder_buffer_percent = Column(Float, nullable=True, default=None)
     data_version = Column(Integer, default=1)
+    staples_box_price = Column(Float, nullable=True, default=None)
+    staples_per_box = Column(Integer, nullable=True, default=None)
+    staples_per_booklet = Column(Integer, nullable=True, default=None)
 
 class PeriodConfiguration(Base):
     __tablename__ = "period_configurations"
@@ -119,6 +131,9 @@ class PeriodConfiguration(Base):
     configured_by = Column(String(50), default="Administrator")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    staples_box_price = Column(Float, default=50.00)
+    staples_per_box = Column(Integer, default=1000)
+    staples_per_booklet = Column(Integer, default=2)
 
 class BookletTemplateConfig(Base):
     __tablename__ = "booklet_template_configs"
@@ -149,3 +164,28 @@ class BookletTemplateConfig(Base):
     qr_enabled = Column(Boolean, default=True)
     
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+class AcademicProgram(Base):
+    __tablename__ = "academic_programs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    code = Column(String(20), unique=True, nullable=False, index=True)  # e.g., "CS", "IT", "IM"
+    name = Column(String(100), nullable=False)                         # e.g., "Computer Science", "Information Management"
+    section_prefix = Column(String(20), nullable=False, index=True)    # e.g., "BSCS", "BSIT", "BSIM"
+    color_hex = Column(String(10), default="#3498db")                  # e.g., "#3498db", "#e67e22"
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+class PaymentRecord(Base):
+    __tablename__ = "payment_records"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    enrollment_id = Column(Integer, ForeignKey("enrollments.id"), index=True, nullable=False)
+    amount = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    payment_date = Column(DateTime, default=datetime.now)
+    recorded_by = Column(String(100), default="System Clerk")
+    notes = Column(String(255), nullable=True)
+
+    enrollment = relationship("Enrollment", back_populates="payment_records")

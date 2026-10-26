@@ -8,17 +8,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
-        
-        /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
-        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
-        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; font-size: 0.95rem; }
-        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-        
-        /* User Profile */
+/* User Profile */
         .user-profile { margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center; }
         .user-profile button { background-color: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.3s; margin-top: 10px; }
         .user-profile button:hover { background-color: #c0392b; }
@@ -211,19 +201,10 @@
         .auth-input { width: 100%; padding: 12px; border: 2px solid #27ae60; border-radius: 4px; font-size: 1.5rem; text-align: center; font-weight: bold; color: #27ae60; transition: border-color 0.2s; outline: none; }
         .auth-input:focus { border-color: #219653; box-shadow: 0 0 5px rgba(39, 174, 96, 0.4); }
 
-        /* Mobile Hamburger & Overlay Styles */
-        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-        .sidebar-overlay.active { display: block; }
         
         @media (max-width: 900px) {
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-            .mobile-header { display: flex; flex-shrink: 0; }
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-            .sidebar.active { left: 0; }
-            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
-            .main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+.main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
             .summary-grid { grid-template-columns: 1fr; }
             .mobile-hide { display: none !important; }
             .table-container { padding: 10px; }
@@ -259,62 +240,13 @@
             filter: brightness(0.92);
             transform: translateY(-1px);
         }
-        .sidebar-logout-btn:hover {
-            background-color: #c0392b !important;
-            transform: translateY(-1px);
-        }
-        .sidebar-logout-btn:active {
-            transform: translateY(0);
-        }
+
 
 </style>
 </head>
 <body>
 
-<div class="mobile-header no-print">
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="mobile-title">BOOKLETLOG</div>
-</div>
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
-<div class="sidebar" id="sidebar">
-    <!-- Notification Bell & Panel -->
-    <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-            <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                🔔
-                <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-            </div>
-            <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                ⚙️
-            </a>
-        </div>
-        
-        <!-- Hidden Dropdown Panel -->
-        <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-            Loading alerts...
-        </div>
-    </div>
-
-    <div class="sidebar-header">Proposed System</div>
-    <a href="/dashboard" class="nav-link">📊 Dashboard</a>
-    <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-    <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-    <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
-    <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
-    <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
-    <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
-    <a href="/history" class="nav-link">📜 Transaction Trail</a>
-    <a href="/payment-tracking" class="nav-link active">💳 Payment Tracking</a>
-    
-    <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-        <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-        <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-        <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-    </div>
-</div>
+{% include 'sidebar.html' %}
 
 <div class="main-content">
     <div class="header-bar">
@@ -337,7 +269,7 @@
         <div class="stat-card outstanding">
             <p>Total Outstanding</p>
             <h2 id="totalOutstanding" style="color: #e74c3c;">₱0.00</h2>
-            <p style="font-size: 0.8rem; color: #7f8c8d; margin-top: 4px;" id="deptOutstanding">CS: ₱0.00 | IT: ₱0.00</p>
+            <p style="font-size: 0.8rem; color: #7f8c8d; margin-top: 4px;" id="deptOutstanding">Calculating outstanding by program...</p>
         </div>
     </div>
 
@@ -376,11 +308,9 @@
                     </button>
                 </div>
 
-                <!-- Program Filter -->
+                <!-- Program Filter (Dynamically loaded via /api/academic-programs) -->
                 <select id="deptFilter" style="flex: 1; min-width: 200px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
-                    <option value="All">All Programs (CS &amp; IT)</option>
-                    <option value="CS">Computer Science (BSCS)</option>
-                    <option value="IT">Information Technology (BSIT)</option>
+                    <option value="All">All Programs</option>
                 </select>
 
                 <!-- Status Filter (With history.html style colored emoji badges) -->
@@ -419,49 +349,99 @@
     </div>
 </div>
 
-<!-- Calculation Breakdown Modal -->
+<!-- Calculation & Payment Installment History Modal -->
 <div class="modal-overlay" id="calcBreakdownModal">
-    <div class="modal-card" style="border-top: 6px solid #3498db;">
-        <h3 style="color: #2980b9; margin-bottom: 10px; text-align: center;">Calculation Breakdown</h3>
-        <p style="color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">Detailed formula breakdown for this class issuance.</p>
-        
-        <table style="width: 100%; border-collapse: collapse; margin: 15px 0 20px; font-size: 0.95rem;">
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #7f8c8d;">Student Headcount:</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcHeadcount">0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #7f8c8d;">Distributed Booklets:</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcDistributed">0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #e74c3c;">Dropped (Loose Returns):</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #e74c3c;" id="calcDropped">0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1; background-color: #f8f9fa;">
-                <td style="padding: 10px 8px; color: #2c3e50; font-weight: bold;">Net Billable Booklets:</td>
-                <td style="padding: 10px 8px; text-align: right; font-weight: bold; color: #2c3e50;" id="calcBillable">0</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #7f8c8d;">Price per Booklet:</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcPrice">₱0.00</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #2c3e50; font-weight: bold;">Total Amount Due:</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #3498db;" id="calcTotal">₱0.00</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #ecf0f1;">
-                <td style="padding: 10px 0; color: #27ae60; font-weight: bold;">Amount Paid (Credited):</td>
-                <td style="padding: 10px 0; text-align: right; font-weight: bold; color: #27ae60;" id="calcPaid">₱0.00</td>
-            </tr>
-            <tr>
-                <td style="padding: 14px 0 10px; color: #e74c3c; font-weight: bold; font-size: 1.05rem;">Remaining Balance:</td>
-                <td style="padding: 14px 0 10px; text-align: right; font-weight: bold; color: #e74c3c; font-size: 1.15rem;" id="calcBalance">₱0.00</td>
-            </tr>
-        </table>
+    <div class="modal-card" style="border-top: 6px solid #3498db; max-width: 700px; width: 94%; max-height: 90vh; overflow-y: auto; padding: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">
+            <div>
+                <h3 style="color: #2980b9; margin: 0 0 4px 0; text-align: left; font-size: 1.35rem;">Calculation &amp; Payment Ledger</h3>
+                <div id="calcModalSubtitle" style="font-size: 0.9rem; color: #555; text-align: left;">
+                    <strong id="calcInstructorName">Instructor</strong> &bull; <span id="calcSectionSubject">Section &bull; Subject</span>
+                    <span id="calcDeptBadge" class="badge" style="background-color: #3498db; color: white; margin-left: 6px; font-size: 0.75rem;">CS</span>
+                </div>
+            </div>
+            <button onclick="closeBreakdownModal()" style="background: none; border: none; font-size: 1.6rem; color: #95a5a6; cursor: pointer; line-height: 1;" title="Close Modal">&times;</button>
+        </div>
 
-        <div class="btn-group">
-            <button class="btn-cancel" onclick="closeBreakdownModal()">Close</button>
+        <!-- Section 1: Issuance & Cost Formula Summary -->
+        <div style="background: #fdfefe; border: 1px solid #e1e8ed; border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;">
+            <div style="font-size: 0.82rem; font-weight: bold; text-transform: uppercase; color: #7f8c8d; letter-spacing: 0.5px; margin-bottom: 8px;">
+                📐 Issuance &amp; Billable Cost Overview
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #7f8c8d;">Student Headcount:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcHeadcount">0</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #7f8c8d;">Distributed Booklets:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcDistributed">0</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #e74c3c;">Dropped (Loose Returns):</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #e74c3c;" id="calcDropped">0</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5; background-color: #f8f9fa;">
+                    <td style="padding: 6px 8px; color: #2c3e50; font-weight: bold;">Net Billable Booklets:</td>
+                    <td style="padding: 6px 8px; text-align: right; font-weight: bold; color: #2c3e50;" id="calcBillable">0</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #7f8c8d;">Price per Booklet:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcPrice">₱0.00</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #2c3e50; font-weight: bold;">Total Amount Due:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #3498db;" id="calcTotal">₱0.00</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #f0f2f5;">
+                    <td style="padding: 6px 0; color: #27ae60; font-weight: bold;">Total Credited / Paid:</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #27ae60;" id="calcPaid">₱0.00</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0 4px; color: #e74c3c; font-weight: bold; font-size: 1rem;">Current Remaining Balance:</td>
+                    <td style="padding: 8px 0 4px; text-align: right; font-weight: bold; color: #e74c3c; font-size: 1.1rem;" id="calcBalance">₱0.00</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- Section 2: Installment Payment Audit Trail (When & How Much Paid Till Fully Paid) -->
+        <div style="background: #ffffff; border: 1px solid #dcdde1; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 0.85rem; font-weight: bold; text-transform: uppercase; color: #27ae60; letter-spacing: 0.5px;">
+                    💳 Payment Installment Audit Trail
+                </div>
+                <div id="calcPaymentCountBadge" class="badge" style="background-color: #ecf0f1; color: #2c3e50; font-size: 0.75rem;">
+                    0 installment(s)
+                </div>
+            </div>
+            <p style="color: #7f8c8d; font-size: 0.82rem; margin: 0 0 10px 0; text-align: left;">
+                Chronological log of installment payments received for this class until payoff.
+            </p>
+
+            <div style="overflow-x: auto; max-height: 220px; border: 1px solid #eee; border-radius: 4px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left;">
+                    <thead style="background: #f8f9fa; border-bottom: 2px solid #e1e8ed; position: sticky; top: 0; z-index: 1;">
+                        <tr>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; width: 35px; text-align: center;">#</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 150px;">Date &amp; Time</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 100px; text-align: right;">Amount Paid</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 110px; text-align: right;">Balance After</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 110px;">Received By</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calcPaymentHistoryBody">
+                        <!-- Dynamic payment rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Payoff status notice banner -->
+            <div id="calcPayoffBanner" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="btn-group" style="margin-top: 0;">
+            <button type="button" class="btn-cancel" onclick="closeBreakdownModal()" style="flex: 1;">Close</button>
+            <button type="button" id="calcModalPayBtn" class="btn-execute" onclick="triggerPaymentFromBreakdown()" style="flex: 1; display: none;">💵 Record Payment</button>
         </div>
     </div>
 </div>
@@ -567,7 +547,39 @@ function toggleDateRangeMode(forceState) {
     renderTable();
 }
 
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+async function loadPaymentAcademicPrograms() {
+    try {
+        const res = await fetch('/api/academic-programs');
+        const data = await res.json();
+        if (data.status === 'success' && data.programs) {
+            const sel = document.getElementById('deptFilter');
+            if (sel) {
+                const cur = sel.value;
+                let opts = '<option value="All">All Programs</option>';
+                data.programs.forEach(p => {
+                    opts += `<option value="${p.code}">${p.name} (${p.section_prefix || p.code})</option>`;
+                });
+                sel.innerHTML = opts;
+                if (cur) sel.value = cur;
+            }
+        }
+    } catch(e) {
+        console.warn("Could not load /api/academic-programs for payment tracking:", e);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
+    loadPaymentAcademicPrograms();
     document.getElementById('searchInput').addEventListener('input', renderTable);
     document.getElementById('statusFilter').addEventListener('change', renderTable);
     document.getElementById('deptFilter').addEventListener('change', renderTable);
@@ -686,16 +698,13 @@ function renderTable() {
     
     // Dynamic KPI Totals strictly calculated on filteredData
     let tExpected = 0, tCollected = 0, tOutstanding = 0;
-    let csOutstanding = 0, itOutstanding = 0;
+    const deptTotals = {};
     filteredData.forEach(enr => {
         tExpected += enr.amount_due;
         tCollected += enr.amount_paid;
         tOutstanding += enr.balance;
-        if (enr.department === 'CS') {
-            csOutstanding += enr.balance;
-        } else if (enr.department === 'IT') {
-            itOutstanding += enr.balance;
-        }
+        const dept = enr.department || 'Other';
+        deptTotals[dept] = (deptTotals[dept] || 0) + enr.balance;
     });
 
     const isFiltered = Boolean(searchVal || statusVal !== 'All' || deptVal !== 'All' || fromDate || (isDateRangeActive && toDate));
@@ -727,13 +736,22 @@ function renderTable() {
             }
 
             const enrJson = JSON.stringify({
+                id: enr.id,
+                teacher_name: enr.teacher_name,
+                section: enr.section,
+                subject: enr.subject,
+                department: enr.department,
                 student_headcount: enr.student_headcount || 0,
                 distributed_count: enr.distributed_count || 0,
                 loose_returned: enr.loose_returned || 0,
                 booklet_price: enr.booklet_price || 0,
                 amount_due: enr.amount_due || 0,
                 amount_paid: enr.amount_paid || 0,
-                balance: enr.balance || 0
+                balance: enr.balance || 0,
+                payment_status: enr.payment_status,
+                distribution_date: enr.distribution_date,
+                date_display: enr.date_display,
+                payments: enr.payments || []
             }).replace(/"/g, '&quot;');
 
             const row = `
@@ -748,7 +766,7 @@ function renderTable() {
                     </td>
                     <td style="font-weight: bold; color: #2c3e50;">
                         ₱${enr.amount_due.toFixed(2)}
-                        <span style="cursor:pointer; font-size:1.1rem; color: #3498db; margin-left: 8px; opacity: 0.85; transition: opacity 0.2s;" onclick="openBreakdownModal('${enrJson}')" title="View Calculation Breakdown">ℹ️</span>
+                        <span style="cursor:pointer; font-size:1.1rem; color: #3498db; margin-left: 8px; opacity: 0.85; transition: opacity 0.2s;" onclick="openBreakdownModal(${enr.id})" title="View Calculation Breakdown">ℹ️</span>
                     </td>
                     <td style="font-weight: bold; color: #2c3e50;">₱${enr.amount_paid.toFixed(2)}</td>
                     <td style="font-weight: bold; color: #e74c3c;">₱${enr.balance.toFixed(2)}</td>
@@ -771,7 +789,14 @@ function renderTable() {
     document.getElementById('totalOutstanding').textContent = `₱${tOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     const deptOutEl = document.getElementById('deptOutstanding');
     if (deptOutEl) {
-        deptOutEl.textContent = `CS: ₱${csOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | IT: ₱${itOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const entries = Object.entries(deptTotals);
+        if (entries.length === 0) {
+            deptOutEl.textContent = 'No outstanding balances';
+        } else {
+            deptOutEl.textContent = entries.map(([dept, bal]) => 
+                `${dept}: ₱${bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
+            ).join(' | ');
+        }
     }
 }
 
@@ -788,31 +813,175 @@ function clearFilters() {
     }
 }
 
-function openBreakdownModal(enrJsonStr) {
-    const data = JSON.parse(enrJsonStr);
+let currentBreakdownData = null;
+
+function openBreakdownModal(input) {
+    let data = null;
+    if (typeof input === 'number' || (typeof input === 'string' && !input.trim().startsWith('{'))) {
+        const id = parseInt(input);
+        data = globalPaymentData.find(e => e.id === id);
+    } else {
+        data = typeof input === 'string' ? JSON.parse(input) : input;
+    }
+    if (!data) return;
+    currentBreakdownData = data;
+
+    // Header context
+    document.getElementById('calcInstructorName').textContent = data.teacher_name || 'Instructor';
+    document.getElementById('calcSectionSubject').textContent = `${data.section || 'N/A'} • ${data.subject || 'N/A'}`;
+    const deptBadge = document.getElementById('calcDeptBadge');
+    if (deptBadge) {
+        deptBadge.textContent = data.department || 'CS';
+    }
+
+    // Formula table
     document.getElementById('calcHeadcount').textContent = data.student_headcount != null ? data.student_headcount : 0;
     document.getElementById('calcDistributed').textContent = data.distributed_count != null ? data.distributed_count : 0;
-    
-    // Display dropped student count in red without minus sign
     document.getElementById('calcDropped').textContent = data.loose_returned != null ? data.loose_returned : 0;
     
-    // Net Billable Booklets directly reflects active distributed booklets
     const billable = data.distributed_count != null ? data.distributed_count : 0;
     document.getElementById('calcBillable').textContent = billable;
-    document.getElementById('calcPrice').textContent = `₱${data.booklet_price.toFixed(2)}`;
-    document.getElementById('calcTotal').textContent = `₱${data.amount_due.toFixed(2)}`;
+    document.getElementById('calcPrice').textContent = `₱${(data.booklet_price || 0).toFixed(2)}`;
+    document.getElementById('calcTotal').textContent = `₱${(data.amount_due || 0).toFixed(2)}`;
     if (document.getElementById('calcPaid')) {
         document.getElementById('calcPaid').textContent = `₱${(data.amount_paid || 0).toFixed(2)}`;
     }
-    if (document.getElementById('calcBalance')) {
-        document.getElementById('calcBalance').textContent = `₱${(data.balance || 0).toFixed(2)}`;
-    }
     
+    const balance = data.balance != null ? data.balance : Math.max(0, (data.amount_due || 0) - (data.amount_paid || 0));
+    const balanceEl = document.getElementById('calcBalance');
+    if (balanceEl) {
+        if (balance <= 0) {
+            balanceEl.innerHTML = `<span style="color: #27ae60;">₱0.00 (Fully Settled)</span>`;
+        } else {
+            balanceEl.innerHTML = `<span style="color: #e74c3c;">₱${balance.toFixed(2)}</span>`;
+        }
+    }
+
+    // Payment History Installment Table
+    const historyBody = document.getElementById('calcPaymentHistoryBody');
+    const countBadge = document.getElementById('calcPaymentCountBadge');
+    const payoffBanner = document.getElementById('calcPayoffBanner');
+    const payBtn = document.getElementById('calcModalPayBtn');
+
+    if (historyBody) {
+        historyBody.innerHTML = '';
+        const payments = data.payments || [];
+        if (countBadge) {
+            countBadge.textContent = `${payments.length} installment${payments.length === 1 ? '' : 's'}`;
+        }
+
+        if (payments.length === 0) {
+            if ((data.amount_paid || 0) > 0) {
+                const paidAmt = (data.amount_paid || 0).toFixed(2);
+                const balAmt = balance.toFixed(2);
+                const payDate = data.date_display || data.distribution_date || 'Recorded';
+                historyBody.innerHTML = `
+                    <tr style="border-bottom: 1px solid #f1f2f6;">
+                        <td style="padding: 8px 10px; text-align: center; font-weight: bold; color: #7f8c8d;">1</td>
+                        <td style="padding: 8px 10px; color: #2c3e50; font-weight: 500; white-space: nowrap;">
+                            ${escapeHtml(payDate)}
+                        </td>
+                        <td style="padding: 8px 10px; text-align: right; color: #27ae60; font-weight: bold;">
+                            +₱${paidAmt}
+                        </td>
+                        <td style="padding: 8px 10px; text-align: right; color: #e74c3c; font-weight: bold;">
+                            ₱${balAmt}
+                        </td>
+                        <td style="padding: 8px 10px; color: #555;">
+                            <span style="display: inline-block; background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: 500;">
+                                System Clerk
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                if (countBadge) countBadge.textContent = '1 installment';
+                if (payoffBanner) {
+                    payoffBanner.innerHTML = `
+                        <div style="background: #fcf3cf; border: 1px solid #f39c12; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; color: #b7950b; text-align: center;">
+                            Partially paid (₱${paidAmt} received). Remaining balance: <strong>₱${balAmt}</strong>.
+                        </div>
+                    `;
+                }
+            } else {
+                historyBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #7f8c8d; padding: 18px 10px; font-style: italic;">
+                            🔴 No payment installments recorded yet (Unpaid).
+                        </td>
+                    </tr>
+                `;
+                if (payoffBanner) {
+                    payoffBanner.innerHTML = `
+                        <div style="background: #fdf2e9; border: 1px dashed #e67e22; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; color: #d35400; text-align: center;">
+                            Outstanding balance of <strong>₱${balance.toFixed(2)}</strong> awaiting settlement.
+                        </div>
+                    `;
+                }
+            }
+        } else {
+            payments.forEach((p, index) => {
+                const isZeroBal = p.balance_after <= 0;
+                const balStyle = isZeroBal ? 'color: #27ae60; font-weight: bold;' : 'color: #e74c3c; font-weight: bold;';
+                const balDisplay = isZeroBal ? '₱0.00 (Paid Off)' : `₱${p.balance_after.toFixed(2)}`;
+                const row = `
+                    <tr style="border-bottom: 1px solid #f1f2f6;">
+                        <td style="padding: 8px 10px; text-align: center; font-weight: bold; color: #7f8c8d;">${index + 1}</td>
+                        <td style="padding: 8px 10px; color: #2c3e50; font-weight: 500; white-space: nowrap;">
+                            ${escapeHtml(p.date_display || p.payment_date || 'N/A')}
+                        </td>
+                        <td style="padding: 8px 10px; text-align: right; color: #27ae60; font-weight: bold;">
+                            +₱${p.amount.toFixed(2)}
+                        </td>
+                        <td style="padding: 8px 10px; text-align: right; ${balStyle}">
+                            ${balDisplay}
+                        </td>
+                        <td style="padding: 8px 10px; color: #555;">
+                            <span style="display: inline-block; background: #eef2f7; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: 500;">
+                                ${escapeHtml(p.recorded_by || 'System Clerk')}
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                historyBody.insertAdjacentHTML('beforeend', row);
+            });
+
+            if (payoffBanner) {
+                const lastPayment = payments[payments.length - 1];
+                if (balance <= 0 && lastPayment) {
+                    payoffBanner.innerHTML = `
+                        <div style="background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px; padding: 10px 14px; font-size: 0.85rem; color: #1e8449; text-align: center; font-weight: bold;">
+                            🎉 Account Fully Settled &amp; Paid Off on ${escapeHtml(lastPayment.date_display || lastPayment.payment_date)}!
+                        </div>
+                    `;
+                } else {
+                    payoffBanner.innerHTML = `
+                        <div style="background: #fcf3cf; border: 1px solid #f39c12; border-radius: 6px; padding: 8px 12px; font-size: 0.82rem; color: #b7950b; text-align: center;">
+                            Partially paid (₱${(data.amount_paid || 0).toFixed(2)} received). Remaining balance: <strong>₱${balance.toFixed(2)}</strong>.
+                        </div>
+                    `;
+                }
+            }
+        }
+    }
+
+    // Toggle inline pay button
+    if (payBtn) {
+        payBtn.style.display = balance > 0 ? 'block' : 'none';
+    }
+
     document.getElementById('calcBreakdownModal').style.display = 'flex';
+}
+
+function triggerPaymentFromBreakdown() {
+    if (!currentBreakdownData) return;
+    const enr = currentBreakdownData;
+    closeBreakdownModal();
+    openPaymentModal(enr.id, enr.teacher_name, enr.balance);
 }
 
 function closeBreakdownModal() {
     document.getElementById('calcBreakdownModal').style.display = 'none';
+    currentBreakdownData = null;
 }
 
 let pendingPayment = null;
@@ -897,10 +1066,16 @@ function submitConfirmedPayment() {
     btn.disabled = true;
     btn.textContent = "Processing Payment...";
 
+    const userObj = JSON.parse(localStorage.getItem('bookletlog_user') || '{}');
+    const recordedBy = userObj.username || "System Clerk";
+
     fetch(`/api/enrollments/${pendingPayment.id}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: pendingPayment.amount })
+        body: JSON.stringify({ 
+            amount: pendingPayment.amount,
+            recorded_by: recordedBy
+        })
     })
     .then(response => response.json())
     .then(res => {
@@ -919,17 +1094,6 @@ function submitConfirmedPayment() {
         console.error('Error submitting payment:', error);
         alert("Network error: Could not complete payment.");
     });
-}
-
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('active');
-    
-    const overlay = document.getElementById('sidebarOverlay');
-    if(overlay.style.display === 'none') {
-        overlay.style.display = 'block';
-    } else {
-        overlay.style.display = 'none';
-    }
 }
 </script>
 

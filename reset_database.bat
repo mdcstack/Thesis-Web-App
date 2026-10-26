@@ -38,6 +38,7 @@ if /i not "%CONFIRM%"=="y" (
 )
 
 color 0b
+set PYTHONUTF8=1
 echo.
 echo Executing full clean reset...
 echo.

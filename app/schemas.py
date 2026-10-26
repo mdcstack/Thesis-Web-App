@@ -63,7 +63,12 @@ class SettingsUpdate(BaseModel):
     booklet_price: float
     active_period: str
     department_ream_budget: Optional[float] = 0.0
-    reorder_buffer_percent: Optional[float] = 15.0
+    reorder_buffer_percent: Optional[float] = 0.0
+    budget_is_manual: Optional[bool] = False
+    configured_by: Optional[str] = "Administrator"
+    staples_box_price: Optional[float] = 0.00
+    staples_per_box: Optional[int] = 0
+    staples_per_booklet: Optional[int] = 0
 
 class BookletTemplateUpdate(BaseModel):
     department: Optional[str] = "CS"
@@ -86,6 +91,7 @@ class BookletTemplateUpdate(BaseModel):
 class UpdateUserRequest(BaseModel):
     role: str
     department: str
+    updated_by: Optional[str] = "Administrator" 
 
 class AdminResetPasswordRequest(BaseModel):
     new_password: str
@@ -95,4 +101,25 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class AcademicProgramBase(BaseModel):
+    code: str
+    name: str
+    section_prefix: str
+    color_hex: Optional[str] = "#3498db"
+    is_active: Optional[bool] = True
+
+class AcademicProgramCreate(AcademicProgramBase):
+    pass
+
+class AcademicProgramUpdate(BaseModel):
+    name: Optional[str] = None
+    section_prefix: Optional[str] = None
+    color_hex: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class AcademicProgramResponse(AcademicProgramBase):
+    id: int
+
+    class Config:
+        from_attributes = True
 

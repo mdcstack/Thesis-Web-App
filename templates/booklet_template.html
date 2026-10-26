@@ -166,9 +166,6 @@
         .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
         .sidebar-overlay.active { display: block; }
         
-        /* Mobile Desktop Notice Guard Card */
-        .mobile-desktop-notice { display: none; }
-        
         @media (max-width: 1024px) {
             .template-workspace { grid-template-columns: 1fr; }
         }
@@ -181,67 +178,8 @@
             .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
             .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
             .header-bar { flex-direction: column; text-align: center; gap: 12px; }
-            .header-actions { display: none !important; }
+            .header-actions { display: flex !important; flex-wrap: wrap; width: 100%; justify-content: center; gap: 8px; }
             .btn-action { width: 100%; justify-content: center; }
-
-            /* Hide complex visual studio on mobile screens */
-            .dept-tabs-bar,
-            .preset-tabs-bar,
-            .template-workspace {
-                display: none !important;
-            }
-
-            /* Show mobile desktop notice card */
-            .mobile-desktop-notice {
-                display: flex !important;
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-                background: white;
-                padding: 35px 22px;
-                border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-                border-top: 5px solid #3498db;
-                margin: 20px auto 35px auto;
-                max-width: 500px;
-                box-sizing: border-box;
-            }
-            .mobile-desktop-notice .notice-icon {
-                font-size: 3.2rem;
-                margin-bottom: 14px;
-                line-height: 1;
-            }
-            .mobile-desktop-notice h2 {
-                color: #2c3e50;
-                font-size: 1.35rem;
-                margin-bottom: 12px;
-                font-weight: 800;
-            }
-            .mobile-desktop-notice p {
-                color: #64748b;
-                font-size: 0.92rem;
-                line-height: 1.6;
-                margin-bottom: 16px;
-            }
-            .mobile-desktop-notice .notice-advice {
-                background: #f1f5f9;
-                border-left: 4px solid #3498db;
-                padding: 12px 16px;
-                border-radius: 6px;
-                text-align: left;
-                margin-bottom: 24px;
-                width: 100%;
-                box-sizing: border-box;
-            }
-            .mobile-desktop-notice .notice-advice p {
-                margin: 0;
-                color: #334155;
-                font-size: 0.85rem;
-                line-height: 1.5;
-            }
-            .mobile-desktop-notice .notice-actions {
-                width: 100%;
-            }
 
             /* Mobile Top-Floating Dynamic Pill */
             #toastContainer {
@@ -387,33 +325,12 @@
             </div>
         </div>
 
-        <!-- Mobile Viewport Guard Card -->
-        <div class="mobile-desktop-notice" id="mobileDesktopNotice">
-            <div class="notice-icon">💻 📐</div>
-            <h2>Desktop Display Required</h2>
-            <p>
-                The Booklet Template calibration studio requires a larger desktop or laptop screen to accurately render standard A4 landscape proportions (841.89 pt &times; 595.28 pt) and calibrate sub-millimeter stamp positions.
-            </p>
-            <div class="notice-advice">
-                <p>Please open this studio on a desktop computer or a large tablet (screen width &gt; 900px) to configure and calibrate cover templates.</p>
-            </div>
-            <div class="notice-actions">
-                <a href="/dashboard" class="btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 6px; font-weight: bold; width: 100%; box-sizing: border-box;">
-                    <span>&larr; Return to Dashboard</span>
-                </a>
-            </div>
-        </div>
         <!-- Department Switcher Tabs -->
         <div class="dept-tabs-bar" style="width: 100%; display: flex; gap: 12px; margin-bottom: 12px; align-items: center; background: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
             <span style="font-weight: 700; color: #2c3e50; font-size: 0.95rem; margin-right: 8px;">1. Select Course:</span>
-            <button type="button" class="dept-tab-btn" id="tabDeptCS" onclick="switchDepartment('CS')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; border: 2px solid #3498db; background: #3498db; color: white; cursor: pointer; transition: all 0.2s;">
-                💻 Computer Science (CS)
-                <span id="badgeDeptCS" style="background: rgba(255,255,255,0.25); font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">Checking...</span>
-            </button>
-            <button type="button" class="dept-tab-btn" id="tabDeptIT" onclick="switchDepartment('IT')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
-                🌐 Information Technology (IT)
-                <span id="badgeDeptIT" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">Checking...</span>
-            </button>
+            <div id="dynamicDeptTabsContainer" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <!-- Dynamically generated course buttons go here -->
+            </div>
             <div id="deptStatusBanner" style="margin-left: auto; font-size: 0.85rem; font-weight: 600; padding: 6px 14px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; background: #f8fafc; color: #475569;">
                 <!-- Dynamic status description -->
             </div>
@@ -632,8 +549,7 @@
                             🏷️ Template Label / Name:
                         </label>
                         <input type="text" id="templateNameInput" maxlength="60" placeholder="e.g. Template 1"
-                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.92rem; font-weight: 600; color: #1e293b;"
-                               oninput="onTemplateNameInput()" />
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.92rem; font-weight: 600; color: #1e293b;" />
                         <span style="font-size: 0.72rem; color: #64748b; margin-top: 3px; display: block;">Identifies this cover layout in the PDF Generator.</span>
                     </div>
 
@@ -725,6 +641,16 @@
     </div>
 
     <script>
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         const PT_TO_MM = 25.4 / 72; // 0.35277777778
         const MM_TO_PT = 72 / 25.4; // 2.83464567
 
@@ -733,6 +659,64 @@
 
         let currentDept = 'CS';
         let currentSlot = 1;
+        let cachedAcademicPrograms = [];
+        let latestDeptStatuses = {};
+        let currentPeriodPrefix = '1ST26';
+
+        async function loadAcademicProgramsForStudio() {
+            try {
+                const res = await fetch('/api/academic-programs');
+                const data = await res.json();
+                if (data.status === 'success' && Array.isArray(data.programs) && data.programs.length > 0) {
+                    cachedAcademicPrograms = data.programs;
+                    if (!cachedAcademicPrograms.some(p => p.code === currentDept)) {
+                        currentDept = cachedAcademicPrograms[0].code;
+                    }
+                }
+                try {
+                    const sRes = await fetch('/api/settings');
+                    if (sRes.ok) {
+                        const sData = await sRes.json();
+                        if (sData && sData.current_semester_name) {
+                            currentPeriodPrefix = sData.current_semester_name;
+                        }
+                    }
+                } catch (err) {}
+            } catch (e) {
+                console.error("Failed to load academic programs for booklet studio:", e);
+            }
+        }
+
+        function renderDynamicDeptTabs(statusData = {}) {
+            const container = document.getElementById('dynamicDeptTabsContainer');
+            if (!container) return;
+            const progs = (cachedAcademicPrograms && cachedAcademicPrograms.length > 0)
+                ? cachedAcademicPrograms
+                : [{ code: 'CS', name: 'Computer Science', color_hex: '#3498db' }, { code: 'IT', name: 'Information Technology', color_hex: '#7c3aed' }];
+
+            container.innerHTML = progs.map(p => {
+                const code = p.code;
+                const name = p.name || code;
+                const color = p.color_hex || '#3498db';
+                const isSelected = code === currentDept;
+                const deptInfo = statusData[code];
+                const isConfigured = deptInfo ? Boolean(deptInfo.has_active_template || deptInfo.is_configured) : false;
+
+                const btnBg = isSelected ? color : '#f8fafc';
+                const btnColor = isSelected ? '#ffffff' : '#64748b';
+                const btnBorder = isSelected ? `2px solid ${color}` : '2px solid #cbd5e1';
+                const badgeBg = isSelected ? 'rgba(255,255,255,0.25)' : (isConfigured ? '#dcfce7' : '#fee2e2');
+                const badgeColor = isSelected ? '#ffffff' : (isConfigured ? '#166534' : '#991b1b');
+                const badgeText = isConfigured ? '✅ Ready' : '⚠️ Not Set';
+
+                return `
+                    <button type="button" class="dept-tab-btn" id="tabDept${code}" data-dept="${code}" data-color="${color}" onclick="switchDepartment('${code}')" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; border: ${btnBorder}; background: ${btnBg}; color: ${btnColor}; cursor: pointer; transition: all 0.2s;">
+                        ${escapeHtml(name)} (${escapeHtml(code)})
+                        <span id="badgeDept${code}" style="background: ${badgeBg}; color: ${badgeColor}; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">${badgeText}</span>
+                    </button>
+                `;
+            }).join('');
+        }
 
         // Check URL parameter e.g. /booklet-template?dept=IT&slot=2
         try {
@@ -791,29 +775,38 @@
         }
 
         function updateDeptTabStyles() {
-            const csBtn = document.getElementById('tabDeptCS');
-            const itBtn = document.getElementById('tabDeptIT');
-            if (!csBtn || !itBtn) return;
-            if (currentDept === 'CS') {
-                csBtn.style.border = '2px solid #3498db';
-                csBtn.style.background = '#3498db';
-                csBtn.style.color = 'white';
-                itBtn.style.border = '2px solid #cbd5e1';
-                itBtn.style.background = '#f8fafc';
-                itBtn.style.color = '#64748b';
-            } else {
-                itBtn.style.border = '2px solid #3498db';
-                itBtn.style.background = '#3498db';
-                itBtn.style.color = 'white';
-                csBtn.style.border = '2px solid #cbd5e1';
-                csBtn.style.background = '#f8fafc';
-                csBtn.style.color = '#64748b';
+            const container = document.getElementById('dynamicDeptTabsContainer');
+            if (container) {
+                const btns = container.querySelectorAll('.dept-tab-btn');
+                btns.forEach(btn => {
+                    const dept = btn.getAttribute('data-dept');
+                    const color = btn.getAttribute('data-color') || '#3498db';
+                    const isSelected = dept === currentDept;
+                    btn.style.border = isSelected ? `2px solid ${color}` : '2px solid #cbd5e1';
+                    btn.style.background = isSelected ? color : '#f8fafc';
+                    btn.style.color = isSelected ? 'white' : '#64748b';
+                    const badge = btn.querySelector(`#badgeDept${dept}`);
+                    if (badge) {
+                        if (isSelected) {
+                            badge.style.background = 'rgba(255,255,255,0.25)';
+                            badge.style.color = 'white';
+                        } else {
+                            const deptInfo = latestDeptStatuses[dept];
+                            const isConfigured = deptInfo ? Boolean(deptInfo.has_active_template || deptInfo.is_configured) : false;
+                            badge.style.background = isConfigured ? '#dcfce7' : '#fee2e2';
+                            badge.style.color = isConfigured ? '#166534' : '#991b1b';
+                        }
+                    }
+                });
             }
+
+            const prog = (cachedAcademicPrograms || []).find(p => p.code === currentDept);
+            const deptFullName = prog ? `${prog.name} (${prog.code})` : (currentDept === 'CS' ? 'Computer Science (CS)' : (currentDept === 'IT' ? 'Information Technology (IT)' : currentDept));
 
             const uploadCardTitle = document.getElementById('uploadCardTitle');
             if (uploadCardTitle) uploadCardTitle.innerText = currentDept;
             const uploadDeptNameText = document.getElementById('uploadDeptNameText');
-            if (uploadDeptNameText) uploadDeptNameText.innerText = currentDept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+            if (uploadDeptNameText) uploadDeptNameText.innerText = deptFullName;
             const uploadDeptBadgeText = document.getElementById('uploadDeptBadgeText');
             if (uploadDeptBadgeText) uploadDeptBadgeText.innerText = currentDept;
         }
@@ -842,48 +835,16 @@
         }
 
         function onTemplateNameInput() {
-            const input = document.getElementById('templateNameInput');
-            if (!input) return;
-            const val = input.value.trim() || `Template ${currentSlot}`;
-            activeConfig.template_name = val;
-            const uploadSlotTitle = document.getElementById('uploadSlotTitle');
-            if (uploadSlotTitle) uploadSlotTitle.innerText = val;
-            const labelSlot = document.getElementById(`labelSlot${currentSlot}`);
-            if (labelSlot) labelSlot.innerText = val;
+            // Intentionally no-op: template name only mutates active layout and DOM labels upon explicit save
         }
 
         async function refreshDeptStatuses() {
             try {
                 const res = await fetch('/api/booklet-template/status');
                 const data = await res.json();
+                latestDeptStatuses = data;
                 
-                // Update CS badge
-                const csBadge = document.getElementById('badgeDeptCS');
-                if (csBadge && data.CS) {
-                    if (data.CS.is_configured) {
-                        csBadge.innerText = '✅ Configured';
-                        csBadge.style.background = currentDept === 'CS' ? 'rgba(255,255,255,0.3)' : '#dcfce7';
-                        csBadge.style.color = currentDept === 'CS' ? 'white' : '#166534';
-                    } else {
-                        csBadge.innerText = '⚠️ Not Set';
-                        csBadge.style.background = currentDept === 'CS' ? 'rgba(239,68,68,0.5)' : '#fee2e2';
-                        csBadge.style.color = currentDept === 'CS' ? 'white' : '#991b1b';
-                    }
-                }
-
-                // Update IT badge
-                const itBadge = document.getElementById('badgeDeptIT');
-                if (itBadge && data.IT) {
-                    if (data.IT.is_configured) {
-                        itBadge.innerText = '✅ Configured';
-                        itBadge.style.background = currentDept === 'IT' ? 'rgba(255,255,255,0.3)' : '#dcfce7';
-                        itBadge.style.color = currentDept === 'IT' ? 'white' : '#166534';
-                    } else {
-                        itBadge.innerText = '⚠️ Not Set';
-                        itBadge.style.background = currentDept === 'IT' ? 'rgba(239,68,68,0.5)' : '#fee2e2';
-                        itBadge.style.color = currentDept === 'IT' ? 'white' : '#991b1b';
-                    }
-                }
+                renderDynamicDeptTabs(data);
 
                 // Update slots 1..3 labels and badges for current department
                 if (data[currentDept] && data[currentDept].slots) {
@@ -897,33 +858,35 @@
                                 badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#dcfce7';
                                 badgeEl.style.color = currentSlot === s.slot ? 'white' : '#166534';
                             } else if (s.has_pdf_file) {
-                                badgeEl.innerText = '🟡 Draft (Unsaved)';
-                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.35)' : '#fef3c7';
-                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#92400e';
+                                badgeEl.innerText = '🟡 Draft';
+                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#fef9c3';
+                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#854d0e';
                             } else {
                                 badgeEl.innerText = '⚠️ Not Set';
-                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(239,68,68,0.5)' : '#fee2e2';
+                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#fee2e2';
                                 badgeEl.style.color = currentSlot === s.slot ? 'white' : '#991b1b';
                             }
                         }
                     });
+                }
 
-                    // Update slot status banner
-                    const curSlotInfo = data[currentDept].slots.find(s => s.slot === currentSlot);
-                    const slotBanner = document.getElementById('slotStatusBanner');
-                    if (slotBanner && curSlotInfo) {
-                        if (curSlotInfo.is_configured) {
+                // Update slot status banner description
+                const slotBanner = document.getElementById('slotStatusBanner');
+                if (slotBanner && data[currentDept] && data[currentDept].slots) {
+                    const slotInfo = data[currentDept].slots.find(s => s.slot === currentSlot);
+                    if (slotInfo) {
+                        if (slotInfo.is_configured) {
                             slotBanner.style.background = '#dcfce7';
                             slotBanner.style.color = '#166534';
-                            slotBanner.innerHTML = `✅ <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> Official Template Saved &amp; Ready for Printing`;
-                        } else if (curSlotInfo.has_pdf_file) {
-                            slotBanner.style.background = '#fef3c7';
-                            slotBanner.style.color = '#92400e';
-                            slotBanner.innerHTML = `🟡 <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> PDF Uploaded (Draft). Calibrate stamp positions and click "Save Official Template" to activate for printing.`;
+                            slotBanner.innerHTML = `✅ <strong>${escapeHtml(slotInfo.template_name)}:</strong> Live & Active for Distribution.`;
+                        } else if (slotInfo.has_pdf_file) {
+                            slotBanner.style.background = '#fef9c3';
+                            slotBanner.style.color = '#854d0e';
+                            slotBanner.innerHTML = `🟡 <strong>${escapeHtml(slotInfo.template_name)}:</strong> Draft PDF Uploaded. Coordinate adjustments not yet saved as official.`;
                         } else {
                             slotBanner.style.background = '#fee2e2';
                             slotBanner.style.color = '#991b1b';
-                            slotBanner.innerHTML = `⚠️ <strong>${currentDept} - ${curSlotInfo.template_name}:</strong> Not Configured Yet. Please upload a front-cover PDF first.`;
+                            slotBanner.innerHTML = `⚠️ <strong>${escapeHtml(slotInfo.template_name)}:</strong> Not Configured Yet. Please upload a front-cover PDF first.`;
                         }
                     }
                 }
@@ -932,14 +895,16 @@
                 const deptBanner = document.getElementById('deptStatusBanner');
                 if (deptBanner && data[currentDept]) {
                     const cur = data[currentDept];
-                    if (cur.is_configured) {
+                    const prog = (cachedAcademicPrograms || []).find(p => p.code === currentDept);
+                    const progName = prog ? prog.name : currentDept;
+                    if (cur.has_active_template || cur.is_configured) {
                         deptBanner.style.background = '#dcfce7';
                         deptBanner.style.color = '#166534';
-                        deptBanner.innerHTML = `✅ ${currentDept}: <strong>Templates Active</strong>`;
+                        deptBanner.innerHTML = `✅ ${escapeHtml(progName)}: <strong>Templates Active</strong>`;
                     } else {
                         deptBanner.style.background = '#fee2e2';
                         deptBanner.style.color = '#991b1b';
-                        deptBanner.innerHTML = `⚠️ ${currentDept}: <strong>Setup Required</strong>`;
+                        deptBanner.innerHTML = `⚠️ ${escapeHtml(progName)}: <strong>Setup Required</strong>`;
                     }
                 }
             } catch (err) {
@@ -1458,6 +1423,14 @@
                     if (isOfficial) {
                         activeConfig.is_configured = true;
                     }
+                    activeConfig.template_name = tName;
+                    const uploadSlotTitle = document.getElementById('uploadSlotTitle');
+                    if (uploadSlotTitle) uploadSlotTitle.innerText = tName;
+                    const uploadSlotNameText = document.getElementById('uploadSlotNameText');
+                    if (uploadSlotNameText) uploadSlotNameText.innerText = tName;
+                    const labelSlot = document.getElementById(`labelSlot${currentSlot}`);
+                    if (labelSlot) labelSlot.innerText = tName;
+
                     await refreshDeptStatuses();
                     updateSlotTabStyles();
                     if (!silent) {
@@ -1879,6 +1852,7 @@
 
         // Initialize on load
         window.addEventListener('DOMContentLoaded', async () => {
+            await loadAcademicProgramsForStudio();
             updateDeptTabStyles();
             updateSlotTabStyles();
             await loadTemplateConfig(currentDept, currentSlot);

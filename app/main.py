@@ -6,7 +6,7 @@ import json
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, UploadFile, File
 import bcrypt
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 import datetime
 from fastapi.responses import RedirectResponse, HTMLResponse, Response
@@ -44,12 +44,68 @@ class DistributionRequest(BaseModel):
 # 1. Initialize Database Tables
 models.Base.metadata.create_all(bind=engine)
 
+
+def ensure_program_template_slots(dept_code: str, db: Session):
+    """Ensures 3 BookletTemplateConfig slots exist for a given department/program."""
+    dept = (dept_code or "CS").upper()
+    for slot_idx in [1, 2, 3]:
+        cfg = db.query(models.BookletTemplateConfig).filter(
+            models.BookletTemplateConfig.department == dept,
+            models.BookletTemplateConfig.slot_number == slot_idx
+        ).first()
+        if not cfg:
+            target_pdf = f"active_template_{dept}_slot{slot_idx}.pdf"
+            has_file = os.path.exists(f"static/templates/{target_pdf}")
+            new_cfg = models.BookletTemplateConfig(
+                department=dept,
+                slot_number=slot_idx,
+                is_configured=has_file,
+                template_name=f"Template {slot_idx}",
+                pdf_filename=target_pdf if has_file else None,
+                control_x=500.0,
+                control_y=400.0,
+                control_font_size=18,
+                control_enabled=True,
+                srn_x=500.0,
+                srn_y=375.0,
+                srn_font_size=11,
+                srn_enabled=True,
+                qr_x=680.0,
+                qr_y=360.0,
+                qr_size=65.0,
+                qr_enabled=True
+            )
+            db.add(new_cfg)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
 def ensure_schema_migrations():
     try:
         from sqlalchemy import inspect, text
         import shutil
         inspector = inspect(engine)
         tables = inspector.get_table_names()
+        
+        # 0. academic_programs table creation & Day-0 defaults
+        if 'academic_programs' not in tables:
+            models.AcademicProgram.__table__.create(bind=engine, checkfirst=True)
+            tables.append('academic_programs')
+        
+        db_prog_seed = SessionLocal()
+        try:
+            if db_prog_seed.query(models.AcademicProgram).count() == 0:
+                db_prog_seed.add_all([
+                    models.AcademicProgram(code="CS", name="Computer Science", section_prefix="BSCS", color_hex="#3498db", is_active=True),
+                    models.AcademicProgram(code="IT", name="Information Technology", section_prefix="BSIT", color_hex="#e67e22", is_active=True)
+                ])
+                db_prog_seed.commit()
+        except Exception as seed_err:
+            db_prog_seed.rollback()
+            print(f"Notice: AcademicProgram seeding: {seed_err}")
+        finally:
+            db_prog_seed.close()
         
         # 1. system_settings
         if 'system_settings' in tables:
@@ -59,7 +115,7 @@ def ensure_schema_migrations():
                     conn.execute(text("ALTER TABLE system_settings ADD COLUMN department_ream_budget FLOAT DEFAULT 0.0"))
                     conn.commit()
                 if 'reorder_buffer_percent' not in columns:
-                    conn.execute(text("ALTER TABLE system_settings ADD COLUMN reorder_buffer_percent FLOAT DEFAULT 15.0"))
+                    conn.execute(text("ALTER TABLE system_settings ADD COLUMN reorder_buffer_percent FLOAT DEFAULT 0.0"))
                     conn.commit()
 
         # 2. booklet_template_configs
@@ -92,7 +148,9 @@ def ensure_schema_migrations():
         # 4. Seamless migration of template files and 3 slots per department
         db_mig = SessionLocal()
         try:
-            for dept in ["CS", "IT"]:
+            active_progs = db_mig.query(models.AcademicProgram).all()
+            depts = [p.code for p in active_progs] if active_progs else ["CS", "IT"]
+            for dept in depts:
                 # Ensure legacy file is copied to slot 1 if present
                 legacy_pdf = f"static/templates/active_template_{dept}.pdf"
                 slot1_pdf = f"static/templates/active_template_{dept}_slot1.pdf"
@@ -206,8 +264,7 @@ async def startup_event():
         all_enrs = init_db.query(models.Enrollment).all()
         repaired = 0
         for enr in all_enrs:
-            sec = (enr.section or "").upper()
-            target_dept = "IT" if ("BSIT" in sec or "IT-" in sec) else ("CS" if ("BSCS" in sec or "CS-" in sec) else (enr.department or "CS").upper())
+            target_dept = resolve_enrollment_department(enr, db=init_db)
             if enr.department != target_dept:
                 enr.department = target_dept
                 repaired += 1
@@ -364,8 +421,9 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         )
 
     department = (request_data.department or "CS").upper()
-    if department not in ["CS", "IT"]:
-        department = "CS"
+    valid_programs = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_programs and department not in valid_programs:
+        department = valid_programs[0]
 
     template_slot = getattr(request_data, 'template_slot', 1) or 1
     try:
@@ -407,11 +465,16 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     yield_per_ream = 500 // settings.sheets_per_booklet
     total_yield = ream_count * yield_per_ream
     
-    # 1. Find the last generated reference number
-    last_booklet = db.query(models.Booklet).order_by(models.Booklet.id.desc()).first()
+    # 1. Find the last generated reference number for THIS department (Per-course independent sequence)
+    last_booklet = db.query(models.Booklet).join(models.MasterBatch).filter(
+        models.MasterBatch.department == department
+    ).order_by(models.Booklet.id.desc()).first()
     start_num = 1
-    if last_booklet:
-        start_num = int(last_booklet.control_num.split("-")[-1]) + 1
+    if last_booklet and last_booklet.control_num:
+        try:
+            start_num = int(last_booklet.control_num.split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            start_num = 1
         
     # 2. Generate Master Batch ID (Daily Sequential: BATCH-YYYYMMDD######)
     today_str = datetime.now().strftime("%Y%m%d")
@@ -428,10 +491,13 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     batch_id = f"{batch_prefix}{next_batch_num:06d}"
     
     current_period = get_active_period(db)
-    prefix = settings.current_semester_name or "1ST26"
+    prefix = settings.current_semester_name or ""
+    # Course-specific Control Number prefix: {semester_prefix}-{DEPT}
+    course_ctrl_prefix = f"{prefix}-{department}" if prefix else department
 
-    # 3. Calculate Global Sort Record Number (SRN) Range
-    last_srn_booklet = db.query(models.Booklet).filter(
+    # 3. Calculate Department Sort Record Number (SRN) Range
+    last_srn_booklet = db.query(models.Booklet).join(models.MasterBatch).filter(
+        models.MasterBatch.department == department,
         models.Booklet.sort_record_num.isnot(None)
     ).order_by(models.Booklet.id.desc()).first()
 
@@ -440,18 +506,18 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         try:
             start_srn_num = int(last_srn_booklet.sort_record_num.split("-")[-1]) + 1
         except (ValueError, IndexError):
-            start_srn_num = db.query(models.Booklet).count() + 1
+            start_srn_num = 1
 
-    start_srn_str = f"SRN-{start_srn_num:06d}"
-    end_srn_str = f"SRN-{(start_srn_num + total_yield - 1):06d}"
+    start_srn_str = f"SRN-{department}-{start_srn_num:06d}"
+    end_srn_str = f"SRN-{department}-{(start_srn_num + total_yield - 1):06d}"
     
     new_batch = models.MasterBatch(
         qr_code_id=batch_id,
         department=department,
         ream_count=ream_count,
         total_yield=total_yield, 
-        start_control_num=f"{prefix}-{start_num:04d}",
-        end_control_num=f"{prefix}-{(start_num + total_yield - 1):04d}",
+        start_control_num=f"{course_ctrl_prefix}-{start_num:04d}",
+        end_control_num=f"{course_ctrl_prefix}-{(start_num + total_yield - 1):04d}",
         start_srn=start_srn_str,
         end_srn=end_srn_str,
         registered_period=current_period,
@@ -465,8 +531,8 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     
     # 4. Log ALL physical booklets dynamically (Marked as pending with sequential SRN)
     for i in range(total_yield):
-        ref_num = f"{prefix}-{(start_num + i):04d}"
-        srn_num = f"SRN-{(start_srn_num + i):06d}"
+        ref_num = f"{course_ctrl_prefix}-{(start_num + i):04d}"
+        srn_num = f"SRN-{department}-{(start_srn_num + i):06d}"
         new_booklet = models.Booklet(
             control_num=ref_num,
             sort_record_num=srn_num,
@@ -574,7 +640,8 @@ def get_batch_info(batch_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Batch ID '{clean_id}' was not found in the database.")
     
     dept = (batch.department or "CS").upper()
-    dept_label = "Computer Science (CS)" if dept == "CS" else ("Information Technology (IT)" if dept == "IT" else dept)
+    prog = db.query(models.AcademicProgram).filter_by(code=dept).first()
+    dept_label = f"{prog.name} ({prog.code})" if prog else ("Computer Science (CS)" if dept == "CS" else ("Information Technology (IT)" if dept == "IT" else dept))
     slot = batch.template_slot or 1
     
     tpl = db.query(models.BookletTemplateConfig).filter(
@@ -621,11 +688,12 @@ def activate_batch(request_data: ActivateRequest, db: Session = Depends(get_db))
         if b.status == "active":
             raise HTTPException(status_code=400, detail=f"Batch {b.qr_code_id} is already active.")
             
-    # 1b. Validate Course & Template Homogeneity (Cannot mix CS and IT covers)
+    # 1b. Validate Course & Template Homogeneity (Cannot mix different course covers)
     departments = set((b.department or "CS").upper() for b in batches)
     if len(departments) > 1:
-        dept_names = {"CS": "Computer Science (CS)", "IT": "Information Technology (IT)"}
-        dept_str = " vs ".join(dept_names.get(d, d) for d in departments)
+        active_progs = db.query(models.AcademicProgram).all()
+        prog_map = {p.code.upper(): f"{p.name} ({p.code.upper()})" for p in active_progs} if active_progs else {"CS": "Computer Science (CS)", "IT": "Information Technology (IT)"}
+        dept_str = " vs ".join(prog_map.get(d, d) for d in departments)
         raise HTTPException(
             status_code=400, 
             detail=f"Course Template Mismatch: Cannot combine batches across different courses ({dept_str}). "
@@ -736,50 +804,116 @@ def distribution_page(request: Request):
 
 @app.get("/api/loose-stock-list")
 def get_loose_stock_list(department: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(models.Booklet).join(models.MasterBatch).filter(models.Booklet.status == "loose_stock")
-    if department and department.upper() in ["CS", "IT"]:
-        query = query.filter(models.MasterBatch.department == department.upper())
-    loose = query.order_by(models.Booklet.control_num).all()
+    all_loose = db.query(models.Booklet).join(models.MasterBatch).filter(models.Booklet.status == "loose_stock").order_by(models.Booklet.control_num).all()
+    
+    dept_counts = {}
+    for b in all_loose:
+        d = (b.master_batch.department or "CS").upper() if b.master_batch else "CS"
+        dept_counts[d] = dept_counts.get(d, 0) + 1
+        
+    filtered = all_loose
+    if department and department.strip().upper() not in ["ALL", ""]:
+        target = department.strip().upper()
+        filtered = [b for b in all_loose if ((b.master_batch.department or "CS").upper() if b.master_batch else "CS") == target]
+        
     return {
         "status": "success", 
+        "total_count": len(all_loose),
+        "counts_by_dept": dept_counts,
         "data": [
             {
                 "id": b.id, 
                 "control_num": b.control_num, 
-                "department": b.master_batch.department if b.master_batch else "CS"
+                "sort_record_num": b.sort_record_num or "N/A",
+                "department": (b.master_batch.department or "CS").upper() if b.master_batch else "CS"
             } 
-            for b in loose
+            for b in filtered
         ]
     }
 
+def detect_department_from_section(section_str: str, db: Optional[Session] = None) -> str:
+    """
+    Intelligently detects academic department code (e.g. 'CS', 'IT', 'IM')
+    by dynamically matching section prefixes configured in the database.
+    """
+    if not section_str:
+        return "CS"
+    sec_clean = section_str.strip().upper()
+    
+    if db:
+        try:
+            programs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
+            if programs:
+                # Sort by section_prefix length descending so more specific matches first (e.g. BSCS before CS)
+                programs.sort(key=lambda p: len(p.section_prefix), reverse=True)
+                for p in programs:
+                    pref = p.section_prefix.upper()
+                    code = p.code.upper()
+                    if pref in sec_clean or f"{code}-" in sec_clean or f"{code} " in sec_clean:
+                        return p.code
+                # Secondary boundary check against code
+                for p in programs:
+                    code = p.code.upper()
+                    if sec_clean.startswith(code) or f"-{code}" in sec_clean or f" {code}" in sec_clean:
+                        return p.code
+                return programs[0].code
+        except Exception:
+            pass
+            
+    # Heuristic fallback if DB is unavailable
+    if "BSIT" in sec_clean or "IT-" in sec_clean or "IT " in sec_clean:
+        return "IT"
+    return "CS"
+
 def resolve_enrollment_department(enrollment: models.Enrollment, db: Optional[Session] = None) -> str:
     """
-    Authoritatively resolve department (IT or CS) for an enrollment record.
-    Prioritizes section code prefix ('BSIT' / 'IT-' vs 'BSCS' / 'CS-').
-    If the section matches a specific program but the database stored the opposite,
-    it automatically self-heals the database record in-place.
+    Authoritatively resolve academic department for an enrollment record.
+    Prioritizes dynamic section prefix matching. Self-heals the database record in-place.
     """
     if not enrollment:
         return "CS"
-    sec = (enrollment.section or "").upper()
-    if "BSIT" in sec or "IT-" in sec:
-        correct_dept = "IT"
-    elif "BSCS" in sec or "CS-" in sec:
-        correct_dept = "CS"
-    elif enrollment.department and enrollment.department.strip().upper() in ["CS", "IT"]:
-        correct_dept = enrollment.department.strip().upper()
-    else:
-        correct_dept = "CS"
         
-    # Self-heal database record in-place if detected inconsistent
-    if db and enrollment.department != correct_dept:
+    detected = detect_department_from_section(enrollment.section, db=db)
+    
+    if db:
         try:
-            enrollment.department = correct_dept
-            db.commit()
+            programs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
+            active_codes = [p.code for p in programs] if programs else ["CS", "IT"]
+            
+            # If enrollment.department is already valid and section doesn't override with another program
+            if enrollment.department and enrollment.department in active_codes:
+                correct_dept = detected if detected in active_codes else enrollment.department
+            else:
+                correct_dept = detected
+                
+            if enrollment.department != correct_dept:
+                enrollment.department = correct_dept
+                db.commit()
+            return correct_dept
         except Exception:
             db.rollback()
             
-    return correct_dept
+    return detected
+
+def get_program_label(code: Optional[str], db: Optional[Session] = None) -> str:
+    """Returns human-readable label e.g. 'Computer Science (CS)' or 'Civil Engineering (CE)'."""
+    if not code:
+        return "Unknown Department"
+    c_upper = code.strip().upper()
+    if db:
+        try:
+            prog = db.query(models.AcademicProgram).filter(func.upper(models.AcademicProgram.code) == c_upper).first()
+            if prog:
+                return f"{prog.name} ({prog.code})"
+        except Exception:
+            pass
+    fallback_map = {
+        "CS": "Computer Science (CS)",
+        "IT": "Information Technology (IT)",
+        "IM": "Information Management (IM)",
+        "CE": "Civil Engineering (CE)"
+    }
+    return fallback_map.get(c_upper, f"Department ({c_upper})")
 
 @app.get("/api/pending-distributions")
 def get_pending_distributions(db: Session = Depends(get_db)):
@@ -971,6 +1105,7 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     return {
         "status": "success", 
         "user": {
+            "id": user.id,
             "username": user.username,
             "role": user.role,
             "department": user.department,
@@ -994,7 +1129,14 @@ def authorize_admin(req: LoginRequest, db: Session = Depends(get_db)):
 def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if user and user.session_token == req.session_token:
-        return {"status": "valid"}
+        return {
+            "status": "valid",
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "department": user.department,
+            "updated_by": getattr(user, "updated_by", None) or "Administrator"
+        }
     return {"status": "invalid"}
 
 @app.post("/api/logout")
@@ -1011,60 +1153,112 @@ def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
 @app.get("/api/dss-alert")
 def check_dss_alert(db: Session = Depends(get_db)):
     settings = db.query(models.SystemSettings).first()
-    sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
-    yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
 
     # Check if enrollments exist
     enrollment_count = db.query(models.Enrollment).count()
     total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     has_enrollments = bool(enrollment_count > 0 and total_students > 0)
 
-    if not has_enrollments:
+    # 0. Strict check: Has Administrator established System Settings?
+    is_period_unset = bool(not settings or not settings.active_period or settings.active_period == "UNSET" or "UNSET" in settings.active_period)
+    is_settings_unconfigured = bool(
+        is_period_unset or 
+        not settings.sheets_per_booklet or 
+        settings.sheets_per_booklet <= 0 or 
+        not settings.ream_price or 
+        settings.ream_price <= 0
+    )
+
+    if is_settings_unconfigured:
         return {
             "alert": False,
-            "has_enrollments": False,
-            "status": "awaiting_enrollment",
-            "message": "No classes have been enrolled yet. Add sections in Manage Classes to activate demand tracking.",
+            "is_configured": False,
+            "has_enrollments": has_enrollments,
+            "status": "awaiting_settings",
+            "message": "System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet. Awaiting Administrator configuration in Settings.",
             "reams_needed": 0,
             "deficit_booklets": 0,
             "deficit_sheets": 0
         }
 
-    # 1. Calculate pending demand (Students who haven't received booklets yet)
-    distributed = db.query(models.Booklet).filter(models.Booklet.status == "distributed").count()
-    pending_demand = max(0, total_students - distributed)
-    
-    # 2. Calculate available physical stock
-    available_stock = db.query(models.Booklet).filter(models.Booklet.status == "available").count()
-    
-    # 3. Decision Support Logic (Is there a deficit?)
-    if available_stock < pending_demand:
-        deficit_booklets = pending_demand - available_stock
-        deficit_sheets = deficit_booklets * sheets_per_b
-        deficit_full_reams = deficit_sheets // 500
-        deficit_loose_sheets = deficit_sheets % 500
-        reams_to_print = math.ceil(deficit_booklets / yield_per_r)
-        
-        usage_text = f"{deficit_full_reams} Ream(s) and {deficit_loose_sheets} paper sheets" if deficit_full_reams > 0 else f"{deficit_loose_sheets} paper sheets"
-        
+    active_period = settings.active_period if settings else None
+    metrics = calculate_course_production_metrics(db, active_period)
+
+    sheets_per_b = metrics.get("sheets_per_booklet", 5)
+    yield_per_r = metrics.get("yield_per_ream", 100)
+    has_system_enrollments = metrics.get("has_enrollments", has_enrollments)
+
+    if not has_system_enrollments:
         return {
-            "alert": True, 
+            "alert": False,
+            "is_configured": True,
+            "has_enrollments": False,
+            "status": "awaiting_enrollment",
+            "message": "No classes have been enrolled yet. Add sections in Manage Classes to activate demand tracking.",
+            "reams_needed": 0,
+            "deficit_booklets": 0,
+            "deficit_sheets": 0,
+            "buffer_booklets": 0,
+            "buffer_sheets": 0,
+            "buffer_percent": 0.0,
+            "target_production": 0,
+            "total_sheets_needed": 0
+        }
+
+    total_deficit = metrics.get("total_deficit", 0)
+    total_buffer_booklets = metrics.get("total_buffer_booklets", 0)
+    total_target_production = metrics.get("total_target_production", 0)
+    total_sheets_needed = metrics.get("total_sheets_needed", 0)
+    total_reams_to_procure = metrics.get("total_reams_to_procure", 0)
+    buffer_pct = metrics.get("buffer_percent", 0.0)
+
+    # 3. Decision Support Logic (Is there production demand / deficit?)
+    if total_target_production > 0:
+        deficit_sheets = total_deficit * sheets_per_b
+        buffer_sheets = total_buffer_booklets * sheets_per_b
+        exact_reams = total_sheets_needed // 500
+        loose_sheets = total_sheets_needed % 500
+        usage_text = f"{exact_reams} Ream(s) and {loose_sheets} paper sheets" if exact_reams > 0 else f"{loose_sheets} paper sheets"
+
+        if total_buffer_booklets > 0:
+            msg = f"You have an inventory deficit of {total_deficit} booklets plus {total_buffer_booklets} buffer booklets ({total_target_production} total booklets, {usage_text}). Procure {total_reams_to_procure} whole Ream(s) to suffice this demand."
+        else:
+            msg = f"You have an inventory deficit of {total_deficit} booklets ({usage_text}). Procure {total_reams_to_procure} whole Ream(s) to suffice this demand."
+
+        return {
+            "alert": True,
+            "is_configured": True,
             "has_enrollments": True,
-            "message": f"You have an inventory deficit of {deficit_booklets} booklets ({usage_text}). Procure {reams_to_print} whole Ream(s) to suffice this demand.",
-            "deficit_booklets": deficit_booklets,
+            "message": msg,
+            "deficit_booklets": total_deficit,
             "deficit_sheets": deficit_sheets,
-            "deficit_full_reams": deficit_full_reams,
-            "deficit_loose_sheets": deficit_loose_sheets,
+            "buffer_booklets": total_buffer_booklets,
+            "buffer_sheets": buffer_sheets,
+            "buffer_percent": buffer_pct,
+            "target_production": total_target_production,
+            "total_sheets_needed": total_sheets_needed,
+            "exact_reams": exact_reams,
+            "loose_sheets": loose_sheets,
             "sheets_per_booklet": sheets_per_b,
             "yield_per_ream": yield_per_r,
-            "reams_needed": reams_to_print
+            "reams_needed": total_reams_to_procure,
+            "courses": metrics.get("courses", {})
         }
-        
+
     return {
         "alert": False,
+        "is_configured": True,
         "has_enrollments": True,
         "status": "sufficient",
-        "message": "Inventory levels are sufficient. No active alerts."
+        "message": "Inventory levels are sufficient. No active alerts.",
+        "reams_needed": 0,
+        "deficit_booklets": 0,
+        "deficit_sheets": 0,
+        "buffer_booklets": 0,
+        "buffer_sheets": 0,
+        "buffer_percent": buffer_pct,
+        "target_production": 0,
+        "total_sheets_needed": 0
     }    
 
 @app.get("/enrollments", response_class=HTMLResponse)
@@ -1075,14 +1269,7 @@ def read_enrollments(request: Request, db: Session = Depends(get_db)):
 @app.post("/api/enrollments")
 def create_enrollment(enr: schemas.EnrollmentCreate, db: Session = Depends(get_db)):
     section_upper = enr.section.strip().upper()
-    if "BSIT" in section_upper or "IT-" in section_upper:
-        inferred_dept = "IT"
-    elif "BSCS" in section_upper or "CS-" in section_upper:
-        inferred_dept = "CS"
-    elif enr.department and enr.department.strip().upper() in ["CS", "IT"]:
-        inferred_dept = enr.department.strip().upper()
-    else:
-        inferred_dept = "CS"
+    inferred_dept = detect_department_from_section(section_upper, db=db)
 
     new_enr = models.Enrollment(
         teacher_name=enr.teacher_name.strip(),
@@ -1123,23 +1310,10 @@ def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Dep
         
         if existing:
             existing.student_headcount = headcount
-            # Keep department updated as well
-            if "BSIT" in sec_upper or "IT-" in sec_upper:
-                existing.department = "IT"
-            elif "BSCS" in sec_upper or "CS-" in sec_upper:
-                existing.department = "CS"
-            elif getattr(item, 'department', None) and item.department.strip().upper() in ["CS", "IT"]:
-                existing.department = item.department.strip().upper()
+            existing.department = detect_department_from_section(sec_upper, db=db)
             updated_count += 1
         else:
-            if "BSIT" in sec_upper or "IT-" in sec_upper:
-                inferred_dept = "IT"
-            elif "BSCS" in sec_upper or "CS-" in sec_upper:
-                inferred_dept = "CS"
-            elif getattr(item, 'department', None) and item.department.strip().upper() in ["CS", "IT"]:
-                inferred_dept = item.department.strip().upper()
-            else:
-                inferred_dept = "CS"
+            inferred_dept = detect_department_from_section(sec_upper, db=db)
 
             new_enr = models.Enrollment(
                 teacher_name=t_name,
@@ -1212,12 +1386,7 @@ def update_enrollment(enr_id: int, enr: schemas.EnrollmentCreate, db: Session = 
         db_enr.student_headcount = enr.student_headcount
         
         # 3. Recalculate and update department upon editing
-        if "BSIT" in sec_clean or "IT-" in sec_clean:
-            db_enr.department = "IT"
-        elif "BSCS" in sec_clean or "CS-" in sec_clean:
-            db_enr.department = "CS"
-        elif enr.department and enr.department.strip().upper() in ["CS", "IT"]:
-            db_enr.department = enr.department.strip().upper()
+        db_enr.department = detect_department_from_section(sec_clean, db=db)
         
         db.commit()
         notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "update", "enrollment_id": enr_id}, db=db)
@@ -1230,9 +1399,52 @@ from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
 
+def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_booklet=None):
+    """
+    Ensures that any amount_paid on an enrollment is fully accounted for in payment_records.
+    If an enrollment has amount_paid > sum(recorded payments), auto-creates and persists
+    the missing PaymentRecord row in MySQL.
+    """
+    logged_sum = sum(round(pr.amount, 2) for pr in (enr.payment_records or []))
+    unlogged_diff = round((enr.amount_paid or 0.0) - logged_sum, 2)
+    if unlogged_diff > 0:
+        if first_booklet and getattr(first_booklet, 'date_distributed', None):
+            dist_dt = first_booklet.date_distributed
+        else:
+            fb = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).order_by(models.Booklet.date_distributed.asc()).first()
+            dist_dt = fb.date_distributed if (fb and getattr(fb, 'date_distributed', None)) else datetime.now()
+        
+        balance_after = round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2)
+        backfill_record = models.PaymentRecord(
+            enrollment_id=enr.id,
+            amount=unlogged_diff,
+            balance_after=balance_after,
+            payment_date=dist_dt,
+            recorded_by="System Clerk",
+            notes="Initial / Reconciled Payment"
+        )
+        db.add(backfill_record)
+        db.commit()
+        db.refresh(enr)
+
 @app.get("/api/public-receipts")
 def get_public_receipts(db: Session = Depends(get_db)):
     try:
+        active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).order_by(models.AcademicProgram.code).all()
+        programs_data = [
+            {
+                "code": p.code,
+                "name": p.name,
+                "color": getattr(p, 'color_hex', '#3498db') or "#3498db",
+                "color_hex": getattr(p, 'color_hex', '#3498db') or "#3498db",
+                "section_prefix": p.section_prefix or p.code
+            }
+            for p in active_programs
+        ]
+
         enrollments = db.query(models.Enrollment).all()
         receipts_data = []
         
@@ -1240,6 +1452,7 @@ def get_public_receipts(db: Session = Depends(get_db)):
         booklet_price = settings.booklet_price if settings else 2.50
         
         for enr in enrollments:
+            reconcile_enrollment_payments(enr, db)
             # Group by period just like we do in the History route!
             periods = db.query(models.Booklet.exam_period).filter(
                 models.Booklet.enrollment_id == enr.id,
@@ -1316,32 +1529,174 @@ def get_public_receipts(db: Session = Depends(get_db)):
                         # Amount reflects total order due for whole batch
                         receipt_amount = round(qty * effective_unit_price, 2)
 
+                    # Payment records audit trail for this enrollment
+                    payments_list = []
+                    for pr in (enr.payment_records or []):
+                        payments_list.append({
+                            "id": pr.id,
+                            "amount": round(pr.amount, 2),
+                            "balance_after": round(pr.balance_after, 2),
+                            "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
+                            "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
+                            "recorded_by": pr.recorded_by or "System Clerk",
+                            "notes": pr.notes or ""
+                        })
+
                     receipts_data.append({
                         "enrollment_id": enr.id,
                         "date": date_str,
                         "teacher": enr.teacher_name,
                         "section": enr.section,
                         "subject": enr.subject,
+                        "department": enr.department or "CS",
                         "qty": qty,
                         "unit_price": effective_unit_price,
                         "amount": receipt_amount,
                         "payment_status": enr.payment_status or "Unpaid",
-                        "amount_due": round(enr.amount_due, 2),
+                        "amount_due": round(enr.amount_due or 0.0, 2),
                         "amount_paid": round(enr.amount_paid or 0.0, 2),
+                        "balance": round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2),
                         "staff": staff_name,
                         "log": log_strings,
-                        "exam_period": period if period else "Legacy (No Period)" # NEW: Added Period
+                        "exam_period": period if period else "Legacy (No Period)",
+                        "payments": payments_list
                     })
         
-        return {"status": "success", "booklet_price": booklet_price, "data": receipts_data}
+        return {
+            "status": "success", 
+            "booklet_price": booklet_price, 
+            "programs": programs_data,
+            "data": receipts_data
+        }
     except Exception as e:
-        return {"status": "error", "message": str(e), "data": []}
+        return {"status": "error", "message": str(e), "programs": [], "data": []}
     
 
-    # --- PUBLIC RECEIPTS PORTAL ROUTE ---
+# --- PUBLIC RECEIPTS PORTAL ROUTE ---
 @app.get("/receipts", response_class=HTMLResponse)
 def public_receipts_portal(request: Request):
     return templates.TemplateResponse("receipts.html", {"request": request})
+
+# --- PUBLIC INSTRUCTOR TRANSACTION PROFILE ROUTE ---
+@app.get("/transaction-profile", response_class=HTMLResponse)
+def public_transaction_profile_portal(request: Request):
+    return templates.TemplateResponse("transaction_profile.html", {"request": request})
+
+@app.get("/api/public-instructor-profiles")
+def get_public_instructor_profiles(db: Session = Depends(get_db)):
+    try:
+        active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).order_by(models.AcademicProgram.code).all()
+        programs_data = [
+            {
+                "code": p.code,
+                "name": p.name,
+                "color": getattr(p, 'color_hex', '#3498db') or "#3498db",
+                "color_hex": getattr(p, 'color_hex', '#3498db') or "#3498db",
+                "section_prefix": p.section_prefix or p.code
+            }
+            for p in active_programs
+        ]
+
+        settings = db.query(models.SystemSettings).first()
+        booklet_price = settings.booklet_price if settings else 2.50
+
+        enrollments = db.query(models.Enrollment).all()
+        instructors_map = {}
+
+        for enr in enrollments:
+            teacher_clean = (enr.teacher_name or "Unknown").strip()
+            if not teacher_clean:
+                continue
+
+            distributed_booklets = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).order_by(models.Booklet.id).all()
+
+            if not distributed_booklets and (enr.amount_due or 0.0) <= 0:
+                continue
+
+            reconcile_enrollment_payments(enr, db)
+
+            if teacher_clean not in instructors_map:
+                instructors_map[teacher_clean] = {
+                    "teacher_name": teacher_clean,
+                    "department": enr.department or "CS",
+                    "total_due": 0.0,
+                    "total_paid": 0.0,
+                    "total_balance": 0.0,
+                    "total_qty": 0,
+                    "classes": [],
+                    "payments": []
+                }
+
+            inst = instructors_map[teacher_clean]
+            if enr.department and inst["department"] == "CS" and enr.department != "CS":
+                inst["department"] = enr.department
+
+            qty = len(distributed_booklets)
+            inst["total_qty"] += qty
+            due = round(float(enr.amount_due or 0.0), 2)
+            paid = round(float(enr.amount_paid or 0.0), 2)
+            bal = round(max(0.0, due - paid), 2)
+
+            inst["total_due"] += due
+            inst["total_paid"] += paid
+
+            # Class item
+            inst["classes"].append({
+                "enrollment_id": enr.id,
+                "section": enr.section,
+                "subject": enr.subject,
+                "department": enr.department or "CS",
+                "qty": qty,
+                "amount_due": due,
+                "amount_paid": paid,
+                "balance": bal,
+                "payment_status": enr.payment_status or "Unpaid"
+            })
+
+            # Payment records for this enrollment
+            for pr in (enr.payment_records or []):
+                inst["payments"].append({
+                    "id": pr.id,
+                    "enrollment_id": enr.id,
+                    "section": enr.section,
+                    "subject": enr.subject,
+                    "amount": round(pr.amount, 2),
+                    "balance_after": round(pr.balance_after, 2),
+                    "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
+                    "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
+                    "recorded_by": pr.recorded_by or "System Clerk",
+                    "notes": pr.notes or ""
+                })
+
+        instructors_list = []
+        for teacher, inst in instructors_map.items():
+            inst["total_due"] = round(inst["total_due"], 2)
+            inst["total_paid"] = round(inst["total_paid"], 2)
+            inst["total_balance"] = round(max(0.0, inst["total_due"] - inst["total_paid"]), 2)
+            
+            if inst["total_balance"] <= 0 and inst["total_due"] > 0:
+                inst["overall_status"] = "Fully Paid"
+            elif inst["total_paid"] > 0:
+                inst["overall_status"] = "Partially Paid"
+            else:
+                inst["overall_status"] = "Unpaid"
+
+            inst["payments"].sort(key=lambda x: x["payment_date"])
+            instructors_list.append(inst)
+
+        instructors_list.sort(key=lambda x: x["teacher_name"].lower())
+
+        return {
+            "status": "success",
+            "booklet_price": booklet_price,
+            "programs": programs_data,
+            "instructors": instructors_list
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "programs": [], "instructors": []}
 
 # --- LOOSE STOCK / RETURN ROUTES ---
 
@@ -1459,15 +1814,29 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
 def lookup_booklet(identifier: str, expected_dept: Optional[str] = None, db: Session = Depends(get_db)):
     """Resolves any identifier (Booklet QR payload, Control Number, or SRN) to an authentic booklet record."""
     raw = identifier.strip()
+    exp_dept_clean = expected_dept.strip().upper() if (expected_dept and expected_dept.strip() and expected_dept.strip().upper() not in ["ALL", "NONE"]) else None
     
-    # Try exact match on control_num, sort_record_num, or with SRN- prefix
+    # Candidate match conditions
     possible_srn = f"SRN-{raw.zfill(6)}" if raw.isdigit() else raw
+    query_conditions = [
+        models.Booklet.control_num == raw,
+        models.Booklet.sort_record_num == raw,
+        models.Booklet.sort_record_num == possible_srn
+    ]
+    if raw.isdigit():
+        if exp_dept_clean:
+            query_conditions.append(models.Booklet.sort_record_num == f"SRN-{exp_dept_clean}-{raw.zfill(6)}")
+            query_conditions.append(models.Booklet.control_num.like(f"%-{exp_dept_clean}-{raw.zfill(4)}"))
+            query_conditions.append(models.Booklet.control_num.like(f"%-{exp_dept_clean}-{raw}"))
+        query_conditions.append(models.Booklet.control_num.like(f"%-{raw.zfill(4)}"))
     
-    booklet = db.query(models.Booklet).join(models.MasterBatch).filter(
-        (models.Booklet.control_num == raw) |
-        (models.Booklet.sort_record_num == raw) |
-        (models.Booklet.sort_record_num == possible_srn)
-    ).first()
+    query = db.query(models.Booklet).join(models.MasterBatch).filter(or_(*query_conditions))
+    if exp_dept_clean:
+        booklet = query.filter(models.MasterBatch.department == exp_dept_clean).first()
+        if not booklet:
+            booklet = query.first()
+    else:
+        booklet = query.first()
     
     if not booklet:
         return {"status": "error", "message": f"Booklet '{raw}' was not found in the database."}
@@ -1476,12 +1845,13 @@ def lookup_booklet(identifier: str, expected_dept: Optional[str] = None, db: Ses
     dept = (batch.department if batch and batch.department else "CS").upper()
     
     # Department Verification Guard
-    if expected_dept and dept != expected_dept.upper():
-        dept_labels = {"CS": "Computer Science (CS)", "IT": "Information Technology (IT)"}
+    if exp_dept_clean and dept != exp_dept_clean:
+        dept_label = get_program_label(dept, db)
+        exp_label = get_program_label(exp_dept_clean, db)
         return {
             "status": "error",
             "code": "DEPT_MISMATCH",
-            "message": f"Department Mismatch: Booklet '{booklet.control_num}' is for {dept_labels.get(dept, dept)}, but active transaction requires {dept_labels.get(expected_dept.upper(), expected_dept)}."
+            "message": f"Department Mismatch: Booklet '{booklet.control_num}' is for {dept_label}, but active transaction requires {exp_label}."
         }
         
     return {
@@ -1542,8 +1912,8 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
             for b in explicit_bks:
                 b_dept = (b.master_batch.department or "CS").upper() if b.master_batch else "CS"
                 if b_dept != enrollment_dept:
-                    dept_label = "Computer Science (CS)" if b_dept == "CS" else "Information Technology (IT)"
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
+                    dept_label = get_program_label(b_dept, db)
+                    enr_label = get_program_label(enrollment_dept, db)
                     return {
                         "status": "error",
                         "code": "DEPT_MISMATCH",
@@ -1562,77 +1932,22 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
 
         else:
             # --- THE TRIPLE-POOL ALGORITHM (Preview) ---
-            # Verify Primary Pack
-            primary_batches = db.query(models.MasterBatch).filter(
-                (models.MasterBatch.qr_code_id == req.scanned_pack_qr) |
-                (models.MasterBatch.pack_qr_id == req.scanned_pack_qr)
-            ).all()
-            if not primary_batches: return {"status": "error", "message": "Invalid Primary Pack QR."}
-            primary_batch_ids = [b.id for b in primary_batches]
+            still_needed = remaining_demand
 
-            # Verify Bridging Pack (If provided)
-            bridging_batch_ids = []
-            bridging_batches = []
-            if req.bridging_pack_qr:
-                if req.scanned_pack_qr and req.bridging_pack_qr.strip() == req.scanned_pack_qr.strip():
-                    return {
-                        "status": "error",
-                        "code": "DUPLICATE_PACK",
-                        "message": "Duplicate Pack: The bridging pack cannot be the same as your active primary pack. Please scan a different Master Pack to bridge the transaction."
-                    }
-                bridging_batches = db.query(models.MasterBatch).filter(
-                    (models.MasterBatch.qr_code_id == req.bridging_pack_qr) |
-                    (models.MasterBatch.pack_qr_id == req.bridging_pack_qr)
-                ).all()
-                if not bridging_batches: return {"status": "error", "message": "Invalid Bridging Pack QR."}
-                bridging_batch_ids = [b.id for b in bridging_batches]
-                if any(b_id in primary_batch_ids for b_id in bridging_batch_ids):
-                    return {
-                        "status": "error",
-                        "code": "DUPLICATE_PACK",
-                        "message": "Duplicate Pack: The scanned bridging pack belongs to the same supply batch as your active primary pack. Please scan a different Master Pack to bridge the transaction."
-                    }
-
-            for b in primary_batches:
-                batch_dept = b.department or "CS"
-                if batch_dept != enrollment_dept:
-                    dept_label = "Computer Science (CS)" if batch_dept == "CS" else "Information Technology (IT)"
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
-                    return {
-                        "status": "error",
-                        "code": "DEPT_MISMATCH",
-                        "message": f"Department Template Mismatch: Scanned supply box is for {dept_label}, but section {enrollment.section} is {enr_label}. You cannot distribute {batch_dept} booklet templates to a {enrollment_dept} section."
-                    }
-
-            if bridging_batches:
-                for b in bridging_batches:
-                    batch_dept = b.department or "CS"
-                    if batch_dept != enrollment_dept:
-                        dept_label = "Computer Science (CS)" if batch_dept == "CS" else "Information Technology (IT)"
-                        enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
-                        return {
-                            "status": "error",
-                            "code": "BRIDGING_DEPT_MISMATCH",
-                            "message": f"Bridging Template Mismatch: The bridging pack is for {dept_label}, but section {enrollment.section} is {enr_label}. All booklets in a single distribution must use the same {enr_label} template."
-                        }
-
+            # Pool 1: Loose Stock
             if req.selected_loose_controls:
                 mismatched_loose = db.query(models.Booklet).join(models.MasterBatch).filter(
                     models.Booklet.control_num.in_(req.selected_loose_controls),
                     models.MasterBatch.department != enrollment_dept
                 ).count()
                 if mismatched_loose > 0:
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
+                    enr_label = get_program_label(enrollment_dept, db)
                     return {
                         "status": "error",
                         "code": "LOOSE_DEPT_MISMATCH",
                         "message": f"Loose Stock Mismatch: Selected loose booklets contain templates from another department. All booklets must match {enr_label}."
                     }
 
-            still_needed = remaining_demand
-
-            # Pool 1: Loose Stock
-            if req.selected_loose_controls:
                 loose = db.query(models.Booklet).filter(
                     models.Booklet.control_num.in_(req.selected_loose_controls),
                     models.Booklet.status == "loose_stock"
@@ -1641,28 +1956,90 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
                     booklets_to_distribute.extend(loose)
                     still_needed -= len(loose)
 
-            # Pool 2: Primary Pack
-            if still_needed > 0:
-                primary = db.query(models.Booklet).filter(
-                    models.Booklet.master_batch_id.in_(primary_batch_ids), 
-                    models.Booklet.status == "available"
-                ).order_by(models.Booklet.control_num).limit(still_needed).all()
-                if primary:
-                    booklets_to_distribute.extend(primary)
-                    still_needed -= len(primary)
+            primary_batch_ids = []
+            bridging_batch_ids = []
 
-            # Pool 3: Bridging Pack
-            if still_needed > 0 and bridging_batch_ids:
-                bridging = db.query(models.Booklet).filter(
-                    models.Booklet.master_batch_id.in_(bridging_batch_ids), 
-                    models.Booklet.status == "available"
-                ).order_by(models.Booklet.control_num).limit(still_needed).all()
-                if bridging:
-                    booklets_to_distribute.extend(bridging)
-                    still_needed -= len(bridging)
+            # Only verify Primary Pack and Bridging Pack if still needed or explicitly scanned
+            if still_needed > 0 or req.scanned_pack_qr:
+                primary_batches = db.query(models.MasterBatch).filter(
+                    (models.MasterBatch.qr_code_id == req.scanned_pack_qr) |
+                    (models.MasterBatch.pack_qr_id == req.scanned_pack_qr)
+                ).all()
+                if not primary_batches: return {"status": "error", "message": "Invalid Primary Pack QR."}
+                primary_batch_ids = [b.id for b in primary_batches]
+
+                # Verify Bridging Pack (If provided)
+                bridging_batches = []
+                if req.bridging_pack_qr:
+                    if req.scanned_pack_qr and req.bridging_pack_qr.strip() == req.scanned_pack_qr.strip():
+                        return {
+                            "status": "error",
+                            "code": "DUPLICATE_PACK",
+                            "message": "Duplicate Pack: The bridging pack cannot be the same as your active primary pack. Please scan a different Master Pack to bridge the transaction."
+                        }
+                    bridging_batches = db.query(models.MasterBatch).filter(
+                        (models.MasterBatch.qr_code_id == req.bridging_pack_qr) |
+                        (models.MasterBatch.pack_qr_id == req.bridging_pack_qr)
+                    ).all()
+                    if not bridging_batches: return {"status": "error", "message": "Invalid Bridging Pack QR."}
+                    bridging_batch_ids = [b.id for b in bridging_batches]
+                    if any(b_id in primary_batch_ids for b_id in bridging_batch_ids):
+                        return {
+                            "status": "error",
+                            "code": "DUPLICATE_PACK",
+                            "message": "Duplicate Pack: The scanned bridging pack belongs to the same supply batch as your active primary pack. Please scan a different Master Pack to bridge the transaction."
+                        }
+
+                for b in primary_batches:
+                    batch_dept = (b.department or "CS").upper()
+                    if batch_dept != enrollment_dept:
+                        dept_label = get_program_label(batch_dept, db)
+                        enr_label = get_program_label(enrollment_dept, db)
+                        return {
+                            "status": "error",
+                            "code": "DEPT_MISMATCH",
+                            "message": f"Department Template Mismatch: Scanned supply box is for {dept_label}, but section {enrollment.section} is {enr_label}. You cannot distribute {batch_dept} booklet templates to a {enrollment_dept} section."
+                        }
+
+                if bridging_batches:
+                    for b in bridging_batches:
+                        batch_dept = (b.department or "CS").upper()
+                        if batch_dept != enrollment_dept:
+                            dept_label = get_program_label(batch_dept, db)
+                            enr_label = get_program_label(enrollment_dept, db)
+                            return {
+                                "status": "error",
+                                "code": "BRIDGING_DEPT_MISMATCH",
+                                "message": f"Bridging Template Mismatch: The bridging pack is for {dept_label}, but section {enrollment.section} is {enr_label}. All booklets in a single distribution must use the same {enr_label} template."
+                            }
+
+                # Pool 2: Primary Pack
+                if still_needed > 0:
+                    primary = db.query(models.Booklet).filter(
+                        models.Booklet.master_batch_id.in_(primary_batch_ids), 
+                        models.Booklet.status == "available"
+                    ).order_by(models.Booklet.control_num).limit(still_needed).all()
+                    if primary:
+                        booklets_to_distribute.extend(primary)
+                        still_needed -= len(primary)
+
+                # Pool 3: Bridging Pack
+                if still_needed > 0 and bridging_batch_ids:
+                    bridging = db.query(models.Booklet).filter(
+                        models.Booklet.master_batch_id.in_(bridging_batch_ids), 
+                        models.Booklet.status == "available"
+                    ).order_by(models.Booklet.control_num).limit(still_needed).all()
+                    if bridging:
+                        booklets_to_distribute.extend(bridging)
+                        still_needed -= len(bridging)
 
             if still_needed > 0:
-                return {"status": "error", "message": f"Insufficient stock even with bridging. Short by {still_needed} pcs."}
+                return {
+                    "status": "error",
+                    "code": "INSUFFICIENT_STOCK",
+                    "shortage": still_needed,
+                    "message": f"Insufficient stock even with bridging. Short by {still_needed} pcs."
+                }
 
         if not booklets_to_distribute:
             return {"status": "error", "message": "No booklets could be allocated."}
@@ -1787,8 +2164,8 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
             for b in explicit_bks:
                 b_dept = (b.master_batch.department or "CS").upper() if b.master_batch else "CS"
                 if b_dept != enrollment_dept:
-                    dept_label = "Computer Science (CS)" if b_dept == "CS" else "Information Technology (IT)"
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
+                    dept_label = get_program_label(b_dept, db)
+                    enr_label = get_program_label(enrollment_dept, db)
                     return {
                         "status": "error",
                         "code": "DEPT_MISMATCH",
@@ -1806,53 +2183,7 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
 
         else:
             # --- THE TRIPLE-POOL ALGORITHM (Execution) ---
-            primary_batches = db.query(models.MasterBatch).filter((models.MasterBatch.qr_code_id == req.scanned_pack_qr) | (models.MasterBatch.pack_qr_id == req.scanned_pack_qr)).all()
-            if not primary_batches:
-                return {"status": "error", "message": "Invalid Primary Pack QR."}
-            primary_batch_ids = [b.id for b in primary_batches]
-
-            bridging_batch_ids = []
-            bridging_batches = []
-            if req.bridging_pack_qr:
-                if req.scanned_pack_qr and req.bridging_pack_qr.strip() == req.scanned_pack_qr.strip():
-                    return {
-                        "status": "error",
-                        "code": "DUPLICATE_PACK",
-                        "message": "Duplicate Pack: The bridging pack cannot be the same as your active primary pack. Please scan a different Master Pack to bridge the transaction."
-                    }
-                bridging_batches = db.query(models.MasterBatch).filter((models.MasterBatch.qr_code_id == req.bridging_pack_qr) | (models.MasterBatch.pack_qr_id == req.bridging_pack_qr)).all()
-                if not bridging_batches:
-                    return {"status": "error", "message": "Invalid Bridging Pack QR."}
-                bridging_batch_ids = [b.id for b in bridging_batches]
-                if any(b_id in primary_batch_ids for b_id in bridging_batch_ids):
-                    return {
-                        "status": "error",
-                        "code": "DUPLICATE_PACK",
-                        "message": "Duplicate Pack: The scanned bridging pack belongs to the same supply batch as your active primary pack. Please scan a different Master Pack to bridge the transaction."
-                    }
-
-            for b in primary_batches:
-                batch_dept = b.department or "CS"
-                if batch_dept != enrollment_dept:
-                    dept_label = "Computer Science (CS)" if batch_dept == "CS" else "Information Technology (IT)"
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
-                    return {
-                        "status": "error",
-                        "code": "DEPT_MISMATCH",
-                        "message": f"Department Template Mismatch: Scanned supply box is for {dept_label}, but section {enrollment.section} is {enr_label}. You cannot distribute {batch_dept} booklet templates to a {enrollment_dept} section."
-                    }
-
-            if bridging_batches:
-                for b in bridging_batches:
-                    batch_dept = b.department or "CS"
-                    if batch_dept != enrollment_dept:
-                        dept_label = "Computer Science (CS)" if batch_dept == "CS" else "Information Technology (IT)"
-                        enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
-                        return {
-                            "status": "error",
-                            "code": "BRIDGING_DEPT_MISMATCH",
-                            "message": f"Bridging Template Mismatch: The bridging pack is for {dept_label}, but section {enrollment.section} is {enr_label}. All booklets in a single distribution must use the same {enr_label} template."
-                        }
+            still_needed = remaining_demand
 
             if req.selected_loose_controls:
                 mismatched_loose = db.query(models.Booklet).join(models.MasterBatch).filter(
@@ -1860,16 +2191,13 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
                     models.MasterBatch.department != enrollment_dept
                 ).count()
                 if mismatched_loose > 0:
-                    enr_label = "Computer Science (CS)" if enrollment_dept == "CS" else "Information Technology (IT)"
+                    enr_label = get_program_label(enrollment_dept, db)
                     return {
                         "status": "error",
                         "code": "LOOSE_DEPT_MISMATCH",
                         "message": f"Loose Stock Mismatch: Selected loose booklets contain templates from another department. All booklets must match {enr_label}."
                     }
 
-            still_needed = remaining_demand
-
-            if req.selected_loose_controls:
                 loose = db.query(models.Booklet).filter(
                     models.Booklet.control_num.in_(req.selected_loose_controls),
                     models.Booklet.status == "loose_stock"
@@ -1877,14 +2205,66 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
                 booklets_to_distribute.extend(loose)
                 still_needed -= len(loose)
 
-            if still_needed > 0:
-                primary = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(primary_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
-                booklets_to_distribute.extend(primary)
-                still_needed -= len(primary)
+            primary_batch_ids = []
+            bridging_batch_ids = []
 
-            if still_needed > 0 and bridging_batch_ids:
-                bridging = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(bridging_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
-                booklets_to_distribute.extend(bridging)
+            # Only verify Primary Pack and Bridging Pack if still needed or explicitly scanned
+            if still_needed > 0 or req.scanned_pack_qr:
+                primary_batches = db.query(models.MasterBatch).filter((models.MasterBatch.qr_code_id == req.scanned_pack_qr) | (models.MasterBatch.pack_qr_id == req.scanned_pack_qr)).all()
+                if not primary_batches:
+                    return {"status": "error", "message": "Invalid Primary Pack QR."}
+                primary_batch_ids = [b.id for b in primary_batches]
+
+                bridging_batches = []
+                if req.bridging_pack_qr:
+                    if req.scanned_pack_qr and req.bridging_pack_qr.strip() == req.scanned_pack_qr.strip():
+                        return {
+                            "status": "error",
+                            "code": "DUPLICATE_PACK",
+                            "message": "Duplicate Pack: The bridging pack cannot be the same as your active primary pack. Please scan a different Master Pack to bridge the transaction."
+                        }
+                    bridging_batches = db.query(models.MasterBatch).filter((models.MasterBatch.qr_code_id == req.bridging_pack_qr) | (models.MasterBatch.pack_qr_id == req.bridging_pack_qr)).all()
+                    if not bridging_batches:
+                        return {"status": "error", "message": "Invalid Bridging Pack QR."}
+                    bridging_batch_ids = [b.id for b in bridging_batches]
+                    if any(b_id in primary_batch_ids for b_id in bridging_batch_ids):
+                        return {
+                            "status": "error",
+                            "code": "DUPLICATE_PACK",
+                            "message": "Duplicate Pack: The scanned bridging pack belongs to the same supply batch as your active primary pack. Please scan a different Master Pack to bridge the transaction."
+                        }
+
+                for b in primary_batches:
+                    batch_dept = (b.department or "CS").upper()
+                    if batch_dept != enrollment_dept:
+                        dept_label = get_program_label(batch_dept, db)
+                        enr_label = get_program_label(enrollment_dept, db)
+                        return {
+                            "status": "error",
+                            "code": "DEPT_MISMATCH",
+                            "message": f"Department Template Mismatch: Scanned supply box is for {dept_label}, but section {enrollment.section} is {enr_label}. You cannot distribute {batch_dept} booklet templates to a {enrollment_dept} section."
+                        }
+
+                if bridging_batches:
+                    for b in bridging_batches:
+                        batch_dept = (b.department or "CS").upper()
+                        if batch_dept != enrollment_dept:
+                            dept_label = get_program_label(batch_dept, db)
+                            enr_label = get_program_label(enrollment_dept, db)
+                            return {
+                                "status": "error",
+                                "code": "BRIDGING_DEPT_MISMATCH",
+                                "message": f"Bridging Template Mismatch: The bridging pack is for {dept_label}, but section {enrollment.section} is {enr_label}. All booklets in a single distribution must use the same {enr_label} template."
+                            }
+
+                if still_needed > 0:
+                    primary = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(primary_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
+                    booklets_to_distribute.extend(primary)
+                    still_needed -= len(primary)
+
+                if still_needed > 0 and bridging_batch_ids:
+                    bridging = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_(bridging_batch_ids), models.Booklet.status == "available").order_by(models.Booklet.control_num).limit(still_needed).all()
+                    booklets_to_distribute.extend(bridging)
 
             if len(booklets_to_distribute) < remaining_demand:
                 return {
@@ -1912,11 +2292,9 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
             b.distributed_by = req.clerk_name
             b.exam_period = active_period
             b.unit_price = effective_price
+            b.return_reason = None
             
-        if "BSCS" in enrollment.section.upper():
-            enrollment.department = "CS"
-        elif "BSIT" in enrollment.section.upper():
-            enrollment.department = "IT"
+        enrollment.department = resolve_enrollment_department(enrollment, db=db)
 
         # Phase 3: Payment Tracking & Replacement Credit Application
         new_charge = round(len(booklets_to_distribute) * effective_price, 2)
@@ -1967,7 +2345,7 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
         for enr in enrollments:
             periods = db.query(models.Booklet.exam_period).filter(
                 models.Booklet.enrollment_id == enr.id,
-                models.Booklet.status == "distributed"
+                models.Booklet.status.in_(["distributed", "voided", "loose_stock"])
             ).distinct().all()
 
             for (period,) in periods:
@@ -1977,14 +2355,37 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
                     models.Booklet.exam_period == period
                 ).order_by(models.Booklet.id).all()
                 
-                if booklets:
+                # Defective returns check for audit tag
+                defective_bks = db.query(models.Booklet).filter(
+                    models.Booklet.enrollment_id == enr.id,
+                    models.Booklet.exam_period == period,
+                    models.Booklet.status == "voided",
+                    models.Booklet.return_reason.like("Misprint / Defect%")
+                ).order_by(models.Booklet.id).all()
+                defective_voided_qty = len(defective_bks)
+
+                # Dropped returns check for loose stock audit tag
+                dropped_bks = db.query(models.Booklet).filter(
+                    models.Booklet.enrollment_id == enr.id,
+                    models.Booklet.exam_period == period,
+                    models.Booklet.status == "loose_stock",
+                    models.Booklet.return_reason.like("Student Dropped%")
+                ).order_by(models.Booklet.id).all()
+                dropped_returned_qty = len(dropped_bks)
+
+                if booklets or defective_bks or dropped_bks:
                     qty = len(booklets)
-                    refs = f"{booklets[0].control_num} ➔ {booklets[-1].control_num}" if qty > 1 else booklets[0].control_num
-                    
-                    dist_date = getattr(booklets[0], 'date_distributed', None)
+                    if booklets:
+                        refs = f"{booklets[0].control_num} ➔ {booklets[-1].control_num}" if qty > 1 else booklets[0].control_num
+                        dist_date = getattr(booklets[0], 'date_distributed', None)
+                    else:
+                        all_prior = defective_bks + dropped_bks
+                        all_prior.sort(key=lambda x: x.id)
+                        refs = f"{all_prior[0].control_num} ➔ {all_prior[-1].control_num}" if len(all_prior) > 1 else all_prior[0].control_num
+                        dist_date = getattr(all_prior[0], 'date_distributed', None)
+
                     if dist_date:
                         date_str = dist_date.strftime("%d-%b-%Y %I:%M %p")
-                        # SECURE PYTHON MATH: Calculate exact days old
                         days_old = (datetime.now() - dist_date).days
                     else:
                         date_str = datetime.now().strftime("%d-%b-%Y %I:%M %p")
@@ -1992,7 +2393,7 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
 
                     # Determine effective price based on Payment Status Grandfathering Rule
                     is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
-                    b_prices = [getattr(b, 'unit_price', None) for b in booklets if getattr(b, 'unit_price', None) is not None]
+                    b_prices = [getattr(b, 'unit_price', None) for b in (booklets or defective_bks or dropped_bks) if getattr(b, 'unit_price', None) is not None]
 
                     if is_fully_paid:
                         if b_prices:
@@ -2008,18 +2409,8 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
                             effective_price = float(booklet_price)
 
                     transaction_total = round(qty * effective_price, 2)
-
-                    # Defective returns check for audit tag
-                    defective_voided_qty = db.query(models.Booklet).filter(
-                        models.Booklet.enrollment_id == enr.id,
-                        models.Booklet.exam_period == period,
-                        models.Booklet.status == "voided",
-                        models.Booklet.return_reason.like("Misprint / Defect%")
-                    ).count()
-
-                    # Amount paid displayed for this transaction:
-                    # If fully paid, display matching transaction_total to reflect deducted price
                     paid_display = transaction_total if is_fully_paid else min(transaction_total, float(enr.amount_paid or 0.0))
+                    enr_dept = enr.department or resolve_enrollment_department(enr, db)
 
                     history_data.append({
                         "enrollment_id": enr.id,
@@ -2027,6 +2418,7 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
                         "teacher": enr.teacher_name,
                         "section": enr.section,
                         "subject": enr.subject,
+                        "department": enr_dept,
                         "qty": qty,
                         "booklet_price": effective_price,
                         "total_bill": transaction_total,
@@ -2039,6 +2431,7 @@ def get_history_data(department: str = "ALL", db: Session = Depends(get_db)):
                         "exam_period": period if period else "Legacy (No Period)",
                         "days_old": days_old,
                         "defective_voided_qty": defective_voided_qty,
+                        "dropped_returned_qty": dropped_returned_qty,
                         "replacement_credit": float(getattr(enr, 'replacement_credit', 0.0) or 0.0)
                     })
         
@@ -2118,9 +2511,9 @@ def get_system_status(db: Session = Depends(get_db)):
         "is_initialized": is_initialized,
         "active_period": period,
         "booklet_price": price,
-        "ream_price": float(settings.ream_price or 250.0),
-        "sheets_per_booklet": int(settings.sheets_per_booklet or 6),
-        "current_semester_name": settings.current_semester_name or "1ST26",
+        "ream_price": float(settings.ream_price or 0.0),
+        "sheets_per_booklet": int(settings.sheets_per_booklet or 0),
+        "current_semester_name": settings.current_semester_name or "",
         "requires_admin_setup": not is_initialized
     }
 
@@ -2168,12 +2561,15 @@ def reset_all_transactions(req: AdminResetRequest, db: Session = Depends(get_db)
         settings = models.SystemSettings()
         db.add(settings)
     settings.active_period = "UNSET"
-    settings.booklet_price = 0.0
+    settings.booklet_price = None
     settings.sheets_per_booklet = None
     settings.ream_price = None
-    settings.department_ream_budget = 0.0
+    settings.department_ream_budget = None
     settings.reorder_buffer_percent = None
     settings.current_semester_name = None
+    settings.staples_box_price = None
+    settings.staples_per_box = None
+    settings.staples_per_booklet = None
 
     db.commit()
     notify_lan_mutation("SYSTEM_RESET", {
@@ -2193,7 +2589,7 @@ def reset_all_transactions(req: AdminResetRequest, db: Session = Depends(get_db)
 
 # --- COURSE PRODUCTION METRICS (Dynamic & Settings-Driven) ---
 def calculate_course_production_metrics(db: Session, active_period: Optional[str] = None):
-    """Calculates period-isolated production demand broken down by course (CS vs IT) with dynamic buffer margin."""
+    """Calculates period-isolated production demand broken down across all active academic courses with dynamic buffer margin."""
     if not active_period:
         active_period = get_active_period(db)
     
@@ -2216,15 +2612,23 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
     total_headcount = sum(e.student_headcount for e in enrollments)
     has_system_enrollments = bool(total_enrollments > 0 and total_headcount > 0)
 
-    def get_dept(e):
-        sec = (e.section or '').upper()
-        if 'BSIT' in sec: return 'IT'
-        if 'BSCS' in sec: return 'CS'
-        return getattr(e, 'department', 'CS') or 'CS'
+    # Fetch all active academic programs
+    active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).order_by(models.AcademicProgram.id.asc()).all()
+    if not active_progs:
+        program_list = [
+            {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db"},
+            {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22"}
+        ]
+    else:
+        program_list = [
+            {"code": p.code, "name": p.name, "prefix": p.section_prefix, "color": p.color_hex or "#3498db"}
+            for p in active_progs
+        ]
 
     data = {}
-    for dept in ["CS", "IT"]:
-        dept_enrollments = [e for e in enrollments if get_dept(e) == dept]
+    for p_info in program_list:
+        dept = p_info["code"]
+        dept_enrollments = [e for e in enrollments if resolve_enrollment_department(e, db) == dept]
         dept_enrollment_count = len(dept_enrollments)
         headcount = sum(e.student_headcount for e in dept_enrollments)
         dept_has_enrollments = bool(dept_enrollment_count > 0 and headcount > 0)
@@ -2238,33 +2642,69 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         
         remaining_demand = max(0, headcount - distributed)
         
-        # Available vault stock
+        # Available vault stock (packaged and activated supply packs or loose stock)
         available = db.query(models.Booklet).join(models.MasterBatch).filter(
             models.MasterBatch.department == dept,
             models.Booklet.status.in_(["available", "loose_stock"])
         ).count()
+
+        # Pending generated stock (batches stamped/printed on PDF but not yet activated into supply packs)
+        pending_stock = db.query(models.Booklet).join(models.MasterBatch).filter(
+            models.MasterBatch.department == dept,
+            models.Booklet.status == "pending"
+        ).count()
         
-        deficit = max(0, remaining_demand - available)
+        total_existing_stock = available + pending_stock
+        deficit = max(0, remaining_demand - total_existing_stock)
         buffer_booklets = math.ceil(deficit * (buffer_pct / 100.0)) if deficit > 0 else 0
         target_production = deficit + buffer_booklets
-        reams_needed = math.ceil(target_production / yield_per_r) if target_production > 0 else 0
-        projected_yield = reams_needed * yield_per_r
+        
+        # Exact paper sheets and breakdown for this specific course
+        sheets_needed = target_production * sheets_per_b
+        reams_whole = sheets_needed // 500
+        sheets_remainder = sheets_needed % 500
+        reams_needed = math.ceil(sheets_needed / 500) if sheets_needed > 0 else 0
+        if sheets_needed == 0:
+            paper_required_text = "0 Sheets (Demand Met)"
+        else:
+            paper_required_text = f"{reams_whole} Ream(s) & {sheets_remainder} Sheet(s)"
+            
+        projected_yield = target_production
         
         data[dept] = {
+            "code": dept,
+            "name": p_info["name"],
+            "prefix": p_info["prefix"],
+            "color": p_info["color"],
             "headcount": headcount,
             "enrollment_count": dept_enrollment_count,
             "has_enrollments": dept_has_enrollments,
             "distributed": distributed,
             "remaining_demand": remaining_demand,
             "available_stock": available,
+            "pending_stock": pending_stock,
+            "total_existing_stock": total_existing_stock,
             "deficit": deficit,
             "buffer_percent": buffer_pct,
             "buffer_booklets": buffer_booklets,
             "target_production": target_production,
+            "sheets_needed": sheets_needed,
+            "reams_whole": reams_whole,
+            "sheets_remainder": sheets_remainder,
+            "paper_required_text": paper_required_text,
             "reams_needed": reams_needed,
             "projected_yield": projected_yield,
             "is_satisfied": deficit == 0
         }
+
+    total_deficit = sum(c["deficit"] for c in data.values())
+    total_buffer_booklets = sum(c["buffer_booklets"] for c in data.values())
+    total_target_production = sum(c["target_production"] for c in data.values())
+    total_sheets_needed = sum(c["sheets_needed"] for c in data.values())
+    total_reams_to_procure = math.ceil(total_sheets_needed / 500) if total_sheets_needed > 0 else 0
+    total_sheets_procured = total_reams_to_procure * 500
+    excess_sheets = max(0, total_sheets_procured - total_sheets_needed)
+    excess_booklets_yield = excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
 
     return {
         "status": "success",
@@ -2276,7 +2716,15 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         "yield_per_ream": yield_per_r,
         "buffer_percent": buffer_pct,
         "courses": data,
-        "total_reams_needed": data["CS"]["reams_needed"] + data["IT"]["reams_needed"]
+        "total_deficit": total_deficit,
+        "total_buffer_booklets": total_buffer_booklets,
+        "total_target_production": total_target_production,
+        "total_sheets_needed": total_sheets_needed,
+        "total_reams_to_procure": total_reams_to_procure,
+        "total_sheets_procured": total_sheets_procured,
+        "excess_sheets": excess_sheets,
+        "excess_booklets_yield": excess_booklets_yield,
+        "total_reams_needed": total_reams_to_procure
     }
 
 @app.get("/api/course-production-metrics")
@@ -2306,23 +2754,44 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 
         settings = db.query(models.SystemSettings).first()
         if period_cfg:
-            sheets_per_b = period_cfg.sheets_per_booklet or 6
-            ream_price = float(period_cfg.ream_price or 250.0)
-            booklet_price = float(period_cfg.booklet_price or 2.50)
+            sheets_per_b = period_cfg.sheets_per_booklet or 0
+            ream_price = float(period_cfg.ream_price or 0.0)
+            booklet_price = float(period_cfg.booklet_price or 0.0)
             department_ream_budget = float(period_cfg.department_ream_budget or 0.0)
+            staples_box_price = float(period_cfg.staples_box_price if period_cfg.staples_box_price is not None else 50.0)
+            staples_per_box = int(period_cfg.staples_per_box if period_cfg.staples_per_box is not None else 1000)
+            staples_per_booklet = int(period_cfg.staples_per_booklet if period_cfg.staples_per_booklet is not None else 2)
         else:
             sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
-            ream_price = float(settings.ream_price or 250.0) if settings else 250.0
-            booklet_price = float(settings.booklet_price or 2.50) if settings else 2.50
+            ream_price = float(settings.ream_price or 0.0) if settings else 0.0
+            booklet_price = float(settings.booklet_price or 0.0) if settings else 0.0
             department_ream_budget = float(settings.department_ream_budget or 0.0) if settings else 0.0
+            staples_box_price = float(settings.staples_box_price if settings and settings.staples_box_price is not None else 50.0)
+            staples_per_box = int(settings.staples_per_box if settings and settings.staples_per_box is not None else 1000)
+            staples_per_booklet = int(settings.staples_per_booklet if settings and settings.staples_per_booklet is not None else 2)
 
         yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
+
+        # Fetch active academic programs
+        active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).order_by(models.AcademicProgram.id.asc()).all()
+        if not active_progs:
+            programs_meta = [
+                {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db"},
+                {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22"}
+            ]
+        else:
+            programs_meta = [
+                {"code": p.code, "name": p.name, "prefix": p.section_prefix, "color": p.color_hex or "#3498db"}
+                for p in active_progs
+            ]
+        prog_codes = [p["code"] for p in programs_meta]
 
         period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == active_period).all()
         total_generated = sum([b.total_yield for b in period_batches])
         reams_converted = sum([b.ream_count for b in period_batches])
-        reams_converted_cs = sum([b.ream_count for b in period_batches if b.department == 'CS'])
-        reams_converted_it = sum([b.ream_count for b in period_batches if b.department == 'IT'])
+        reams_converted_per_dept = {code: sum([b.ream_count for b in period_batches if b.department == code]) for code in prog_codes}
+        reams_converted_cs = reams_converted_per_dept.get("CS", 0)
+        reams_converted_it = reams_converted_per_dept.get("IT", 0)
         total_generated_sheets = sum([b.total_yield * (b.sheets_per_booklet or sheets_per_b) for b in period_batches])
         
         # 2. Math for Reams Distributed
@@ -2336,15 +2805,18 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             models.Booklet.return_reason.like("Misprint / Defect%")
         ).all()
 
-        defective_cs = 0
-        defective_it = 0
+        defective_by_dept = {code: 0 for code in prog_codes}
         for b in defective_booklets:
             if b.enrollment_id:
                 enr_obj = db.query(models.Enrollment).filter(models.Enrollment.id == b.enrollment_id).first()
                 if enr_obj:
-                    dept = "CS" if "BSCS" in enr_obj.section.upper() else ("IT" if "BSIT" in enr_obj.section.upper() else enr_obj.department)
-                    if dept == "CS": defective_cs += 1
-                    elif dept == "IT": defective_it += 1
+                    dept = resolve_enrollment_department(enr_obj, db)
+                    if dept in defective_by_dept:
+                        defective_by_dept[dept] += 1
+                    else:
+                        defective_by_dept[dept] = defective_by_dept.get(dept, 0) + 1
+        defective_cs = defective_by_dept.get("CS", 0)
+        defective_it = defective_by_dept.get("IT", 0)
         defective_count = len(defective_booklets)
         
         # --- 1. LIVE INVENTORY CALCULATION ---
@@ -2368,14 +2840,10 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         trend_data = [daily_counts[d] for d in sorted_dates]
 
         # --- 3. YEAR LEVEL REVENUE & TRANSPARENT COMPUTATIONS ENGINE ---
-        # (booklet_price and ream_price resolved from PeriodConfiguration above)
-
-        cs_count = 0
-        it_count = 0
-        
-        year_level_sales = {"CS": {"1": 0, "2": 0, "3": 0, "4": 0}, "IT": {"1": 0, "2": 0, "3": 0, "4": 0}}
-        comp_records = {"CS": {"1": [], "2": [], "3": [], "4": []}, "IT": {"1": [], "2": [], "3": [], "4": []}}
-        comp_summary = {"CS": {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0}, "IT": {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0}}
+        year_level_sales = {code: {"1": 0, "2": 0, "3": 0, "4": 0} for code in prog_codes}
+        comp_records = {code: {"1": [], "2": [], "3": [], "4": []} for code in prog_codes}
+        comp_summary = {code: {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0} for code in prog_codes}
+        dept_counts = {code: 0 for code in prog_codes}
 
         for enr in enrollments:
             b_count = db.query(models.Booklet).filter(
@@ -2386,12 +2854,13 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 
             if b_count > 0:
                 amount = b_count * booklet_price
-                dept = "CS" if "BSCS" in enr.section.upper() else ("IT" if "BSIT" in enr.section.upper() else None)
-                
-                if dept == "CS": cs_count += b_count
-                if dept == "IT": it_count += b_count
+                dept = resolve_enrollment_department(enr, db)
+                if dept in dept_counts:
+                    dept_counts[dept] += b_count
+                else:
+                    dept_counts[dept] = b_count
 
-                if dept:
+                if dept in year_level_sales:
                     y = next((char for char in enr.section if char.isdigit()), "1")
                     if y in ["1", "2", "3", "4"]:
                         year_level_sales[dept][y] += amount
@@ -2412,51 +2881,59 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                             "amount": amount
                         })
 
-        cs_distributed_sheets = cs_count * sheets_per_b
-        reams_distributed_cs = cs_distributed_sheets // 500
-        loose_distributed_cs = cs_distributed_sheets % 500
-
-        it_distributed_sheets = it_count * sheets_per_b
-        reams_distributed_it = it_distributed_sheets // 500
-        loose_distributed_it = it_distributed_sheets % 500
+        distributed_sheets_by_dept = {code: dept_counts.get(code, 0) * sheets_per_b for code in prog_codes}
+        reams_distributed_by_dept = {code: distributed_sheets_by_dept[code] // 500 for code in prog_codes}
+        loose_distributed_by_dept = {code: distributed_sheets_by_dept[code] % 500 for code in prog_codes}
+        
+        cs_count = dept_counts.get("CS", 0)
+        it_count = dept_counts.get("IT", 0)
+        reams_distributed_cs = reams_distributed_by_dept.get("CS", 0)
+        loose_distributed_cs = loose_distributed_by_dept.get("CS", 0)
+        reams_distributed_it = reams_distributed_by_dept.get("IT", 0)
+        loose_distributed_it = loose_distributed_by_dept.get("IT", 0)
 
         course_metrics = calculate_course_production_metrics(db, active_period)
 
         # --- 4. EXPENDITURE & ROI REPORT (FINANCIALS) ---
-        cs_gross = cs_count * booklet_price
-        it_gross = it_count * booklet_price
-        total_gross = cs_gross + it_gross
+        dept_gross = {code: dept_counts.get(code, 0) * booklet_price for code in prog_codes}
+        total_gross = sum(dept_gross.values())
         
-        cs_share = cs_gross * 0.01
-        it_share = it_gross * 0.01
+        dept_shares = {code: dept_gross[code] * 0.01 for code in prog_codes}
+        total_dept_shares = sum(dept_shares.values())
         
-        combined_subtotal = total_gross - cs_share - it_share
+        cs_gross = dept_gross.get("CS", 0.0)
+        it_gross = dept_gross.get("IT", 0.0)
+        cs_share = dept_shares.get("CS", 0.0)
+        it_share = dept_shares.get("IT", 0.0)
+        
+        combined_subtotal = total_gross - total_dept_shares
         igp_share = combined_subtotal * 0.20
         
-        production_cost = reams_converted * ream_price
+        paper_cost = reams_converted * ream_price
+        total_staples_consumed = total_generated * staples_per_booklet
+        staples_boxes_consumed = round(total_staples_consumed / staples_per_box, 2) if staples_per_box > 0 else 0.0
+        whole_boxes_to_buy = math.ceil(total_staples_consumed / staples_per_box) if total_staples_consumed > 0 and staples_per_box > 0 else 0
+        staples_cost = round((total_staples_consumed / staples_per_box) * staples_box_price, 2) if staples_per_box > 0 else 0.0
+        production_cost = paper_cost + staples_cost
         net_income = combined_subtotal - igp_share - production_cost
         
-        def get_dept(e):
-            sec = (e.section or "").upper()
-            if "BSIT" in sec:
-                return "IT"
-            elif "BSCS" in sec:
-                return "CS"
-            return getattr(e, "department", "CS") or "CS"
+        billed_by_dept = {code: sum(enr.amount_due for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
+        collected_by_dept = {code: sum(enr.amount_paid for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
+        ar_by_dept = {code: sum(max(0.0, enr.amount_due - enr.amount_paid) for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
 
-        cs_billed = sum(enr.amount_due for enr in enrollments if get_dept(enr) == "CS")
-        it_billed = sum(enr.amount_due for enr in enrollments if get_dept(enr) == "IT")
-        total_billed = cs_billed + it_billed
+        cs_billed = billed_by_dept.get("CS", 0.0)
+        it_billed = billed_by_dept.get("IT", 0.0)
+        total_billed = sum(billed_by_dept.values())
 
-        cs_collected = sum(enr.amount_paid for enr in enrollments if get_dept(enr) == "CS")
-        it_collected = sum(enr.amount_paid for enr in enrollments if get_dept(enr) == "IT")
-        total_collected = cs_collected + it_collected
+        cs_collected = collected_by_dept.get("CS", 0.0)
+        it_collected = collected_by_dept.get("IT", 0.0)
+        total_collected = sum(collected_by_dept.values())
 
-        accounts_receivable_cs = sum(max(0.0, enr.amount_due - enr.amount_paid) for enr in enrollments if get_dept(enr) == "CS")
-        accounts_receivable_it = sum(max(0.0, enr.amount_due - enr.amount_paid) for enr in enrollments if get_dept(enr) == "IT")
-        accounts_receivable = accounts_receivable_cs + accounts_receivable_it
+        accounts_receivable_cs = ar_by_dept.get("CS", 0.0)
+        accounts_receivable_it = ar_by_dept.get("IT", 0.0)
+        accounts_receivable = sum(ar_by_dept.values())
 
-        # Department Ream Budget (Cash Allocation in PHP for paper procurement)
+        # Department Material Budget (Cash Allocation in PHP for paper & staples procurement)
         department_ream_budget = float(settings.department_ream_budget or 0.0) if settings else 0.0
         beginning_balance = department_ream_budget
         reams_purchasing_power = int(department_ream_budget // ream_price) if ream_price > 0 else 0
@@ -2468,15 +2945,28 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "accounts_receivable": accounts_receivable,
             "accounts_receivable_cs": accounts_receivable_cs,
             "accounts_receivable_it": accounts_receivable_it,
+            "ar_by_dept": ar_by_dept,
             "cs_billed": cs_billed,
             "it_billed": it_billed,
             "total_billed": total_billed,
+            "billed_by_dept": billed_by_dept,
             "cs_collected": cs_collected,
             "it_collected": it_collected,
             "total_collected": total_collected,
+            "collected_by_dept": collected_by_dept,
             "accounts_payable": igp_share,
+            "paper_cost": paper_cost,
+            "staples_cost": staples_cost,
             "production_cost": production_cost,
+            "staples_box_price": staples_box_price,
+            "staples_per_box": staples_per_box,
+            "staples_per_booklet": staples_per_booklet,
+            "total_staples_consumed": total_staples_consumed,
+            "staples_boxes_consumed": staples_boxes_consumed,
+            "whole_boxes_to_buy": whole_boxes_to_buy,
             "gross_revenue": total_gross,
+            "dept_gross": dept_gross,
+            "dept_shares": dept_shares,
             "cs_gross": cs_gross,
             "it_gross": it_gross,
             "cs_share": cs_share,
@@ -2489,30 +2979,44 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "reorder_buffer_percent": float(course_metrics["buffer_percent"])
         }
 
+        # Department chart counts
+        dept_chart_counts = {code: dept_counts.get(code, 0) for code in prog_codes}
+        dept_chart_counts["Other"] = max(0, total_issued - sum(dept_counts.values()))
+
         return {
             "status": "success",
             "active_period": active_period,
+            "programs": programs_meta,
+            "defective_by_dept": defective_by_dept,
+            "issued_by_dept": dept_counts,
+            "revenue_by_dept": dept_gross,
+            "dept_shares": dept_shares,
             "sheets_per_booklet": sheets_per_b,
             "yield_per_ream": yield_per_r,
             "kpi": {
                 "reams_converted": reams_converted,
+                "reams_converted_per_dept": reams_converted_per_dept,
                 "reams_converted_cs": reams_converted_cs,
                 "reams_converted_it": reams_converted_it,
                 "total_generated": total_generated,
                 "total_generated_sheets": total_generated_sheets,
                 "reams_distributed": reams_distributed,
+                "reams_distributed_per_dept": reams_distributed_by_dept,
                 "reams_distributed_cs": reams_distributed_cs,
                 "reams_distributed_it": reams_distributed_it,
                 "loose_distributed": loose_distributed,
+                "loose_distributed_per_dept": loose_distributed_by_dept,
                 "loose_distributed_cs": loose_distributed_cs,
                 "loose_distributed_it": loose_distributed_it,
                 "usage_display": f"{reams_distributed} Ream(s) and {loose_distributed} paper sheets",
                 "whole_reams_to_buy": math.ceil(total_distributed_sheets / 500) if total_distributed_sheets > 0 else 0,
                 "issued": total_issued,
+                "issued_per_dept": dept_counts,
                 "issued_cs": cs_count,
                 "issued_it": it_count,
                 "defective": defective_count,
                 "defective_breakdown": {
+                    **defective_by_dept,
                     "cs": defective_cs,
                     "it": defective_it,
                     "total": defective_count
@@ -2526,16 +3030,19 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 "has_enrollments": bool(len(enrollments) > 0 and total_headcount > 0)
             },
             "charts": {
-                "departments": {"CS": cs_count, "IT": it_count, "Other": max(0, total_issued - (cs_count + it_count))},
-                "defective": {"CS": defective_cs, "IT": defective_it, "Total": defective_count},
+                "departments": dept_chart_counts,
+                "defective": {**defective_by_dept, "CS": defective_cs, "IT": defective_it, "Total": defective_count},
                 "trend": {"labels": trend_labels, "data": trend_data}
             },
             "year_level_sales": year_level_sales,
             "computations_data": {
+                "programs": programs_meta,
                 "records": comp_records,
                 "summary": comp_summary,
                 "sheets_per_booklet": sheets_per_b,
-                "yield_per_ream": yield_per_r
+                "yield_per_ream": yield_per_r,
+                "dept_gross": dept_gross,
+                "dept_shares": dept_shares
             },
             "financials": financials,
             "course_breakdown": course_metrics["courses"],
@@ -2548,6 +3055,14 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 # --- REORDER DECISION EXPERT SYSTEM (Inference Engine) ---
 EXPERT_RULES = [
     {
+        "conditions": lambda facts: facts.get('is_settings_unconfigured', False),
+        "advice": lambda facts: (
+            "⚙️ AWAITING SYSTEM SETTINGS CONFIGURATION: Academic examination period and booklet specifications have not been configured yet. "
+            "Please navigate to System Settings to establish the active examination period, sheets per booklet, and ream pricing before generating procurement recommendations."
+        ),
+        "color": "#f59e0b"
+    },
+    {
         "conditions": lambda facts: not facts.get('has_enrollments', True),
         "advice": lambda facts: (
             "📋 AWAITING CLASS ENROLLMENTS: No academic classes or student headcounts are registered in the system yet. "
@@ -2556,59 +3071,59 @@ EXPERT_RULES = [
         "color": "#475569"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Final' in facts['period'],
+        "conditions": lambda facts: facts.get('total_target_production', 0) > 0 and 'Final' in facts.get('period', ''),
         "advice": lambda facts: (
-            f"⚠️ SEMESTER ENDING (FINAL EXAM): Total demand is short by {facts['pending_demand'] - facts['available_stock']} booklets ({(facts['pending_demand'] - facts['available_stock']) * facts['sheets_per_booklet']} paper sheets). "
-            f"Action: Procure & convert {facts.get('total_reams_needed', __import__('math').ceil((facts['pending_demand'] - facts['available_stock']) / facts['yield_per_ream']))} Ream(s) total — "
-            f"{facts.get('cs_data', {}).get('reams_needed', 0)} Reams for Computer Science (CS) and "
-            f"{facts.get('it_data', {}).get('reams_needed', 0)} Reams for Information Technology (IT). "
-            f"Convert each course under its designated cover template. Do not print extra buffer stock because the semester is ending."
+            f"⚠️ SEMESTER ENDING (FINAL EXAM): Production deficit across courses: {len(facts.get('deficit_courses', []))} course(s) require producing {facts.get('total_target_production', 0)} booklets ({facts.get('total_sheets_needed', 0)} paper sheets). "
+            f"Action: Procure & convert {facts.get('total_reams_to_procure', 0)} Ream(s) total — "
+            f"{facts.get('courses_breakdown_text', '')}. "
+            f"Convert each course under its designated cover template. Do not print excessive buffer as the semester is concluding."
         ),
         "color": "#e74c3c"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Midterm' in facts['period'],
+        "conditions": lambda facts: facts.get('total_target_production', 0) > 0 and 'Midterm' in facts.get('period', ''),
         "advice": lambda facts: (
-            f"🔥 CRITICAL PEAK (MIDTERM EXAM): Total demand is short by {facts['pending_demand'] - facts['available_stock']} booklets ({(facts['pending_demand'] - facts['available_stock']) * facts['sheets_per_booklet']} paper sheets). "
-            f"Action: Procure & convert {facts.get('total_reams_needed', 0)} Ream(s) total — "
-            f"{facts.get('cs_data', {}).get('reams_needed', 0)} Reams for Computer Science (CS) and "
-            f"{facts.get('it_data', {}).get('reams_needed', 0)} Reams for Information Technology (IT) "
-            f"({'exact demand with 0% buffer configured in Settings' if facts.get('buffer_pct', 15) <= 0 else f'includes +{facts.get("buffer_pct", 15):g}% safety buffer configured in Settings'}). "
+            f"🔥 CRITICAL PEAK (MIDTERM EXAM): Production deficit across courses: {len(facts.get('deficit_courses', []))} course(s) require producing {facts.get('total_target_production', 0)} booklets ({facts.get('total_sheets_needed', 0)} paper sheets). "
+            f"Action: Procure & convert {facts.get('total_reams_to_procure', 0)} Ream(s) total — "
+            f"{facts.get('courses_breakdown_text', '')} "
+            f"({'exact demand with 0% buffer configured in Settings' if facts.get('buffer_pct', 0) <= 0 else f'includes +{facts.get("buffer_pct", 0):g}% safety buffer configured in Settings'}). "
             f"Convert each course under its designated cover template to avoid cover mismatch."
         ),
         "color": "#c0392b"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Midyear' in facts['period'],
+        "conditions": lambda facts: facts.get('total_target_production', 0) > 0 and 'Midyear' in facts.get('period', ''),
         "advice": lambda facts: (
-            f"☀️ MIDYEAR TERM: Total demand is short by {facts['pending_demand'] - facts['available_stock']} booklets ({(facts['pending_demand'] - facts['available_stock']) * facts['sheets_per_booklet']} paper sheets). "
-            f"Action: Procure & convert {facts.get('total_reams_needed', 0)} Ream(s) total — "
-            f"{facts.get('cs_data', {}).get('reams_needed', 0)} Reams for Computer Science (CS) and "
-            f"{facts.get('it_data', {}).get('reams_needed', 0)} Reams for Information Technology (IT). "
+            f"☀️ MIDYEAR TERM: Production deficit across courses: {len(facts.get('deficit_courses', []))} course(s) require producing {facts.get('total_target_production', 0)} booklets ({facts.get('total_sheets_needed', 0)} paper sheets). "
+            f"Action: Procure & convert {facts.get('total_reams_to_procure', 0)} Ream(s) total — "
+            f"{facts.get('courses_breakdown_text', '')}. "
             f"Convert each course under its designated cover template as the Midyear term is concluding."
         ),
         "color": "#e67e22"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] < facts['pending_demand'] and 'Prelims' in facts['period'],
+        "conditions": lambda facts: facts.get('total_target_production', 0) > 0 and 'Prelims' in facts.get('period', ''),
         "advice": lambda facts: (
-            f"📉 NORMAL DEFICIT (PRELIMS): Total demand is short by {facts['pending_demand'] - facts['available_stock']} booklets ({(facts['pending_demand'] - facts['available_stock']) * facts['sheets_per_booklet']} paper sheets). "
-            f"Action: Procure & convert {facts.get('total_reams_needed', 0)} Ream(s) total — "
-            f"{facts.get('cs_data', {}).get('reams_needed', 0)} Reams for Computer Science (CS) and "
-            f"{facts.get('it_data', {}).get('reams_needed', 0)} Reams for Information Technology (IT) "
-            f"({'exact demand with 0% buffer configured in Settings' if facts.get('buffer_pct', 5) <= 0 else f'includes +{facts.get("buffer_pct", 5):g}% safety buffer configured in Settings'}). "
+            f"📉 NORMAL DEFICIT (PRELIMS): Production deficit across courses: {len(facts.get('deficit_courses', []))} course(s) require producing {facts.get('total_target_production', 0)} booklets ({facts.get('total_sheets_needed', 0)} paper sheets). "
+            f"Action: Procure & convert {facts.get('total_reams_to_procure', 0)} Ream(s) total — "
+            f"{facts.get('courses_breakdown_text', '')} "
+            f"({'exact demand with 0% buffer configured in Settings' if facts.get('buffer_pct', 0) <= 0 else f'includes +{facts.get("buffer_pct", 0):g}% safety buffer configured in Settings'}). "
             f"Convert each course under its designated cover template."
         ),
         "color": "#e67e22"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] >= facts['pending_demand'] and (facts['available_stock'] - facts['pending_demand']) < 20,
-        "advice": lambda facts: "💡 SAFE BUFFER WARNING: Demand is met, but you have dipped below the safe buffer of 20 booklets. Consider a small reorder batch soon.",
-        "color": "#3498db"
+        "conditions": lambda facts: facts.get('total_target_production', 0) > 0,
+        "advice": lambda facts: (
+            f"📦 PRODUCTION SHORTAGE DETECTED: {len(facts.get('deficit_courses', []))} course(s) require producing {facts.get('total_target_production', 0)} booklets ({facts.get('total_sheets_needed', 0)} paper sheets). "
+            f"Action: Procure & convert {facts.get('total_reams_to_procure', 0)} Ream(s) total — "
+            f"{facts.get('courses_breakdown_text', '')}."
+        ),
+        "color": "#d97706"
     },
     {
-        "conditions": lambda facts: facts['available_stock'] >= facts['pending_demand'] and (facts['available_stock'] - facts['pending_demand']) >= 20,
-        "advice": lambda facts: "✅ INVENTORY HEALTHY: Available stock fully meets pending demand with a safe buffer. No reordering necessary.",
+        "conditions": lambda facts: facts.get('total_target_production', 0) == 0,
+        "advice": lambda facts: "✅ INVENTORY HEALTHY: Available stock and distributed booklets fully satisfy enrolled student headcounts across all courses. No reordering necessary.",
         "color": "#27ae60"
     }
 ]
@@ -2627,14 +3142,51 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
     # Get active period and course breakdown
     period_name = get_active_period(db)
     course_metrics = calculate_course_production_metrics(db, period_name)
-    sheets_per_b = course_metrics["sheets_per_booklet"]
-    yield_per_r = course_metrics["yield_per_ream"]
-    buffer_pct = course_metrics["buffer_percent"]
+    sheets_per_b = course_metrics.get("sheets_per_booklet", 5)
+    yield_per_r = course_metrics.get("yield_per_ream", 100)
+    buffer_pct = course_metrics.get("buffer_percent", 3.0)
     buffer_multiplier = 1.0 + (buffer_pct / 100.0)
     
-    cs_data = course_metrics["courses"]["CS"]
-    it_data = course_metrics["courses"]["IT"]
-    total_reams_needed = course_metrics["total_reams_needed"]
+    courses_dict = course_metrics.get("courses", {})
+    cs_data = courses_dict.get("CS", {})
+    it_data = courses_dict.get("IT", {})
+    
+    total_deficit = course_metrics.get("total_deficit", 0)
+    total_buffer_booklets = course_metrics.get("total_buffer_booklets", 0)
+    total_target_production = course_metrics.get("total_target_production", 0)
+    total_sheets_needed = course_metrics.get("total_sheets_needed", 0)
+    total_reams_to_procure = course_metrics.get("total_reams_to_procure", 0)
+    total_sheets_procured = course_metrics.get("total_sheets_procured", 0)
+    excess_sheets = course_metrics.get("excess_sheets", 0)
+    excess_booklets_yield = course_metrics.get("excess_booklets_yield", 0)
+
+    deficit_courses = [v for v in courses_dict.values() if not v.get("is_satisfied", False)]
+    satisfied_courses = [v for v in courses_dict.values() if v.get("is_satisfied", False)]
+
+    # Dynamic verbal breakdown across deficit courses
+    course_paper_parts = [
+        f"{v.get('paper_required_text', '0 Sheets')} for {v.get('name', k)} ({k})"
+        for k, v in courses_dict.items()
+        if not v.get("is_satisfied", False)
+    ]
+    if len(course_paper_parts) == 0:
+        breakdown_text = "All courses satisfied"
+    elif len(course_paper_parts) == 1:
+        breakdown_text = course_paper_parts[0]
+    else:
+        breakdown_text = ", ".join(course_paper_parts[:-1]) + " and " + course_paper_parts[-1]
+
+    # Check if settings are unconfigured
+    is_period_unset = bool(not period_name or period_name == "UNSET" or "UNSET" in period_name)
+    sys_settings = db.query(models.SystemSettings).first()
+    is_settings_unconfigured = bool(
+        is_period_unset or 
+        not sys_settings or 
+        not sys_settings.sheets_per_booklet or 
+        sys_settings.sheets_per_booklet <= 0 or 
+        not sys_settings.ream_price or 
+        sys_settings.ream_price <= 0
+    )
 
     facts = {
         'available_stock': available_stock,
@@ -2642,15 +3194,27 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
         'total_students': total_students,
         'enrollment_count': enrollment_count,
         'has_enrollments': has_enrollments,
+        'is_settings_unconfigured': is_settings_unconfigured,
         'period': period_name,
         'sheets_per_booklet': sheets_per_b,
         'yield_per_ream': yield_per_r,
         'buffer_pct': buffer_pct,
         'buffer_multiplier': buffer_multiplier,
         'course_metrics': course_metrics,
+        'courses_breakdown_text': breakdown_text,
         'cs_data': cs_data,
         'it_data': it_data,
-        'total_reams_needed': total_reams_needed
+        'total_deficit': total_deficit,
+        'total_buffer_booklets': total_buffer_booklets,
+        'total_target_production': total_target_production,
+        'total_sheets_needed': total_sheets_needed,
+        'total_reams_to_procure': total_reams_to_procure,
+        'total_sheets_procured': total_sheets_procured,
+        'excess_sheets': excess_sheets,
+        'excess_booklets_yield': excess_booklets_yield,
+        'deficit_courses': deficit_courses,
+        'satisfied_courses': satisfied_courses,
+        'total_reams_needed': total_reams_to_procure
     }
     
     # 2. Run Inference Engine
@@ -2664,12 +3228,127 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
             break # Fire only highest priority rule
             
     if not expert_advice:
-        expert_advice.append("System analyzing...")
-        
+        expert_advice.append("System analyzing active period and inventory variables...")
+
+    # 3. Build Structured Recommendation Object for Modern UI
+    if is_settings_unconfigured:
+        status_title = "Awaiting System Settings Configuration"
+        status_type = "standby"
+        badge_color = "#f59e0b"
+        summary_text = "System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet. The Inference Engine is awaiting Administrator setup in Settings before generating procurement orders."
+        action_steps = [
+            "Navigate to System Settings to establish the active examination period and academic year.",
+            "Configure bond paper sheets per booklet, ream acquisition price, and reorder buffer margin.",
+            "Once saved, the Inference Engine will calculate the exact paper reams required for all academic courses."
+        ]
+    elif not has_enrollments:
+        status_title = "Awaiting Class Enrollments"
+        status_type = "standby"
+        badge_color = "#475569"
+        summary_text = "No academic classes or student headcounts are registered in the system yet. The Inference Engine is on standby and will generate reorder recommendations once class enrollments are established."
+        action_steps = [
+            "Navigate to Manage Classes to register instructor sections and student headcounts.",
+            "Verify curriculum subjects and academic program assignments before printing booklets."
+        ]
+    elif total_target_production > 0:
+        if "Final" in period_name:
+            status_title = "Semester Ending (Final Exam)"
+            status_type = "danger"
+            badge_color = "#e74c3c"
+        elif "Midterm" in period_name:
+            status_title = "Critical Peak Demand (Midterm Exam)"
+            status_type = "critical"
+            badge_color = "#c0392b"
+        elif "Midyear" in period_name:
+            status_title = "Midyear Term Demand"
+            status_type = "warning"
+            badge_color = "#e67e22"
+        elif "Prelims" in period_name:
+            status_title = "Normal Deficit (Prelims Exam)"
+            status_type = "warning"
+            badge_color = "#e67e22"
+        else:
+            status_title = "Production Shortage Detected"
+            status_type = "warning"
+            badge_color = "#d97706"
+
+        buf_note = f" (+{buffer_pct:g}% safety buffer included)" if buffer_pct > 0 else ""
+        summary_text = (
+            f"Production needed across {len(deficit_courses)} course(s): Total target of {total_target_production:,} booklets "
+            f"({total_sheets_needed:,} paper sheets){buf_note}. "
+            f"Procure {total_reams_to_procure:,} Ream(s) total from suppliers."
+        )
+
+        action_steps = [
+            f"Procure {total_reams_to_procure:,} Ream(s) of bond paper ({total_sheets_procured:,} sheets total, 500 sheets/ream)."
+        ]
+        for c in deficit_courses:
+            action_steps.append(
+                f"Print & convert {c['target_production']:,} booklets for {c['name']} ({c['code']}) — exact paper: {c['paper_required_text']} ({c['sheets_needed']:,} sheets) using [{c['prefix']}] template."
+            )
+        if excess_sheets > 0:
+            action_steps.append(
+                f"Reserve the remaining {excess_sheets:,} excess paper sheets as buffer stock (yields up to ~{excess_booklets_yield:,} reserve booklets)."
+            )
+        action_steps.append(
+            "Scan and activate generated Master QR packs in Booklet Generator before releasing to instructors."
+        )
+    else:
+        status_title = "Inventory Healthy (All Demands Met)"
+        status_type = "success"
+        badge_color = "#27ae60"
+        summary_text = "Available vault stock and distributed booklets fully satisfy all enrolled student headcounts across all courses. No paper reorders or printing required at this time."
+        action_steps = [
+            "All active courses currently meet or exceed student headcount requirements.",
+            "Monitor ongoing distributions in Live POS and track any dropped or misprinted returns in Distribution History."
+        ]
+
+    course_allocations = [
+        {
+            "code": c["code"],
+            "name": c["name"],
+            "prefix": c["prefix"],
+            "color": c["color"],
+            "headcount": c["headcount"],
+            "distributed": c["distributed"],
+            "available_stock": c["available_stock"],
+            "deficit": c["deficit"],
+            "buffer_booklets": c["buffer_booklets"],
+            "target_production": c["target_production"],
+            "sheets_needed": c["sheets_needed"],
+            "reams_whole": c["reams_whole"],
+            "sheets_remainder": c["sheets_remainder"],
+            "paper_required_text": c["paper_required_text"],
+            "is_satisfied": c["is_satisfied"]
+        }
+        for c in courses_dict.values()
+    ]
+
+    recommendation = {
+        "status_title": status_title,
+        "status_type": status_type,
+        "badge_color": badge_color,
+        "summary": summary_text,
+        "total_reams_to_procure": total_reams_to_procure,
+        "total_sheets_needed": total_sheets_needed,
+        "total_sheets_procured": total_sheets_procured,
+        "excess_sheets": excess_sheets,
+        "excess_booklets_yield": excess_booklets_yield,
+        "total_target_production": total_target_production,
+        "total_deficit": total_deficit,
+        "total_buffer_booklets": total_buffer_booklets,
+        "buffer_pct": buffer_pct,
+        "sheets_per_booklet": sheets_per_b,
+        "active_period": period_name,
+        "course_allocations": course_allocations,
+        "action_steps": action_steps
+    }
+
     return {
         "facts": facts,
         "advice": expert_advice[0],
         "color": advice_color,
+        "recommendation": recommendation,
         "course_production": course_metrics
     }
 
@@ -2773,13 +3452,32 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
         return {"status": "error", "message": "The root 'admin' account role cannot be changed."}
     
     final_dept = "All" if req.role == "Admin" else req.department
+    admin_actor = getattr(req, "updated_by", None) or "Administrator"
     user.role = req.role
     user.department = final_dept
+    user.updated_by = admin_actor
     db.commit()
     db.refresh(user)
     
-    notify_lan_mutation("USER_UPDATED", {"action": "update", "user_id": user_id, "username": user.username}, db=db)
-    return {"status": "success", "message": f"User '{user.username}' updated successfully!"}
+    notify_lan_mutation("USER_UPDATED", {
+        "action": "update",
+        "user_id": user_id,
+        "username": user.username,
+        "role": user.role,
+        "department": final_dept,
+        "updated_by": admin_actor
+    }, db=db)
+    return {
+        "status": "success", 
+        "message": f"User '{user.username}' updated successfully!",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "department": user.department,
+            "updated_by": admin_actor
+        }
+    }
 
 @app.post("/api/users/{user_id}/reset-password")
 def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, db: Session = Depends(get_db)):
@@ -2881,8 +3579,11 @@ class SettingsUpdate(BaseModel):
     active_period: str
     department_ream_budget: Optional[float] = 0.0
     budget_is_manual: Optional[bool] = False
-    reorder_buffer_percent: Optional[float] = 15.0
+    reorder_buffer_percent: Optional[float] = 0.0
     configured_by: Optional[str] = "Administrator"
+    staples_box_price: Optional[float] = 0.00
+    staples_per_box: Optional[int] = 0
+    staples_per_booklet: Optional[int] = 0
 
 @app.get("/settings", response_class=HTMLResponse)
 def get_settings_page(request: Request):
@@ -2907,12 +3608,12 @@ def get_settings(db: Session = Depends(get_db)):
         booklet_p = float(settings.booklet_price) if (settings.booklet_price and settings.booklet_price > 0) else None
         budget = float(settings.department_ream_budget) if (settings.department_ream_budget and settings.department_ream_budget > 0) else None
         buffer_pct = float(settings.reorder_buffer_percent) if (settings.reorder_buffer_percent is not None and settings.reorder_buffer_percent >= 0) else None
-        sem_prefix = settings.current_semester_name if (settings.current_semester_name and settings.current_semester_name != "1STXX") else None
+        sem_prefix = settings.current_semester_name if (settings.current_semester_name and settings.current_semester_name != "") else None
     else:
         sheets_per_b = settings.sheets_per_booklet if (settings.sheets_per_booklet and settings.sheets_per_booklet > 0) else 6
         yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
         leftover = 500 % sheets_per_b if sheets_per_b > 0 else 2
-        ream_p = float(settings.ream_price or 250.0)
+        ream_p = float(settings.ream_price or 0.0)
         booklet_p = float(settings.booklet_price or 0.0)
         budget = float(settings.department_ream_budget or 0.0)
         buffer_pct = float(settings.reorder_buffer_percent if settings.reorder_buffer_percent is not None else 15.0)
@@ -2921,7 +3622,17 @@ def get_settings(db: Session = Depends(get_db)):
     total_demand = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     if yield_per_r and yield_per_r > 0 and total_demand > 0 and ream_p and ream_p > 0:
         recommended_reams = math.ceil(total_demand / yield_per_r)
-        recommended_budget = round(recommended_reams * ream_p, 2)
+        paper_budget = recommended_reams * ream_p
+
+        st_box_price = float(settings.staples_box_price if settings.staples_box_price is not None else 50.0)
+        st_per_box = int(settings.staples_per_box if settings.staples_per_box is not None else 1000)
+        st_per_booklet = int(settings.staples_per_booklet if settings.staples_per_booklet is not None else 2)
+
+        total_staples = total_demand * st_per_booklet
+        staples_boxes = math.ceil(total_staples / st_per_box) if st_per_box > 0 else 0
+        staples_budget = staples_boxes * st_box_price
+
+        recommended_budget = round(paper_budget + staples_budget, 2)
     else:
         recommended_reams = 0
         recommended_budget = 0.0
@@ -2940,6 +3651,9 @@ def get_settings(db: Session = Depends(get_db)):
         "total_demand": total_demand,
         "recommended_reams": recommended_reams,
         "recommended_budget": recommended_budget,
+        "staples_box_price": float(settings.staples_box_price if settings.staples_box_price is not None else 50.0),
+        "staples_per_box": int(settings.staples_per_box if settings.staples_per_box is not None else 1000),
+        "staples_per_booklet": int(settings.staples_per_booklet if settings.staples_per_booklet is not None else 2),
         "is_initialized": not is_unset and bool(booklet_p and booklet_p > 0)
     }
 
@@ -2986,9 +3700,9 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
         else:
             derived_semester_name = f"2ND{end_year}"
     except Exception:
-        derived_semester_name = req.current_semester_name or "1STXX"
+        derived_semester_name = req.current_semester_name or ""
     
-    old_price = float(settings.booklet_price) if settings.booklet_price is not None else 2.50
+    old_price = float(settings.booklet_price) if settings.booklet_price is not None else 0.0
     new_price = float(req.booklet_price)
 
     settings.current_semester_name = derived_semester_name
@@ -2999,6 +3713,9 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     settings.department_ream_budget = float(req.department_ream_budget or 0.0)
     settings.budget_is_manual = bool(req.budget_is_manual)
     settings.reorder_buffer_percent = float(req.reorder_buffer_percent if req.reorder_buffer_percent is not None else 15.0)
+    settings.staples_box_price = float(req.staples_box_price if req.staples_box_price is not None else 50.0)
+    settings.staples_per_box = int(req.staples_per_box if req.staples_per_box is not None else 1000)
+    settings.staples_per_booklet = int(req.staples_per_booklet if req.staples_per_booklet is not None else 2)
 
     # --- ARCHIVE SNAPSHOT IN period_configurations ---
     period_cfg = db.query(models.PeriodConfiguration).filter(
@@ -3016,6 +3733,9 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     period_cfg.department_ream_budget = float(req.department_ream_budget or 0.0)
     period_cfg.budget_is_manual = bool(req.budget_is_manual)
     period_cfg.reorder_buffer_percent = float(req.reorder_buffer_percent if req.reorder_buffer_percent is not None else 15.0)
+    period_cfg.staples_box_price = settings.staples_box_price
+    period_cfg.staples_per_box = settings.staples_per_box
+    period_cfg.staples_per_booklet = settings.staples_per_booklet
     period_cfg.configured_by = req.configured_by or "Administrator"
 
     preserved_count = 0
@@ -3077,6 +3797,9 @@ def list_period_configurations(db: Session = Depends(get_db)):
         "department_ream_budget": c.department_ream_budget,
         "budget_is_manual": c.budget_is_manual,
         "reorder_buffer_percent": c.reorder_buffer_percent,
+        "staples_box_price": float(c.staples_box_price if c.staples_box_price is not None else 50.0),
+        "staples_per_box": int(c.staples_per_box if c.staples_per_box is not None else 1000),
+        "staples_per_booklet": int(c.staples_per_booklet if c.staples_per_booklet is not None else 2),
         "configured_by": c.configured_by,
         "updated_at": c.updated_at.strftime("%Y-%m-%d %H:%M:%S") if c.updated_at else ""
     } for c in configs]
@@ -3092,8 +3815,22 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
     
     if cfg:
         yield_per_r = cfg.yield_per_ream or (500 // cfg.sheets_per_booklet)
-        recommended_reams = math.ceil(total_demand / yield_per_r) if total_demand > 0 and yield_per_r > 0 else 0
-        recommended_budget = round(recommended_reams * cfg.ream_price, 2)
+        if total_demand > 0 and yield_per_r > 0 and cfg.ream_price:
+            recommended_reams = math.ceil(total_demand / yield_per_r)
+            paper_budget = recommended_reams * float(cfg.ream_price)
+
+            st_box_price = float(cfg.staples_box_price if cfg.staples_box_price is not None else 50.0)
+            st_per_box = int(cfg.staples_per_box if cfg.staples_per_box is not None else 1000)
+            st_per_booklet = int(cfg.staples_per_booklet if cfg.staples_per_booklet is not None else 2)
+
+            total_staples = total_demand * st_per_booklet
+            staples_boxes = math.ceil(total_staples / st_per_box) if st_per_box > 0 else 0
+            staples_budget = staples_boxes * st_box_price
+
+            recommended_budget = round(paper_budget + staples_budget, 2)
+        else:
+            recommended_reams = 0
+            recommended_budget = 0.0
         return {
             "found": True,
             "academic_period": cfg.academic_period,
@@ -3105,6 +3842,9 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "department_ream_budget": cfg.department_ream_budget,
             "budget_is_manual": cfg.budget_is_manual,
             "reorder_buffer_percent": cfg.reorder_buffer_percent,
+            "staples_box_price": float(cfg.staples_box_price if cfg.staples_box_price is not None else 50.0),
+            "staples_per_box": int(cfg.staples_per_box if cfg.staples_per_box is not None else 1000),
+            "staples_per_booklet": int(cfg.staples_per_booklet if cfg.staples_per_booklet is not None else 2),
             "configured_by": cfg.configured_by,
             "recommended_budget": recommended_budget,
             "recommended_reams": recommended_reams,
@@ -3120,6 +3860,9 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "booklet_price": None,
             "department_ream_budget": None,
             "reorder_buffer_percent": None,
+            "staples_box_price": 50.0,
+            "staples_per_box": 1000,
+            "staples_per_booklet": 2,
             "recommended_budget": 0.0,
             "recommended_reams": 0,
             "total_demand": total_demand
@@ -3133,6 +3876,173 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
 from pydantic import BaseModel
 class PaymentRequest(BaseModel):
     amount: float
+    recorded_by: Optional[str] = "System Clerk"
+    notes: Optional[str] = None
+
+
+# --- ACADEMIC PROGRAMS CONFIGURATION (Dynamic Multi-Course Engine) ---
+
+@app.get("/api/academic-programs")
+def list_academic_programs(include_inactive: bool = False, db: Session = Depends(get_db)):
+    """Returns all configured academic programs/courses with section prefix identifiers and theme colors."""
+    query = db.query(models.AcademicProgram)
+    if not include_inactive:
+        query = query.filter_by(is_active=True)
+    programs = query.order_by(models.AcademicProgram.id.asc()).all()
+    return {
+        "status": "success",
+        "programs": [
+            {
+                "id": p.id,
+                "code": p.code,
+                "name": p.name,
+                "section_prefix": p.section_prefix,
+                "color_hex": p.color_hex or "#3498db",
+                "is_active": p.is_active,
+                "created_at": p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else "",
+                "updated_at": p.updated_at.strftime("%Y-%m-%d %H:%M:%S") if p.updated_at else ""
+            }
+            for p in programs
+        ]
+    }
+
+@app.post("/api/academic-programs")
+def create_academic_program(prog: schemas.AcademicProgramCreate, db: Session = Depends(get_db)):
+    """Registers a new academic program with code, full name, section naming prefix, and visual color."""
+    code_clean = prog.code.strip().upper()
+    name_clean = prog.name.strip()
+    prefix_clean = prog.section_prefix.strip().upper()
+    color_clean = (prog.color_hex or "#3498db").strip()
+
+    if not code_clean:
+        raise HTTPException(status_code=400, detail="Course Code is required (e.g. 'IM', 'CPE').")
+    if not name_clean:
+        raise HTTPException(status_code=400, detail="Full Course Name is required (e.g. 'Information Management').")
+    if not prefix_clean:
+        raise HTTPException(status_code=400, detail="Section Naming Identifier Prefix is required (e.g. 'BSIM').")
+
+    # Check for existing duplicate code
+    existing_code = db.query(models.AcademicProgram).filter(
+        func.upper(models.AcademicProgram.code) == code_clean
+    ).first()
+    if existing_code:
+        if not existing_code.is_active:
+            # Reactivate if it was previously deactivated
+            existing_code.is_active = True
+            existing_code.name = name_clean
+            existing_code.section_prefix = prefix_clean
+            existing_code.color_hex = color_clean
+            db.commit()
+            ensure_program_template_slots(code_clean, db)
+            notify_lan_mutation("PROGRAM_UPDATED", {"code": code_clean, "action": "reactivate"}, db=db)
+            return {"status": "success", "message": f"Program '{code_clean}' reactivated successfully!", "id": existing_code.id}
+        raise HTTPException(status_code=400, detail=f"Course Code '{code_clean}' already exists.")
+
+    # Check for duplicate prefix
+    existing_prefix = db.query(models.AcademicProgram).filter(
+        func.upper(models.AcademicProgram.section_prefix) == prefix_clean
+    ).first()
+    if existing_prefix and existing_prefix.is_active:
+        raise HTTPException(status_code=400, detail=f"Section Prefix '{prefix_clean}' is already assigned to {existing_prefix.name} ({existing_prefix.code}).")
+
+    new_prog = models.AcademicProgram(
+        code=code_clean,
+        name=name_clean,
+        section_prefix=prefix_clean,
+        color_hex=color_clean,
+        is_active=True
+    )
+    db.add(new_prog)
+    db.commit()
+    db.refresh(new_prog)
+
+    # Immediately ensure 3 booklet template config slots are generated for this new department
+    ensure_program_template_slots(code_clean, db)
+
+    notify_lan_mutation("PROGRAM_CREATED", {"code": code_clean, "name": name_clean}, db=db)
+    return {
+        "status": "success",
+        "message": f"Academic Course '{name_clean} ({code_clean})' registered successfully with section prefix '{prefix_clean}'!",
+        "program": {
+            "id": new_prog.id,
+            "code": new_prog.code,
+            "name": new_prog.name,
+            "section_prefix": new_prog.section_prefix,
+            "color_hex": new_prog.color_hex,
+            "is_active": new_prog.is_active
+        }
+    }
+
+@app.put("/api/academic-programs/{prog_id}")
+def update_academic_program(prog_id: int, prog: schemas.AcademicProgramUpdate, db: Session = Depends(get_db)):
+    """Updates academic program metadata (name, section prefix, color, or active status)."""
+    item = db.query(models.AcademicProgram).filter(models.AcademicProgram.id == prog_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Academic program not found.")
+
+    if prog.name is not None and prog.name.strip():
+        item.name = prog.name.strip()
+    if prog.section_prefix is not None and prog.section_prefix.strip():
+        pref = prog.section_prefix.strip().upper()
+        # Verify no collision with other active programs
+        collision = db.query(models.AcademicProgram).filter(
+            func.upper(models.AcademicProgram.section_prefix) == pref,
+            models.AcademicProgram.id != prog_id,
+            models.AcademicProgram.is_active == True
+        ).first()
+        if collision:
+            raise HTTPException(status_code=400, detail=f"Section Prefix '{pref}' is already in use by {collision.name} ({collision.code}).")
+        item.section_prefix = pref
+    if prog.color_hex is not None and prog.color_hex.strip():
+        item.color_hex = prog.color_hex.strip()
+    if prog.is_active is not None:
+        item.is_active = bool(prog.is_active)
+
+    db.commit()
+    notify_lan_mutation("PROGRAM_UPDATED", {"id": prog_id, "code": item.code}, db=db)
+    return {"status": "success", "message": f"Program '{item.code}' updated successfully!"}
+
+@app.delete("/api/academic-programs/{prog_id}")
+def delete_academic_program(prog_id: int, db: Session = Depends(get_db)):
+    """Safely deactivates or removes an academic program while preserving relational integrity."""
+    item = db.query(models.AcademicProgram).filter(models.AcademicProgram.id == prog_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Academic program not found.")
+
+    # Prevent deleting core defaults CS or IT if they are the only two
+    total_active = db.query(models.AcademicProgram).filter_by(is_active=True).count()
+    if total_active <= 1:
+        raise HTTPException(status_code=400, detail="Cannot deactivate the last remaining academic program. The system must have at least one active course.")
+
+    # Referential check: are there classes or booklet batches tied to this department?
+    has_enrollments = db.query(models.Enrollment).filter(models.Enrollment.department == item.code).count()
+    has_batches = db.query(models.MasterBatch).filter(models.MasterBatch.department == item.code).count()
+    has_users = db.query(models.User).filter(models.User.department == item.code).count()
+
+    if has_enrollments > 0 or has_batches > 0 or has_users > 0:
+        # Soft-deactivate for audit & historical ledger safety
+        item.is_active = False
+        db.commit()
+        notify_lan_mutation("PROGRAM_UPDATED", {"id": prog_id, "code": item.code, "action": "deactivated"}, db=db)
+        return {
+            "status": "success",
+            "message": f"Program '{item.code}' has active transactions or enrollments, so it was safely deactivated instead of deleted. Historical reports remain preserved.",
+            "action": "deactivated"
+        }
+    else:
+        # Clean hard delete
+        code_deleted = item.code
+        # Also clean up unconfigured template slots for this department
+        db.query(models.BookletTemplateConfig).filter(models.BookletTemplateConfig.department == code_deleted).delete()
+        db.delete(item)
+        db.commit()
+        notify_lan_mutation("PROGRAM_DELETED", {"id": prog_id, "code": code_deleted}, db=db)
+        return {
+            "status": "success",
+            "message": f"Academic Program '{code_deleted}' removed successfully.",
+            "action": "deleted"
+        }
+
 
 @app.get("/payment-tracking", response_class=HTMLResponse)
 def payment_tracking_page(request: Request):
@@ -3145,6 +4055,38 @@ def department_breakdown_page(request: Request):
 @app.get("/expenditure-report", response_class=HTMLResponse)
 def expenditure_report_page(request: Request):
     return templates.TemplateResponse("expenditure_report.html", {"request": request})
+
+def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_booklet=None):
+    """
+    Ensures that any amount_paid on an enrollment is fully accounted for in payment_records.
+    If an enrollment has amount_paid > sum(recorded payments), auto-creates and persists
+    the missing PaymentRecord row in MySQL.
+    """
+    logged_sum = sum(round(pr.amount, 2) for pr in (enr.payment_records or []))
+    unlogged_diff = round((enr.amount_paid or 0.0) - logged_sum, 2)
+    if unlogged_diff > 0:
+        if first_booklet and first_booklet.date_distributed:
+            dist_dt = first_booklet.date_distributed
+        else:
+            fb = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).order_by(models.Booklet.date_distributed.asc()).first()
+            dist_dt = fb.date_distributed if (fb and fb.date_distributed) else datetime.now()
+        
+        balance_after = round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2)
+        backfill_record = models.PaymentRecord(
+            enrollment_id=enr.id,
+            amount=unlogged_diff,
+            balance_after=balance_after,
+            payment_date=dist_dt,
+            recorded_by="System Clerk",
+            notes="Initial / Reconciled Payment"
+        )
+        db.add(backfill_record)
+        db.commit()
+        db.refresh(enr)
+
 
 @app.get("/api/payment-tracking")
 def get_payment_tracking(department: str = "ALL", db: Session = Depends(get_db)):
@@ -3185,6 +4127,22 @@ def get_payment_tracking(department: str = "ALL", db: Session = Depends(get_db))
             dist_date_str = dist_date.strftime("%Y-%m-%d") if dist_date else ""
             dist_date_display = dist_date.strftime("%d-%b-%Y") if dist_date else "N/A"
 
+            # Reconcile any unlogged payments into database
+            reconcile_enrollment_payments(enr, db, first_booklet=first_booklet)
+
+            # Serialize payment installments audit trail
+            payments_list = []
+            for pr in enr.payment_records:
+                payments_list.append({
+                    "id": pr.id,
+                    "amount": round(pr.amount, 2),
+                    "balance_after": round(pr.balance_after, 2),
+                    "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
+                    "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
+                    "recorded_by": pr.recorded_by or "System Clerk",
+                    "notes": pr.notes or ""
+                })
+
             data.append({
                 "id": enr.id,
                 "teacher_name": enr.teacher_name,
@@ -3200,7 +4158,8 @@ def get_payment_tracking(department: str = "ALL", db: Session = Depends(get_db))
                 "loose_returned": loose_returned,
                 "booklet_price": effective_price,
                 "distribution_date": dist_date_str,
-                "date_display": dist_date_display
+                "date_display": dist_date_display,
+                "payments": payments_list
             })
         return {"status": "success", "data": data}
     except Exception as e:
@@ -3223,7 +4182,9 @@ def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depen
                 "message": f"Payment amount (₱{req.amount:,.2f}) exceeds the outstanding balance (₱{remaining_balance:,.2f}). Overpayment is not allowed."
             }
             
-        enrollment.amount_paid += req.amount
+        new_amount_paid = enrollment.amount_paid + req.amount
+        new_balance = round(max(0.0, enrollment.amount_due - new_amount_paid), 2)
+        enrollment.amount_paid = new_amount_paid
         
         # Recalculate status
         if enrollment.amount_paid >= enrollment.amount_due:
@@ -3233,18 +4194,74 @@ def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depen
         else:
             enrollment.payment_status = "Unpaid"
             
+        # Create and persist audit record
+        payment_record = models.PaymentRecord(
+            enrollment_id=enrollment.id,
+            amount=round(req.amount, 2),
+            balance_after=new_balance,
+            payment_date=datetime.now(),
+            recorded_by=req.recorded_by or "System Clerk",
+            notes=req.notes or ""
+        )
+        db.add(payment_record)
         db.commit()
+        db.refresh(payment_record)
+
         notify_lan_mutation("PAYMENT_RECORDED", {
             "enrollment_id": enrollment_id,
             "amount": req.amount,
-            "status": enrollment.payment_status
+            "balance_after": new_balance,
+            "status": enrollment.payment_status,
+            "recorded_by": payment_record.recorded_by,
+            "payment_date": payment_record.payment_date.strftime("%Y-%m-%d %H:%M:%S")
         }, db=db)
-        return {"status": "success", "message": "Payment recorded successfully."}
+        return {
+            "status": "success", 
+            "message": "Payment recorded successfully.",
+            "payment_id": payment_record.id,
+            "balance_after": new_balance,
+            "payment_status": enrollment.payment_status
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 # ==========================================
+
+@app.get("/api/enrollments/{enrollment_id}/payment-history")
+def get_enrollment_payment_history(enrollment_id: int, db: Session = Depends(get_db)):
+    try:
+        enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == enrollment_id).first()
+        if not enrollment:
+            return {"status": "error", "message": "Enrollment not found."}
+        
+        reconcile_enrollment_payments(enrollment, db)
+        
+        payments_list = []
+        for pr in enrollment.payment_records:
+            payments_list.append({
+                "id": pr.id,
+                "amount": round(pr.amount, 2),
+                "balance_after": round(pr.balance_after, 2),
+                "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
+                "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
+                "recorded_by": pr.recorded_by or "System Clerk",
+                "notes": pr.notes or ""
+            })
+        return {
+            "status": "success",
+            "enrollment_id": enrollment.id,
+            "teacher_name": enrollment.teacher_name,
+            "amount_due": enrollment.amount_due,
+            "amount_paid": enrollment.amount_paid,
+            "balance": round(max(0.0, enrollment.amount_due - enrollment.amount_paid), 2),
+            "payment_status": enrollment.payment_status,
+            "payments": payments_list
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # PRIORITY 5: BOOKLET TEMPLATE CUSTOMIZATION
 # ==========================================
 
@@ -3254,9 +4271,11 @@ def get_booklet_template_page(request: Request):
 
 @app.get("/api/booklet-template/status")
 def get_booklet_template_status(db: Session = Depends(get_db)):
-    """Returns the configuration readiness of all 3 slots for both CS and IT booklet cover templates."""
+    """Returns the configuration readiness of all 3 slots across all registered academic programs."""
     status_dict = {}
-    for dept in ["CS", "IT"]:
+    active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).order_by(models.AcademicProgram.id.asc()).all()
+    depts = [p.code for p in active_progs] if active_progs else ["CS", "IT"]
+    for dept in depts:
         slots_info = []
         has_any_configured = False
         for s in [1, 2, 3]:
@@ -3271,7 +4290,11 @@ def get_booklet_template_status(db: Session = Depends(get_db)):
 
             # Stamped proof image path (authentic printed copy with numbers & QR)
             proof_png_path = f"static/front_page_pdfs/template_preview_{dept}_slot{s}_proof.png"
-            if has_file and not os.path.exists(proof_png_path):
+            needs_regen = has_file and (
+                not os.path.exists(proof_png_path) or 
+                (raw_pdf and os.path.exists(raw_pdf) and os.path.getmtime(raw_pdf) > os.path.getmtime(proof_png_path))
+            )
+            if needs_regen:
                 try:
                     generate_sample_preview_pdf(department=dept, slot=s, config=cfg, db=db)
                 except Exception as e:
@@ -3312,8 +4335,9 @@ def get_booklet_template_status(db: Session = Depends(get_db)):
 @app.get("/api/booklet-template")
 def get_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
     dept = (department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
+    valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_codes and dept not in valid_codes:
+        dept = valid_codes[0]
     try:
         slot_num = int(slot)
         if slot_num not in [1, 2, 3]:
@@ -3372,8 +4396,9 @@ def get_booklet_template_api(department: str = "CS", slot: int = 1, db: Session 
 @app.post("/api/booklet-template")
 def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session = Depends(get_db)):
     dept = (req.department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
+    valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_codes and dept not in valid_codes:
+        dept = valid_codes[0]
     try:
         slot_num = int(req.slot_number or 1)
         if slot_num not in [1, 2, 3]:
@@ -3437,8 +4462,9 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
 @app.post("/api/booklet-template/upload")
 async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, file: UploadFile = File(...), db: Session = Depends(get_db)):
     dept = (department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
+    valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_codes and dept not in valid_codes:
+        dept = valid_codes[0]
     try:
         slot_num = int(slot)
         if slot_num not in [1, 2, 3]:
@@ -3491,8 +4517,9 @@ async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, fil
 @app.get("/api/booklet-template/preview")
 def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
     dept = (department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
+    valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_codes and dept not in valid_codes:
+        dept = valid_codes[0]
     try:
         slot_num = int(slot)
         if slot_num not in [1, 2, 3]:
@@ -3516,8 +4543,9 @@ def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Sess
 @app.post("/api/booklet-template/delete")
 def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
     dept = (department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
+    valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+    if valid_codes and dept not in valid_codes:
+        dept = valid_codes[0]
     try:
         slot_num = int(slot)
         if slot_num not in [1, 2, 3]:

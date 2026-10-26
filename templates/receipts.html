@@ -22,18 +22,30 @@
             position: fixed; 
             top: 0; 
             left: 0; 
+            right: 0; /* Added to ensure full stretch */
             width: 100%; 
+            box-sizing: border-box;
             z-index: 2000; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
 
         /* Public Header (Desktop) */
-        .header { background-color: #2c3e50; color: white; padding: 20px 40px; text-align: center; }
+        .header { background-color: #2c3e50; color: white; padding: 20px 40px; text-align: center; width: 100%; }
         .header h1 { font-size: 1.5rem; margin: 0; letter-spacing: 1px; }
 
         /* Main Container */
         .container { flex: 1; padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
-        .card { background: white; padding: 30px; width: max-content; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        /* FIX: Changed width to 100% and added margin: 0 auto to center it properly */
+        .card { 
+            background: white; 
+            padding: 30px; 
+            width: 100%; 
+            margin: 0 auto; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            overflow-x: auto; /* Keeps table from breaking container */
+        }
 
         /* Card Header (Title & Buttons Layout) */
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 25px; flex-wrap: wrap; gap: 15px; }
@@ -56,7 +68,7 @@
         .date-range-group input[type="date"] { flex: 1; width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
 
         /* Table Styles */
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
         th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
         th { background-color: #f8f9fa; color: #2c3e50; text-transform: uppercase; font-size: 0.85rem; }
         tr:hover { background-color: #f1f2f6; }
@@ -97,12 +109,9 @@
             /* 3. Push the rest of the page down so it doesn't hide behind the new fixed bar */
             body { padding-top: 60px; min-height: 100vh; min-height: 100dvh; }
             .container { padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; }
-            
-            /* Keeping your exact original card size rules */
-            .card { width: max-content; margin: 0 auto; }
         }
 
-            @media (max-width: 900px) { .mobile-hide { display: none !important; } }
+        @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
@@ -127,6 +136,7 @@
                     <p>Use the filters below to locate and download your official acknowledgement receipt.</p>
                 </div>
                 <div class="card-actions">
+                    <a href="/transaction-profile" class="btn-action-top" style="background-color: #2980b9; color: white; text-decoration: none;" title="View Overall Instructor Balances & Profiles">👤 Instructor Overall Profiles</a>
                     <a href="/distribution" id="backBtn" class="btn-action-top" style="background-color: #f39c12; color: white; text-decoration: none; display: none;">⬅ Back to Distribution</a>
                     <button class="btn-action-top btn-clear" onclick="clearFilters()" title="Clear all search filters">❌ Clear Filters</button>
                     <button class="btn-action-top btn-refresh" onclick="refreshData()" title="Pull latest records from server">🔄 Refresh Data</button>
@@ -148,9 +158,7 @@
                 </select>
 
                 <select id="filterDept" onchange="onDeptChange()">
-                    <option value="">-- All Departments --</option>
-                    <option value="CS">Computer Science (CS)</option>
-                    <option value="IT">Information Technology (IT)</option>
+                    <option value="">-- All Departments / Courses --</option>
                 </select>
 
                 <select id="filterSection" onchange="applyFilters()">
@@ -158,21 +166,23 @@
                 </select>
             </div>
 
-            <table id="receiptsTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Instructor</th>
-                        <th>Section</th>
-                        <th>Subject</th>
-                        <th>Qty</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>
-                </tbody>
-            </table>
+            <div style="overflow-x: auto;">
+                <table id="receiptsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Instructor</th>
+                            <th>Section</th>
+                            <th>Subject</th>
+                            <th>Qty</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -231,10 +241,49 @@
                     <ul id="r-log" style="list-style-type: none; padding-left: 20px; margin: 5px 0; font-family: monospace; font-size: 1rem; color: #333;"></ul>
                 </div>
 
-                <!-- FINANCIAL SUMMARY -->
-                <div style="border: 2px solid #000; margin-bottom: 10px;">
-                    <div style="padding: 10px 15px; font-size: 1.3rem; font-weight: bold;" id="r-payment-box">
-                        <span id="r-payment-icon">☑</span> Payment Status: <span id="r-payment-status">FULLY PAID</span>
+                <!-- FINANCIAL SUMMARY & REMAINING BALANCE -->
+                <div style="border: 2px solid #000; margin-bottom: 15px; padding: 12px 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #7f8c8d; padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <div style="font-size: 1.2rem; font-weight: bold;" id="r-payment-box">
+                            <span id="r-payment-icon">☑</span> Payment Status: <span id="r-payment-status">FULLY PAID</span>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; font-size: 0.95rem; text-align: center;">
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                            <div style="color: #555; font-size: 0.8rem; text-transform: uppercase;">Amount Due</div>
+                            <div style="font-size: 1.15rem; font-weight: bold; color: #2c3e50;" id="r-amount-due-box">₱0.00</div>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                            <div style="color: #555; font-size: 0.8rem; text-transform: uppercase;">Amount Paid</div>
+                            <div style="font-size: 1.15rem; font-weight: bold; color: #27ae60;" id="r-amount-paid-box">₱0.00</div>
+                        </div>
+                        <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                            <div style="color: #555; font-size: 0.8rem; text-transform: uppercase;">Remaining Balance</div>
+                            <div style="font-size: 1.15rem; font-weight: bold;" id="r-balance-box">₱0.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INSTALLMENT PAYMENT AUDIT TRAIL (WHEN DID THEY PAY) -->
+                <div style="margin-bottom: 15px; font-size: 0.95rem;" id="r-payment-history-section">
+                    <h3 style="margin: 0 0 6px 0; font-size: 1.05rem; border-bottom: 1px solid #000; padding-bottom: 4px;">
+                        💰 Payment Installments Audit Trail
+                    </h3>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;" id="r-payment-history-table">
+                            <thead>
+                                <tr style="border-bottom: 1px solid #333; background: #f1f2f6;">
+                                    <th style="padding: 6px; text-align: left;">Date &amp; Time</th>
+                                    <th style="padding: 6px; text-align: right;">Amount Paid</th>
+                                    <th style="padding: 6px; text-align: right;">Balance After</th>
+                                    <th style="padding: 6px; text-align: left;">Received By</th>
+                                    <th style="padding: 6px; text-align: left;">Notes / Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody id="r-payment-history-body">
+                                <tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 8px;">No installment records</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -254,7 +303,13 @@
     </div>
 
 <script>
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     let globalReceipts = [];
+    let globalPrograms = [];
     let globalBookletPrice = 2.50;
     let allSections = [];
 
@@ -282,9 +337,12 @@
                     if (data.booklet_price !== undefined) {
                         globalBookletPrice = parseFloat(data.booklet_price) || 2.50;
                     }
+                    if (data.programs) {
+                        globalPrograms = data.programs;
+                    }
 
                     // SORT NEWEST FIRST
-                    globalReceipts = data.data.sort((a, b) => {
+                    globalReceipts = (data.data || []).sort((a, b) => {
                         return new Date(b.date) - new Date(a.date);
                     });
 
@@ -300,13 +358,11 @@
     }
 
     function refreshData() {
-        // Clear all inputs then pull fresh data from DB
         clearFilterInputs();
         fetchData();
     }
 
     function clearFilters() {
-        // Just clear the UI inputs and reset the view instantly (no network call)
         clearFilterInputs();
         updateSectionDropdown(""); 
         applyFilters();
@@ -326,11 +382,23 @@
 
         teacherSelect.innerHTML = '<option value="">-- All Instructors --</option>';
         uniqueTeachers.forEach(t => {
-            teacherSelect.innerHTML += `<option value="${t}">${t}</option>`;
+            teacherSelect.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`;
         });
 
+        // Dynamic Department / Course dropdown
+        const deptSelect = document.getElementById('filterDept');
+        if (deptSelect) {
+            const curDept = deptSelect.value;
+            let deptHtml = '<option value="">-- All Departments / Courses --</option>';
+            globalPrograms.forEach(p => {
+                deptHtml += `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`;
+            });
+            deptSelect.innerHTML = deptHtml;
+            if (curDept) deptSelect.value = curDept;
+        }
+
         allSections = [...new Set(globalReceipts.map(item => item.section))].sort();
-        updateSectionDropdown("");
+        updateSectionDropdown(deptSelect ? deptSelect.value : "");
     }
 
     function onDeptChange() {
@@ -346,14 +414,17 @@
 
         let filteredSections = allSections;
 
-        if (dept === 'CS') {
-            filteredSections = allSections.filter(s => s.toUpperCase().includes('BSCS'));
-        } else if (dept === 'IT') {
-            filteredSections = allSections.filter(s => s.toUpperCase().includes('BSIT'));
+        if (dept) {
+            const prog = globalPrograms.find(p => p.code === dept);
+            const prefix = prog ? (prog.section_prefix || prog.code).toUpperCase() : dept.toUpperCase();
+            filteredSections = allSections.filter(s => {
+                const sUpper = s.toUpperCase();
+                return sUpper.includes(prefix) || globalReceipts.some(r => r.section === s && r.department === dept);
+            });
         }
 
         filteredSections.forEach(s => {
-            sectionSelect.innerHTML += `<option value="${s}">${s}</option>`;
+            sectionSelect.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
         });
     }
 
@@ -369,10 +440,10 @@
         // Apply Date Range Logic
         if (startDateVal || endDateVal) {
             let startObj = startDateVal ? new Date(startDateVal) : null;
-            if (startObj) startObj.setHours(0, 0, 0, 0); // Start of the day
+            if (startObj) startObj.setHours(0, 0, 0, 0);
 
             let endObj = endDateVal ? new Date(endDateVal) : null;
-            if (endObj) endObj.setHours(23, 59, 59, 999); // End of the day
+            if (endObj) endObj.setHours(23, 59, 59, 999);
 
             filtered = filtered.filter(row => {
                 const rowDateObj = new Date(row.date); 
@@ -391,10 +462,12 @@
         if (teacher) {
             filtered = filtered.filter(row => row.teacher === teacher);
         }
-        if (dept === 'CS') {
-            filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
-        } else if (dept === 'IT') {
-            filtered = filtered.filter(row => row.section.toUpperCase().includes('BSIT'));
+        if (dept) {
+            const prog = globalPrograms.find(p => p.code === dept);
+            const prefix = prog ? (prog.section_prefix || prog.code).toUpperCase() : dept.toUpperCase();
+            filtered = filtered.filter(row => {
+                return (row.department && row.department === dept) || row.section.toUpperCase().includes(prefix);
+            });
         }
         if (section) {
             filtered = filtered.filter(row => row.section === section);
@@ -417,10 +490,14 @@
 
             let tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${row.date}</td>
-                <td><strong>${row.teacher}</strong></td>
-                <td>${row.section}</td>
-                <td>${row.subject}</td>
+                <td>${escapeHtml(row.date)}</td>
+                <td>
+                    <a href="/transaction-profile?instructor=${encodeURIComponent(row.teacher)}" style="color: #2c3e50; text-decoration: underline; font-weight: bold;" title="Click to view full instructor transaction profile & statement">
+                        ${escapeHtml(row.teacher)}
+                    </a>
+                </td>
+                <td>${escapeHtml(row.section)}</td>
+                <td>${escapeHtml(row.subject)}</td>
                 <td>${row.qty} pcs</td>
                 <td><button class="btn-view" onclick="openReceipt(${globalIndex})">View Receipt</button></td>
             `;
@@ -445,8 +522,26 @@
 
         document.getElementById('r-qty-table').innerText = data.qty;
         document.getElementById('r-amount-table').innerText = data.amount.toFixed(2);
-
         document.getElementById('r-total-issued').innerText = data.qty;
+
+        // Financial Breakdown: Due, Paid, Remaining Balance
+        const due = data.amount_due !== undefined ? parseFloat(data.amount_due) : parseFloat(data.amount);
+        const paid = data.amount_paid !== undefined ? parseFloat(data.amount_paid) : 0.0;
+        
+        // FIX: Replaced newline calculation error with `due - paid`
+        const balance = data.balance !== undefined ? parseFloat(data.balance) : Math.max(0.0, due - paid); 
+
+        const dueEl = document.getElementById('r-amount-due-box');
+        if (dueEl) dueEl.innerText = `₱${due.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        const paidEl = document.getElementById('r-amount-paid-box');
+        if (paidEl) paidEl.innerText = `₱${paid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        const balEl = document.getElementById('r-balance-box');
+        if (balEl) {
+            balEl.innerText = `₱${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            balEl.style.color = balance <= 0 ? '#27ae60' : '#e74c3c';
+        }
 
         // Dynamic Payment Status Display
         const status = data.payment_status || "Unpaid";
@@ -460,15 +555,32 @@
                 iconEl.innerText = "☑";
                 boxEl.style.color = "#27ae60";
             } else if (status === "Partially Paid") {
-                const paid = data.amount_paid !== undefined ? data.amount_paid.toFixed(2) : "0.00";
-                const due = data.amount_due !== undefined ? data.amount_due.toFixed(2) : data.amount.toFixed(2);
-                statusEl.innerText = `PARTIALLY PAID (₱${paid} / ₱${due})`;
+                statusEl.innerText = `PARTIALLY PAID (₱${paid.toFixed(2)} / ₱${due.toFixed(2)})`;
                 iconEl.innerText = "⏳";
                 boxEl.style.color = "#d35400";
             } else {
                 statusEl.innerText = "UNPAID (PENDING COLLECTION)";
                 iconEl.innerText = "⚠️";
                 boxEl.style.color = "#c0392b";
+            }
+        }
+
+        // Render payment installments audit trail
+        const historyTbody = document.getElementById('r-payment-history-body');
+        if (historyTbody) {
+            const payments = data.payments || [];
+            if (payments.length === 0) {
+                historyTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 10px; font-style: italic;">No installment payments recorded yet (Pending Collection).</td></tr>`;
+            } else {
+                historyTbody.innerHTML = payments.map(p => `
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td style="padding: 6px; font-family: monospace;">${escapeHtml(p.date_display || p.payment_date)}</td>
+                        <td style="padding: 6px; text-align: right; font-weight: bold; color: #27ae60;">₱${parseFloat(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td style="padding: 6px; text-align: right; font-weight: bold; color: ${parseFloat(p.balance_after) <= 0 ? '#27ae60' : '#e74c3c'};">₱${parseFloat(p.balance_after).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td style="padding: 6px;">${escapeHtml(p.recorded_by || 'System Clerk')}</td>
+                        <td style="padding: 6px; color: #555;">${escapeHtml(p.notes || '-')}</td>
+                    </tr>
+                `).join('');
             }
         }
 

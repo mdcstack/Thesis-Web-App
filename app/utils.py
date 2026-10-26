@@ -17,8 +17,12 @@ def get_active_template_config(db=None, department="CS", slot=1):
         close_db = True
     try:
         dept = (department or "CS").upper()
-        if dept not in ["CS", "IT"]:
-            dept = "CS"
+        try:
+            valid_progs = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
+            if valid_progs and dept not in valid_progs:
+                dept = valid_progs[0]
+        except Exception:
+            pass
         try:
             slot_num = int(slot)
             if slot_num not in [1, 2, 3]:
@@ -72,8 +76,6 @@ def get_raw_template_pdf_path(department="CS", slot=1, config=None):
     Returns None if no PDF file exists on disk.
     """
     dept = (getattr(config, 'department', None) or department or "CS").upper()
-    if dept not in ["CS", "IT"]:
-        dept = "CS"
         
     slot_num = getattr(config, 'slot_number', None) or slot or 1
     try:
@@ -199,9 +201,18 @@ def generate_batch_pdf(start_num, total_yield, batch_id, prefix, start_srn_num=1
     
     writer = PdfWriter()
 
+    # Per-course Control Number prefix: {prefix}-{dept}
+    if prefix:
+        if prefix.endswith(f"-{dept}") or prefix.endswith(f"_{dept}"):
+            course_ctrl_prefix = prefix
+        else:
+            course_ctrl_prefix = f"{prefix}-{dept}"
+    else:
+        course_ctrl_prefix = dept
+
     for i in range(total_yield):
-        ref_num = f"{prefix}-{(start_num + i):04d}"
-        srn_str = f"SRN-{(start_srn_num + i):06d}"
+        ref_num = f"{course_ctrl_prefix}-{(start_num + i):04d}"
+        srn_str = f"SRN-{dept}-{(start_srn_num + i):06d}"
         
         packet = io.BytesIO()
         can = canvas.Canvas(packet, pagesize=landscape(A4))
@@ -253,6 +264,21 @@ def generate_sample_preview_pdf(sample_control_num="1ST26-0001", sample_srn="SRN
             slot_num = 1
     except Exception:
         slot_num = 1
+        
+    prefix = "1ST26"
+    if db:
+        try:
+            from . import models
+            settings = db.query(models.SystemSetting).first()
+            if settings and settings.current_semester_name:
+                prefix = settings.current_semester_name
+        except Exception:
+            pass
+
+    if sample_control_num in ["1ST26-0001", None] or sample_control_num == f"{prefix}-0001":
+        sample_control_num = f"{prefix}-{dept}-0001"
+    if sample_srn in ["SRN-000001", None]:
+        sample_srn = f"SRN-{dept}-000001"
         
     if config is None:
         config = get_active_template_config(db, department=dept, slot=slot_num)

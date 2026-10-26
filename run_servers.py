@@ -4,9 +4,9 @@ import sys
 # Pre-flight check: ensure websockets library is installed for offline real-time sync
 try:
     import websockets
-    print("✔ Offline LAN WebSocket protocol engine detected.")
+    print("[OK] Offline LAN WebSocket protocol engine detected.")
 except ImportError:
-    print("⚠ Notice: 'websockets' library not found. Installing offline WebSocket engine...")
+    print("[NOTICE] 'websockets' library not found. Installing offline WebSocket engine...")
     subprocess.run([sys.executable, "-m", "pip", "install", "websockets", "--quiet"])
 
 print("Starting HTTP Server (Port 8080) for Public Receipts (http://192.168.55.100:8080)...")

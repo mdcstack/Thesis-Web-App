@@ -19,28 +19,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
-
-        
-
-        /* Sidebar */
-
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
-
-        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
-
-        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
-
-        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-
-        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-
-        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-
-        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-
-        
-
-        /* Main Layout Grid */
+/* Main Layout Grid */
 
         .main-content { flex: 1; padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
 
@@ -102,6 +81,19 @@
 
         .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; }
 
+        /* Selectable Checkbox Grid (Uniform with History return modal) */
+        .ref-search { width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 4px; font-size: 1rem; margin-bottom: 15px; font-family: monospace; outline: none; transition: border-color 0.3s; box-sizing: border-box; }
+        .ref-search:focus { border-color: #2980b9; box-shadow: 0 0 5px rgba(52, 152, 219, 0.5); }
+        .ref-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 250px; overflow-y: auto; background: #ecf0f1; padding: 15px; border-radius: 4px; border: 1px solid #bdc3c7; margin-bottom: 10px; box-sizing: border-box; }
+        .ref-item { display: flex; align-items: center; gap: 8px; font-family: monospace; font-size: 0.9rem; color: #2c3e50; }
+        .ref-item label { cursor: pointer; white-space: nowrap; font-weight: 600; font-family: monospace; }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-group button { flex: 1; padding: 12px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; transition: 0.3s; }
+        .btn-execute { background-color: #f39c12; color: white; }
+        .btn-execute:hover { background-color: #d68910; }
+        .btn-cancel { background-color: #bdc3c7; color: #2c3e50; }
+        .btn-cancel:hover { background-color: #95a5a6; }
+
         
 
         /* Strict Modal Stacking Hierarchy */
@@ -157,13 +149,7 @@
         .dialog-btn:active {
             transform: translateY(0);
         }
-        .sidebar-logout-btn:hover {
-            background-color: #c0392b !important;
-            transform: translateY(-1px);
-        }
-        .sidebar-logout-btn:active {
-            transform: translateY(0);
-        }
+
 
 
 
@@ -721,17 +707,6 @@
 
         }
 
-    
-
-        /* Mobile Hamburger & Overlay Styles */
-
-        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-
-        .hamburger { font-size: 1.5rem; cursor: default; margin-right: 15px; }
-
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-
-        .sidebar-overlay.active { display: block; }
 
 
 
@@ -744,22 +719,7 @@
             .desktop-only { display: none !important; }
 
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-
-            
-
-            .mobile-header { display: flex; flex-shrink: 0; }
-
-            
-
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-
-            .sidebar.active { left: 0; }
-
-            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
-
-            
-
-            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+.main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
 
             
 
@@ -823,63 +783,9 @@
 
 
 
-<div class="mobile-header no-print">
+{% include 'sidebar.html' %}
 
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-
-    <div class="mobile-title">BOOKLETLOG</div>
-
-</div>
-
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-
-
-
-
-    <div class="sidebar no-print">
-
-
-
-        <!-- NEW: Notification Bell & Panel -->
-
-        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-
-                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-
-                    🔔
-
-                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-
-                </div>
-
-                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-
-                    ⚙️
-
-                </a>
-
-            </div>
-
-            
-
-            <!-- Hidden Dropdown Panel -->
-
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-
-                Loading alerts...
-
-            </div>
-
-        </div>
-
-
-
-
-
-        <!-- STAFF / SYSTEM LOCKOUT MODAL -->
+<!-- STAFF / SYSTEM LOCKOUT MODAL -->
 
 <div class="modal-overlay" id="staffLockoutModal" style="background: rgba(15, 23, 42, 0.95); z-index: 9999; backdrop-filter: blur(4px);">
 
@@ -917,49 +823,6 @@
 
 </div>
 
-
-
-
-
-        <div class="sidebar-header">Proposed System</div>
-
-        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
-
-        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-
-        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-
-        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
-
-        <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a> 
-
-        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
-
-        <a href="/distribution" class="nav-link active">🛒 Point of Distribution</a>
-
-        <a href="/history" class="nav-link">📜 Transaction Trail</a>
-
-        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
-
-       
-
-        
-
-
-
-        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-
-            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-
-            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-
-            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-
-        </div>
-
-    </div>
 
 
 
@@ -1011,6 +874,8 @@
 
                         <button class="btn" style="margin:0;" onclick="openScannerModal('primary')">Scan Master Pack QR</button>
 
+
+
                     </div>
 
                     <div id="active-supply-view" style="display: none;">
@@ -1031,7 +896,15 @@
 
                 </div>
 
-
+                <!-- Vault Loose Stock Section (Always 100% visible, never faded, clickable anytime) -->
+                <div id="looseStockContainer" style="margin: 0 0 20px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
+                    <button id="looseStockBtn" class="btn btn-warning" onclick="openLooseStockModal()" style="width: 100%; text-align: left;">
+                        <i class="fas fa-boxes"></i> View Vault Loose Stock
+                    </button>
+                    <div id="looseSelectionPreview" style="margin-top: 8px; font-weight: bold; color: #d35400;">
+                        0 loose booklets selected.
+                    </div>
+                </div>
 
                 <div id="transaction-form" style="opacity: 0.5; pointer-events: none; transition: opacity 0.3s;">
 
@@ -1039,11 +912,7 @@
 
                         <h3 style="margin: 0;">🧾 Step 2: Transaction Details</h3>
 
-                        <button class="btn btn-primary" onclick="fetchPendingDistributions(false)" style="margin: 0; padding: 6px 6px; width: 80px; font-size: 0.85rem;" title="Refresh pending sections to prevent concurrent conflicts">
-
-                            🔄 Refresh Lists
-
-                        </button>
+                        
 
                     </div>
 
@@ -1211,21 +1080,7 @@
 
 
 
-                    <div style="margin: 15px 0; padding: 12px; background: #fff3cd; border-left: 4px solid #f39c12; border-radius: 4px;">
 
-                        <button id="looseStockBtn" class="btn btn-warning" onclick="openLooseStockModal()" style="width: 100%; text-align: left;" disabled>
-
-                            <i class="fas fa-hand-pointer"></i> Select Specific Loose Stock
-
-                        </button>
-
-                        <div id="looseSelectionPreview" style="margin-top: 8px; font-weight: bold; color: #d35400;">
-
-                            0 loose booklets selected.
-
-                        </div>
-
-                    </div>
 
 
 
@@ -1251,7 +1106,7 @@
 
                         <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
 
-                        <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
+                        <h3 id="receiptDeptHeader" style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
 
                         <h3 style="margin: 10px 0 0 0; font-size: 1.3rem; color: #e74c3c;" id="doc-title">Document Title: PREVIEW (NOT RECORDED)</h3>
 
@@ -1753,6 +1608,31 @@
 
     let primaryPackQR = localStorage.getItem(getUserPackKey()) || null;
 
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function getCourseColor(deptCode) {
+        if (!deptCode) return '#475569';
+        const prog = getProgramMeta(deptCode);
+        if (prog && prog.color_hex) return prog.color_hex;
+        const fallbackColors = {
+            'CS': '#2563eb',
+            'IT': '#7c3aed',
+            'PE': '#10b981',
+            'NS': '#059669',
+            'CE': '#d97706',
+            'IM': '#0891b2'
+        };
+        return fallbackColors[deptCode.toUpperCase()] || '#475569';
+    }
+
     let primaryPackStock = 0;
 
     let activePackDept = null;
@@ -1760,6 +1640,40 @@
     let activePackTemplateName = null;
 
     let activePackTemplateSlot = null;
+
+    let cachedAcademicPrograms = [];
+
+    async function loadAcademicProgramsForDistribution() {
+        try {
+            const res = await fetch('/api/academic-programs');
+            const data = await res.json();
+            if (data.status === 'success' && Array.isArray(data.programs)) {
+                cachedAcademicPrograms = data.programs;
+                if (activePackDept) {
+                    refreshActivePackDisplay();
+                }
+            }
+        } catch (e) {
+            console.warn("Could not load academic programs for distribution:", e);
+        }
+    }
+
+    function getProgramMeta(deptCode) {
+        if (!deptCode) return null;
+        const codeClean = deptCode.trim().toUpperCase();
+        return cachedAcademicPrograms.find(p => p.code && p.code.toUpperCase() === codeClean) || null;
+    }
+
+    function getProgramLabel(deptCode) {
+        if (!deptCode) return '';
+        const meta = getProgramMeta(deptCode);
+        if (meta) return `${meta.name} (${meta.code})`;
+        if (deptCode === 'CS') return 'Computer Science (CS)';
+        if (deptCode === 'IT') return 'Information Technology (IT)';
+        if (deptCode === 'IM') return 'Information Management (IM)';
+        if (deptCode === 'CE') return 'Civil Engineering (CE)';
+        return `Department (${deptCode})`;
+    }
 
     
 
@@ -2202,6 +2116,8 @@ ${message}`));
 
     window.onload = function() {
 
+        loadAcademicProgramsForDistribution();
+
         fetchActivePeriod(); // Fetch the period FIRST
 
         fetchLooseStockList(); // Pre-fetch loose stock count
@@ -2518,21 +2434,44 @@ ${message}`));
 
 
 
-                // If running in background and user already has selections in progress:
+                // Always preserve teacher and section selection if user already selected them
+                if (savedTeacher && currentInstructorSelect && currentInstructorSelect.value !== savedTeacher) {
 
-                if (isBackground) {
-
-                    if (savedTeacher && currentInstructorSelect && currentInstructorSelect.value !== savedTeacher) {
+                    if (enrollmentsData.some(i => i.teacher_name === savedTeacher)) {
 
                         currentInstructorSelect.value = savedTeacher;
 
+                        if (currentSectionSelect && currentSectionSelect.options.length <= 1) {
+
+                            handleInstructorChange();
+
+                        }
+
                     }
 
-                    if (savedSection && currentSectionSelect && currentSectionSelect.value !== savedSection) {
+                }
+
+                if (savedSection && currentSectionSelect && currentSectionSelect.value !== savedSection) {
+
+                    if (currentInstructorSelect && enrollmentsData.some(i => i.teacher_name === currentInstructorSelect.value && i.section === savedSection)) {
 
                         currentSectionSelect.value = savedSection;
 
+                        if (currentSubjectSelect && currentSubjectSelect.options.length <= 1) {
+
+                            handleSectionChange();
+
+                        }
+
                     }
+
+                }
+
+
+
+                // If running in background and user already has selections in progress:
+
+                if (isBackground) {
 
 
 
@@ -2634,13 +2573,31 @@ ${message}`));
 
     function applyCourseFilter(keepSelection = false) {
 
-        if (activePackDept === 'CS') {
+        if (activePackDept) {
 
-            enrollmentsData = rawPendingDistributions.filter(item => (item.department === 'CS') || (item.section && item.section.toUpperCase().includes('BSCS')));
+            const prog = getProgramMeta(activePackDept);
 
-        } else if (activePackDept === 'IT') {
+            const prefix = (prog && prog.section_prefix) ? prog.section_prefix.toUpperCase() : ('BS' + activePackDept);
 
-            enrollmentsData = rawPendingDistributions.filter(item => (item.department === 'IT') || (item.section && item.section.toUpperCase().includes('BSIT')));
+            const deptUpper = activePackDept.toUpperCase();
+
+            enrollmentsData = rawPendingDistributions.filter(item => {
+
+                const itemDept = (item.department || '').toUpperCase();
+
+                const itemSec = (item.section || '').toUpperCase();
+
+                return (itemDept === deptUpper) || 
+
+                       (prefix && itemSec.includes(prefix)) || 
+
+                       itemSec.startsWith(deptUpper) ||
+
+                       itemSec.includes(deptUpper + '-') ||
+
+                       itemSec.includes(deptUpper + ' ');
+
+            });
 
         } else {
 
@@ -2662,43 +2619,63 @@ ${message}`));
 
         const prevSelected = select.value;
 
-        const newTeachers = [...new Set(enrollmentsData.map(item => item.teacher_name))];
+        const newTeachers = [...new Set(enrollmentsData.map(item => item.teacher_name))].filter(Boolean);
 
 
 
-        // If keeping selection, check if options actually changed to avoid DOM churn & closing open dropdowns
+        // 1. Guard against active user interaction (avoid collapsing open dropdown menu)
 
-        if (keepSelection) {
+        if (document.activeElement === select && prevSelected) {
 
-            const currentOptions = Array.from(select.options).slice(1).map(opt => opt.value);
-
-            const isIdentical = currentOptions.length === newTeachers.length && 
-
-                                currentOptions.every((val, idx) => val === newTeachers[idx]);
-
-            if (isIdentical) {
-
-                if (prevSelected) select.value = prevSelected;
-
-                return; // Nothing changed, skip DOM rewrite!
-
-            }
+            return;
 
         }
 
 
 
+        // 2. Unconditionally check if options in DOM are already identical to avoid destructive DOM churn
+
+        const currentOptions = Array.from(select.options).slice(1).map(opt => opt.value);
+
+        const isIdentical = currentOptions.length === newTeachers.length && 
+
+                            currentOptions.every((val, idx) => val === newTeachers[idx]);
+
+        if (isIdentical) {
+
+            if (prevSelected && newTeachers.includes(prevSelected) && select.value !== prevSelected) {
+
+                select.value = prevSelected;
+
+            }
+
+            return; // Options match, skip DOM rewrite!
+
+        }
+
+
+
+        // 3. Rebuild options only when teacher list actually changed
+
         select.innerHTML = '<option value="">-- Select Instructor --</option>'; 
 
         newTeachers.forEach(t => {
 
-            select.innerHTML += `<option value="${t}">${t}</option>`;
+            select.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`;
 
         });
 
-        if (keepSelection && prevSelected) {
+
+
+        // 4. Always preserve active selection if valid
+
+        if (prevSelected && newTeachers.includes(prevSelected)) {
 
             select.value = prevSelected;
+
+        } else if (prevSelected && !newTeachers.includes(prevSelected)) {
+
+            handleInstructorChange();
 
         }
 
@@ -2707,6 +2684,9 @@ ${message}`));
 
 
     // --- 4. UI EVENT HANDLERS ---
+
+
+
 
     function handleInstructorChange() {
 
@@ -2726,17 +2706,15 @@ ${message}`));
 
         sectionSelect.disabled = true; subjectSelect.disabled = true;
 
-        if(looseBtn) looseBtn.disabled = true;
-
         resetReceipt();
+
+        updateLooseStockUI();
 
 
 
         if (teacher) {
 
             sectionSelect.disabled = false;
-
-            if(looseBtn && allLooseStock.length > 0) looseBtn.disabled = false;
 
             [...new Set(enrollmentsData.filter(i => i.teacher_name === teacher).map(i => i.section))].forEach(sec => {
 
@@ -2886,13 +2864,23 @@ ${message}`));
 
     function triggerLivePreview() {
 
+        const successModal = document.getElementById('successModal');
+
+        if (successModal && (successModal.style.display === 'flex' || successModal.style.display === 'block')) {
+
+            return;
+
+        }
+
+
+
         const enrollmentId = document.getElementById('subjectSelect').value;
 
         const btn = document.getElementById('submitTxBtn');
 
         
 
-        if (!enrollmentId) { resetReceipt(); return; }
+        if (!enrollmentId || !currentDemand || currentDemand <= 0) { resetReceipt(); return; }
 
 
 
@@ -3035,6 +3023,14 @@ ${message}`));
                     fetchPendingDistributions();
 
                     resetReceipt();
+
+                } else if (data.code === "INSUFFICIENT_STOCK" || (data.message && data.message.includes("Insufficient stock"))) {
+
+                    showAppAlert("Stock Shortage Notice", data.message + "\n\nPlease scan a bridging supply pack to complete this transaction.", "warning").then(() => {
+
+                        handleBridgingShortageState();
+
+                    });
 
                 } else if (data.code === "DEPT_MISMATCH" || data.code === "BRIDGING_DEPT_MISMATCH" || data.code === "LOOSE_DEPT_MISMATCH") {
 
@@ -3208,7 +3204,9 @@ ${message}`));
 
 
 
-        const shortage = Math.max(0, currentDemand - primaryPackStock);
+        const effectiveStock = primaryPackStock + (bridgingPackStock || 0) + (globalSelectedLoose ? globalSelectedLoose.length : 0);
+
+        const shortage = Math.max(0, currentDemand - effectiveStock);
 
         const btn = document.getElementById('submitTxBtn');
 
@@ -3302,11 +3300,11 @@ ${message}`));
 
 
 
-            if (document.getElementById('subjectSelect').value) {
+            if (document.getElementById('subjectSelect').value && currentDemand > 0) {
 
                 allocatedBooklets = [];
 
-                triggerLivePreview();
+                checkProactiveBridging();
 
             }
 
@@ -3652,7 +3650,7 @@ ${message}`));
 
 
 
-        const deptParam = encodeURIComponent(activePackDept || 'CS');
+        const deptParam = encodeURIComponent(activePackDept || '');
 
         fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
 
@@ -3886,7 +3884,7 @@ ${message}`));
 
 
 
-        const deptParam = encodeURIComponent(activePackDept || 'CS');
+        const deptParam = encodeURIComponent(activePackDept || '');
 
         fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
 
@@ -4039,167 +4037,226 @@ ${message}`));
     
 
     let globalSelectedLoose = [];
+    let rawLooseStock = [];
+    let looseDeptCounts = {};
 
-    let allLooseStock = [];
-
-
-
-    function openLooseStockModal() {
-
-        const modalTitle = document.querySelector('#looseStockModal h2');
-
-        if (modalTitle) {
-
-            const deptText = activePackDept ? ` (${activePackDept === 'CS' ? 'Computer Science' : 'Information Technology'})` : '';
-
-            modalTitle.innerText = `Select Loose Booklets${deptText}`;
-
+    function updateSelectedLooseCountDisplay() {
+        const countEl = document.getElementById('looseSelectedCount');
+        if (countEl) {
+            countEl.innerText = globalSelectedLoose.length;
         }
-
-        document.getElementById('looseStockModal').style.display = 'flex';
-
-        fetchLooseStockList();
-
+        const previewEl = document.getElementById('looseSelectionPreview');
+        if (previewEl) {
+            previewEl.innerText = `${globalSelectedLoose.length} loose booklets selected.`;
+        }
     }
 
-
-
-    function closeLooseStockModal() {
-
-        document.getElementById('looseStockModal').style.display = 'none';
-
+    function onLooseCheckboxChange(cb) {
+        if (!cb) return;
+        if (cb.checked) {
+            if (!globalSelectedLoose.includes(cb.value)) {
+                globalSelectedLoose.push(cb.value);
+            }
+        } else {
+            globalSelectedLoose = globalSelectedLoose.filter(c => c !== cb.value);
+        }
+        updateSelectedLooseCountDisplay();
     }
-
-
 
     function fetchLooseStockList(isBackground = false) {
-
-        const url = activePackDept ? `/api/loose-stock-list?department=${encodeURIComponent(activePackDept)}` : '/api/loose-stock-list';
-
-        fetch(url)
-
-        .then(res => res.json())
-
-        .then(data => {
-
-            if(data.status === 'success') {
-
-                allLooseStock = data.data || [];
-
-                renderLooseList(allLooseStock);
-
-                
-
-                // Update Button UI
-
-                const btn = document.getElementById('looseStockBtn');
-
-                if(btn) {
-
-                    const deptLabel = activePackDept ? ` (${activePackDept})` : '';
-
-                    btn.innerHTML = `<i class="fas fa-hand-pointer"></i> Select Specific Loose Stock (${allLooseStock.length}${deptLabel} Available)`;
-
-                    // If no stock, ensure it is disabled even if teacher is selected
-
-                    if(allLooseStock.length === 0) {
-
-                        btn.disabled = true;
-
-                    } else if (document.getElementById('instructorSelect').value) {
-
-                        btn.disabled = false;
-
-                    }
-
-                }
-
-            }
-
-        }).catch(err => {
-
-            if (!isBackground) console.error("Error fetching loose stock:", err);
-
-        });
-
-    }
-
-
-
-    function renderLooseList(list) {
-
-        const container = document.getElementById('looseListContainer');
-
-        container.innerHTML = '';
-
-        if(list.length === 0) {
-
-            container.innerHTML = '<div style="color:#7f8c8d;">No loose stock available.</div>';
-
+        const modal = document.getElementById('looseStockModal');
+        // Do not disrupt active modal inspection or active checkbox selection on background ticks
+        if (isBackground && modal && modal.style.display === 'flex') {
             return;
-
         }
 
-        
-
-        list.forEach(item => {
-
-            const isChecked = globalSelectedLoose.includes(item.control_num) ? 'checked' : '';
-
-            container.innerHTML += `
-
-                <label style="display: block; padding: 8px; border-bottom: 1px solid #eee; cursor: default;">
-
-                    <input type="checkbox" class="loose-checkbox" value="${item.control_num}" ${isChecked}>
-
-                    ${item.control_num}
-
-                </label>
-
-            `;
-
+        fetch('/api/loose-stock-list?department=ALL')
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                rawLooseStock = data.data || [];
+                looseDeptCounts = data.counts_by_dept || {};
+                updateLooseStockUI();
+            }
+        }).catch(err => {
+            if (!isBackground) console.error("Error fetching loose stock:", err);
         });
-
     }
 
+    function updateLooseStockUI() {
+        const btn = document.getElementById('looseStockBtn');
+        const totalVaultCount = rawLooseStock.length;
 
+        // Clean breakdown string of all courses in vault (e.g. "2 NS, 3 PE")
+        const deptBreakdown = Object.entries(looseDeptCounts)
+            .filter(([_, c]) => c > 0)
+            .map(([d, c]) => `${c} ${d}`)
+            .join(', ');
+
+        if (!btn) return;
+
+        if (activePackDept) {
+            // Case 1: Master Pack has been scanned for a specific course
+            const targetDeptUpper = activePackDept.toUpperCase();
+            const scopedList = rawLooseStock.filter(item => (item.department || 'CS').toUpperCase() === targetDeptUpper);
+            const scopedCount = scopedList.length;
+
+            if (scopedCount > 0) {
+                btn.innerHTML = `<i class="fas fa-hand-pointer"></i> Select Specific Loose Stock (${scopedCount} ${targetDeptUpper} Available)`;
+                btn.className = "btn btn-warning";
+                btn.disabled = false;
+                btn.title = `Click to select from ${scopedCount} available loose booklets for ${targetDeptUpper}`;
+            } else {
+                btn.innerHTML = `<i class="fas fa-box-open"></i> Select Specific Loose Stock (0 ${targetDeptUpper} Available)`;
+                btn.className = "btn btn-secondary";
+                btn.disabled = false;
+                btn.title = `No ${targetDeptUpper} loose stock available in vault`;
+            }
+        } else {
+            // Case 2: No Master Pack scanned yet (Global Vault Overview)
+            if (totalVaultCount > 0) {
+                const summaryText = deptBreakdown ? ` (${totalVaultCount} in Vault: ${deptBreakdown})` : ` (${totalVaultCount} in Vault)`;
+                btn.innerHTML = `<i class="fas fa-boxes"></i> View Vault Loose Stock${summaryText}`;
+                btn.className = "btn btn-secondary";
+                btn.disabled = false;
+                btn.title = "Click to inspect available loose stock across all courses in the vault";
+            } else {
+                btn.innerHTML = `<i class="fas fa-boxes"></i> View Vault Loose Stock (0 in Vault)`;
+                btn.className = "btn btn-secondary";
+                btn.disabled = true;
+                btn.title = "No loose stock currently available in vault";
+            }
+        }
+
+        // Do not force re-render while modal is open if user is currently interacting
+    }
+
+    function openLooseStockModal() {
+        const modal = document.getElementById('looseStockModal');
+        const modalTitle = document.getElementById('looseModalTitle') || document.querySelector('#looseStockModal h3');
+        const modalBanner = document.getElementById('looseModalBanner');
+        const confirmBtn = document.getElementById('looseModalConfirmBtn');
+        const cancelBtn = document.getElementById('looseModalCancelBtn');
+        const countRow = document.getElementById('looseSelectedCountRow');
+        const searchInput = document.getElementById('looseSearch');
+        if (searchInput) searchInput.value = '';
+
+        const totalVaultCount = rawLooseStock.length;
+
+        if (activePackDept) {
+            const targetDeptUpper = activePackDept.toUpperCase();
+            const progName = getProgramLabel(targetDeptUpper);
+            const scopedList = rawLooseStock.filter(item => (item.department || 'CS').toUpperCase() === targetDeptUpper);
+            
+            if (modalTitle) modalTitle.innerText = `Select Loose Booklets (${progName})`;
+            if (modalBanner) {
+                modalBanner.style.display = 'block';
+                modalBanner.innerHTML = `Showing <strong>${scopedList.length}</strong> loose booklet(s) for <strong>${escapeHtml(targetDeptUpper)}</strong>. Only booklets matching your scanned Master Pack can be distributed.`;
+            }
+            if (countRow) countRow.style.display = 'block';
+            if (confirmBtn) {
+                confirmBtn.style.display = 'inline-block';
+                confirmBtn.innerText = "Confirm Selection";
+            }
+            if (cancelBtn) {
+                cancelBtn.innerText = "Cancel";
+            }
+            renderLooseList(scopedList);
+        } else {
+            // Global inspection mode
+            if (modalTitle) modalTitle.innerText = "Vault Loose Stock Inventory (All Courses)";
+            if (modalBanner) {
+                modalBanner.style.display = 'block';
+                modalBanner.innerHTML = `<em>Vault Inspection Mode: Showing all <strong>${totalVaultCount}</strong> loose booklet(s) across all courses in the vault. Scan a Master Pack to distribute booklets.</em>`;
+            }
+            if (countRow) countRow.style.display = 'none';
+            if (confirmBtn) {
+                confirmBtn.style.display = 'none';
+            }
+            if (cancelBtn) {
+                cancelBtn.innerText = "Close Vault Inventory";
+            }
+            renderLooseList(rawLooseStock);
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    function closeLooseStockModal() {
+        document.getElementById('looseStockModal').style.display = 'none';
+    }
 
     function filterLooseList() {
-
-        const query = document.getElementById('looseSearch').value.toUpperCase();
-
-        const filtered = allLooseStock.filter(item => item.control_num.includes(query));
-
-        renderLooseList(filtered);
-
+        const searchEl = document.getElementById('looseSearch');
+        const query = (searchEl ? searchEl.value : '').trim().toUpperCase();
+        const refItems = document.querySelectorAll('.loose-ref-item');
+        refItems.forEach(item => {
+            const ctrl = (item.dataset.control || '').toUpperCase();
+            const dept = (item.dataset.dept || '').toUpperCase();
+            const match = (!query || ctrl.includes(query) || dept.includes(query));
+            item.style.display = match ? 'flex' : 'none';
+        });
     }
 
+    function renderLooseList(list) {
+        const container = document.getElementById('looseListContainer');
+        if (!container) return;
+        container.innerHTML = '';
 
+        if (!list || list.length === 0) {
+            if (activePackDept) {
+                const totalVaultCount = rawLooseStock.length;
+                const otherMsg = totalVaultCount > 0 ? `<br><small style="color: #7f8c8d; margin-top: 6px; display: block;">Vault has ${totalVaultCount} loose booklet(s) under other courses.</small>` : '';
+                container.innerHTML = `<div style="grid-column: span 3; text-align: center; color: #e74c3c; padding: 20px 10px;">No loose booklets found for <strong>${escapeHtml(activePackDept)}</strong>.${otherMsg}</div>`;
+            } else {
+                container.innerHTML = `<div style="grid-column: span 3; text-align: center; color: #7f8c8d; padding: 20px 10px;">No loose booklets in vault.</div>`;
+            }
+            return;
+        }
 
-    function confirmLooseSelection() {
+        const isInspection = !activePackDept;
 
-        const checkboxes = document.querySelectorAll('.loose-checkbox');
+        list.forEach(item => {
+            const deptCode = (item.department || 'CS').toUpperCase();
+            const color = getCourseColor(deptCode);
+            const isChecked = globalSelectedLoose.includes(item.control_num) ? 'checked' : '';
+            const deptBadge = (!activePackDept && deptCode) ? ` <span style="font-size: 0.72rem; color: ${color}; font-weight: bold;">(${escapeHtml(deptCode)})</span>` : '';
 
-        globalSelectedLoose = [];
+            let div = document.createElement('div');
+            div.className = "ref-item loose-ref-item";
+            div.dataset.control = item.control_num;
+            div.dataset.dept = deptCode;
 
-        checkboxes.forEach(cb => {
-
-            if(cb.checked) {
-
-                globalSelectedLoose.push(cb.value);
-
+            if (isInspection) {
+                // Vault Inspection Mode: Clean read-only inventory list without checkboxes
+                div.style.cursor = "default";
+                div.innerHTML = `
+                    <span style="font-weight: 600; white-space: nowrap; font-family: monospace;">${escapeHtml(item.control_num)}</span>${deptBadge}
+                `;
+            } else {
+                // Active Pack Distribution Mode: Interactive checkboxes for selecting loose stock
+                div.innerHTML = `
+                    <input type="checkbox" class="ref-checkbox loose-checkbox" value="${escapeHtml(item.control_num)}" id="chk_loose_${item.id}" ${isChecked} onchange="onLooseCheckboxChange(this)">
+                    <label for="chk_loose_${item.id}">${escapeHtml(item.control_num)}${deptBadge}</label>
+                `;
             }
 
+            container.appendChild(div);
         });
 
-        
+        updateSelectedLooseCountDisplay();
+    }
 
+    function confirmLooseSelection() {
+        if (!activePackDept) {
+            closeLooseStockModal();
+            return;
+        }
+
+        // globalSelectedLoose is already updated in real-time via onLooseCheckboxChange
         document.getElementById('looseSelectionPreview').innerText = `${globalSelectedLoose.length} loose booklets selected.`;
-
         closeLooseStockModal();
-
         triggerLivePreview();
-
     }
 
 
@@ -4494,7 +4551,7 @@ ${message}`));
 
             title.style.color = "#e74c3c";
 
-            const deptLabel = activePackDept === 'CS' ? 'Computer Science (CS)' : (activePackDept === 'IT' ? 'Information Technology (IT)' : 'matching');
+            const deptLabel = activePackDept ? getProgramLabel(activePackDept) : 'matching';
 
             msg.innerHTML = `You are short <strong>${deficit}</strong> booklets.<br>Grab a new <strong>${deptLabel}</strong> Master Pack from inventory and scan it to bridge this transaction.`;
 
@@ -4704,7 +4761,7 @@ ${message}`));
 
             isLookupBusy = true;
 
-            const deptParam = encodeURIComponent(activePackDept || 'CS');
+            const deptParam = encodeURIComponent(activePackDept || '');
 
             fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${deptParam}`)
 
@@ -4962,9 +5019,9 @@ ${message}`));
 
                     if (activePackDept && data.department && data.department !== activePackDept) {
 
-                        const activeLabel = activePackDept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+                        const activeLabel = getProgramLabel(activePackDept);
 
-                        const scannedLabel = data.department === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
+                        const scannedLabel = getProgramLabel(data.department);
 
                         showAppAlert(
 
@@ -5028,124 +5085,77 @@ ${message}`));
 
 
 
-    function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false) {
-
-        primaryPackQR = qr; 
-
-        primaryPackStock = stock;
-
-        activePackDept = (dept && (dept.toUpperCase() === 'IT' || dept.toUpperCase() === 'CS')) ? dept.toUpperCase() : 'CS';
-
-        activePackTemplateName = templateName || `Template ${templateSlot || 1}`;
-
-        activePackTemplateSlot = templateSlot || 1;
-
-
-
-        localStorage.setItem(getUserPackKey(), qr);
-
-        document.getElementById('no-supply-view').style.display = "none";
-
-        document.getElementById('active-supply-view').style.display = "block";
-
-        document.getElementById('pack-qr-display').innerText = qr;
-
-        document.getElementById('pack-stock-display').innerText = stock;
-
-        
-
-        // Guard 1: Visual Pack Tagging
+    function refreshActivePackDisplay() {
+        if (!activePackDept) return;
+        const prog = getProgramMeta(activePackDept);
+        const color = (prog && prog.color_hex) ? prog.color_hex : (activePackDept === 'IT' ? '#7c3aed' : '#2563eb');
+        const name = (prog && prog.name) ? prog.name : (activePackDept === 'IT' ? 'Information Technology' : (activePackDept === 'CS' ? 'Computer Science' : activePackDept));
+        const prefix = (prog && prog.section_prefix) ? prog.section_prefix : ('BS' + activePackDept);
 
         const badgeContainer = document.getElementById('pack-dept-badge');
+        if (badgeContainer) {
+            badgeContainer.innerHTML = `<span style="background: ${color}; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.25);">📦 ${name} (${activePackDept}) Pack</span>`;
+        }
 
         const tplContainer = document.getElementById('pack-template-display');
-
-        if (badgeContainer) {
-
-            if (activePackDept === 'CS') {
-
-                badgeContainer.innerHTML = '<span style="background: #2563eb; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(37,99,235,0.3);">💻 Computer Science (CS) Pack</span>';
-
-            } else if (activePackDept === 'IT') {
-
-                badgeContainer.innerHTML = '<span style="background: #7c3aed; color: white; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(124,58,237,0.3);">🌐 Information Technology (IT) Pack</span>';
-
-            } else {
-
-                badgeContainer.innerHTML = '';
-
-            }
-
-        }
-
         if (tplContainer) {
-
             tplContainer.innerText = activePackTemplateName ? `Design: ${activePackTemplateName}` : '';
-
         }
-
-
-
-        // Guard 2: Automatic Smart Course Filter & Program Tag
 
         const progBanner = document.getElementById('activeProgramBanner');
-
         const progBadge = document.getElementById('activeProgramBadge');
-
         const progText = document.getElementById('activeProgramText');
-
         if (progBanner && progBadge && progText) {
-
             progBanner.style.display = 'block';
-
-            if (activePackDept === 'IT') {
-
-                progBadge.innerText = 'IT';
-
-                progBadge.style.background = '#7c3aed';
-
-                progText.innerText = 'Information Technology (BSIT)';
-
-            } else {
-
-                progBadge.innerText = 'CS';
-
-                progBadge.style.background = '#2563eb';
-
-                progText.innerText = 'Computer Science (BSCS)';
-
-            }
-
+            progBadge.innerText = activePackDept;
+            progBadge.style.background = color;
+            progText.innerText = `${name} (${prefix})`;
         }
 
+        const receiptHeader = document.getElementById('receiptDeptHeader');
+        if (receiptHeader) {
+            receiptHeader.innerText = name ? `Department of ${name}` : 'Department of Computer Studies';
+        }
+    }
 
+    function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false) {
+        primaryPackQR = qr; 
+        primaryPackStock = stock;
+        activePackDept = (dept || '').trim().toUpperCase() || 'CS';
+        activePackTemplateName = templateName || `Template ${templateSlot || 1}`;
+        activePackTemplateSlot = templateSlot || 1;
+
+        localStorage.setItem(getUserPackKey(), qr);
+        document.getElementById('no-supply-view').style.display = "none";
+        document.getElementById('active-supply-view').style.display = "block";
+        document.getElementById('pack-qr-display').innerText = qr;
+        document.getElementById('pack-stock-display').innerText = stock;
+        
+        refreshActivePackDisplay();
+
+        // Purge any previously selected loose booklets that do not match the newly scanned active pack course
+        if (globalSelectedLoose.length > 0 && Array.isArray(rawLooseStock)) {
+            globalSelectedLoose = globalSelectedLoose.filter(ctrl => {
+                const item = rawLooseStock.find(x => x.control_num === ctrl);
+                return item && (item.department || '').toUpperCase() === activePackDept;
+            });
+            const previewEl = document.getElementById('looseSelectionPreview');
+            if (previewEl) previewEl.innerText = `${globalSelectedLoose.length} loose booklets selected.`;
+        }
 
         if (preserveForm) {
-
             applyCourseFilter(true);
-
             // Do NOT call handleInstructorChange() - preserves active selections!
-
         } else {
-
             applyCourseFilter(false);
-
             handleInstructorChange();
-
         }
 
-
-
         document.getElementById('transaction-form').style.opacity = "1";
-
         document.getElementById('transaction-form').style.pointerEvents = "auto";
 
-
-
-        // Refresh loose stock list for this department
-
+        // Refresh loose stock list and update button/modal UI
         fetchLooseStockList(preserveForm);
-
     }
 
 
@@ -5238,6 +5248,10 @@ ${message}`));
 
         if (progBanner) progBanner.style.display = 'none';
 
+        const receiptDeptH = document.getElementById('receiptDeptHeader');
+
+        if (receiptDeptH) receiptDeptH.innerText = 'Department of Computer Studies';
+
         applyCourseFilter(false);
 
 
@@ -5252,7 +5266,12 @@ ${message}`));
 
         document.getElementById('instructorSelect').value = "";
 
+        globalSelectedLoose = [];
+        const previewEl = document.getElementById('looseSelectionPreview');
+        if (previewEl) previewEl.innerText = "0 loose booklets selected.";
+
         fetchLooseStockList();
+        updateLooseStockUI();
 
 
 
@@ -5346,7 +5365,7 @@ ${message}`));
 
                 selected_loose_controls: globalSelectedLoose,
 
-                clerk_department: activeUser.department || "CS",
+                clerk_department: (activeUser && activeUser.department && activeUser.department !== 'All') ? activeUser.department : (activePackDept || 'CS'),
 
                 distribution_mode: currentAllocationMode,
 
@@ -5406,9 +5425,11 @@ ${message}`));
 
                 // Deduct inventory stats in the background (Prompt Removed)
 
+                const txDemand = currentDemand;
+
                 if (bridgingPackQR) {
 
-                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (currentDemand - primaryPackStock), activePackDept, activePackTemplateName, activePackTemplateSlot);
+                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (txDemand - primaryPackStock), activePackDept, activePackTemplateName, activePackTemplateSlot, false);
 
                     bridgingPackQR = null;
 
@@ -5416,11 +5437,27 @@ ${message}`));
 
                 } else {
 
-                    primaryPackStock -= currentDemand;
+                    primaryPackStock -= txDemand;
 
                     document.getElementById('pack-stock-display').innerText = primaryPackStock;
 
                 }
+
+
+
+                // Immediate form state reset so fulfilled section cannot linger or trigger false concurrency alerts
+
+                document.getElementById('instructorSelect').value = "";
+
+                allocatedBooklets = [];
+
+                globalSelectedLoose = [];
+
+                currentDemand = 0;
+
+                handleInstructorChange();
+
+                fetchPendingDistributions(true);
 
 
 
@@ -5484,15 +5521,19 @@ ${message}`));
 
         allocatedBooklets = [];
 
-        switchAllocationMode('auto');
+        globalSelectedLoose = [];
+
+        currentDemand = 0;
 
         handleInstructorChange();
+
+        switchAllocationMode('auto');
 
         
 
         // 2. Fetch fresh demands
 
-        fetchPendingDistributions(); 
+        fetchPendingDistributions(true); 
 
         
 
@@ -5554,7 +5595,7 @@ ${message}`));
 
                 if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
 
-                    showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
+                    showDSSModal(data);
 
                 }
 
@@ -5606,89 +5647,74 @@ ${message}`));
 
     // Only the Admin will ever trigger this function
 
-    function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
-
-        let bCount = deficitBooklets;
-
-        let sCount = deficitSheets;
-
-        if (typeof message === 'object' && message !== null) {
-
-            reams = message.reams_needed;
-
-            bCount = message.deficit_booklets;
-
-            sCount = message.deficit_sheets;
-
-            message = message.message;
-
+    function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
+        let data = {};
+        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
+            data = dataOrMessage;
+        } else {
+            data = {
+                message: dataOrMessage,
+                reams_needed: reamsArg,
+                deficit_booklets: deficitBookletsArg,
+                deficit_sheets: deficitSheetsArg
+            };
         }
 
-        const modalHtml = `
+        const bCount = Number(data.deficit_booklets || 0);
+        const sCount = Number(data.deficit_sheets || 0);
+        const bufBooklets = Number(data.buffer_booklets || 0);
+        const bufSheets = Number(data.buffer_sheets || 0);
+        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
+        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
+        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
+        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
 
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+        if (document.getElementById('dssModal')) return;
 
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-
-                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-
-                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-
-                    
-
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-
-                            <span style="font-weight: 600;">📦 Inventory Deficit:</span>
-
-                            <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
-
-                        </div>
-
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-
-                            <span style="font-weight: 600;">🛒 Procurement Demand:</span>
-
-                            <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
-
-                        </div>
-
-                    </div>
-
-                    
-
-                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-
-                        To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
-
-                    </p>
-
-                    
-
-                    <div style="display: flex; justify-content: center;">
-
-                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-
-                            Acknowledge & Close
-
-                        </button>
-
-                    </div>
-
-                </div>
-
+        const bufferRowHtml = bufBooklets > 0 ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
+                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
             </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🎯 Target Production:</span>
+                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
+            </div>
+        ` : '';
 
+        const modalHtml = `
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                    
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">📦 Net Deficit:</span>
+                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
+                        </div>
+                        ${bufferRowHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
+                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
+                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
+                    </p>
+                    
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                            Acknowledge & Close
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
-
         document.body.insertAdjacentHTML('beforeend', modalHtml);
-
     }
-
-
 
     function dismissDSS() {
 
@@ -5764,17 +5790,6 @@ ${message}`));
 
 <script>
 
-function toggleSidebar() {
-
-    const sidebar = document.querySelector('.sidebar');
-
-    const overlay = document.querySelector('.sidebar-overlay');
-
-    if(sidebar) sidebar.classList.toggle('active');
-
-    if(overlay) overlay.classList.toggle('active');
-
-}
 
 </script>
 
@@ -5786,21 +5801,35 @@ function toggleSidebar() {
 
     <div class="modal-overlay" id="looseStockModal">
 
-        <div class="modal-card" style="max-width: 500px; text-align: left; border-top-color: #f39c12;">
+        <div class="modal-card" style="max-width: 580px; text-align: left; border-top-color: #f39c12;">
 
-            <span class="close" style="float: right; font-size: 1.5rem; cursor: default; color: #7f8c8d;" onclick="closeLooseStockModal()">&times;</span>
+            <span class="close" style="float: right; font-size: 1.5rem; cursor: pointer; color: #7f8c8d;" onclick="closeLooseStockModal()">&times;</span>
 
-            <h2>Select Loose Booklets</h2>
+            <h3 id="looseModalTitle" style="margin-bottom: 8px; color: #2c3e50;">Select Loose Booklets</h3>
 
-            <input type="text" id="looseSearch" placeholder="Search REF-..." onkeyup="filterLooseList()" style="width: 100%; padding: 10px; margin-bottom: 15px;">
+            <p id="looseModalBanner" style="font-size: 0.85rem; color: #7f8c8d; margin-bottom: 12px; line-height: 1.4; display: none;"></p>
 
-            <div id="looseListContainer" style="max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+            <div class="form-group" style="margin-bottom: 0;">
 
-                <!-- Checkboxes will be injected here via JS -->
+                <input type="text" id="looseSearch" class="ref-search" onkeyup="filterLooseList()" placeholder="🔍 Type Control No (e.g. 1ST26-0001)...">
+
+                <div class="ref-grid" id="looseListContainer">
+
+                    <div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading control numbers...</div>
+
+                </div>
+
+                <p id="looseSelectedCountRow" style="font-size: 0.8rem; color: #e74c3c; text-align: right; margin-top: 5px;">Total Selected: <span id="looseSelectedCount">0</span></p>
 
             </div>
 
-            <button class="btn btn-success" style="margin-top: 15px; width: 100%;" onclick="confirmLooseSelection()">Confirm Selection</button>
+            <div class="btn-group">
+
+                <button class="btn-cancel" id="looseModalCancelBtn" onclick="closeLooseStockModal()">Cancel</button>
+
+                <button class="btn-execute" id="looseModalConfirmBtn" onclick="confirmLooseSelection()">Confirm Selection</button>
+
+            </div>
 
         </div>
 

@@ -8,17 +8,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }
-        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
-        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
-        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-        
-        /* Main Content */
+/* Main Content */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
         .card { background: white; padding: 25px;width: max-content; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
         .card-title { margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -104,32 +94,13 @@
         .dialog-btn:active {
             transform: translateY(0);
         }
-        .sidebar-logout-btn:hover {
-            background-color: #c0392b !important;
-            transform: translateY(-1px);
-        }
-        .sidebar-logout-btn:active {
-            transform: translateY(0);
-        }
-    
-        /* Mobile Hamburger & Overlay Styles */
-        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-        .sidebar-overlay.active { display: block; }
+
 
         /* Responsive Mobile Layout Fixes */
         @media (max-width: 900px) {
             .card {width: max-content; margin: 0 auto;}
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-            
-            .mobile-header { display: flex; flex-shrink: 0; }
-            
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-            .sidebar.active { left: 0; }
-            .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
-            
-            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+.main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
             
             .pos-grid { flex-direction: column; }
             .control-panel { max-width: 100%; flex: auto; }
@@ -151,51 +122,7 @@
 </head>
 <body>
 
-<div class="mobile-header no-print">
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="mobile-title">BOOKLETLOG</div>
-</div>
-<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-
-    <div class="sidebar">
-        <!-- Notification Bell & Panel -->
-        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                    🔔
-                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-                </div>
-                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                    ⚙️
-                </a>
-            </div>
-            
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-                Loading alerts...
-            </div>
-        </div>
-
-        <div class="sidebar-header">Proposed System</div>
-        <a href="/dashboard" class="nav-link ">📊 Dashboard</a>
-        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
-        <a href="/generator" class="nav-link mobile-hide ">🖨️ PDF Generator</a>
-        <a href="/qr-registration" class="nav-link mobile-hide ">📥 QR Registration</a>
-        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
-        <a href="/history" class="nav-link active">📜 Transaction Trail</a>
-        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
-      
-        
-        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-        </div>
-    </div>
+{% include 'sidebar.html' %}
 
     <div class="main-content">
         <div class="card">
@@ -232,9 +159,7 @@
                 </select>
                 
                 <select id="filterDept" onchange="onDeptChange()">
-                    <option value="">All Programs (CS &amp; IT)</option>
-                    <option value="CS">Computer Science (BSCS)</option>
-                    <option value="IT">Information Technology (BSIT)</option>
+                    <option value="">-- All Programs --</option>
                 </select>
 
                 <select id="filterSection" onchange="applyFilters()">
@@ -516,7 +441,11 @@ ${message}`));
     }
     document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
     document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
-    if (activeUser.role !== 'Admin') document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none'); const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
+    if (activeUser.role !== 'Admin') {
+        document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
+        const navUsers = document.getElementById('navManageUsers');
+        if (navUsers) navUsers.innerHTML = '👤 My Account';
+    }
 
     async function logout() {
         const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
@@ -576,7 +505,28 @@ ${message}`));
         });
     }
 
-    window.onload = function() {
+    
+        async function loadHistoryAcademicPrograms() {
+            try {
+                const res = await fetch('/api/academic-programs');
+                const data = await res.json();
+                if (data.status === 'success' && data.programs) {
+                    const sel = document.getElementById('filterDept');
+                    if (sel) {
+                        const cur = sel.value;
+                        let opts = '<option value="">-- All Departments --</option>';
+                        data.programs.forEach(p => {
+                            opts += `<option value="${p.code}">${p.name} (${p.code})</option>`;
+                        });
+                        sel.innerHTML = opts;
+                        if (cur) sel.value = cur;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        window.onload = function() {
+            loadHistoryAcademicPrograms();
         fetchData(false);
         if (window.lanSync) {
             window.lanSync.onUpdate(() => {
@@ -675,8 +625,9 @@ ${message}`));
         const sectionSelect = document.getElementById('filterSection');
         sectionSelect.innerHTML = '<option value="">-- All Sections --</option>';
         let filteredSections = allSections;
-        if (dept === 'CS') filteredSections = allSections.filter(s => s.toUpperCase().includes('BSCS'));
-        else if (dept === 'IT') filteredSections = allSections.filter(s => s.toUpperCase().includes('BSIT'));
+        if (dept) {
+            filteredSections = [...new Set(globalHistory.filter(r => (r.department || '').toUpperCase() === dept.toUpperCase()).map(r => r.section))].sort();
+        }
         filteredSections.forEach(s => { sectionSelect.innerHTML += `<option value="${s}">${s}</option>`; });
     }
 
@@ -750,8 +701,9 @@ ${message}`));
             }
         }
         if (teacher) filtered = filtered.filter(row => row.teacher === teacher);
-        if (dept === 'CS') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSCS'));
-        else if (dept === 'IT') filtered = filtered.filter(row => row.section.toUpperCase().includes('BSIT'));
+        if (dept) {
+            filtered = filtered.filter(row => (row.department || '').toUpperCase() === dept.toUpperCase());
+        }
         if (section) filtered = filtered.filter(row => row.section === section);
         if (status) filtered = filtered.filter(row => row.payment_status === status);
         
@@ -771,7 +723,10 @@ ${message}`));
             let tr = document.createElement('tr');
             let actionHtml = "";
             
-            if (row.days_old > 21) {
+            if (row.qty === 0) {
+                actionHtml = `<span class="badge" style="background-color: #64748b; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="All distributed booklets for this transaction have been returned.">All Returned</span>`;
+            }
+            else if (row.days_old > 21) {
                 actionHtml = `<span class="badge" style="background-color: #2c3e50; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="The 21-day return window for this transaction has permanently expired.">🔒 Expired</span>`;
             } 
             else if (systemActivePeriod === row.exam_period || row.exam_period === "Legacy (No Period)") {
@@ -833,6 +788,15 @@ ${message}`));
                 defectBadge = `<div style="margin-top: 4px;"><span class="badge" style="background-color: #d35400; font-size: 0.72rem; padding: 2px 6px;" title="${row.defective_voided_qty} defective booklet(s) returned and voided for this section">⚠️ ${row.defective_voided_qty} Defective Voided</span></div>`;
             }
 
+            let droppedBadge = "";
+            if (row.dropped_returned_qty && row.dropped_returned_qty > 0) {
+                droppedBadge = `<div style="margin-top: 4px;"><span class="badge" style="background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; font-size: 0.72rem; padding: 2px 6px;" title="${row.dropped_returned_qty} booklet(s) returned due to dropped students and moved to loose stock">🔄 ${row.dropped_returned_qty} Dropped (In Loose Stock)</span></div>`;
+            }
+
+            const qtyBadge = (row.qty === 0)
+                ? `<span class="badge" style="background-color: #64748b; font-size: 0.78rem;" title="All booklets have been returned">0 (Returned)</span>`
+                : `<span class="badge" style="background-color: #34495e;">${row.qty}</span>`;
+
             tr.innerHTML = `
                 <td>${row.date}</td>
                 <td>
@@ -841,9 +805,9 @@ ${message}`));
                 </td>
                 <td>${row.section}</td>
                 <td>${row.subject}</td>
-                <td><span class="badge" style="background-color: #34495e;">${row.qty}</span></td>
+                <td>${qtyBadge}</td>
                 <td>${paymentHtml}</td>
-                <td class="ref-text">${row.refs}${defectBadge}</td>
+                <td class="ref-text">${row.refs}${defectBadge}${droppedBadge}</td>
                 <td>${actionHtml}</td>
             `;
             tbody.appendChild(tr);
@@ -1101,7 +1065,7 @@ ${message}`));
                 panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
             }
             if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
+                showDSSModal(data);
             }
         } else {
             badge.style.display = 'none';
@@ -1124,15 +1088,41 @@ ${message}`));
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
 
-    function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
-        let bCount = deficitBooklets;
-        let sCount = deficitSheets;
-        if (typeof message === 'object' && message !== null) {
-            reams = message.reams_needed;
-            bCount = message.deficit_booklets;
-            sCount = message.deficit_sheets;
-            message = message.message;
+    function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
+        let data = {};
+        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
+            data = dataOrMessage;
+        } else {
+            data = {
+                message: dataOrMessage,
+                reams_needed: reamsArg,
+                deficit_booklets: deficitBookletsArg,
+                deficit_sheets: deficitSheetsArg
+            };
         }
+
+        const bCount = Number(data.deficit_booklets || 0);
+        const sCount = Number(data.deficit_sheets || 0);
+        const bufBooklets = Number(data.buffer_booklets || 0);
+        const bufSheets = Number(data.buffer_sheets || 0);
+        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
+        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
+        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
+        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
+
+        if (document.getElementById('dssModal')) return;
+
+        const bufferRowHtml = bufBooklets > 0 ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
+                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🎯 Target Production:</span>
+                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
+            </div>
+        ` : '';
+
         const modalHtml = `
             <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
                 <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
@@ -1142,17 +1132,18 @@ ${message}`));
                     
                     <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                            <span style="font-weight: 600;">📦 Inventory Deficit:</span>
-                            <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
+                            <span style="font-weight: 600;">📦 Net Deficit:</span>
+                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                        ${bufferRowHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
+                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
+                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
                         </div>
                     </div>
                     
                     <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                        To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
+                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
                     </p>
                     
                     <div style="display: flex; justify-content: center;">
@@ -1161,7 +1152,8 @@ ${message}`));
                         </button>
                     </div>
                 </div>
-            </div>`;
+            </div>
+        `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
@@ -1200,12 +1192,7 @@ ${message}`));
 </script>
 
 <script>
-function toggleSidebar() {
-    const sidebar = document.querySelector('.sidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
-    if(sidebar) sidebar.classList.toggle('active');
-    if(overlay) overlay.classList.toggle('active');
-}
+
 </script>
 
 <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->

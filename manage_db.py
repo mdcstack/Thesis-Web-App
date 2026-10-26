@@ -67,7 +67,7 @@ def create_schema_tables():
     print("Generating all database tables via SQLAlchemy Base...")
     models.Base.metadata.create_all(bind=engine)
     ensure_schema_migrations()
-    print("All 7 tables generated successfully.")
+    print("All 8 tables generated successfully.")
 
 def hash_pw(plain_password: str) -> str:
     return bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -158,19 +158,32 @@ def perform_full_clean_reset(db_params):
         )
         db.add(admin)
 
-        # Unconfigured System Settings (Triggers Startup Setup Wizard)
+        # Unconfigured System Settings (Triggers Startup Setup Wizard - Clean Slate)
         settings = models.SystemSettings(
             active_period="UNSET",
-            current_semester_name="1ST26",
-            ream_price=250.0,
-            booklet_price=0.0,
-            sheets_per_booklet=6,
-            department_ream_budget=0.0,
+            current_semester_name=None,
+            ream_price=None,
+            booklet_price=None,
+            sheets_per_booklet=None,
+            department_ream_budget=None,
             budget_is_manual=False,
-            reorder_buffer_percent=15.0,
+            reorder_buffer_percent=None,
+            staples_box_price=None,
+            staples_per_box=None,
+            staples_per_booklet=None,
             data_version=1
         )
         db.add(settings)
+
+        # Academic Programs (Ensure Default CS and IT)
+        for p_code, p_name, p_prefix, p_color in [
+            ("CS", "Computer Science", "BSCS", "#3498db"),
+            ("IT", "Information Technology", "BSIT", "#e67e22")
+        ]:
+            existing_prog = db.query(models.AcademicProgram).filter_by(code=p_code).first()
+            if not existing_prog:
+                db.add(models.AcademicProgram(code=p_code, name=p_name, section_prefix=p_prefix, color_hex=p_color, is_active=True))
+        db.flush()
 
         # 6 Default Booklet Template Slots: 3 slots per department (Unconfigured)
         for dept in ["CS", "IT"]:
@@ -208,6 +221,7 @@ def perform_full_clean_reset(db_params):
         batch_count = db.query(models.MasterBatch).count()
         booklet_count = db.query(models.Booklet).count()
         period_count = db.query(models.PeriodConfiguration).count()
+        program_count = db.query(models.AcademicProgram).count()
 
         print("\n" + "=" * 62)
         print(" [SUCCESS] FULL DATABASE & WORKSPACE RESET COMPLETE")
@@ -219,6 +233,7 @@ def perform_full_clean_reset(db_params):
         print(" * Table Record Counts:")
         print(f"     - users:                    {user_count} (Single Admin)")
         print(f"     - system_settings:          {settings_count} (UNSET)")
+        print(f"     - academic_programs:        {program_count} (CS, IT)")
         print(f"     - booklet_template_configs: {template_count} (3 CS, 3 IT)")
         print(f"     - enrollments:              {enrollment_count}")
         print(f"     - master_batches:           {batch_count}")
@@ -294,6 +309,16 @@ def mode_demo_ready(db_params):
             data_version=1
         )
         db.add(settings)
+
+        # Academic Programs (Ensure Default CS and IT)
+        for p_code, p_name, p_prefix, p_color in [
+            ("CS", "Computer Science", "BSCS", "#3498db"),
+            ("IT", "Information Technology", "BSIT", "#e67e22")
+        ]:
+            existing_prog = db.query(models.AcademicProgram).filter_by(code=p_code).first()
+            if not existing_prog:
+                db.add(models.AcademicProgram(code=p_code, name=p_name, section_prefix=p_prefix, color_hex=p_color, is_active=True))
+        db.flush()
 
         # 4. Sample Class Enrollments (CS and IT)
         enrollments = [

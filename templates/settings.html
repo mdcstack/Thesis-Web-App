@@ -8,17 +8,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* Sidebar */
-        .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; }
-        .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; }
-        .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-        .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-        .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-        .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-        
-        /* Main Layout */
+/* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; overflow-x: hidden; }
 
         /* Dedicated horizontal scroll track for the audit card */
@@ -133,23 +123,12 @@
         .alert.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
         .alert.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
 
-        /* Mobile Hamburger & Overlay Styles */
-        .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; }
-        .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-        .sidebar-overlay.active { display: block; }
 
         /* Responsive Mobile Layout Fixes */
         @media (max-width: 900px) {
             .mobile-hide { display: none !important; }
             body { flex-direction: column; overflow: hidden; }
-            
-            .mobile-header { display: flex; flex-shrink: 0; }
-            
-            .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); }
-            .sidebar.active { left: 0; }
-            
-            .main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px; }
+.main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px; }
             .card { max-width: 100%; }
         }
 
@@ -214,61 +193,13 @@
             filter: brightness(0.92);
             transform: translateY(-1px);
         }
-        .sidebar-logout-btn:hover {
-            background-color: #c0392b !important;
-            transform: translateY(-1px);
-        }
-        .sidebar-logout-btn:active {
-            transform: translateY(0);
-        }
+
 
 </style>
 </head>
 <body>
 
-    <div class="mobile-header no-print">
-        <div class="hamburger" onclick="toggleSidebar()">☰</div>
-        <div class="mobile-title">BOOKLETLOG</div>
-    </div>
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-    <div class="sidebar">
-        <!-- Notification Bell & Panel -->
-        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                    🔔
-                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-                </div>
-                <a href="/settings" class="admin-only icon-utility-btn active" id="sidebarSettingsBtn" title="System Settings" style="color: #ffffff; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                    ⚙️
-                </a>
-            </div>
-            
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-                Loading alerts...
-            </div>
-        </div>
-
-        <div class="sidebar-header">Proposed System</div>
-        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
-        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only mobile-hide">📄 Booklet Template</a>
-        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a>
-        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
-        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
-        <a href="/history" class="nav-link">📜 Transaction Trail</a>
-        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
-        
-        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-        </div>
-    </div>
+    {% include 'sidebar.html' %}
 
     <div class="main-content">
         <div class="header-bar">
@@ -338,6 +269,46 @@
                     <div class="field-error" id="error_ream_price">⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).</div>
                 </div>
 
+                <!-- Direct Materials: Staples Expense Configuration -->
+                <div style="margin-top: 18px; margin-bottom: 18px; padding: 16px 18px; background: #fdfbf7; border: 1px solid #fde68a; border-left: 5px solid #d97706; border-radius: 8px;">
+                    <div style="font-weight: 700; color: #92400e; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                        <span>📎</span> <span>Staples Expense &amp; Binding Parameters</span>
+                    </div>
+                    <p style="margin: 0 0 14px 0; font-size: 0.85rem; color: #78350f;">
+                        Configure staple consumption and acquisition costs to accurately account for direct binding materials alongside paper reams in financial and expenditure reports.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 5px;">Price per Box of Staples (₱)</label>
+                            <input type="number" id="staples_box_price" step="0.01" min="1" placeholder="e.g., 50.00" required
+                                   style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
+                                   oninput="clearFieldError('staples_box_price'); updateStaplesPreview(); updateRecommendationBox();">
+                            <div class="field-error" id="error_staples_box_price">⚠️ Please enter a valid staple box price (₱).</div>
+                        </div>
+
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 5px;">Staples Consumed per Booklet</label>
+                            <input type="number" id="staples_per_booklet" min="1" max="20" step="1" placeholder="e.g., 2" required
+                                   style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
+                                   oninput="clearFieldError('staples_per_booklet'); updateStaplesPreview(); updateRecommendationBox();">
+                            <div class="field-error" id="error_staples_per_booklet">⚠️ Please enter staples consumed per booklet (1 to 20).</div>
+                        </div>
+
+                        <div>
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 5px;">Staples Quantity per Box</label>
+                            <input type="number" id="staples_per_box" min="100" step="100" placeholder="e.g., 1000" required
+                                   style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
+                                   oninput="clearFieldError('staples_per_box'); updateStaplesPreview(); updateRecommendationBox();">
+                            <div class="field-error" id="error_staples_per_box">⚠️ Please enter staple quantity per box (minimum 100).</div>
+                        </div>
+                    </div>
+
+                    <div id="staples_preview_badge" style="display: none; margin-top: 12px; padding: 8px 12px; background: #fff; border: 1px solid #fcd34d; border-radius: 6px; font-size: 0.85rem; color: #78350f;">
+                        📌 <strong>Staples Efficiency:</strong> 1 Box (<span id="preview_staples_box_qty" style="font-weight: 700;">1,000</span> staples) binds ~<strong id="preview_staples_yield" style="color: #059669;">500</strong> booklets at <span id="preview_staples_per_booklet" style="font-weight: 700;">2</span> staples/booklet (~₱<strong id="preview_staples_unit_cost" style="color: #d97706;">0.10</strong> staple cost per booklet).
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>Selling Price per Booklet (₱)</label>
                     <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="clearFieldError('booklet_price');">
@@ -345,9 +316,9 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Department Ream Budget (Cash Allocation in ₱)</label>
+                    <label>Department Material Budget (Cash Allocation in ₱)</label>
                     <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="clearFieldError('department_ream_budget');">
-                    <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental budget allocation (₱).</div>
+                    <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).</div>
                     
                     <!-- Clean, Structured Intelligent Recommendation Advisory Card -->
                     <div id="budget_recommendation_card" style="margin-top: 10px; background: #ffffff; border: 1px solid #d1fae5; border-left: 5px solid #10b981; border-radius: 8px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.25s ease;">
@@ -368,7 +339,7 @@
                                     ₱<span id="rec_budget_amount">0.00</span>
                                 </div>
                                 <div style="color: #64748b; font-size: 0.85rem;">
-                                    Estimated allocation required to cover enrolled classes
+                                    Estimated material allocation required to cover enrolled classes (Paper + Staples)
                                 </div>
                             </div>
 
@@ -379,12 +350,16 @@
                                     <div id="rec_metric_students" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">0 students</div>
                                 </div>
                                 <div>
-                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Yield per Ream</div>
-                                    <div id="rec_metric_yield" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">83 booklets</div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Paper Reams</div>
+                                    <div id="rec_metric_reams" style="font-weight: 700; color: #2563eb; font-size: 0.95rem; margin-top: 2px;">0 reams</div>
                                 </div>
                                 <div>
-                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Reams Required</div>
-                                    <div id="rec_metric_reams" style="font-weight: 700; color: #2563eb; font-size: 0.95rem; margin-top: 2px;">0 reams</div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Staples Boxes</div>
+                                    <div id="rec_metric_staples" style="font-weight: 700; color: #d97706; font-size: 0.95rem; margin-top: 2px;">0 boxes</div>
+                                </div>
+                                <div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Yield per Ream</div>
+                                    <div id="rec_metric_yield" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">83 booklets</div>
                                 </div>
                             </div>
                         </div>
@@ -397,14 +372,14 @@
                                 </span>
                             </div>
                             <p style="margin: 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
-                                The system has recognized class enrollments for this academic period. Please input <strong>Bond Paper Sheets Consumed Per Booklet</strong> and <strong>Price per Raw Bond Paper Ream (₱)</strong> above to automatically calculate your required paper reams and recommended cash allocation.
+                                The system has recognized class enrollments for this academic period. Please input <strong>Bond Paper Sheets Consumed Per Booklet</strong>, <strong>Price per Raw Bond Paper Ream (₱)</strong>, and <strong>Staples Binding Parameters</strong> above to automatically calculate your required direct materials and recommended cash allocation.
                             </p>
                         </div>
 
                         <!-- State 3: Truly Zero Enrolled Students -->
                         <div id="rec_zero_container" style="display: none; padding: 4px 0; color: #475569; font-size: 0.85rem; line-height: 1.5;">
                             <p style="margin: 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
-                                No enrolled classes have been uploaded yet. Please enter your department's initial allocated cash fund above (e.g., ₱5,000.00). Once classes are uploaded in <strong>Manage Classes</strong>, the demand-driven ream recommendation will automatically populate here.
+                                No enrolled classes have been uploaded yet. Please enter your department's initial allocated material fund above (e.g., ₱5,000.00). Once classes are uploaded in <strong>Manage Classes</strong>, the demand-driven material recommendation will automatically populate here.
                             </p>
                         </div>
                     </div>
@@ -418,6 +393,8 @@
                         🛡️ <strong>Heuristic Buffer:</strong> Applies a <strong id="preview_buffer_pct" style="color:#8e44ad;">15%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.
                     </div>
                 </div>
+
+
             </div>
 
             <div style="display: flex; gap: 12px; margin-top: 10px;">
@@ -427,6 +404,46 @@
                 <button type="button" class="btn-save" onclick="saveSettings()" style="flex: 1;" disabled>
                     Save Configuration
                 </button>
+            </div>
+        </div>
+
+        
+        <!-- ACADEMIC COURSES & SECTION PREFIX MANAGEMENT CARD -->
+        <div class="audit-scroll-wrapper" style="margin-top: 24px;">
+            <div class="card audit-card" style="border-left-color: #2563eb; margin-top: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2 style="margin-bottom: 4px; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                            <span>🎓</span> Academic Courses &amp; Section Configuration
+                        </h2>
+                        <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 0;">
+                            Manage accredited degree courses, register class section naming identifier prefixes (e.g. BSCS, BSIT, BSIM) for automatic class assignment, and configure visual color themes.
+                        </p>
+                    </div>
+                    <button type="button" onclick="openAddProgramModal()" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 9px 18px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(37,99,235,0.2); display: flex; align-items: center; gap: 6px;">
+                        <span>➕</span> Add New Course
+                    </button>
+                </div>
+
+                <table class="audit-table" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th style="width: 130px;">Course Code</th>
+                            <th>Full Course / Degree Name</th>
+                            <th>Section Identifier Prefix</th>
+                            <th style="width: 130px; text-align: center;">Theme Color</th>
+                            <th style="width: 110px; text-align: center;">Status</th>
+                            <th style="width: 150px; text-align: center;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="academicProgramsTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #64748b; padding: 24px;">
+                                Loading academic courses...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -454,7 +471,7 @@
                         <th style="min-width: 120px;">Booklet Price</th>
                         <th style="min-width: 130px;">Sheets/Booklet</th>
                         <th style="min-width: 110px;">Yield</th>
-                        <th style="min-width: 140px;">Ream Budget</th>
+                        <th style="min-width: 140px;">Material Budget</th>
                         <th style="min-width: 110px;">Safety %</th>
                         <th style="min-width: 130px;">Configured By</th>
                         <th style="min-width: 160px;">Last Updated</th>
@@ -513,12 +530,20 @@
                         <strong id="modalSummaryReamPrice" style="color: #0f172a;">-</strong>
                     </div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                        <span style="color: #64748b;">Department Ream Budget:</span>
+                        <span style="color: #64748b;">Department Material Budget:</span>
                         <strong id="modalSummaryBudget" style="color: #059669;">-</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                         <span style="color: #64748b;">Reorder Buffer:</span>
                         <strong id="modalSummaryBuffer" style="color: #8e44ad;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #64748b;">Staples Box Price:</span>
+                        <strong id="modalSummaryStaplesBoxPrice" style="color: #d97706;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #64748b;">Staples Usage:</span>
+                        <strong id="modalSummaryStaplesUsage" style="color: #0f172a;">-</strong>
                     </div>
                 </div>
 
@@ -530,7 +555,175 @@
             </div>
         </div>
     </div>
+    <!-- SETTINGS OVERWRITE WARNING & CONFIRMATION MODAL -->
+    <div id="confirmSaveSettingsModal" class="modal-overlay" onclick="if(event.target === this) closeConfirmSaveSettingsModal();" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 10002; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; width: 92%; max-width: 580px; box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: popIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
+            
+            <!-- Modal Header -->
+            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 22px 24px; color: white;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700;">Confirm Configuration Save</h2>
+                        <p style="margin: 3px 0 0; font-size: 0.85rem; opacity: 0.92;">Notice: This action will overwrite system and period parameters</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div style="padding: 22px 24px;">
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.88rem; color: #92400e; line-height: 1.5;">
+                    ⚠️ <strong>Warning:</strong> Saving will overwrite or establish the configuration parameters for <strong id="confirmModalPeriod" style="color: #78350f;">-</strong>. All future booklet allocations, DSS inventory projections, and financial expenditure calculations for this period will adopt these values.
+                </div>
+
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; font-size: 0.85rem; color: #334155; margin-bottom: 20px;">
+                    <div style="font-weight: 700; color: #1e293b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.78rem;">
+                        📋 Parameters to be Saved
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;">
+                        <div><span style="color: #64748b;">Exam Period:</span> <strong id="confirmModalPeriodVal" style="color: #0f172a; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Control Prefix:</span> <strong id="confirmModalPrefixVal" style="color: #2563eb; display: block; font-family: monospace;">-</strong></div>
+                        <div><span style="color: #64748b;">Ream Paper Price:</span> <strong id="confirmModalReamPrice" style="color: #0f172a; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Sheets Per Booklet:</span> <strong id="confirmModalSheets" style="color: #0f172a; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Booklet Selling Price:</span> <strong id="confirmModalBookletPrice" style="color: #0f172a; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Department Material Budget:</span> <strong id="confirmModalBudget" style="color: #059669; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Safety Buffer:</span> <strong id="confirmModalBuffer" style="color: #8e44ad; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Staples Box Price:</span> <strong id="confirmModalStaplesBoxPrice" style="color: #d97706; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Staples / Booklet:</span> <strong id="confirmModalStaplesPerBooklet" style="color: #0f172a; display: block;">-</strong></div>
+                        <div><span style="color: #64748b;">Staples / Box:</span> <strong id="confirmModalStaplesPerBox" style="color: #0f172a; display: block;">-</strong></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" onclick="closeConfirmSaveSettingsModal()" style="background: #e2e8f0; color: #334155; border: none; padding: 11px 18px; border-radius: 6px; font-weight: 600; font-size: 0.92rem; cursor: pointer; transition: background 0.2s;">
+                        Cancel
+                    </button>
+                    <button type="button" id="confirmSaveSettingsBtn" onclick="executeSaveSettings()" style="background: #d97706; color: white; border: none; padding: 11px 22px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(217,119,6,0.3);">
+                        Confirm &amp; Overwrite Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ZERO BUFFER SAFETY MARGIN CONFIRMATION MODAL -->
+    
+    <!-- MODAL: ADD ACADEMIC PROGRAM -->
+    <div id="addProgramModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; width: 92%; max-width: 520px; box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: popIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+            <div style="background: linear-gradient(135deg, #1e40af, #2563eb); padding: 18px 22px; color: white; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span>🎓</span> Add New Academic Program
+                </h3>
+                <span onclick="closeAddProgramModal()" style="font-size: 1.5rem; cursor: pointer; line-height: 1; opacity: 0.8;">&times;</span>
+            </div>
+            <div style="padding: 22px;">
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Course Code <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="newProgCode" placeholder="e.g., IM, IS, CPE" maxlength="15" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-family: monospace; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase(); updateProgPreview()">
+                    <span style="font-size: 0.78rem; color: #64748b;">Short departmental abbreviation (used across database & filters).</span>
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Full Course / Degree Name <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="newProgName" placeholder="e.g., Information Management" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 500;" oninput="updateProgPreview()">
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Section Identifier Prefix <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="newProgPrefix" placeholder="e.g., BSIM, BSIS, BSCPE" maxlength="15" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-family: monospace; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase(); updateProgPreview()">
+                    <div id="newProgPrefixPreview" style="margin-top: 6px; font-size: 0.78rem; color: #2563eb; background: #eff6ff; padding: 6px 10px; border-radius: 4px; border: 1px solid #dbeafe;">
+                        💡 Auto-detection rule: Any class like <strong>BSIM-1A</strong> or <strong>BSIM-2B</strong> will automatically be mapped to this course.
+                    </div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Theme Color Swatch
+                    </label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="newProgColor" value="#9b59b6" style="width: 48px; height: 38px; border: none; border-radius: 6px; cursor: pointer;">
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <span onclick="setNewProgColor('#3498db')" style="width: 26px; height: 26px; border-radius: 50%; background: #3498db; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Blue"></span>
+                            <span onclick="setNewProgColor('#e67e22')" style="width: 26px; height: 26px; border-radius: 50%; background: #e67e22; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Orange"></span>
+                            <span onclick="setNewProgColor('#9b59b6')" style="width: 26px; height: 26px; border-radius: 50%; background: #9b59b6; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Purple"></span>
+                            <span onclick="setNewProgColor('#10b981')" style="width: 26px; height: 26px; border-radius: 50%; background: #10b981; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Emerald"></span>
+                            <span onclick="setNewProgColor('#f43f5e')" style="width: 26px; height: 26px; border-radius: 50%; background: #f43f5e; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Rose"></span>
+                            <span onclick="setNewProgColor('#06b6d4')" style="width: 26px; height: 26px; border-radius: 50%; background: #06b6d4; cursor: pointer; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Teal"></span>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="closeAddProgramModal()" style="background: #e2e8f0; color: #334155; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="saveNewProgram()" style="background: #2563eb; color: white; border: none; padding: 10px 22px; border-radius: 6px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 4px rgba(37,99,235,0.25);">
+                        Save Course
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT ACADEMIC PROGRAM -->
+    <div id="editProgramModal" class="modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; width: 92%; max-width: 520px; box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: popIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+            <div style="background: linear-gradient(135deg, #0f172a, #334155); padding: 18px 22px; color: white; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span>✏️</span> Edit Academic Course
+                </h3>
+                <span onclick="closeEditProgramModal()" style="font-size: 1.5rem; cursor: pointer; line-height: 1; opacity: 0.8;">&times;</span>
+            </div>
+            <div style="padding: 22px;">
+                <input type="hidden" id="editProgId">
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Course Code
+                    </label>
+                    <input type="text" id="editProgCode" readonly style="width: 100%; padding: 10px 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px; font-weight: 700; font-family: monospace; color: #64748b;">
+                    <span style="font-size: 0.75rem; color: #64748b;">Program codes cannot be renamed to preserve audit references.</span>
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Full Course / Degree Name <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="editProgName" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 500;">
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Section Identifier Prefix <span style="color: #dc2626;">*</span>
+                    </label>
+                    <input type="text" id="editProgPrefix" maxlength="15" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-family: monospace; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase();">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+                        Theme Color
+                    </label>
+                    <input type="color" id="editProgColor" style="width: 48px; height: 38px; border: none; border-radius: 6px; cursor: pointer;">
+                </div>
+                <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="editProgActive" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="editProgActive" style="font-weight: 600; font-size: 0.88rem; color: #1e293b; cursor: pointer;">
+                        Active Program (Visible in dropdowns, generation, and reports)
+                    </label>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="closeEditProgramModal()" style="background: #e2e8f0; color: #334155; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="updateProgram()" style="background: #1e293b; color: white; border: none; padding: 10px 22px; border-radius: 6px; font-weight: 700; cursor: pointer;">
+                        Update Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="zeroBufferModal" class="modal-overlay" onclick="if(event.target === this) closeZeroBufferModal();" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 10001; justify-content: center; align-items: center;">
         <div style="background: white; border-radius: 12px; width: 90%; max-width: 520px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); animation: fadeIn 0.2s ease;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
@@ -585,14 +778,40 @@
             }
         }
 
-    // --- IN-APP CONFIRMATION DIALOG SYSTEM ---
+    // --- HTML ESCAPE UTILITY ---
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // --- IN-APP CONFIRMATION & ALERT DIALOG SYSTEM ---
+    function showAppAlert(title, message, type = 'info') {
+        return showAppConfirm(title, message, {
+            type: type,
+            confirmText: 'OK',
+            cancelText: null,
+            showCancel: false
+        });
+    }
+
+    function showCustomLogModal(message, type = 'info') {
+        const title = type === 'success' ? 'Academic Course Configured' : (type === 'danger' ? 'Action Failed' : 'Notice');
+        return showAppAlert(title, message, type);
+    }
+
     function showAppConfirm(title, message, options = {}) {
         return new Promise(resolve => {
             const {
                 type = 'warning',
                 confirmText = 'Confirm',
                 cancelText = 'Cancel',
-                confirmBg = null
+                confirmBg = null,
+                showCancel = true
             } = options;
 
             const modal = document.getElementById('appDialogModal');
@@ -646,8 +865,12 @@
             }
 
             if (cancelBtn) {
-                cancelBtn.style.display = 'inline-block';
-                cancelBtn.innerText = cancelText;
+                if (showCancel === false || cancelText === null) {
+                    cancelBtn.style.display = 'none';
+                } else {
+                    cancelBtn.style.display = 'inline-block';
+                    cancelBtn.innerText = cancelText;
+                }
             }
 
             function cleanup(result) {
@@ -720,7 +943,7 @@
                     panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
                     
                     if (!sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data.message, data.reams_needed, data.deficit_booklets, data.deficit_sheets);
+                        showDSSModal(data);
                     }
                 } else {
                     badge.style.display = 'none';
@@ -734,49 +957,76 @@
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }
 
-        function showDSSModal(message, reams, deficitBooklets, deficitSheets) {
-            let bCount = deficitBooklets;
-            let sCount = deficitSheets;
-            if (typeof message === 'object' && message !== null) {
-                reams = message.reams_needed;
-                bCount = message.deficit_booklets;
-                sCount = message.deficit_sheets;
-                message = message.message;
-            }
-            const modalHtml = `
-                <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                    <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                        <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-                        <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-                        <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-                        
-                        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                                <span style="font-weight: 600;">📦 Inventory Deficit:</span>
-                                <span style="font-weight: 700; color: #be123c;">${bCount ? bCount + ' booklets (' + (sCount || 0) + ' sheets)' : 'Active Deficit'}</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-weight: 600;">🛒 Procurement Demand:</span>
-                                <span style="font-weight: 800; font-size: 1rem; color: #991b1b;">${reams} whole Ream(s)</span>
-                            </div>
-                        </div>
-                        
-                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                            To fulfill upcoming examination demand across enrolled class sections, please procure the recommended paper stock before distribution begins.
-                        </p>
-                        
-                        <div style="display: flex; justify-content: center;">
-                            <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-                                Acknowledge & Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
+        let data = {};
+        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
+            data = dataOrMessage;
+        } else {
+            data = {
+                message: dataOrMessage,
+                reams_needed: reamsArg,
+                deficit_booklets: deficitBookletsArg,
+                deficit_sheets: deficitSheetsArg
+            };
         }
 
-        function dismissDSS() {
+        const bCount = Number(data.deficit_booklets || 0);
+        const sCount = Number(data.deficit_sheets || 0);
+        const bufBooklets = Number(data.buffer_booklets || 0);
+        const bufSheets = Number(data.buffer_sheets || 0);
+        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
+        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
+        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
+        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
+
+        if (document.getElementById('dssModal')) return;
+
+        const bufferRowHtml = bufBooklets > 0 ? `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
+                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                <span style="font-weight: 600;">🎯 Target Production:</span>
+                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
+            </div>
+        ` : '';
+
+        const modalHtml = `
+            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
+                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
+                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
+                    
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">📦 Net Deficit:</span>
+                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
+                        </div>
+                        ${bufferRowHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
+                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
+                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
+                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
+                    </p>
+                    
+                    <div style="display: flex; justify-content: center;">
+                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
+                            Acknowledge & Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    function dismissDSS() {
             sessionStorage.setItem('dss_acknowledged', 'true');
             const modal = document.getElementById('dssModal');
             if (modal) modal.remove();
@@ -809,7 +1059,10 @@
                 'ream_price',
                 'booklet_price',
                 'department_ream_budget',
-                'reorder_buffer_percent'
+                'reorder_buffer_percent',
+                'staples_box_price',
+                'staples_per_booklet',
+                'staples_per_box'
             ];
 
             dependentIds.forEach(id => {
@@ -936,7 +1189,7 @@
             const budgetVal = budgetInput.value.trim();
             const budget = parseFloat(budgetVal);
             if (budgetVal === "" || isNaN(budget) || budget <= 0) {
-                showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental budget allocation (₱).');
+                showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).');
                 isValid = false;
                 if (!firstInvalidEl) firstInvalidEl = budgetInput;
             } else {
@@ -953,6 +1206,42 @@
                 if (!firstInvalidEl) firstInvalidEl = bufferInput;
             } else {
                 clearFieldError('reorder_buffer_percent');
+            }
+
+            // 7. Staples Box Price
+            const stapleBoxInput = document.getElementById('staples_box_price');
+            const stapleBoxVal = stapleBoxInput.value.trim();
+            const stapleBox = parseFloat(stapleBoxVal);
+            if (stapleBoxVal === "" || isNaN(stapleBox) || stapleBox <= 0) {
+                showFieldError('staples_box_price', '⚠️ Please enter a valid staple box price (₱).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = stapleBoxInput;
+            } else {
+                clearFieldError('staples_box_price');
+            }
+
+            // 8. Staples Consumed Per Booklet
+            const staplePerBInput = document.getElementById('staples_per_booklet');
+            const staplePerBVal = staplePerBInput.value.trim();
+            const staplePerB = parseInt(staplePerBVal, 10);
+            if (staplePerBVal === "" || isNaN(staplePerB) || staplePerB < 1 || staplePerB > 20) {
+                showFieldError('staples_per_booklet', '⚠️ Please enter staples consumed per booklet (1 to 20).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = staplePerBInput;
+            } else {
+                clearFieldError('staples_per_booklet');
+            }
+
+            // 9. Staples Quantity Per Box
+            const stapleQtyInput = document.getElementById('staples_per_box');
+            const stapleQtyVal = stapleQtyInput.value.trim();
+            const stapleQty = parseInt(stapleQtyVal, 10);
+            if (stapleQtyVal === "" || isNaN(stapleQty) || stapleQty < 100) {
+                showFieldError('staples_per_box', '⚠️ Please enter staple quantity per box (minimum 100).');
+                isValid = false;
+                if (!firstInvalidEl) firstInvalidEl = stapleQtyInput;
+            } else {
+                clearFieldError('staples_per_box');
             }
 
             if (!isValid && firstInvalidEl) {
@@ -989,10 +1278,25 @@
             const isYearValid = !isNaN(startYear) && startYear >= 2000 && startYear <= 2099 && startVal.length === 4;
             const isUnlocked = isPeriodValid && isYearValid;
 
+            const staplePriceEl = document.getElementById('staples_box_price');
+            const staplePerBEl = document.getElementById('staples_per_booklet');
+            const staplePerBoxEl = document.getElementById('staples_per_box');
+
+            const stapleBoxPrice = staplePriceEl ? (parseFloat(staplePriceEl.value.trim()) || 50.0) : 50.0;
+            const staplesPerBooklet = staplePerBEl ? (parseInt(staplePerBEl.value.trim(), 10) || 2) : 2;
+            const staplesPerBox = staplePerBoxEl ? (parseInt(staplePerBoxEl.value.trim(), 10) || 1000) : 1000;
+
             if (currentTotalDemand > 0 && yieldPerReam > 0 && reamPrice > 0) {
                 // --- STATE 1: ACTIVE RECOMMENDATION READY ---
                 const reamsNeeded = Math.ceil(currentTotalDemand / yieldPerReam);
-                computedRecommendedBudget = Math.round((reamsNeeded * reamPrice + Number.EPSILON) * 100) / 100;
+                const paperBudget = reamsNeeded * reamPrice;
+
+                const totalStaplesNeeded = currentTotalDemand * (staplesPerBooklet > 0 ? staplesPerBooklet : 2);
+                const boxCapacity = staplesPerBox > 0 ? staplesPerBox : 1000;
+                const stapleBoxesNeeded = Math.ceil(totalStaplesNeeded / boxCapacity);
+                const staplesBudget = stapleBoxesNeeded * stapleBoxPrice;
+
+                computedRecommendedBudget = Math.round((paperBudget + staplesBudget + Number.EPSILON) * 100) / 100;
 
                 if (card) {
                     card.style.borderLeft = '5px solid #10b981';
@@ -1000,7 +1304,7 @@
                     card.style.background = '#ffffff';
                 }
                 if (cardTitle) {
-                    cardTitle.innerHTML = '<span style="color: #059669;">⚡</span> <span>Demand-Driven Budget Recommendation</span>';
+                    cardTitle.innerHTML = '<span style="color: #059669;">⚡</span> <span>Demand-Driven Material Budget Recommendation</span>';
                     cardTitle.style.color = '#065f46';
                 }
 
@@ -1011,10 +1315,12 @@
                 const metricStudents = document.getElementById('rec_metric_students');
                 const metricYield = document.getElementById('rec_metric_yield');
                 const metricReams = document.getElementById('rec_metric_reams');
+                const metricStaples = document.getElementById('rec_metric_staples');
 
                 if (metricStudents) metricStudents.innerText = `${currentTotalDemand.toLocaleString()} students`;
+                if (metricReams) metricReams.innerText = `${reamsNeeded} ream${reamsNeeded !== 1 ? 's' : ''} (₱${paperBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                if (metricStaples) metricStaples.innerText = `${stapleBoxesNeeded} box${stapleBoxesNeeded !== 1 ? 'es' : ''} (₱${staplesBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
                 if (metricYield) metricYield.innerText = `${yieldPerReam} booklets / ream`;
-                if (metricReams) metricReams.innerText = `${reamsNeeded} whole ream${reamsNeeded !== 1 ? 's' : ''}`;
 
                 if (recActiveEl) recActiveEl.style.display = 'block';
                 if (recPendingEl) recPendingEl.style.display = 'none';
@@ -1196,6 +1502,10 @@
                     document.getElementById('booklet_price').value = (data.booklet_price !== null && data.booklet_price > 0) ? data.booklet_price : '';
                     document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
                     document.getElementById('department_ream_budget').value = (data.department_ream_budget !== null && data.department_ream_budget > 0) ? data.department_ream_budget : '';
+                    document.getElementById('staples_box_price').value = (data.staples_box_price !== null && data.staples_box_price > 0) ? data.staples_box_price : '';
+                    document.getElementById('staples_per_booklet').value = (data.staples_per_booklet !== null && data.staples_per_booklet > 0) ? data.staples_per_booklet : '';
+                    document.getElementById('staples_per_box').value = (data.staples_per_box !== null && data.staples_per_box > 0) ? data.staples_per_box : '';
+                    updateStaplesPreview();
                 } else {
                     // Unconfigured period: clear fields to empty to force user to enter parameters!
                     document.getElementById('sheets_per_booklet').value = '';
@@ -1203,6 +1513,10 @@
                     document.getElementById('booklet_price').value = '';
                     document.getElementById('reorder_buffer_percent').value = '';
                     document.getElementById('department_ream_budget').value = '';
+                    document.getElementById('staples_box_price').value = '';
+                    document.getElementById('staples_per_booklet').value = '';
+                    document.getElementById('staples_per_box').value = '';
+                    updateStaplesPreview();
                 }
                 updateYieldPreview();
                 updateBufferPreview();
@@ -1252,6 +1566,119 @@
             }
         }
 
+        function updateStaplesPreview() {
+            const boxPriceInput = document.getElementById('staples_box_price');
+            const perBookletInput = document.getElementById('staples_per_booklet');
+            const perBoxInput = document.getElementById('staples_per_box');
+            const badge = document.getElementById('staples_preview_badge');
+            if (!boxPriceInput || !perBookletInput || !perBoxInput || !badge) return;
+
+            const boxPrice = parseFloat(boxPriceInput.value);
+            const perBooklet = parseInt(perBookletInput.value, 10);
+            const perBox = parseInt(perBoxInput.value, 10);
+
+            if (!isNaN(boxPrice) && boxPrice > 0 && !isNaN(perBooklet) && perBooklet > 0 && !isNaN(perBox) && perBox > 0) {
+                const bookletsPerBox = Math.floor(perBox / perBooklet);
+                const costPerBooklet = (boxPrice / perBox) * perBooklet;
+                document.getElementById('preview_staples_box_qty').innerText = perBox.toLocaleString();
+                document.getElementById('preview_staples_per_booklet').innerText = perBooklet;
+                document.getElementById('preview_staples_yield').innerText = bookletsPerBox.toLocaleString();
+                document.getElementById('preview_staples_unit_cost').innerText = costPerBooklet.toFixed(2);
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        let pendingSettingsPayload = null;
+
+        function openConfirmSaveSettingsModal(payload) {
+            pendingSettingsPayload = payload;
+            const modal = document.getElementById('confirmSaveSettingsModal');
+            if (!modal) return;
+
+            document.getElementById('confirmModalPeriod').innerText = payload.active_period;
+            document.getElementById('confirmModalPeriodVal').innerText = payload.active_period;
+            const currentPrefix = document.getElementById('generated_prefix_badge');
+            document.getElementById('confirmModalPrefixVal').innerText = currentPrefix ? currentPrefix.innerText.trim() : '-';
+            document.getElementById('confirmModalReamPrice').innerText = `₱${payload.ream_price.toFixed(2)} / ream`;
+            const yieldVal = Math.floor(500 / payload.sheets_per_booklet);
+            document.getElementById('confirmModalSheets').innerText = `${payload.sheets_per_booklet} sheets (${yieldVal} pcs/ream)`;
+            document.getElementById('confirmModalBookletPrice').innerText = `₱${payload.booklet_price.toFixed(2)} / pc`;
+            document.getElementById('confirmModalBudget').innerText = `₱${payload.department_ream_budget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('confirmModalBuffer').innerText = payload.reorder_buffer_percent === 0 ? '0% (Exact Demand)' : `${payload.reorder_buffer_percent}%`;
+            document.getElementById('confirmModalStaplesBoxPrice').innerText = `₱${payload.staples_box_price.toFixed(2)} / box`;
+            document.getElementById('confirmModalStaplesPerBooklet').innerText = `${payload.staples_per_booklet} staples / booklet`;
+            document.getElementById('confirmModalStaplesPerBox').innerText = `${payload.staples_per_box.toLocaleString()} pcs / box`;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeConfirmSaveSettingsModal() {
+            const modal = document.getElementById('confirmSaveSettingsModal');
+            if (modal) modal.style.display = 'none';
+            pendingSettingsPayload = null;
+        }
+
+        async function executeSaveSettings() {
+            if (!pendingSettingsPayload) return;
+            const payload = pendingSettingsPayload;
+
+            const modalBtn = document.getElementById('confirmSaveSettingsBtn');
+            const saveBtn = document.querySelector('.btn-save');
+            const defaultSaveBtnText = 'Save Configuration';
+
+            if (modalBtn) {
+                modalBtn.disabled = true;
+                modalBtn.innerText = 'Saving Configuration...';
+            }
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerText = 'Saving Configuration...';
+            }
+
+            try {
+                let res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                let data = await res.json();
+                let alertBox = document.getElementById('alertBox');
+                if (data.status === 'success') {
+                    closeConfirmSaveSettingsModal();
+                    if (alertBox) {
+                        alertBox.className = 'alert success';
+                        alertBox.innerText = data.message;
+                        alertBox.style.display = 'block';
+                        setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
+                    }
+                    showSaveSuccessModal(data.message, payload);
+                    loadPeriodConfigurationsHistory();
+                } else {
+                    if (alertBox) {
+                        alertBox.className = 'alert error';
+                        alertBox.innerText = data.message || 'Error saving settings.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.message || 'Error saving settings.');
+                }
+            } catch(e) {
+                console.error(e);
+                alert('Connection error occurred while saving configuration.');
+            } finally {
+                if (modalBtn) {
+                    modalBtn.disabled = false;
+                    modalBtn.innerText = 'Confirm & Overwrite Configuration';
+                }
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerText = defaultSaveBtnText;
+                }
+            }
+        }
+
         function clearAllSettingsFields() {
             document.getElementById('active_period').value = '';
             document.getElementById('ay_start_year').value = '';
@@ -1261,9 +1688,12 @@
             document.getElementById('booklet_price').value = '';
             document.getElementById('department_ream_budget').value = '';
             document.getElementById('reorder_buffer_percent').value = '';
+            document.getElementById('staples_box_price').value = '';
+            document.getElementById('staples_per_booklet').value = '';
+            document.getElementById('staples_per_box').value = '';
             
             // Clear any active validation error states
-            ['active_period', 'ay_start_year', 'sheets_per_booklet', 'ream_price', 'booklet_price', 'department_ream_budget', 'reorder_buffer_percent'].forEach(clearFieldError);
+            ['active_period', 'ay_start_year', 'sheets_per_booklet', 'ream_price', 'booklet_price', 'department_ream_budget', 'reorder_buffer_percent', 'staples_box_price', 'staples_per_booklet', 'staples_per_box'].forEach(clearFieldError);
             
             updateGeneratedPrefix();
             updateYieldPreview();
@@ -1338,6 +1768,9 @@
                     document.getElementById('booklet_price').value = '';
                     document.getElementById('reorder_buffer_percent').value = '';
                     document.getElementById('department_ream_budget').value = '';
+                    document.getElementById('staples_box_price').value = '';
+                    document.getElementById('staples_per_booklet').value = '';
+                    document.getElementById('staples_per_box').value = '';
                 } else {
                     document.getElementById('generated_prefix_badge').innerText = data.current_semester_name || "--";
                     document.getElementById('generated_prefix_badge').style.color = "#2c3e50";
@@ -1347,6 +1780,10 @@
                     document.getElementById('booklet_price').value = data.booklet_price && data.booklet_price > 0 ? data.booklet_price : '';
                     document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
                     document.getElementById('department_ream_budget').value = data.department_ream_budget && data.department_ream_budget > 0 ? data.department_ream_budget : '';
+                    document.getElementById('staples_box_price').value = (data.staples_box_price !== null && data.staples_box_price > 0) ? data.staples_box_price : '';
+                    document.getElementById('staples_per_booklet').value = (data.staples_per_booklet !== null && data.staples_per_booklet > 0) ? data.staples_per_booklet : '';
+                    document.getElementById('staples_per_box').value = (data.staples_per_box !== null && data.staples_per_box > 0) ? data.staples_per_box : '';
+                    updateStaplesPreview();
                     
                     let fullPeriod = data.active_period || "";
                     let parts = fullPeriod.split(" | ");
@@ -1444,14 +1881,6 @@
             // Reset flag after verification
             hasConfirmedZeroBuffer = false;
 
-            // Network Execution Phase: Lock button here
-            const btn = document.querySelector('.btn-save');
-            const defaultBtnText = 'Save Configuration';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerText = 'Saving Configuration...';
-            }
-
             const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const configuredBy = activeUser ? activeUser.username : 'Administrator';
 
@@ -1462,44 +1891,14 @@
                 active_period: document.getElementById('active_period').value + ' | ' + getAcademicYearString(),
                 department_ream_budget: parseFloat(document.getElementById('department_ream_budget').value),
                 reorder_buffer_percent: bufferPercent,
+                staples_box_price: parseFloat(document.getElementById('staples_box_price').value),
+                staples_per_booklet: parseInt(document.getElementById('staples_per_booklet').value),
+                staples_per_box: parseInt(document.getElementById('staples_per_box').value),
                 configured_by: configuredBy
             };
 
-            try {
-                let res = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                
-                let data = await res.json();
-                let alertBox = document.getElementById('alertBox');
-                if (data.status === 'success') {
-                    if (alertBox) {
-                        alertBox.className = 'alert success';
-                        alertBox.innerText = data.message;
-                        alertBox.style.display = 'block';
-                        setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
-                    }
-                    showSaveSuccessModal(data.message, payload);
-                    loadPeriodConfigurationsHistory();
-                } else {
-                    if (alertBox) {
-                        alertBox.className = 'alert error';
-                        alertBox.innerText = data.message || 'Error saving settings.';
-                        alertBox.style.display = 'block';
-                    }
-                    alert(data.message || 'Error saving settings.');
-                }
-            } catch(e) {
-                console.error(e);
-                alert('Connection error occurred while saving configuration.');
-            } finally {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerText = defaultBtnText;
-                }
-            }
+            // Intercept with Overwrite Confirmation Modal before network execution
+            openConfirmSaveSettingsModal(payload);
         }
 
         function showSaveSuccessModal(serverMessage, payload) {
@@ -1540,6 +1939,16 @@
                 }
             }
 
+            const stapleBoxEl = document.getElementById('modalSummaryStaplesBoxPrice');
+            if (stapleBoxEl && payload.staples_box_price) {
+                stapleBoxEl.innerText = `₱${payload.staples_box_price.toFixed(2)} / box (${payload.staples_per_box.toLocaleString()} pcs)`;
+            }
+
+            const stapleUsageEl = document.getElementById('modalSummaryStaplesUsage');
+            if (stapleUsageEl && payload.staples_per_booklet) {
+                stapleUsageEl.innerText = `${payload.staples_per_booklet} staples/booklet (~₱${((payload.staples_box_price / payload.staples_per_box) * payload.staples_per_booklet).toFixed(2)}/pc)`;
+            }
+
             modal.style.display = 'flex';
         }
 
@@ -1563,11 +1972,24 @@
                     closeZeroBufferModal();
                 }
             }
+
+            const confirmModal = document.getElementById('confirmSaveSettingsModal');
+            if (confirmModal && confirmModal.style.display === 'flex') {
+                if (e.key === 'Escape') {
+                    closeConfirmSaveSettingsModal();
+                }
+            }
         });
 
-        document.addEventListener('DOMContentLoaded', updateDependentFieldsState);
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDependentFieldsState();
+            loadAcademicPrograms();
+        });
         updateDependentFieldsState();
-        window.onload = fetchSettings;
+        window.onload = () => {
+            fetchSettings();
+            loadAcademicPrograms();
+        };
 
         // --- REAL-TIME SESSION POLLING ---
         setInterval(() => {
@@ -1604,12 +2026,226 @@
         }
 
         // --- SIDEBAR TOGGLE LOGIC ---
-        function toggleSidebar() {
-            const sidebar = document.querySelector('.sidebar');
-            const overlay = document.querySelector('.sidebar-overlay');
-            if(sidebar) sidebar.classList.toggle('active');
-            if(overlay) overlay.classList.toggle('active');
+
+    
+    // --- ACADEMIC PROGRAMS & SECTION PREFIX MANAGEMENT ---
+    let cachedAcademicPrograms = [];
+
+    async function loadAcademicPrograms() {
+        const tbody = document.getElementById('academicProgramsTableBody');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/api/academic-programs?include_inactive=true');
+            const data = await res.json();
+            if (data.status === 'success' && data.programs) {
+                cachedAcademicPrograms = data.programs;
+                renderAcademicProgramsTable(data.programs);
+            } else {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Failed to load programs: ${data.message || 'Unknown error'}</td></tr>`;
+            }
+        } catch (err) {
+            console.error("Failed to fetch academic programs:", err);
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Error connecting to server.</td></tr>`;
         }
+    }
+
+    function renderAcademicProgramsTable(programs) {
+        const tbody = document.getElementById('academicProgramsTableBody');
+        if (!tbody) return;
+
+        if (!programs || programs.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">No academic programs registered. Click "Add New Course" to create one.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = programs.map(p => {
+            const color = p.color_hex || '#3498db';
+            const statusBadge = p.is_active 
+                ? `<span style="background: #dcfce7; color: #15803d; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #bbf7d0;">Active</span>`
+                : `<span style="background: #fee2e2; color: #b91c1c; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #fecaca;">Inactive</span>`;
+
+            return `
+                <tr style="border-bottom: 1px solid #e2e8f0;">
+                    <td style="padding: 12px 16px; font-weight: 800; font-family: monospace; font-size: 1rem; color: #0f172a;">
+                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${color}; margin-right: 8px;"></span>
+                        ${p.code}
+                    </td>
+                    <td style="padding: 12px 16px; font-weight: 600; color: #1e293b;">
+                        ${p.name}
+                    </td>
+                    <td style="padding: 12px 16px;">
+                        <span style="font-family: monospace; font-weight: 700; color: #2563eb; background: #eff6ff; padding: 3px 8px; border-radius: 4px; border: 1px solid #dbeafe;">
+                            ${p.section_prefix}
+                        </span>
+                        <span style="font-size: 0.78rem; color: #64748b; margin-left: 6px;">(e.g. ${p.section_prefix}-1A)</span>
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-family: monospace; color: #475569;">
+                            <span style="display: inline-block; width: 18px; height: 18px; border-radius: 4px; background: ${color}; border: 1px solid rgba(0,0,0,0.15);"></span>
+                            ${color}
+                        </span>
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        ${statusBadge}
+                    </td>
+                    <td style="padding: 12px 16px; text-align: center;">
+                        <div style="display: flex; gap: 8px; justify-content: center;">
+                            <button type="button" onclick="openEditProgramModal(${p.id}, '${escapeHtml(p.code)}', '${escapeHtml(p.name)}', '${escapeHtml(p.section_prefix)}', '${color}', ${p.is_active})" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 5px 10px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                                ✏️ Edit
+                            </button>
+                            <button type="button" onclick="deleteProgram(${p.id}, '${escapeHtml(p.code)}', '${escapeHtml(p.name)}')" style="background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3; padding: 5px 10px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='#ffe4e6'" onmouseout="this.style.background='#fff1f2'">
+                                🗑️ Remove
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function openAddProgramModal() {
+        document.getElementById('newProgCode').value = '';
+        document.getElementById('newProgName').value = '';
+        document.getElementById('newProgPrefix').value = '';
+        document.getElementById('newProgColor').value = '#9b59b6';
+        updateProgPreview();
+        const m = document.getElementById('addProgramModal');
+        if (m) m.style.display = 'flex';
+    }
+
+    function closeAddProgramModal() {
+        const m = document.getElementById('addProgramModal');
+        if (m) m.style.display = 'none';
+    }
+
+    function setNewProgColor(color) {
+        document.getElementById('newProgColor').value = color;
+    }
+
+    function updateProgPreview() {
+        const pref = document.getElementById('newProgPrefix').value.trim() || 'BSXX';
+        const code = document.getElementById('newProgCode').value.trim() || 'XX';
+        const previewEl = document.getElementById('newProgPrefixPreview');
+        if (previewEl) {
+            previewEl.innerHTML = `💡 Auto-detection rule: Any class section like <strong>${pref}-1A</strong> or <strong>${pref}-2B</strong> will automatically be mapped to <strong>${code}</strong>.`;
+        }
+    }
+
+    async function saveNewProgram() {
+        const code = document.getElementById('newProgCode').value.trim().toUpperCase();
+        const name = document.getElementById('newProgName').value.trim();
+        const section_prefix = document.getElementById('newProgPrefix').value.trim().toUpperCase();
+        const color_hex = document.getElementById('newProgColor').value.trim();
+
+        if (!code) {
+            showAppAlert('Input Required', 'Please enter a Course Code (e.g. IM).', 'warning');
+            return;
+        }
+        if (!name) {
+            showAppAlert('Input Required', 'Please enter the Full Course Name (e.g. Information Management).', 'warning');
+            return;
+        }
+        if (!section_prefix) {
+            showAppAlert('Input Required', 'Please enter the Section Identifier Prefix (e.g. BSIM).', 'warning');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/academic-programs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, name, section_prefix, color_hex, is_active: true })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                closeAddProgramModal();
+                showCustomLogModal(`Academic course '${code}' created successfully! Cover booklet templates calibrated.`, 'success');
+                await loadAcademicPrograms();
+            } else {
+                showAppAlert('Registration Failed', data.detail || data.message || 'Failed to register academic program.', 'danger');
+            }
+        } catch (err) {
+            console.error("Save program error:", err);
+            showAppAlert('Network Error', err.message || 'Network error while saving program.', 'danger');
+        }
+    }
+
+    function openEditProgramModal(id, code, name, prefix, color, isActive) {
+        document.getElementById('editProgId').value = id;
+        document.getElementById('editProgCode').value = code;
+        document.getElementById('editProgName').value = name;
+        document.getElementById('editProgPrefix').value = prefix;
+        document.getElementById('editProgColor').value = color || '#3498db';
+        document.getElementById('editProgActive').checked = !!isActive;
+        const m = document.getElementById('editProgramModal');
+        if (m) m.style.display = 'flex';
+    }
+
+    function closeEditProgramModal() {
+        const m = document.getElementById('editProgramModal');
+        if (m) m.style.display = 'none';
+    }
+
+    async function updateProgram() {
+        const id = document.getElementById('editProgId').value;
+        const name = document.getElementById('editProgName').value.trim();
+        const section_prefix = document.getElementById('editProgPrefix').value.trim().toUpperCase();
+        const color_hex = document.getElementById('editProgColor').value.trim();
+        const is_active = document.getElementById('editProgActive').checked;
+
+        if (!name || !section_prefix) {
+            showAppAlert('Input Required', 'Course Name and Section Prefix are required.', 'warning');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/academic-programs/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, section_prefix, color_hex, is_active })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                closeEditProgramModal();
+                showCustomLogModal('Academic course updated successfully!', 'success');
+                await loadAcademicPrograms();
+            } else {
+                showAppAlert('Update Failed', data.detail || data.message || 'Failed to update academic course.', 'danger');
+            }
+        } catch (err) {
+            console.error("Update program error:", err);
+            showAppAlert('Network Error', err.message || 'Network error while updating course.', 'danger');
+        }
+    }
+
+    async function deleteProgram(id, code, name) {
+        const confirmed = await showAppConfirm(
+            `Remove Course '${code}'?`,
+            `Are you sure you want to remove '${name}' (${code})?\n\nIf this course has existing student enrollments or booklet batches, the system will safely deactivate it to preserve financial and historical audit integrity.`,
+            {
+                type: 'warning',
+                confirmText: 'Remove Course',
+                confirmBg: '#e11d48'
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch(`/api/academic-programs/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                showCustomLogModal(data.message, 'info');
+                await loadAcademicPrograms();
+            } else {
+                showAppAlert('Removal Failed', data.detail || data.message || 'Failed to remove academic course.', 'danger');
+            }
+        } catch (err) {
+            console.error("Delete program error:", err);
+            showAppAlert('Network Error', err.message || 'Network error while removing course.', 'danger');
+        }
+    }
+
     </script>
 
 <!-- APP CUSTOM DIALOG MODAL (Standardized & Viewport Centered) -->
