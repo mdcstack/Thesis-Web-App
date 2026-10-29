@@ -657,31 +657,81 @@
         const PAGE_WIDTH_PT = 841.89;
         const PAGE_HEIGHT_PT = 595.28;
 
+        const TPL_CONFIG_CACHE_PREFIX = 'bookletlog_template_config_';
+        const TPL_STATUS_CACHE_KEY = 'bookletlog_template_status_cache';
+        const TPL_PROGRAMS_CACHE_KEY = 'bookletlog_academic_programs_cache';
+        const TPL_ACTIVE_DEPT_KEY = 'bookletlog_active_dept';
+        const TPL_ACTIVE_SLOT_KEY = 'bookletlog_active_slot';
+
         let currentDept = 'CS';
         let currentSlot = 1;
+
+        try {
+            const savedDept = sessionStorage.getItem(TPL_ACTIVE_DEPT_KEY);
+            if (savedDept && savedDept.trim()) currentDept = savedDept.toUpperCase();
+            const savedSlot = parseInt(sessionStorage.getItem(TPL_ACTIVE_SLOT_KEY));
+            if (savedSlot && [1, 2, 3].includes(savedSlot)) currentSlot = savedSlot;
+        } catch(e) {}
+
+        // Check URL parameter e.g. /booklet-template?dept=IT&slot=2
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const deptParam = urlParams.get('dept') || urlParams.get('department');
+            if (deptParam && deptParam.trim()) {
+                currentDept = deptParam.toUpperCase();
+            }
+            const slotParam = parseInt(urlParams.get('slot'));
+            if (slotParam && [1, 2, 3].includes(slotParam)) {
+                currentSlot = slotParam;
+            }
+        } catch (e) {}
+
         let cachedAcademicPrograms = [];
+        try {
+            const rawProgs = sessionStorage.getItem(TPL_PROGRAMS_CACHE_KEY);
+            if (rawProgs) {
+                const parsedProgs = JSON.parse(rawProgs);
+                if (Array.isArray(parsedProgs) && parsedProgs.length > 0) {
+                    cachedAcademicPrograms = parsedProgs;
+                }
+            }
+        } catch(e) {}
+
         let latestDeptStatuses = {};
+        try {
+            const rawStatuses = sessionStorage.getItem(TPL_STATUS_CACHE_KEY);
+            if (rawStatuses) {
+                const parsedStatuses = JSON.parse(rawStatuses);
+                if (parsedStatuses && typeof parsedStatuses === 'object') {
+                    latestDeptStatuses = parsedStatuses;
+                }
+            }
+        } catch(e) {}
+
         let currentPeriodPrefix = '1ST26';
 
         async function loadAcademicProgramsForStudio() {
             try {
-                const res = await fetch('/api/academic-programs');
-                const data = await res.json();
+                const [pRes, sRes] = await Promise.all([
+                    fetch('/api/academic-programs'),
+                    fetch('/api/settings').catch(() => null)
+                ]);
+                const data = await pRes.json();
                 if (data.status === 'success' && Array.isArray(data.programs) && data.programs.length > 0) {
                     cachedAcademicPrograms = data.programs;
+                    try {
+                        sessionStorage.setItem(TPL_PROGRAMS_CACHE_KEY, JSON.stringify(data.programs));
+                    } catch(e) {}
                     if (!cachedAcademicPrograms.some(p => p.code === currentDept)) {
                         currentDept = cachedAcademicPrograms[0].code;
                     }
                 }
-                try {
-                    const sRes = await fetch('/api/settings');
-                    if (sRes.ok) {
-                        const sData = await sRes.json();
-                        if (sData && sData.current_semester_name) {
-                            currentPeriodPrefix = sData.current_semester_name;
-                        }
+                if (sRes && sRes.ok) {
+                    const sData = await sRes.json();
+                    if (sData && sData.current_semester_name) {
+                        currentPeriodPrefix = sData.current_semester_name;
                     }
-                } catch (err) {}
+                }
             } catch (e) {
                 console.error("Failed to load academic programs for booklet studio:", e);
             }
@@ -718,19 +768,6 @@
             }).join('');
         }
 
-        // Check URL parameter e.g. /booklet-template?dept=IT&slot=2
-        try {
-            const urlParams = new URLSearchParams(window.location.search);
-            const deptParam = urlParams.get('dept');
-            if (deptParam && ['CS', 'IT'].includes(deptParam.toUpperCase())) {
-                currentDept = deptParam.toUpperCase();
-            }
-            const slotParam = parseInt(urlParams.get('slot'));
-            if (slotParam && [1, 2, 3].includes(slotParam)) {
-                currentSlot = slotParam;
-            }
-        } catch (e) {}
-
         let activeConfig = {
             department: "CS",
             slot_number: 1,
@@ -757,10 +794,15 @@
                 return;
             }
             currentDept = dept;
+            try { sessionStorage.setItem(TPL_ACTIVE_DEPT_KEY, currentDept); } catch(e) {}
             updateDeptTabStyles();
             updateSlotTabStyles();
-            await loadTemplateConfig(currentDept, currentSlot);
-            await refreshDeptStatuses();
+            // 0ms instant cache hydration
+            applyCachedConfigIfExists(currentDept, currentSlot);
+            await Promise.all([
+                loadTemplateConfig(currentDept, currentSlot),
+                refreshDeptStatuses()
+            ]);
         }
 
         async function switchSlot(slot) {
@@ -769,73 +811,114 @@
                 return;
             }
             currentSlot = slot;
+            try { sessionStorage.setItem(TPL_ACTIVE_SLOT_KEY, currentSlot); } catch(e) {}
             updateSlotTabStyles();
+            // 0ms instant cache hydration
+            applyCachedConfigIfExists(currentDept, currentSlot);
             await loadTemplateConfig(currentDept, currentSlot);
-            await refreshDeptStatuses();
         }
 
         function updateDeptTabStyles() {
-            const container = document.getElementById('dynamicDeptTabsContainer');
-            if (container) {
-                const btns = container.querySelectorAll('.dept-tab-btn');
-                btns.forEach(btn => {
-                    const dept = btn.getAttribute('data-dept');
-                    const color = btn.getAttribute('data-color') || '#3498db';
-                    const isSelected = dept === currentDept;
-                    btn.style.border = isSelected ? `2px solid ${color}` : '2px solid #cbd5e1';
-                    btn.style.background = isSelected ? color : '#f8fafc';
-                    btn.style.color = isSelected ? 'white' : '#64748b';
-                    const badge = btn.querySelector(`#badgeDept${dept}`);
-                    if (badge) {
-                        if (isSelected) {
-                            badge.style.background = 'rgba(255,255,255,0.25)';
-                            badge.style.color = 'white';
-                        } else {
-                            const deptInfo = latestDeptStatuses[dept];
-                            const isConfigured = deptInfo ? Boolean(deptInfo.has_active_template || deptInfo.is_configured) : false;
-                            badge.style.background = isConfigured ? '#dcfce7' : '#fee2e2';
-                            badge.style.color = isConfigured ? '#166534' : '#991b1b';
-                        }
-                    }
-                });
-            }
+            const tabs = document.querySelectorAll('.dept-tab-btn');
+            tabs.forEach(tab => {
+                const dept = tab.dataset.dept;
+                const isSelected = dept === currentDept;
+                const color = tab.dataset.color || '#3498db';
 
-            const prog = (cachedAcademicPrograms || []).find(p => p.code === currentDept);
-            const deptFullName = prog ? `${prog.name} (${prog.code})` : (currentDept === 'CS' ? 'Computer Science (CS)' : (currentDept === 'IT' ? 'Information Technology (IT)' : currentDept));
+                tab.style.background = isSelected ? color : '#f8fafc';
+                tab.style.color = isSelected ? '#ffffff' : '#64748b';
+                tab.style.borderColor = isSelected ? color : '#cbd5e1';
+
+                const badge = tab.querySelector(`span[id^="badgeDept"]`);
+                if (badge) {
+                    if (isSelected) {
+                        badge.style.background = 'rgba(255,255,255,0.25)';
+                        badge.style.color = '#ffffff';
+                    } else {
+                        const deptInfo = latestDeptStatuses[dept];
+                        const isConfigured = deptInfo ? Boolean(deptInfo.has_active_template || deptInfo.is_configured) : false;
+                        badge.style.background = isConfigured ? '#dcfce7' : '#fee2e2';
+                        badge.style.color = isConfigured ? '#166534' : '#991b1b';
+                    }
+                }
+            });
+
+            const prog = cachedAcademicPrograms.find(p => p.code === currentDept);
+            const deptLabel = prog ? `${prog.name} (${prog.code})` : (currentDept === 'CS' ? 'Computer Science (CS)' : (currentDept === 'IT' ? 'Information Technology (IT)' : currentDept));
 
             const uploadCardTitle = document.getElementById('uploadCardTitle');
             if (uploadCardTitle) uploadCardTitle.innerText = currentDept;
             const uploadDeptNameText = document.getElementById('uploadDeptNameText');
-            if (uploadDeptNameText) uploadDeptNameText.innerText = deptFullName;
-            const uploadDeptBadgeText = document.getElementById('uploadDeptBadgeText');
-            if (uploadDeptBadgeText) uploadDeptBadgeText.innerText = currentDept;
+            if (uploadDeptNameText) uploadDeptNameText.innerText = deptLabel;
+
+            const badge = document.getElementById('previewModalDeptBadge');
+            const title = document.getElementById('previewModalTitle');
+            const subtitle = document.getElementById('previewModalSubtitle');
+            const tName = activeConfig.template_name || `Template ${currentSlot}`;
+
+            if (badge) {
+                badge.innerText = currentDept;
+                badge.style.background = prog ? (prog.color_hex || '#2563eb') : (currentDept === 'CS' ? '#2563eb' : '#7c3aed');
+            }
+            if (title) title.innerText = `Stamped Cover Print Preview — ${tName} (${currentDept})`;
+            if (subtitle) subtitle.innerText = `Official ReportLab Stamped Output for ${deptLabel} • A4 Landscape (297 × 210 mm)`;
         }
 
         function updateSlotTabStyles() {
             for (let s = 1; s <= 3; s++) {
                 const btn = document.getElementById(`btnSlot${s}`);
+                const badge = document.getElementById(`badgeSlot${s}`);
                 if (!btn) continue;
-                if (s === currentSlot) {
-                    btn.style.border = '2px solid #3498db';
-                    btn.style.background = '#3498db';
-                    btn.style.color = 'white';
-                } else {
-                    btn.style.border = '2px solid #cbd5e1';
-                    btn.style.background = '#f8fafc';
-                    btn.style.color = '#64748b';
+                const isSelected = s === currentSlot;
+                btn.classList.toggle('active', isSelected);
+
+                if (badge && latestDeptStatuses && latestDeptStatuses[currentDept] && latestDeptStatuses[currentDept].slots) {
+                    const slotInfo = latestDeptStatuses[currentDept].slots.find(x => x.slot === s);
+                    if (slotInfo) {
+                        if (slotInfo.is_configured) {
+                            badge.style.background = isSelected ? 'rgba(255,255,255,0.3)' : '#dcfce7';
+                            badge.style.color = isSelected ? 'white' : '#166534';
+                        } else if (slotInfo.has_pdf_file) {
+                            badge.style.background = isSelected ? 'rgba(255,255,255,0.3)' : '#fef9c3';
+                            badge.style.color = isSelected ? 'white' : '#854d0e';
+                        } else {
+                            badge.style.background = isSelected ? 'rgba(255,255,255,0.3)' : '#f1f5f9';
+                            badge.style.color = isSelected ? 'white' : '#64748b';
+                        }
+                    }
                 }
             }
-            const name = activeConfig.template_name || `Template ${currentSlot}`;
-            const uploadSlotTitle = document.getElementById('uploadSlotTitle');
-            if (uploadSlotTitle) uploadSlotTitle.innerText = name;
-            const uploadSlotNameText = document.getElementById('uploadSlotNameText');
-            if (uploadSlotNameText) uploadSlotNameText.innerText = name;
-            const uploadSlotBadgeText = document.getElementById('uploadSlotBadgeText');
-            if (uploadSlotBadgeText) uploadSlotBadgeText.innerText = `Template ${currentSlot}`;
+            const activeSlotNotice = document.getElementById('activeSlotNotice');
+            if (activeSlotNotice) {
+                const tName = activeConfig.template_name || `Template ${currentSlot}`;
+                activeSlotNotice.innerText = `Calibrating ${currentDept} • Slot ${currentSlot} (${tName})`;
+            }
         }
 
-        function onTemplateNameInput() {
-            // Intentionally no-op: template name only mutates active layout and DOM labels upon explicit save
+        function updateSlotBadges(statusData) {
+            if (!statusData) statusData = latestDeptStatuses;
+            if (statusData && statusData[currentDept] && statusData[currentDept].slots) {
+                statusData[currentDept].slots.forEach(s => {
+                    const labelEl = document.getElementById(`labelSlot${s.slot}`);
+                    const badgeEl = document.getElementById(`badgeSlot${s.slot}`);
+                    if (labelEl) labelEl.innerText = s.template_name || `Template ${s.slot}`;
+                    if (badgeEl) {
+                        if (s.is_configured) {
+                            badgeEl.innerText = '✅ Ready';
+                            badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#dcfce7';
+                            badgeEl.style.color = currentSlot === s.slot ? 'white' : '#166534';
+                        } else if (s.has_pdf_file) {
+                            badgeEl.innerText = '🟡 Draft';
+                            badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#fef9c3';
+                            badgeEl.style.color = currentSlot === s.slot ? 'white' : '#854d0e';
+                        } else {
+                            badgeEl.innerText = '⚪ Empty';
+                            badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#f1f5f9';
+                            badgeEl.style.color = currentSlot === s.slot ? 'white' : '#64748b';
+                        }
+                    }
+                });
+            }
         }
 
         async function refreshDeptStatuses() {
@@ -843,94 +926,19 @@
                 const res = await fetch('/api/booklet-template/status');
                 const data = await res.json();
                 latestDeptStatuses = data;
-                
+                try {
+                    sessionStorage.setItem(TPL_STATUS_CACHE_KEY, JSON.stringify(data));
+                } catch(e) {}
                 renderDynamicDeptTabs(data);
-
-                // Update slots 1..3 labels and badges for current department
-                if (data[currentDept] && data[currentDept].slots) {
-                    data[currentDept].slots.forEach(s => {
-                        const labelEl = document.getElementById(`labelSlot${s.slot}`);
-                        const badgeEl = document.getElementById(`badgeSlot${s.slot}`);
-                        if (labelEl) labelEl.innerText = s.template_name || `Template ${s.slot}`;
-                        if (badgeEl) {
-                            if (s.is_configured) {
-                                badgeEl.innerText = '✅ Ready';
-                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#dcfce7';
-                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#166534';
-                            } else if (s.has_pdf_file) {
-                                badgeEl.innerText = '🟡 Draft';
-                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#fef9c3';
-                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#854d0e';
-                            } else {
-                                badgeEl.innerText = '⚠️ Not Set';
-                                badgeEl.style.background = currentSlot === s.slot ? 'rgba(255,255,255,0.3)' : '#fee2e2';
-                                badgeEl.style.color = currentSlot === s.slot ? 'white' : '#991b1b';
-                            }
-                        }
-                    });
-                }
-
-                // Update slot status banner description
-                const slotBanner = document.getElementById('slotStatusBanner');
-                if (slotBanner && data[currentDept] && data[currentDept].slots) {
-                    const slotInfo = data[currentDept].slots.find(s => s.slot === currentSlot);
-                    if (slotInfo) {
-                        if (slotInfo.is_configured) {
-                            slotBanner.style.background = '#dcfce7';
-                            slotBanner.style.color = '#166534';
-                            slotBanner.innerHTML = `✅ <strong>${escapeHtml(slotInfo.template_name)}:</strong> Live & Active for Distribution.`;
-                        } else if (slotInfo.has_pdf_file) {
-                            slotBanner.style.background = '#fef9c3';
-                            slotBanner.style.color = '#854d0e';
-                            slotBanner.innerHTML = `🟡 <strong>${escapeHtml(slotInfo.template_name)}:</strong> Draft PDF Uploaded. Coordinate adjustments not yet saved as official.`;
-                        } else {
-                            slotBanner.style.background = '#fee2e2';
-                            slotBanner.style.color = '#991b1b';
-                            slotBanner.innerHTML = `⚠️ <strong>${escapeHtml(slotInfo.template_name)}:</strong> Not Configured Yet. Please upload a front-cover PDF first.`;
-                        }
-                    }
-                }
-
-                // Update department overall banner
-                const deptBanner = document.getElementById('deptStatusBanner');
-                if (deptBanner && data[currentDept]) {
-                    const cur = data[currentDept];
-                    const prog = (cachedAcademicPrograms || []).find(p => p.code === currentDept);
-                    const progName = prog ? prog.name : currentDept;
-                    if (cur.has_active_template || cur.is_configured) {
-                        deptBanner.style.background = '#dcfce7';
-                        deptBanner.style.color = '#166534';
-                        deptBanner.innerHTML = `✅ ${escapeHtml(progName)}: <strong>Templates Active</strong>`;
-                    } else {
-                        deptBanner.style.background = '#fee2e2';
-                        deptBanner.style.color = '#991b1b';
-                        deptBanner.innerHTML = `⚠️ ${escapeHtml(progName)}: <strong>Setup Required</strong>`;
-                    }
-                }
+                updateSlotBadges(data);
             } catch (err) {
-                console.error("Failed to load department statuses:", err);
+                console.error("Failed to fetch department template statuses:", err);
             }
         }
 
-        // --- AUTHENTICATION GUARD & RBAC ---
-        let activeUser = null;
-        try {
-            activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
-        } catch (e) {
-            activeUser = null;
-        }
-
-        if (!activeUser || !activeUser.username) {
-            window.location.href = '/login';
-        } else if (activeUser.role !== 'Admin') {
-            alert('Access Denied: Booklet Template management is restricted to Administrators.');
-            window.location.href = '/dashboard';
-        } else {
-            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || "DCS") + ")";
-
-            // Verify session token against backend (handles concurrent device access)
-            if (activeUser.session_token) {
+        function checkUserSession() {
+            const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || '{}');
+            if (activeUser && activeUser.username && activeUser.session_token) {
                 fetch('/api/verify-session', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -985,6 +993,69 @@
             btn.innerHTML = isGridVisible ? '📐 Grid: ON' : '📐 Grid: OFF';
         }
 
+        function applyConfigToUI(data, dept, slot) {
+            if (!data) return;
+            activeConfig = data;
+            dept = (dept || currentDept || 'CS').toUpperCase();
+            slot = parseInt(slot || currentSlot || 1);
+
+            const prog = cachedAcademicPrograms.find(p => p.code === dept);
+            const deptLabel = prog ? `${prog.name} (${prog.code})` : (dept === 'CS' ? 'Computer Science (CS)' : (dept === 'IT' ? 'Information Technology (IT)' : dept));
+
+            const watermarkHint = document.getElementById('watermarkHint');
+            if (watermarkHint) {
+                watermarkHint.innerText = `Upload your official ${deptLabel} (${data.template_name || `Template ${slot}`}) front-cover PDF to start visual calibration.`;
+            }
+
+            // Populate template name input
+            const nameInput = document.getElementById('templateNameInput');
+            if (nameInput) nameInput.value = data.template_name || `Template ${slot}`;
+
+            // Load live cover template background if PDF file exists on disk
+            const activePdfName = document.getElementById('activePdfName');
+            if (data.has_pdf_file && data.preview_image_url) {
+                const statusTag = data.is_configured ? ' (✅ Official)' : ' (🟡 Draft / Unsaved)';
+                if (activePdfName) activePdfName.innerText = (data.pdf_filename || `active_template_${dept}_slot${slot}.pdf`) + statusTag;
+                setCanvasBackground(data.preview_image_url);
+            } else {
+                if (activePdfName) activePdfName.innerText = 'No template uploaded yet';
+                setCanvasBackground(null);
+            }
+            
+            // Populate Inputs
+            updateInputsFromConfig();
+            updateSlotTabStyles();
+            
+            // Update Delete button state
+            const btnDelete = document.getElementById('btnDeleteTemplate');
+            if (btnDelete) {
+                btnDelete.disabled = !data.has_pdf_file && !data.is_configured;
+            }
+            
+            // Reset proof overlay when loading slot
+            toggleCanvasProof(false);
+            
+            // Position Canvas Stamps
+            renderCanvas();
+        }
+
+        function applyCachedConfigIfExists(dept, slot) {
+            dept = (dept || currentDept || 'CS').toUpperCase();
+            slot = parseInt(slot || currentSlot || 1);
+            try {
+                const key = `${TPL_CONFIG_CACHE_PREFIX}${dept}_slot${slot}`;
+                const raw = sessionStorage.getItem(key);
+                if (raw) {
+                    const cachedData = JSON.parse(raw);
+                    if (cachedData && typeof cachedData === 'object' && cachedData.slot_number === slot) {
+                        applyConfigToUI(cachedData, dept, slot);
+                        return true;
+                    }
+                }
+            } catch(e) {}
+            return false;
+        }
+
         // --- LOAD INITIAL CONFIGURATION ---
         async function loadTemplateConfig(dept, slot) {
             dept = (dept || currentDept || 'CS').toUpperCase();
@@ -992,43 +1063,11 @@
             try {
                 const res = await fetch(`/api/booklet-template?department=${dept}&slot=${slot}`);
                 const data = await res.json();
-                activeConfig = data;
-                
-                const deptLabel = dept === 'CS' ? 'Computer Science (CS)' : 'Information Technology (IT)';
-                const watermarkHint = document.getElementById('watermarkHint');
-                if (watermarkHint) {
-                    watermarkHint.innerText = `Upload your official ${deptLabel} (${data.template_name || `Template ${slot}`}) front-cover PDF to start visual calibration.`;
-                }
-
-                // Populate template name input
-                const nameInput = document.getElementById('templateNameInput');
-                if (nameInput) nameInput.value = data.template_name || `Template ${slot}`;
-
-                // Load live cover template background if PDF file exists on disk
-                if (data.has_pdf_file && data.preview_image_url) {
-                    const statusTag = data.is_configured ? ' (✅ Official)' : ' (🟡 Draft / Unsaved)';
-                    document.getElementById('activePdfName').innerText = (data.pdf_filename || `active_template_${dept}_slot${slot}.pdf`) + statusTag;
-                    setCanvasBackground(data.preview_image_url);
-                } else {
-                    document.getElementById('activePdfName').innerText = 'No template uploaded yet';
-                    setCanvasBackground(null);
-                }
-                
-                // Populate Inputs
-                updateInputsFromConfig();
-                updateSlotTabStyles();
-                
-                // Update Delete button state
-                const btnDelete = document.getElementById('btnDeleteTemplate');
-                if (btnDelete) {
-                    btnDelete.disabled = !data.has_pdf_file && !data.is_configured;
-                }
-                
-                // Reset proof overlay when loading slot
-                toggleCanvasProof(false);
-                
-                // Position Canvas Stamps
-                renderCanvas();
+                try {
+                    const key = `${TPL_CONFIG_CACHE_PREFIX}${dept}_slot${slot}`;
+                    sessionStorage.setItem(key, JSON.stringify(data));
+                } catch(e) {}
+                applyConfigToUI(data, dept, slot);
             } catch (err) {
                 console.error("Failed to load template configuration:", err);
             }
@@ -1850,13 +1889,26 @@
     }
 
 
-        // Initialize on load
-        window.addEventListener('DOMContentLoaded', async () => {
-            await loadAcademicProgramsForStudio();
+        // Initialize on load with 0ms instant cache hydration and parallel background fetches
+        window.addEventListener('DOMContentLoaded', () => {
+            // 1. Instant 0ms synchronous UI hydration from cache
+            if (cachedAcademicPrograms.length > 0) {
+                renderDynamicDeptTabs(latestDeptStatuses);
+            }
             updateDeptTabStyles();
             updateSlotTabStyles();
-            await loadTemplateConfig(currentDept, currentSlot);
-            await refreshDeptStatuses();
+            updateSlotBadges(latestDeptStatuses);
+            applyCachedConfigIfExists(currentDept, currentSlot);
+
+            // 2. Parallel network fetches (eliminating sequential 4-step waterfall)
+            Promise.all([
+                loadAcademicProgramsForStudio(),
+                loadTemplateConfig(currentDept, currentSlot),
+                refreshDeptStatuses()
+            ]).then(() => {
+                updateDeptTabStyles();
+                updateSlotTabStyles();
+            });
         });
     </script>
 

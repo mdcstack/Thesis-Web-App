@@ -242,6 +242,20 @@
         }
 
 
+
+        /* Skeleton Loader for Cold Start Instant Perception */
+        @keyframes skeletonShimmer {
+            0% { background-color: #f1f5f9; }
+            50% { background-color: #e2e8f0; }
+            100% { background-color: #f1f5f9; }
+        }
+        .skeleton-line {
+            height: 16px;
+            border-radius: 4px;
+            animation: skeletonShimmer 1.4s ease-in-out infinite;
+            display: inline-block;
+        }
+
 </style>
 </head>
 <body>
@@ -276,7 +290,7 @@
     <!-- Dedicated Horizontal Scroll Track for Filter Toolbar & Payment Ledger Table -->
     <div class="payment-scroll-wrapper">
         <div class="card payment-card">
-            <!-- Card Header / Title with Scope Notice (Mirrored from history.html) -->
+            <!-- Card Header / Title with Scope Notice -->
             <div class="card-title">
                 <h2 style="font-size: 1.35rem; font-weight: bold; color: #2c3e50;">Transaction Ledger &amp; Accounts</h2>
                 <div id="filterScopeNotice" style="font-size: 0.88rem; color: #7f8c8d; font-weight: bold;">
@@ -284,36 +298,43 @@
                 </div>
             </div>
 
-            <!-- DYNAMIC FILTERS SECTION (Mirrored from history.html) -->
+            <!-- DYNAMIC FILTERS SECTION -->
             <div class="filter-container">
                 <input type="text" id="searchInput" placeholder="🔍 Search Instructor, Section, or Subject..." style="flex: 1.5; min-width: 280px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 2px solid #3498db; border-radius: 4px; background-color: #fff; outline: none; transition: 0.3s; flex-shrink: 0;">
 
-                <!-- Date Filter with Dedicated Range Toggle (Mirrored from history.html) -->
+                <!-- Date Filter with Dedicated Range Toggle -->
                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; flex-shrink: 0;">
-                    <!-- Primary / From Date Box -->
                     <div style="display: flex; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
                         <label id="dateLabel" for="fromDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">Date:</label>
                         <input type="date" id="fromDate" title="Filter by date" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
                     </div>
 
-                    <!-- Optional To Date Box (Hidden by default, shown when Range is active) -->
                     <div id="toDateGroup" style="display: none; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
                         <label for="toDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">To:</label>
                         <input type="date" id="toDate" title="End date (Optional)" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
                     </div>
 
-                    <!-- Dedicated Range Toggle Button -->
                     <button type="button" id="toggleDateRangeBtn" onclick="toggleDateRangeMode()" class="btn-toggle-range" title="Toggle date range (From - To)">
                         📅 Range
                     </button>
                 </div>
 
-                <!-- Program Filter (Dynamically loaded via /api/academic-programs) -->
-                <select id="deptFilter" style="flex: 1; min-width: 200px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
-                    <option value="All">All Programs</option>
+                <!-- Instructor Filter -->
+                <select id="filterTeacher" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                    <option value="All">-- All Instructors --</option>
                 </select>
 
-                <!-- Status Filter (With history.html style colored emoji badges) -->
+                <!-- Department / Program Filter -->
+                <select id="filterDept" onchange="onDeptChange()" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                    <option value="All">-- All Departments --</option>
+                </select>
+
+                <!-- Section Filter -->
+                <select id="filterSection" style="flex: 1; min-width: 160px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                    <option value="All">-- All Sections --</option>
+                </select>
+
+                <!-- Status Filter -->
                 <select id="statusFilter" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;" title="Filter by Payment Status">
                     <option value="All">-- All Payment Statuses --</option>
                     <option value="Fully Paid">🟢 Fully Paid</option>
@@ -327,7 +348,7 @@
                 </button>
             </div>
 
-            <!-- Main Table with explicit column min-widths -->
+            <!-- Main Table -->
             <table id="paymentTable" class="payment-table">
                 <thead>
                     <tr>
@@ -506,7 +527,48 @@
 </div>
 
 <script>
+const PAYMENT_CACHE_KEY = 'bookletlog_payment_cache';
 let globalPaymentData = [];
+
+function renderSkeletonRows() {
+    const tbody = document.getElementById('paymentTableBody');
+    if (!tbody || (globalPaymentData && globalPaymentData.length > 0)) return;
+    let skeletonHtml = '';
+    for (let i = 0; i < 6; i++) {
+        skeletonHtml += `
+            <tr class="skeleton-row">
+                <td><div class="skeleton-line" style="width: 140px;"></div></td>
+                <td><div class="skeleton-line" style="width: 180px;"></div></td>
+                <td><div class="skeleton-line" style="width: 90px;"></div></td>
+                <td><div class="skeleton-line" style="width: 70px;"></div></td>
+                <td><div class="skeleton-line" style="width: 70px;"></div></td>
+                <td><div class="skeleton-line" style="width: 70px;"></div></td>
+                <td><div class="skeleton-line" style="width: 85px;"></div></td>
+                <td><div class="skeleton-line" style="width: 100px;"></div></td>
+            </tr>
+        `;
+    }
+    tbody.innerHTML = skeletonHtml;
+}
+
+function restorePaymentCache() {
+    try {
+        const raw = sessionStorage.getItem(PAYMENT_CACHE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.data) && parsed.data.length > 0) {
+                globalPaymentData = parsed.data;
+                populateDropdowns();
+                renderTable();
+                return true;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not read payment cache:", e);
+    }
+    return false;
+}
+let allSections = [];
 let currentSortColumn = null;
 let currentSortOrder = 'asc';
 let isDateRangeActive = false;
@@ -562,10 +624,10 @@ async function loadPaymentAcademicPrograms() {
         const res = await fetch('/api/academic-programs');
         const data = await res.json();
         if (data.status === 'success' && data.programs) {
-            const sel = document.getElementById('deptFilter');
+            const sel = document.getElementById('filterDept');
             if (sel) {
                 const cur = sel.value;
-                let opts = '<option value="All">All Programs</option>';
+                let opts = '<option value="All">-- All Departments --</option>';
                 data.programs.forEach(p => {
                     opts += `<option value="${p.code}">${p.name} (${p.section_prefix || p.code})</option>`;
                 });
@@ -579,10 +641,15 @@ async function loadPaymentAcademicPrograms() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
+    const hasCached = restorePaymentCache();
+    if (!hasCached) {
+        renderSkeletonRows();
+    }
     loadPaymentAcademicPrograms();
     document.getElementById('searchInput').addEventListener('input', renderTable);
     document.getElementById('statusFilter').addEventListener('change', renderTable);
-    document.getElementById('deptFilter').addEventListener('change', renderTable);
+    document.getElementById('filterTeacher').addEventListener('change', renderTable);
+    document.getElementById('filterSection').addEventListener('change', renderTable);
     
     document.getElementById('fromDate').addEventListener('change', function() {
         const toDateInput = document.getElementById('toDate');
@@ -626,6 +693,13 @@ function loadPaymentData(isBackground = false) {
     .then(res => {
         if (res.status === 'success') {
             globalPaymentData = res.data;
+            try {
+                sessionStorage.setItem(PAYMENT_CACHE_KEY, JSON.stringify({
+                    data: res.data,
+                    timestamp: Date.now()
+                }));
+            } catch (e) {}
+            populateDropdowns();
             renderTable();
         } else if (!isBackground) {
             alert('Error loading payment data: ' + res.message);
@@ -634,6 +708,33 @@ function loadPaymentData(isBackground = false) {
     .catch(error => {
         if (!isBackground) console.error('Error fetching payments:', error);
     });
+}
+
+function populateDropdowns() {
+    const teacherSelect = document.getElementById('filterTeacher');
+    const uniqueTeachers = [...new Set(globalPaymentData.map(item => item.teacher_name))].sort();
+    teacherSelect.innerHTML = '<option value="All">-- All Instructors --</option>';
+    uniqueTeachers.forEach(t => { teacherSelect.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; });
+
+    allSections = [...new Set(globalPaymentData.map(item => item.section))].sort();
+    updateSectionDropdown("All");
+}
+
+function onDeptChange() {
+    const dept = document.getElementById('filterDept').value;
+    updateSectionDropdown(dept);
+    document.getElementById('filterSection').value = "All";
+    renderTable();
+}
+
+function updateSectionDropdown(dept) {
+    const sectionSelect = document.getElementById('filterSection');
+    sectionSelect.innerHTML = '<option value="All">-- All Sections --</option>';
+    let filteredSections = allSections;
+    if (dept !== "All" && dept) {
+        filteredSections = [...new Set(globalPaymentData.filter(r => (r.department || '').toUpperCase() === dept.toUpperCase()).map(r => r.section))].sort();
+    }
+    filteredSections.forEach(s => { sectionSelect.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
 }
 
 function sortTable(column) {
@@ -665,7 +766,9 @@ function sortTable(column) {
 function renderTable() {
     const searchVal = document.getElementById('searchInput').value.toLowerCase().trim();
     const statusVal = document.getElementById('statusFilter').value;
-    const deptVal = document.getElementById('deptFilter').value;
+    const teacherVal = document.getElementById('filterTeacher').value;
+    const deptVal = document.getElementById('filterDept').value;
+    const sectionVal = document.getElementById('filterSection').value;
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
     
@@ -676,7 +779,9 @@ function renderTable() {
             enr.subject.toLowerCase().includes(searchVal);
                             
         const statusMatch = statusVal === 'All' || enr.payment_status === statusVal;
+        const teacherMatch = teacherVal === 'All' || enr.teacher_name === teacherVal;
         const deptMatch = deptVal === 'All' || (enr.department && enr.department === deptVal);
+        const sectionMatch = sectionVal === 'All' || enr.section === sectionVal;
         
         let dateMatch = true;
         if (isDateRangeActive) {
@@ -693,7 +798,7 @@ function renderTable() {
             }
         }
 
-        return searchMatch && statusMatch && deptMatch && dateMatch;
+        return searchMatch && statusMatch && teacherMatch && deptMatch && sectionMatch && dateMatch;
     });
     
     // Dynamic KPI Totals strictly calculated on filteredData
@@ -707,7 +812,7 @@ function renderTable() {
         deptTotals[dept] = (deptTotals[dept] || 0) + enr.balance;
     });
 
-    const isFiltered = Boolean(searchVal || statusVal !== 'All' || deptVal !== 'All' || fromDate || (isDateRangeActive && toDate));
+    const isFiltered = Boolean(searchVal || statusVal !== 'All' || teacherVal !== 'All' || deptVal !== 'All' || sectionVal !== 'All' || fromDate || (isDateRangeActive && toDate));
     const scopeEl = document.getElementById('filterScopeNotice');
     if (scopeEl) {
         if (isFiltered) {
@@ -803,7 +908,10 @@ function renderTable() {
 function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('statusFilter').value = 'All';
-    document.getElementById('deptFilter').value = 'All';
+    document.getElementById('filterTeacher').value = 'All';
+    document.getElementById('filterDept').value = 'All';
+    updateSectionDropdown('All');
+    document.getElementById('filterSection').value = 'All';
     document.getElementById('fromDate').value = '';
     document.getElementById('toDate').value = '';
     if (isDateRangeActive) {
@@ -828,7 +936,7 @@ function openBreakdownModal(input) {
 
     // Header context
     document.getElementById('calcInstructorName').textContent = data.teacher_name || 'Instructor';
-    document.getElementById('calcSectionSubject').textContent = `${data.section || 'N/A'} • ${data.subject || 'N/A'}`;
+    document.getElementById('calcSectionSubject').textContent = `${data.section || 'N/A'} - ${data.subject || 'N/A'}`;
     const deptBadge = document.getElementById('calcDeptBadge');
     if (deptBadge) {
         deptBadge.textContent = data.department || 'CS';

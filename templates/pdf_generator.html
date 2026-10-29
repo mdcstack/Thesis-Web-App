@@ -30,8 +30,7 @@
             max-width: 1320px;
             margin: 0 auto;
             align-items: start;
-            opacity: 0;
-            transition: opacity 0.22s ease-in-out;
+            opacity: 1;
         }
         .generator-workspace-grid.loaded {
             opacity: 1;
@@ -134,11 +133,7 @@
 {% include 'sidebar.html' %}
 
     <div class="main-content">
-        <!-- CLEAN LOADING PLACEHOLDER (Prevents visual jumps / FOUC) -->
-        <div id="generatorLoadingPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 480px; color: #64748b; gap: 14px;">
-            <div style="width: 38px; height: 38px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spinLoading 0.8s linear infinite;"></div>
-            <span style="font-weight: 600; font-size: 0.95rem;">Preparing Booklet Generator Workspace...</span>
-        </div>
+
 
         <div class="generator-workspace-grid">
             
@@ -225,7 +220,7 @@
 
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.85rem; color: #334155; margin-bottom: 12px;">
                         <div>
-                            <span style="color: #64748b; font-size: 0.78rem; display: block;">Enrolled Demand:</span>
+                            <span style="color: #64748b; font-size: 0.78rem; display: block;">Booklet Demand:</span>
                             <strong id="cardEnrolledDemand" style="font-size: 1rem; color: #0f172a;">- students</strong>
                         </div>
                         <div>
@@ -371,18 +366,7 @@
                 </div>
             </div>
 
-            <!-- Operational Consequence Box (Hidden by default; shown when demand is met or causes over supply) -->
-            <div id="confirmModalConsequenceBox" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; margin-bottom: 22px; font-size: 0.84rem; color: #92400e; line-height: 1.55;">
-                <div style="font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                    <span>⚠️</span> Operational Consequences:
-                </div>
-                <ul style="margin: 0; padding-left: 18px;">
-                    <li id="consequencePaperText">Raw bond paper will be consumed from physical storage.</li>
-                    <li>Sequential barcodes & control numbers will be <strong>permanently committed</strong> to the active exam period database.</li>
-                    <li id="consequenceCourseText">Covers are course-isolated and <strong>cannot be distributed to other courses</strong>.</li>
-                    <li id="consequenceDemandText"></li>
-                </ul>
-            </div>
+
 
             <!-- Action Buttons: Cancel and Generate PDF Batch -->
             <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
@@ -453,6 +437,12 @@
                 <div id="modalControlRange" style="font-family: monospace; font-size: 0.95rem; font-weight: bold; color: #1e293b; margin-top: 6px;">Control No: ---- to ----</div>
                 <div id="modalSrnRange" style="font-family: monospace; font-size: 0.95rem; font-weight: bold; color: #2563eb; margin-top: 4px;">SRN: SRN-XXXXXX to SRN-XXXXXX</div>
                 <div id="modalBatchMetrics" style="font-size: 0.85rem; color: #4b5563; margin-top: 6px;">166 Booklets Generated | 2 Reams Consumed</div>
+                <div id="modalPrintAdvice" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 12px; margin-top: 10px; font-size: 0.82rem; color: #92400e; text-align: left; line-height: 1.45;">
+                    <div style="font-weight: 700; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+                        <span>📄</span> <span>Smart PDF Structure &amp; Print Quota</span>
+                    </div>
+                    <div id="modalPrintAdviceText">Page 1: Master Batch Cover Sheet</div>
+                </div>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -579,6 +569,99 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         });
     }
 
+    function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+        return new Promise(resolve => {
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                window.alert(`${title}\n\n${message}`);
+                resolve(true);
+                return;
+            }
+
+            const card = modal.querySelector('.app-dialog-card') || modal.querySelector('.modal-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBg = '#3498db';
+
+            if (type === 'danger' || type === 'error') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBg = '#e74c3c';
+            } else if (type === 'info') {
+                borderCol = '#3b82f6';
+                icon = 'ℹ️';
+                defaultBg = '#3b82f6';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                defaultBg = '#10b981';
+            } else if (type === 'locked') {
+                borderCol = '#059669';
+                icon = '🎯';
+                defaultBg = '#059669';
+            }
+
+            if (card) {
+                if (card.classList.contains('app-dialog-card')) {
+                    card.style.borderTopColor = borderCol;
+                } else {
+                    card.style.borderTop = `5px solid ${borderCol}`;
+                }
+            }
+            if (iconEl) iconEl.innerText = icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) {
+                if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<strong') || message.includes('<p') || message.includes('•'))) {
+                    msgEl.style.whiteSpace = 'normal';
+                    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                } else {
+                    msgEl.style.whiteSpace = 'pre-line';
+                    msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                }
+            }
+
+            if (confirmBtn) {
+                confirmBtn.innerText = confirmText;
+                confirmBtn.className = 'dialog-btn';
+                confirmBtn.style.background = defaultBg;
+                confirmBtn.style.color = '#ffffff';
+            }
+
+            if (cancelBtn) {
+                cancelBtn.style.display = 'none';
+            }
+
+            function cleanup() {
+                modal.style.display = 'none';
+                if (confirmBtn) confirmBtn.onclick = null;
+                document.removeEventListener('keydown', handleKey);
+                modal.onclick = null;
+                resolve(true);
+            }
+
+            function handleKey(e) {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                    cleanup();
+                }
+            }
+
+            if (confirmBtn) confirmBtn.onclick = () => cleanup();
+
+            modal.onclick = (e) => {
+                if (e.target === modal) cleanup();
+            };
+            document.addEventListener('keydown', handleKey);
+
+            modal.style.display = 'flex';
+        });
+    }
+
     async function logout() {
         const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
             type: 'danger',
@@ -669,83 +752,14 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
     // Only the Admin will ever trigger this function
     function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        let data = {};
-        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
-            data = dataOrMessage;
-        } else {
-            data = {
-                message: dataOrMessage,
-                reams_needed: reamsArg,
-                deficit_booklets: deficitBookletsArg,
-                deficit_sheets: deficitSheetsArg
-            };
+        if (typeof window.showDSSModal === 'function') {
+            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
         }
-
-        const bCount = Number(data.deficit_booklets || 0);
-        const sCount = Number(data.deficit_sheets || 0);
-        const bufBooklets = Number(data.buffer_booklets || 0);
-        const bufSheets = Number(data.buffer_sheets || 0);
-        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
-        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
-        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
-        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
-
-        if (document.getElementById('dssModal')) return;
-
-        const bufferRowHtml = bufBooklets > 0 ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
-                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🎯 Target Production:</span>
-                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
-            </div>
-        ` : '';
-
-        const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-                    
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                            <span style="font-weight: 600;">📦 Net Deficit:</span>
-                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
-                        </div>
-                        ${bufferRowHtml}
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
-                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
-                    </p>
-                    
-                    <div style="display: flex; justify-content: center;">
-                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-                            Acknowledge & Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
     function dismissDSS() {
-        sessionStorage.setItem('dss_acknowledged', 'true');
-        const modal = document.getElementById('dssModal');
-        if (modal) modal.remove();
-        
-        const panel = document.getElementById('notifPanel');
-        if (panel) {
-            panel.style.display = 'block'; 
-            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        if (typeof window.dismissDSS === 'function') {
+            window.dismissDSS();
         }
     }
 
@@ -796,6 +810,9 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                         list.forEach(p => {
                             activeProgramsMap[p.code] = p;
                         });
+                        try {
+                            sessionStorage.setItem('bookletlog_pdfgen_programs', JSON.stringify(activeProgramsList));
+                        } catch(e) {}
                         populateDepartmentDropdown();
                         return;
                     }
@@ -1330,6 +1347,14 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     }
                 }
 
+                try {
+                    sessionStorage.setItem('bookletlog_pdfgen_settings', JSON.stringify({
+                        sheets_per_booklet: currentSheetsPerBooklet,
+                        yield_per_ream: currentYieldPerReam,
+                        active_period: currentActivePeriod
+                    }));
+                } catch(e) {}
+
                 if (!isPageInitializing && Object.keys(templateStatuses).length > 0) {
                     updateTemplateGuardUI();
                 }
@@ -1412,22 +1437,67 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
             const autoBtn = document.getElementById('autoFillBtn');
             const autoBtnText = document.getElementById('autoFillBtnText');
-            if (autoBtn && autoBtnText) {
-                if (!hasDeptEnrollments) {
+            const registerBtn = document.getElementById('registerBtn');
+            const reamInput = document.getElementById('reamCount');
+
+            if (!hasDeptEnrollments) {
+                if (autoBtn && autoBtnText) {
                     autoBtn.disabled = true;
                     autoBtn.style.opacity = '0.6';
                     autoBtn.style.cursor = 'not-allowed';
                     autoBtnText.innerText = '⚠️ Awaiting Class Enrollments in Manage Classes';
-                } else if (d.is_satisfied) {
-                    autoBtn.disabled = false;
-                    autoBtn.style.opacity = '1';
-                    autoBtn.style.cursor = 'pointer';
+                }
+                if (registerBtn) {
+                    registerBtn.disabled = false;
+                    registerBtn.style.background = '#94a3b8';
+                    registerBtn.style.cursor = 'pointer';
+                    registerBtn.innerText = `⚠️ Awaiting Enrollments for ${selectedDept}`;
+                }
+                if (reamInput) {
+                    reamInput.disabled = true;
+                }
+            } else if (d.is_satisfied || (d.target_production || 0) <= 0 || (d.reams_needed || 0) <= 0) {
+                if (autoBtn && autoBtnText) {
+                    autoBtn.disabled = true;
+                    autoBtn.style.opacity = '0.7';
+                    autoBtn.style.cursor = 'default';
                     autoBtnText.innerText = 'Demand Already Satisfied (0 Reams Needed)';
-                } else {
+                }
+                if (registerBtn) {
+                    registerBtn.disabled = false;
+                    registerBtn.style.background = '#059669';
+                    registerBtn.style.color = '#ffffff';
+                    registerBtn.style.cursor = 'pointer';
+                    registerBtn.innerText = `🔒 Demand Fulfilled for ${selectedDept} (0 Reams Needed)`;
+                }
+                if (reamInput) {
+                    reamInput.disabled = true;
+                    reamInput.value = 0;
+                    const yieldEl = document.getElementById('yieldDisplay');
+                    if (yieldEl) {
+                        yieldEl.innerHTML = `0 <span style="font-size: 0.78rem; font-weight: 700; color: #047857; background: #d1fae5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 12px; display: inline-block; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.3px;">Demand Met</span>`;
+                    }
+                }
+            } else {
+                if (autoBtn && autoBtnText) {
                     autoBtn.disabled = false;
                     autoBtn.style.opacity = '1';
                     autoBtn.style.cursor = 'pointer';
                     autoBtnText.innerText = `Auto-Fill Recommended: ${d.reams_needed || 1} Reams`;
+                }
+                if (registerBtn) {
+                    registerBtn.disabled = false;
+                    registerBtn.style.background = '#2563eb';
+                    registerBtn.style.color = '#ffffff';
+                    registerBtn.style.cursor = 'pointer';
+                    registerBtn.innerText = `Execute Batch PDF Conversion (${d.reams_needed || 1} Ream(s) Recommended)`;
+                }
+                if (reamInput) {
+                    reamInput.disabled = false;
+                    if (parseInt(reamInput.value) <= 0) {
+                        reamInput.value = Math.max(1, d.reams_needed || 1);
+                    }
+                    updateTargetYield();
                 }
             }
 
@@ -1465,8 +1535,6 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 return;
             }
 
-            // CRUCIAL: If department or system has NO enrollments, hide overprint advisory completely!
-            // Surplus warnings should never be shown when student demand is 0 (awaiting enrollment).
             const hasDeptEnrollments = d.has_enrollments !== false && ((d.headcount || 0) > 0 || (d.enrollment_count || 0) > 0);
             const hasAnyEnrollments = courseProductionData ? (courseProductionData.has_enrollments !== false && ((courseProductionData.total_enrollments || 0) > 0 || (courseProductionData.total_headcount || 0) > 0)) : false;
 
@@ -1480,7 +1548,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const reamsNeeded = d.reams_needed || 0;
             const reamsRequested = parseInt(document.getElementById('reamCount').value) || 0;
             const yieldPerReam = currentYieldPerReam || 83;
-            const projectedYield = reamsRequested * yieldPerReam;
+            const reamCapacity = reamsRequested * yieldPerReam;
+            const cappedYield = (target > 0) ? Math.min(reamCapacity, target) : reamCapacity;
             const bufferPct = courseProductionData.buffer_percent || 0;
 
             if (reamsRequested <= 0) {
@@ -1488,41 +1557,32 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 return;
             }
 
-            if (d.is_satisfied) {
+            if (d.is_satisfied || (d.target_production || 0) <= 0 || (d.reams_needed || 0) <= 0) {
                 advBox.style.display = 'block';
-                advBox.style.background = '#fffbeb';
-                advBox.style.border = '1px solid #fde68a';
-                advBox.style.color = '#b45309';
+                advBox.style.background = '#f0fdf4';
+                advBox.style.border = '1px solid #86efac';
+                advBox.style.color = '#166534';
                 const pStock = d.pending_stock || 0;
                 const vStock = d.available_stock || 0;
-                advBox.innerHTML = `⚠️ <strong>Demand Already Met:</strong> Production demand for ${deptName} is already satisfied (${pStock.toLocaleString()} pending generated + ${vStock.toLocaleString()} in vault). Generating additional batches will produce unused front pages and sequential numbers.`;
+                const totalStock = d.total_existing_stock || (pStock + vStock);
+                const hCount = d.headcount || 0;
+                advBox.innerHTML = `✅ <strong>Demand Fully Satisfied:</strong> All required booklets for ${deptName} have already been produced for ${currentActivePeriod || 'the active exam period'} (${totalStock.toLocaleString()} booklets in stock for ${hCount.toLocaleString()} enrolled students). Batch conversion is locked until new class sections are enrolled or a new examination period begins.`;
                 return;
             }
 
-            if (reamsRequested === reamsNeeded) {
+            if (reamsRequested >= reamsNeeded) {
                 advBox.style.display = 'block';
                 advBox.style.background = '#f0fdf4';
                 advBox.style.border = '1px solid #86efac';
                 advBox.style.color = '#15803d';
-                if (bufferPct === 0) {
-                    advBox.innerHTML = `✅ <strong>Optimal Allocation:</strong> Exactly covers the ${deptName} shortage (${d.deficit.toLocaleString()} pcs) with zero buffer (exact headcount demand).`;
-                } else {
-                    advBox.innerHTML = `✅ <strong>Optimal Allocation:</strong> Exactly covers the ${deptName} shortage (${d.deficit.toLocaleString()} pcs) plus the ${bufferPct}% safety buffer configured in Settings.`;
-                }
-            } else if (reamsRequested > reamsNeeded && projectedYield > (target + yieldPerReam)) {
-                advBox.style.display = 'block';
-                advBox.style.background = '#fffbeb';
-                advBox.style.border = '1px solid #fde68a';
-                advBox.style.color = '#b45309';
-                const excess = projectedYield - target;
-                advBox.innerHTML = `⚠️ <strong>Overprint Advisory:</strong> Producing ${projectedYield.toLocaleString()} booklets exceeds the required target of ${target.toLocaleString()} booklets for ${deptName} by ${excess.toLocaleString()} booklets. To conserve paper and department budget, <strong>${reamsNeeded} Ream(s)</strong> is recommended.`;
+                advBox.innerHTML = `✅ <strong>Optimal Quota Production:</strong> Will produce exactly <strong>${cappedYield.toLocaleString()} booklets</strong> (capped at student requirement${bufferPct > 0 ? ` including ${bufferPct}% safety buffer` : ''}). Zero surplus unassigned barcodes or wasted sheets.`;
             } else if (reamsRequested < reamsNeeded) {
                 advBox.style.display = 'block';
                 advBox.style.background = '#f0f9ff';
                 advBox.style.border = '1px solid #bae6fd';
                 advBox.style.color = '#0369a1';
-                const remainingToTarget = target - projectedYield;
-                advBox.innerHTML = `ℹ️ <strong>Partial Batch:</strong> Producing ${projectedYield.toLocaleString()} of ${target.toLocaleString()} target booklets for ${deptName}. An additional ${remainingToTarget.toLocaleString()} booklets (${Math.max(1, reamsNeeded - reamsRequested)} Reams) will be required.`;
+                const remainingToTarget = target - cappedYield;
+                advBox.innerHTML = `ℹ️ <strong>Partial Batch:</strong> Producing ${cappedYield.toLocaleString()} of ${target.toLocaleString()} target booklets for ${deptName}. An additional ${remainingToTarget.toLocaleString()} booklets (${Math.max(1, reamsNeeded - reamsRequested)} Reams) will be required to satisfy full demand.`;
             } else {
                 advBox.style.display = 'none';
             }
@@ -1531,7 +1591,23 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         function updateTargetYield() {
             let reams = parseInt(document.getElementById('reamCount').value) || 0;
             if (reams < 1) reams = 1;
-            document.getElementById('yieldDisplay').innerText = reams * currentYieldPerReam;
+            const deptSelect = document.getElementById('deptSelect');
+            const selectedDept = deptSelect ? deptSelect.value : 'CS';
+            const d = (courseProductionData && courseProductionData.courses) ? courseProductionData.courses[selectedDept] : null;
+            const target = d ? (d.target_production || 0) : 0;
+            const reamCapacity = reams * currentYieldPerReam;
+            const cappedYield = (target > 0) ? Math.min(reamCapacity, target) : reamCapacity;
+
+            const yieldEl = document.getElementById('yieldDisplay');
+            if (yieldEl) {
+                if (d && (d.is_satisfied || target <= 0)) {
+                    yieldEl.innerHTML = `0 <span style="font-size: 0.78rem; font-weight: 700; color: #047857; background: #d1fae5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 12px; display: inline-block; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.3px;">Demand Met</span>`;
+                } else if (target > 0 && reamCapacity > target) {
+                    yieldEl.innerHTML = `${cappedYield.toLocaleString()} <span style="font-size: 0.72rem; font-weight: 600; color: #15803d; background: #dcfce7; border: 1px solid #86efac; padding: 2px 6px; border-radius: 10px; display: inline-block; vertical-align: middle; margin-left: 4px;">Exact Target Capped</span>`;
+                } else {
+                    yieldEl.innerText = cappedYield.toLocaleString();
+                }
+            }
             checkOverprintStatus();
         }
 
@@ -1543,6 +1619,49 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const workspace = document.querySelector('.generator-workspace-grid');
             if (placeholder) placeholder.style.display = 'none';
             if (workspace) workspace.classList.add('loaded');
+        }
+
+        // --- INSTANT CACHE HYDRATION (0ms Workspace Load) ---
+        function initGeneratorFromCache() {
+            try {
+                const cachedPrograms = sessionStorage.getItem('bookletlog_pdfgen_programs');
+                if (cachedPrograms) {
+                    const parsed = JSON.parse(cachedPrograms);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        activeProgramsList = parsed;
+                        activeProgramsMap = {};
+                        parsed.forEach(p => { activeProgramsMap[p.code] = p; });
+                        populateDepartmentDropdown();
+                    }
+                }
+                const cachedSettings = sessionStorage.getItem('bookletlog_pdfgen_settings');
+                if (cachedSettings) {
+                    const parsed = JSON.parse(cachedSettings);
+                    if (parsed.sheets_per_booklet) {
+                        currentSheetsPerBooklet = parsed.sheets_per_booklet;
+                        currentYieldPerReam = parsed.yield_per_ream || Math.floor(500 / currentSheetsPerBooklet);
+                        const sheetsEl = document.getElementById('explainerSheets');
+                        const yieldEl = document.getElementById('explainerYield');
+                        if (sheetsEl) sheetsEl.innerText = currentSheetsPerBooklet;
+                        if (yieldEl) yieldEl.innerText = currentYieldPerReam;
+                        updateTargetYield();
+                    }
+                    if (parsed.active_period) {
+                        currentActivePeriod = parsed.active_period;
+                        const periodPill = document.getElementById('activePeriodPill');
+                        if (periodPill) {
+                            const isPeriodSet = currentActivePeriod && currentActivePeriod !== 'UNSET' && !currentActivePeriod.includes('UNSET');
+                            if (isPeriodSet) {
+                                periodPill.innerText = `Active: ${currentActivePeriod}`;
+                                periodPill.style.background = '#dcfce7';
+                                periodPill.style.color = '#15803d';
+                            }
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn("Could not read pdf_generator cache:", e);
+            }
         }
 
         // Concurrent startup: Load academic programs, system settings and template statuses in parallel, then evaluate template guard
@@ -1564,6 +1683,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 revealGeneratorWorkspace();
             }
         }
+        initGeneratorFromCache();
         initializeGeneratorPage();
 
         let pendingBatch = null;
@@ -1586,20 +1706,13 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             if (courseTemplateEl) courseTemplateEl.innerText = `${batch.deptLabel} • ${batch.templateName}`;
 
             const yieldEl = document.getElementById('confirmModalYield');
-            if (yieldEl) yieldEl.innerText = `${batch.reamsRequested} Ream(s) → ${batch.totalYield} Booklets (${currentSheetsPerBooklet} sheets/booklet)`;
-
-            const paperEl = document.getElementById('consequencePaperText');
-            if (paperEl) paperEl.innerHTML = `Consumes <strong>${batch.reamsRequested} Ream(s)</strong> (${(batch.reamsRequested * 500).toLocaleString()} bond paper sheets) from department storage.`;
-
-            const courseEl = document.getElementById('consequenceCourseText');
-            if (courseEl) courseEl.innerHTML = `Covers are branded exclusively for <strong>${batch.deptLabel}</strong> and <strong>cannot be distributed to other courses</strong> (triggers system mismatch guard).`;
+            const isCapped = batch.targetNeeded > 0 && batch.reamCapacity > batch.targetNeeded;
+            if (yieldEl) yieldEl.innerText = `${batch.reamsRequested} Ream(s) → ${batch.totalYield} Booklets${isCapped ? ' (Exact Target Capped)' : ''} (${currentSheetsPerBooklet} sheets/booklet)`;
 
             const stockEl = document.getElementById('confirmModalStockImpact');
             const badge = document.getElementById('confirmModalStatusBadge');
             const card = document.getElementById('confirmModalCard');
             const icon = document.getElementById('confirmModalIcon');
-            const box = document.getElementById('confirmModalConsequenceBox');
-            const demandLi = document.getElementById('consequenceDemandText');
             const proceedBtn = document.getElementById('confirmProceedBtn');
 
             if (courseProductionData && courseProductionData.courses && courseProductionData.courses[batch.selectedDept]) {
@@ -1608,7 +1721,6 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 const reamsNeeded = d.reams_needed || 0;
                 const existingStock = (d.total_existing_stock !== undefined) ? d.total_existing_stock : ((d.pending_stock || 0) + (d.available_stock || 0));
                 const projectedStock = existingStock + batch.totalYield;
-                const bufferPct = courseProductionData.buffer_percent !== undefined ? courseProductionData.buffer_percent : 0;
 
                 if (stockEl) {
                     const pCount = d.pending_stock || 0;
@@ -1616,11 +1728,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     stockEl.innerHTML = `${pCount.toLocaleString()} pending + ${vCount.toLocaleString()} vault + ${batch.totalYield.toLocaleString()} new = <strong>${projectedStock.toLocaleString()} total</strong> (Target: ${target.toLocaleString()})`;
                 }
 
-                const hasDeptEnrollments = d.has_enrollments !== false && ((d.headcount || 0) > 0 || (d.enrollment_count || 0) > 0);
-                const hasTarget = hasDeptEnrollments && !d.is_satisfied && (target > 0);
-
-                if (!hasTarget) {
-                    // Overproduction / Surplus - No student headcount target to receive booklets (demand already met or zero target)
+                if (batch.reamsRequested > reamsNeeded) {
+                    // User requested more reams than needed to satisfy the target
                     const surplus = Math.max(batch.totalYield, projectedStock - target);
                     if (card) card.style.borderTopColor = '#f59e0b';
                     if (icon) icon.innerText = '⚠️';
@@ -1628,61 +1737,31 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                         badge.style.background = '#fef3c7';
                         badge.style.color = '#b45309';
                         badge.style.borderColor = '#fde68a';
-                        badge.innerText = `⚠️ Overproduction Warning: Zero Student Target`;
-                    }
-                    if (box) {
-                        box.style.display = 'block';
-                        box.style.background = '#fffbeb';
-                        box.style.borderColor = '#fde68a';
-                        box.style.color = '#92400e';
-                    }
-                    if (demandLi) {
-                        if (!hasDeptEnrollments) {
-                            demandLi.innerHTML = `There are currently <strong>no enrolled class sections</strong> registered for ${batch.deptLabel}. Generating this batch will produce <strong>${batch.totalYield.toLocaleString()} unassigned booklets</strong>.`;
-                        } else {
-                            demandLi.innerHTML = `Production demand is already fully satisfied by generated/vault stock (${existingStock.toLocaleString()} booklets). This new batch generates <strong>${batch.totalYield.toLocaleString()} unused front pages</strong> with excess sequential numbers.`;
-                        }
+                        badge.innerText = `⚠️ Overproduction Warning: +${surplus.toLocaleString()} Surplus Booklets`;
                     }
                     if (proceedBtn) proceedBtn.style.background = '#d97706';
-                } else {
-                    // Has student headcount target to receive booklets -> Consequence box is hidden!
-                    if (box) box.style.display = 'none';
-
-                    if (batch.reamsRequested > reamsNeeded) {
-                        // User requested more reams than needed to satisfy the target
-                        const surplus = Math.max(batch.totalYield, projectedStock - target);
-                        if (card) card.style.borderTopColor = '#f59e0b';
-                        if (icon) icon.innerText = '⚠️';
-                        if (badge) {
-                            badge.style.background = '#fef3c7';
-                            badge.style.color = '#b45309';
-                            badge.style.borderColor = '#fde68a';
-                            badge.innerText = `⚠️ Overproduction Warning: +${surplus.toLocaleString()} Surplus Booklets`;
-                        }
-                        if (proceedBtn) proceedBtn.style.background = '#d97706';
-                    } else if (batch.reamsRequested === reamsNeeded || projectedStock >= target) {
-                        // Target Demand Met Exactly - Produced reams fulfill target demand
-                        if (card) card.style.borderTopColor = '#10b981';
-                        if (icon) icon.innerText = '🎯';
-                        if (badge) {
-                            badge.style.background = '#dcfce7';
-                            badge.style.color = '#15803d';
-                            badge.style.borderColor = '#86efac';
-                            badge.innerText = `🎯 Target Demand Satisfied (100% Demand Met)`;
-                        }
-                        if (proceedBtn) proceedBtn.style.background = '#16a34a';
-                    } else {
-                        // Partial Batch - Still below target demand
-                        if (card) card.style.borderTopColor = '#3b82f6';
-                        if (icon) icon.innerText = '📋';
-                        if (badge) {
-                            badge.style.background = '#e0f2fe';
-                            badge.style.color = '#0369a1';
-                            badge.style.borderColor = '#bae6fd';
-                            badge.innerText = `ℹ️ Partial Batch Allocation (${projectedStock.toLocaleString()} of ${target.toLocaleString()} Target)`;
-                        }
-                        if (proceedBtn) proceedBtn.style.background = '#2563eb';
+                } else if (batch.reamsRequested === reamsNeeded || projectedStock >= target) {
+                    // Target Demand Met Exactly - Produced reams fulfill target demand
+                    if (card) card.style.borderTopColor = '#10b981';
+                    if (icon) icon.innerText = '🎯';
+                    if (badge) {
+                        badge.style.background = '#dcfce7';
+                        badge.style.color = '#15803d';
+                        badge.style.borderColor = '#86efac';
+                        badge.innerText = `🎯 Target Demand Satisfied (100% Demand Met)`;
                     }
+                    if (proceedBtn) proceedBtn.style.background = '#16a34a';
+                } else {
+                    // Partial Batch - Still below target demand
+                    if (card) card.style.borderTopColor = '#3b82f6';
+                    if (icon) icon.innerText = '📋';
+                    if (badge) {
+                        badge.style.background = '#e0f2fe';
+                        badge.style.color = '#0369a1';
+                        badge.style.borderColor = '#bae6fd';
+                        badge.innerText = `ℹ️ Partial Batch Allocation (${projectedStock.toLocaleString()} of ${target.toLocaleString()} Target)`;
+                    }
+                    if (proceedBtn) proceedBtn.style.background = '#2563eb';
                 }
             } else {
                 if (stockEl) stockEl.innerText = `${batch.totalYield.toLocaleString()} Booklets to be added`;
@@ -1691,9 +1770,6 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     badge.style.color = '#0369a1';
                     badge.style.borderColor = '#bae6fd';
                     badge.innerText = `📋 Standard Batch Registration`;
-                }
-                if (box) {
-                    box.style.display = 'none';
                 }
                 if (proceedBtn) proceedBtn.style.background = '#2563eb';
             }
@@ -1727,7 +1803,11 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
             if (!slotData || !slotData.is_configured) {
                 const reason = (slotData && slotData.has_pdf_file) ? 'is an unsaved draft' : 'is not configured yet';
-                alert(`Cannot generate batch: ${deptLabel} (${templateName}) ${reason}. Please configure and save an official template in the Booklet Template Studio before printing.`);
+                await showAppAlert(
+                    "Template Configuration Required",
+                    `Cannot generate batch: <strong>${deptLabel}</strong> (${templateName}) ${reason}. Please configure and save an official template in the Booklet Template Studio before printing.`,
+                    "warning"
+                );
                 return;
             }
 
@@ -1737,17 +1817,45 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const hasAnyEnrollments = courseProductionData ? (courseProductionData.has_enrollments !== false && ((courseProductionData.total_enrollments || 0) > 0 || (courseProductionData.total_headcount || 0) > 0)) : false;
 
             if (!hasAnyEnrollments) {
-                alert("Cannot generate booklet batch: No class sections have been enrolled in Manage Classes yet. Please enroll class sections before generating booklets.");
+                await showAppAlert(
+                    "Missing Class Enrollments",
+                    "Cannot generate booklet batch: No class sections have been enrolled in Manage Classes yet. Please enroll class sections before generating booklets.",
+                    "warning"
+                );
                 return;
             }
 
             if (!hasDeptEnrollments) {
-                alert(`Cannot generate booklet batch for ${deptLabel}: No class sections are enrolled for ${selectedDept} in Manage Classes. Please add ${selectedDept} class enrollments first.`);
+                await showAppAlert(
+                    "Missing Course Enrollments",
+                    `Cannot generate booklet batch for <strong>${deptLabel}</strong>: No class sections are enrolled for ${selectedDept} in Manage Classes. Please add ${selectedDept} class enrollments first.`,
+                    "warning"
+                );
+                return;
+            }
+
+            // Strict Demand Fulfilled Lock: Prevent generating additional batches when demand is 100% met
+            if (currentDeptDemand && (currentDeptDemand.is_satisfied || (currentDeptDemand.target_production || 0) <= 0 || (currentDeptDemand.reams_needed || 0) <= 0)) {
+                const existing = (currentDeptDemand.total_existing_stock || 0).toLocaleString();
+                const pending = (currentDeptDemand.pending_stock || 0).toLocaleString();
+                const vault = (currentDeptDemand.available_stock || 0).toLocaleString();
+                const headcount = (currentDeptDemand.headcount || 0).toLocaleString();
+                await showAppAlert(
+                    "Examination Demand Already Fulfilled",
+                    `All student headcount requirements (including safety buffer) for <strong>${deptLabel}</strong> in <strong>${currentActivePeriod || 'the active exam period'}</strong> are already met.\n\n` +
+                    `• <strong>Existing Stock:</strong> ${existing} booklets (${pending} pending + ${vault} vault)\n` +
+                    `• <strong>Student Demand:</strong> ${headcount} students\n\n` +
+                    `Batch conversion is locked to prevent unnecessary paper consumption and unneeded material expenses. Please wait for the next examination period or semester before generating more booklet stock.`,
+                    "locked",
+                    "Understood"
+                );
                 return;
             }
 
             const reamsRequested = parseInt(document.getElementById('reamCount').value) || 1;
-            const totalYield = reamsRequested * currentYieldPerReam;
+            const targetNeeded = currentDeptDemand ? (currentDeptDemand.target_production || 0) : 0;
+            const reamCapacity = reamsRequested * currentYieldPerReam;
+            const totalYield = (targetNeeded > 0) ? Math.min(reamCapacity, targetNeeded) : reamCapacity;
 
             // Intercept with Confirm Action Modal
             showConfirmModal({
@@ -1755,6 +1863,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 currentSlot,
                 reamsRequested,
                 totalYield,
+                reamCapacity,
+                targetNeeded,
                 deptLabel,
                 templateName
             });
@@ -1819,6 +1929,19 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                         document.getElementById('modalSrnRange').innerText = `SRN: ${data.start_srn} to ${data.end_srn}`;
                     }
                     document.getElementById('modalBatchMetrics').innerText = `${data.booklets_generated} Booklets Generated | ${reamsRequested} Ream(s) Consumed`;
+                    
+                    const printAdviceEl = document.getElementById('modalPrintAdvice');
+                    const printAdviceText = document.getElementById('modalPrintAdviceText');
+                    if (printAdviceEl && printAdviceText) {
+                        if (data.has_warning_page) {
+                            printAdviceEl.style.display = 'block';
+                            printAdviceText.innerHTML = `• <strong>Page 1:</strong> Master Batch Cover Sheet (Batch Identification & Print Specs).<br>• <strong>Pages ${data.recommended_print_range}:</strong> Active Student Quota (${data.target_needed} booklets).<br>• <strong>Page ${data.warning_page_number}:</strong> 🛑 Target Quota Warning Divider Sheet.<br>• <span style="color: #b45309; font-weight: 600;">Print Advice:</span> Set printer page range to <strong>Pages ${data.recommended_print_range}</strong> to avoid printing excess booklets.`;
+                        } else {
+                            printAdviceEl.style.display = 'block';
+                            printAdviceText.innerHTML = `• <strong>Page 1:</strong> Master Batch Cover Sheet (Batch Identification & Print Specs).<br>• <strong>Pages 2-${(data.booklets_generated || 0) + 1}:</strong> All ${data.booklets_generated} booklets fulfill active requirements.`;
+                        }
+                    }
+
                     const dlBtn = document.getElementById('modalDownloadBtn');
                     dlBtn.href = data.pdf_download_link;
                     
@@ -1843,14 +1966,14 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                         await fetchGeneratorSettings();
                         await fetchTemplateStatuses(false);
                     }
-                    alert("Batch Production Error: " + (data.detail || "Could not generate batch."));
+                    await showAppAlert("Batch Production Error", data.detail || "Could not generate batch.", "danger");
                     msg.style.display = 'none';
                 }
             } catch (error) {
                 isStampingInProgress = false;
                 modal.style.display = 'none';
                 console.error(error);
-                alert("A network error occurred while reaching the offline server.");
+                await showAppAlert("Connection Error", "A network error occurred while reaching the offline server.", "danger");
                 msg.style.display = 'none';
             } finally {
                 btn.disabled = false;

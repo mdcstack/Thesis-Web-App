@@ -134,10 +134,22 @@
             .charts-grid { grid-template-columns: 1fr; }
         }
 
+        .course-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .course-cards-grid {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+            }
+        }
+
         @media (max-width: 600px) {
             .kpi-grid { grid-template-columns: 1fr; }
             .visual-card { padding: 16px !important; }
-            .course-cards-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
         }
 
     </style>
@@ -194,15 +206,14 @@
                     📑 Dept Breakdown Computation ➔
                 </a>
                 <a href="/expenditure-report" class="btn-header-action btn-expenditure">
-                    💰 Expenditure &amp; ROI Report ➔
+                    💰 Expenditure Report ➔
                 </a>
             </div>
         </div>
         
         <div class="kpi-grid">
-            <div class="kpi-card clickable-card" style="border-left-color: #8e44ad;" onclick="openFilterModal()" title="Click to filter dashboard">
-                <div class="clickable-icon">🔍</div>
-                <h3>📌 Viewing Period</h3>
+            <div class="kpi-card" style="border-left-color: #8e44ad;">
+                <h3>📌 Active Examination Period</h3>
                 <div class="value" id="kpi-period" style="font-size: 1.3rem; margin-top: 10px;">Loading...</div>
             </div>
             <div class="kpi-card revenue clickable-card" onclick="openConvertedModal()" title="Click to view Reams Converted Breakdown">
@@ -250,7 +261,7 @@
                     </span>
                 </div>
 
-                <div id="courses-breakdown-grid" class="course-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px;">
+                <div id="courses-breakdown-grid" class="course-cards-grid" style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
                     <!-- CS Course Card -->
                     <div id="course-card-cs" style="background: white; border: 2px solid #bfdbfe; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-width: 0; box-sizing: border-box; overflow: hidden;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #eff6ff; padding-bottom: 8px; flex-wrap: wrap; gap: 8px;">
@@ -263,7 +274,7 @@
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
                             <div style="min-width: 0;">
-                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Booklet Demand</span>
                                 <strong id="cs-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
                             </div>
                             <div style="min-width: 0;">
@@ -286,8 +297,13 @@
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
-                                <strong id="cs-reams-needed" style="font-size: 1.15rem; color: #2563eb;">- Ream(s) &amp; - Sheet(s)</strong>
+                                <strong id="cs-reams-needed" style="font-size: 1.15rem; color: #2563eb;">- Whole Reams</strong>
+                                <small id="cs-reams-subtext" style="display: block; color: #64748b; font-size: 0.75rem;">- Ream(s) &amp; - Sheet(s)</small>
                             </div>
+                        </div>
+                        <div id="cs-excess-reserve-box" style="margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; display: none; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+                            <span style="color: #166534; font-weight: 600;">🌿 Excess Paper Reserve:</span>
+                            <span id="cs-excess-reserve-text" style="color: #15803d; font-weight: 700;">+0 Sheets</span>
                         </div>
                     </div>
 
@@ -303,7 +319,7 @@
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
                             <div style="min-width: 0;">
-                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Booklet Demand</span>
                                 <strong id="it-headcount" style="font-size: 1.1rem; color: #0f172a;">-</strong>
                             </div>
                             <div style="min-width: 0;">
@@ -326,13 +342,18 @@
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
-                                <strong id="it-reams-needed" style="font-size: 1.15rem; color: #7c3aed;">- Ream(s) &amp; - Sheet(s)</strong>
+                                <strong id="it-reams-needed" style="font-size: 1.15rem; color: #7c3aed;">- Whole Reams</strong>
+                                <small id="it-reams-subtext" style="display: block; color: #64748b; font-size: 0.75rem;">- Ream(s) &amp; - Sheet(s)</small>
                             </div>
+                        </div>
+                        <div id="it-excess-reserve-box" style="margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; display: none; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+                            <span style="color: #166534; font-weight: 600;">🌿 Excess Paper Reserve:</span>
+                            <span id="it-excess-reserve-text" style="color: #15803d; font-weight: 700;">+0 Sheets</span>
                         </div>
                     </div>
                 </div>
             </div>
-        
+            
             <!-- BOTTOM HALF: Expert System Recommendation -->
             <div id="expertAdviceWrapper" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
@@ -404,25 +425,6 @@
     </div>
 
     <!-- MODALS SECTION -->
-    <div class="modal-overlay" id="filterModal">
-        <div class="modal-card" style="border-top: 6px solid #8e44ad;">
-            <h3 style="color: #2c3e50; margin-bottom: 10px;">🔍 Filter Dashboard Data</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 20px;">Select an exam period to view historical or future revenue and analytics.</p>
-            <select id="filterTermSelect">
-                <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
-                <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
-                <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
-                <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
-                <option value="Midyear - Exam">Midyear - Exam</option>
-            </select>
-            <select id="filterAySelect"></select>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn-action" style="background-color: #bdc3c7; color: #2c3e50;" onclick="closeModals()">Cancel</button>
-                <button class="btn-action" style="background-color: #8e44ad;" onclick="applyDashboardFilter()">View Data</button>
-            </div>
-        </div>
-    </div>
-
     <div class="modal-overlay" id="revenueModal">
         <div class="modal-card" style="border-top: 6px solid #27ae60; max-width: 480px;">
             <h3 style="color: #2c3e50; margin-bottom: 10px;">💵 Gross Revenue Breakdown</h3>
@@ -438,13 +440,19 @@
 
     <!-- CONVERTED REAMS BREAKDOWN MODAL -->
     <div class="modal-overlay" id="convertedModal">
-        <div class="modal-card" style="border-top: 6px solid #2563eb; max-width: 480px;">
+        <div class="modal-card" style="border-top: 6px solid #2563eb; max-width: 680px; width: 95%;">
             <h3 style="color: #2c3e50; margin-bottom: 10px;">📦 Raw Reams Converted Breakdown</h3>
             <p style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 16px;" id="convertedModalPeriodLabel">Loading...</p>
             <div id="modalConvertedRowsContainer" style="max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;"></div>
-            <div style="display: flex; justify-content: space-between; align-items: center; color: #2563eb; font-weight: bold; border-top: 2px solid #e2e8f0; padding-top: 12px; font-size: 1rem; margin-top: 6px;">
-                <span>Total Reams Converted</span>
-                <span id="modalConvertedTotal">0 Ream(s)</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 6px; font-size: 0.92rem; margin-top: 8px;">
+                <div>
+                    <strong style="color: #1e40af; font-size: 0.95rem;">Total Reams Converted</strong>
+                    <div id="modalConvertedTotalSubtext" style="font-size: 0.8rem; color: #64748b; margin-top: 3px;">Combined paper demand across all active courses</div>
+                </div>
+                <div style="text-align: right;">
+                    <span id="modalConvertedTotal" style="font-weight: 700; color: #1d4ed8; font-size: 0.98rem;">0 Ream(s) &amp; 0 Sheet(s)</span>
+                    <small id="modalConvertedTotalSheets" style="display: block; font-size: 0.78rem; color: #64748b; margin-top: 2px;">0 sheets total</small>
+                </div>
             </div>
             <button class="btn-action" style="background-color: #2563eb; margin-top: 16px; width: 100%;" onclick="closeModals()">Close</button>
         </div>
@@ -566,7 +574,6 @@
     }
 
     // --- MODAL CONTROLS ---
-    function openFilterModal() { populateFilterYears(); document.getElementById('filterModal').style.display = 'flex'; }
     let dashboardPrograms = [];
 
     function getProgDisplayMeta(code) {
@@ -627,22 +634,81 @@
             { code: 'CS', name: 'Computer Science', color: '#3498db' },
             { code: 'IT', name: 'Information Technology', color: '#e67e22' }
         ];
-        const convMap = statsData.reams_converted_by_dept || {};
+        
+        const totalConverted = Number(statsData.reams_converted_total || 0);
+        const convDetailsMap = statsData.converted_sheets_per_dept || {};
+        const targetPaperMap = statsData.course_target_paper || {};
+        const totalGenSheets = Number(statsData.total_generated_sheets || 0);
+        const hasBatches = totalConverted > 0 || totalGenSheets > 0;
+
+        let totalSheetsSum = 0;
+
         container.innerHTML = progs.map(p => {
-            const val = (convMap[p.code] !== undefined)
-                ? convMap[p.code]
-                : (p.code === 'CS' ? (convMap.CS || convMap.cs || 0) : (p.code === 'IT' ? (convMap.IT || convMap.it || 0) : 0));
+            let sTotal = 0;
+            let rPart = 0;
+            let sPart = 0;
+            let displayTarget = '';
+
+            if (hasBatches) {
+                const cData = convDetailsMap[p.code] || {};
+                sTotal = Number(cData.sheets_total || 0);
+                rPart = cData.reams_part !== undefined ? cData.reams_part : Math.floor(sTotal / 500);
+                sPart = cData.sheets_part !== undefined ? cData.sheets_part : (sTotal % 500);
+                const bCount = Number(cData.booklets || 0);
+                displayTarget = `${bCount.toLocaleString()} booklets generated (${sTotal.toLocaleString()} paper sheets used)`;
+            } else {
+                const tData = targetPaperMap[p.code] || {};
+                sTotal = Number(tData.sheets_needed || 0);
+                rPart = tData.reams_whole !== undefined ? tData.reams_whole : Math.floor(sTotal / 500);
+                sPart = tData.sheets_remainder !== undefined ? tData.sheets_remainder : (sTotal % 500);
+                const bTarget = Number(tData.target_booklets || 0);
+                displayTarget = `${bTarget.toLocaleString()} booklets target (${sTotal.toLocaleString()} paper sheets needed)`;
+            }
+
+            totalSheetsSum += sTotal;
+            const rWord = rPart === 1 ? 'Ream' : 'Reams';
+            const sWord = sPart === 1 ? 'Sheet' : 'Sheets';
+            const displayDetail = `${rPart} ${rWord} & ${sPart.toLocaleString()} ${sWord}`;
+
             return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
-                    <span style="display: inline-flex; align-items: center; gap: 8px;">
-                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#2563eb'};"></span>
-                        <strong style="color: #2c3e50; font-size: 0.92rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
-                    </span>
-                    <span style="font-weight: 700; color: #2563eb; font-size: 0.95rem;">${Number(val).toLocaleString()} Ream(s)</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.92rem;">
+                    <div>
+                        <span style="display: inline-flex; align-items: center; gap: 8px;">
+                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${p.color || '#2563eb'};"></span>
+                            <strong style="color: #2c3e50; font-size: 0.95rem;">${escapeHtml(p.name)} (${escapeHtml(p.code)})</strong>
+                        </span>
+                        <div style="font-size: 0.8rem; color: #64748b; margin-top: 4px; padding-left: 18px;">${displayTarget}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="font-weight: 700; color: #2563eb; font-size: 0.95rem;">${displayDetail}</span>
+                        <small style="display: block; font-size: 0.78rem; color: #64748b;">${sTotal.toLocaleString()} sheets total</small>
+                    </div>
                 </div>
             `;
         }).join('');
-        document.getElementById('modalConvertedTotal').innerText = `${Number(statsData.reams_converted_total || 0).toLocaleString()} Ream(s)`;
+
+        const finalSheets = hasBatches ? totalGenSheets : (totalSheetsSum || Number(statsData.total_target_sheets || 0));
+        const finalRPart = Math.floor(finalSheets / 500);
+        const finalSPart = finalSheets % 500;
+        const finalRWord = finalRPart === 1 ? 'Ream(s)' : 'Ream(s)';
+        const finalSWord = finalSPart === 1 ? 'Sheet(s)' : 'Sheet(s)';
+
+        const totalLabel = document.getElementById('modalConvertedTotal');
+        const totalSheetsLabel = document.getElementById('modalConvertedTotalSheets');
+        const totalSubtextLabel = document.getElementById('modalConvertedTotalSubtext');
+
+        if (totalLabel) {
+            totalLabel.innerText = `${finalRPart} ${finalRWord} & ${finalSPart.toLocaleString()} ${finalSWord}`;
+        }
+        if (totalSheetsLabel) {
+            totalSheetsLabel.innerText = `${finalSheets.toLocaleString()} sheets total`;
+        }
+        if (totalSubtextLabel) {
+            totalSubtextLabel.innerText = hasBatches 
+                ? 'Combined batch production across all active courses' 
+                : 'Combined paper demand across all active courses';
+        }
+
         document.getElementById('convertedModal').style.display = 'flex';
     }
 
@@ -696,7 +762,6 @@
         document.getElementById('defectiveModal').style.display = 'flex';
     }
     function closeModals() {
-        if (document.getElementById('filterModal')) document.getElementById('filterModal').style.display = 'none';
         if (document.getElementById('revenueModal')) document.getElementById('revenueModal').style.display = 'none';
         if (document.getElementById('convertedModal')) document.getElementById('convertedModal').style.display = 'none';
         if (document.getElementById('issuedModal')) document.getElementById('issuedModal').style.display = 'none';
@@ -704,14 +769,6 @@
     }
 
     window.onclick = function(event) { if (event.target.classList.contains('modal-overlay')) closeModals(); };
-
-    function applyDashboardFilter() {
-        const term = document.getElementById('filterTermSelect').value;
-        const ay = document.getElementById('filterAySelect').value;
-        currentDashboardPeriod = `${term} | ${ay}`;
-        closeModals();
-        fetchDashboardData(currentDashboardPeriod);
-    }
 
     // --- CHART RENDERING ---
     function renderYearLevelChart(yearSalesData) {
@@ -867,28 +924,127 @@
         });
     }
 
-    // --- INIT & FETCH DATA ---
-    window.onload = function() {
-        checkSystemInitialization();
-        if (window.lanSync) {
-            window.lanSync.onUpdate(() => {
-                if (currentDashboardPeriod) {
-                    fetchDashboardData(currentDashboardPeriod);
-                }
-                if (typeof fetchExpertSystemData === 'function') {
-                    fetchExpertSystemData();
-                }
-            });
-        }
-    };
+    // --- 0ms INSTANT CACHE HYDRATION & REUSABLE DATA RENDERER ---
+    function applyDashboardData(data, periodQuery = "") {
+        if (!data || data.status !== "success") return;
+        try {
+            const kpi = data.kpi || { reams_opened: 0, loose_sheets: 0, issued: 0, defective: 0 };
+            
+            if (data.active_period) {
+                currentDashboardPeriod = data.active_period;
+            }
+            const periodLabel = document.getElementById('kpi-period');
+            if (periodLabel) {
+                periodLabel.innerText = data.active_period || periodQuery || currentDashboardPeriod || 'Active Examination Period';
+            }
+            
+            if (document.getElementById('kpi-reams-converted')) {
+                document.getElementById('kpi-reams-converted').innerText = kpi.reams_converted || 0;
+                document.getElementById('kpi-total-generated').innerText = (kpi.total_generated || 0).toLocaleString();
+                
+                document.getElementById('kpi-reams-distributed').innerText = kpi.reams_distributed || 0;
+                document.getElementById('kpi-loose-distributed').innerText = kpi.loose_distributed || 0;
 
+                if (document.getElementById('kpi-reams-distributed-breakdown')) {
+                    const distMap = kpi.reams_distributed_per_dept || { CS: kpi.reams_distributed_cs || 0, IT: kpi.reams_distributed_it || 0 };
+                    const looseMap = kpi.loose_distributed_per_dept || { CS: kpi.loose_distributed_cs || 0, IT: kpi.loose_distributed_it || 0 };
+                    const distStr = Object.keys(distMap).map(c => `${c}: ${distMap[c] || 0}R (${looseMap[c] || 0}s)`).join(' | ');
+                    document.getElementById('kpi-reams-distributed-breakdown').innerText = distStr || '0R (0s)';
+                }
+            }
+
+            // Synchronize dynamic active programs FIRST so all charts have full course metadata
+            dashboardPrograms = data.programs || (data.computations_data ? data.computations_data.programs : []) || [];
+
+            if (data.course_production && data.course_production.courses) {
+                updateCourseBreakdownUI(data.course_production);
+            }
+
+            if (document.getElementById('kpi-issued')) {
+                document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
+            }
+            if (document.getElementById('kpi-defective')) {
+                document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
+            }
+            if (document.getElementById('kpi-defective-sub')) {
+                document.getElementById('kpi-defective-sub').innerText = (kpi.defective || 0).toLocaleString();
+            }
+            
+            // Multi-course Chart Renderers (Revenue by Year Level Bar Chart)
+            renderYearLevelChart(data.year_level_sales || {});
+
+            // Populate statsData for dynamic modals
+            statsData.reams_converted_total = kpi.reams_converted || 0;
+            statsData.reams_converted_by_dept = kpi.reams_converted_per_dept || { CS: kpi.reams_converted_cs || 0, IT: kpi.reams_converted_it || 0 };
+            statsData.converted_sheets_per_dept = kpi.converted_sheets_per_dept || {};
+            statsData.total_generated_sheets = kpi.total_generated_sheets || 0;
+            statsData.total_generated_booklets = kpi.total_generated || 0;
+            statsData.total_generated_rounded_reams = kpi.total_generated_rounded_reams || 0;
+            statsData.course_target_paper = kpi.course_target_paper || (data.financials ? data.financials.course_target_paper : {});
+            statsData.total_target_sheets = kpi.total_target_sheets || (data.financials ? data.financials.total_target_sheets : 0);
+            statsData.total_target_booklets = kpi.total_target_booklets || (data.financials ? data.financials.total_target_booklets : 0);
+            statsData.combined_whole_reams_to_procure = kpi.combined_whole_reams_to_procure || (data.financials ? data.financials.combined_whole_reams_to_procure : 0);
+            statsData.combined_usage_display = kpi.combined_usage_display || (data.financials ? data.financials.combined_usage_display : "");
+            statsData.issued.total = kpi.issued || 0;
+            statsData.revenue.total = (data.financials ? data.financials.gross_revenue : 0);
+            statsData.issued_by_dept = data.issued_by_dept || kpi.issued_per_dept || {};
+            statsData.defective_by_dept = data.defective_by_dept || kpi.defective_breakdown || (data.charts ? data.charts.defective : {}) || {};
+            statsData.revenue_by_dept = data.revenue_by_dept || (data.financials ? data.financials.dept_gross : {}) || {};
+
+            if (data.charts && data.charts.departments) {
+                const price = (data.financials ? data.financials.booklet_price : 10) || 10;
+                statsData.revenue.cs = (data.charts.departments.CS || 0) * price;
+                statsData.revenue.it = (data.charts.departments.IT || 0) * price;
+                statsData.issued.cs = data.charts.departments.CS || 0;
+                statsData.issued.it = data.charts.departments.IT || 0;
+            }
+
+            statsData.defective.cs = (statsData.defective_by_dept.CS || statsData.defective_by_dept.cs || 0);
+            statsData.defective.it = (statsData.defective_by_dept.IT || statsData.defective_by_dept.it || 0);
+            statsData.defective.total = kpi.defective || 0;
+
+            // Render dynamic financial allocation chart & budget breakdown (Profit Allocation Pie Chart)
+            const grossMap = statsData.revenue_by_dept;
+            const sharesMap = (data.financials && data.financials.dept_shares) ? data.financials.dept_shares : {};
+            renderAllocationChart(grossMap, sharesMap);
+
+            if (data.computations_data) {
+                computationsPayload = data.computations_data;
+            }
+        } catch(e) {
+            console.error("Dashboard render error:", e);
+        }
+    }
+
+    function initDashboardFromCache() {
+        try {
+            const cachedStats = sessionStorage.getItem('bookletlog_dashboard_stats_cache');
+            if (cachedStats) {
+                const parsedStats = JSON.parse(cachedStats);
+                applyDashboardData(parsedStats);
+            }
+            const cachedDss = sessionStorage.getItem('bookletlog_dashboard_dss_cache');
+            if (cachedDss) {
+                const parsedDss = JSON.parse(cachedDss);
+                if (typeof renderExpertRecommendation === 'function') {
+                    renderExpertRecommendation(parsedDss.recommendation, parsedDss.advice, parsedDss.color);
+                }
+                if (parsedDss.course_production && parsedDss.course_production.courses && typeof updateCourseBreakdownUI === 'function') {
+                    updateCourseBreakdownUI(parsedDss.course_production);
+                }
+            }
+        } catch(e) {
+            console.warn("Could not read dashboard cache:", e);
+        }
+    }
+
+    // --- PARALLEL STARTUP & DATA FETCHING (No Sequential Waterfall) ---
     function checkSystemInitialization() {
         fetch('/api/system-status')
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success") {
                     if (!data.is_initialized) {
-                        // System price is unset or active_period is UNSET!
                         if (activeUser.role === 'Admin') {
                             const modal = document.getElementById('mandatorySetupModal');
                             if (modal) modal.style.display = 'flex';
@@ -896,109 +1052,54 @@
                             const lockout = document.getElementById('clerkLockoutModal');
                             if (lockout) lockout.style.display = 'flex';
                         }
-                    } else {
-                        // System is configured and initialized
+                    } else if (data.active_period) {
                         currentDashboardPeriod = data.active_period;
-                        fetchDashboardData(currentDashboardPeriod);
                     }
                 }
             })
             .catch(err => {
                 console.error("Initialization check failed:", err);
-                fetch('/api/active-period')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === "success") {
-                            currentDashboardPeriod = data.active_period;
-                            fetchDashboardData(currentDashboardPeriod);
-                        }
-                    });
             });
     }
 
-    function fetchDashboardData(periodQuery) {
-        document.getElementById('kpi-period').innerText = "Loading...";
-        
-        fetch(`/api/dashboard-stats?period=${encodeURIComponent(periodQuery)}`)
+    function fetchDashboardData(periodQuery = "") {
+        const queryUrl = periodQuery ? `/api/dashboard-stats?period=${encodeURIComponent(periodQuery)}` : `/api/dashboard-stats`;
+        fetch(queryUrl)
             .then(res => res.json())
             .then(data => {
-                if(data.status === "success") { try {
-                    const kpi = data.kpi || { reams_opened: 0, loose_sheets: 0, issued: 0, defective: 0 };
-                    
-                    document.getElementById('kpi-period').innerText = data.active_period || periodQuery;
-                    
-                    if (document.getElementById('kpi-reams-converted')) {
-                        document.getElementById('kpi-reams-converted').innerText = kpi.reams_converted || 0;
-                        document.getElementById('kpi-total-generated').innerText = (kpi.total_generated || 0).toLocaleString();
-                        
-                        document.getElementById('kpi-reams-distributed').innerText = kpi.reams_distributed || 0;
-                        document.getElementById('kpi-loose-distributed').innerText = kpi.loose_distributed || 0;
-
-                        if (document.getElementById('kpi-reams-converted-breakdown')) {
-                            const convMap = kpi.reams_converted_per_dept || { CS: kpi.reams_converted_cs || 0, IT: kpi.reams_converted_it || 0 };
-                            const convStr = Object.entries(convMap).map(([c, v]) => `${c}: ${v} Ream(s)`).join(' | ');
-                            document.getElementById('kpi-reams-converted-breakdown').innerText = convStr || '0 Ream(s)';
-                        }
-                        if (document.getElementById('kpi-reams-distributed-breakdown')) {
-                            const distMap = kpi.reams_distributed_per_dept || { CS: kpi.reams_distributed_cs || 0, IT: kpi.reams_distributed_it || 0 };
-                            const looseMap = kpi.loose_distributed_per_dept || { CS: kpi.loose_distributed_cs || 0, IT: kpi.loose_distributed_it || 0 };
-                            const distStr = Object.keys(distMap).map(c => `${c}: ${distMap[c] || 0}R (${looseMap[c] || 0}s)`).join(' | ');
-                            document.getElementById('kpi-reams-distributed-breakdown').innerText = distStr || '0R (0s)';
-                        }
-                    }
-
-                    // Synchronize dynamic active programs FIRST so all charts have full course metadata
-                    dashboardPrograms = data.programs || (data.computations_data ? data.computations_data.programs : []) || [];
-
-                    if (data.course_production && data.course_production.courses) {
-                        updateCourseBreakdownUI(data.course_production);
-                    }
-
-                    document.getElementById('kpi-issued').innerText = (kpi.issued || 0).toLocaleString();
-                    document.getElementById('kpi-defective').innerText = (kpi.defective || 0).toLocaleString();
-                    if (document.getElementById('kpi-defective-sub')) {
-                        document.getElementById('kpi-defective-sub').innerText = (kpi.defective || 0).toLocaleString();
-                    }
-                    
-                    // Live inventory status is directly visualized in the Course Production Grid
-
-                    // Multi-course Chart Renderers
-                    renderYearLevelChart(data.year_level_sales || {});
-
-                    // Populate statsData for dynamic modals
-                    statsData.reams_converted_total = kpi.reams_converted || 0;
-                    statsData.reams_converted_by_dept = kpi.reams_converted_per_dept || { CS: kpi.reams_converted_cs || 0, IT: kpi.reams_converted_it || 0 };
-                    statsData.issued.total = kpi.issued || 0;
-                    statsData.revenue.total = (data.financials ? data.financials.gross_revenue : 0);
-                    statsData.issued_by_dept = data.issued_by_dept || kpi.issued_per_dept || {};
-                    statsData.defective_by_dept = data.defective_by_dept || kpi.defective_breakdown || (data.charts ? data.charts.defective : {}) || {};
-                    statsData.revenue_by_dept = data.revenue_by_dept || (data.financials ? data.financials.dept_gross : {}) || {};
-
-                    if (data.charts && data.charts.departments) {
-                        const price = (data.financials ? data.financials.booklet_price : 10) || 10;
-                        statsData.revenue.cs = (data.charts.departments.CS || 0) * price;
-                        statsData.revenue.it = (data.charts.departments.IT || 0) * price;
-                        statsData.issued.cs = data.charts.departments.CS || 0;
-                        statsData.issued.it = data.charts.departments.IT || 0;
-                    }
-
-                    statsData.defective.cs = (statsData.defective_by_dept.CS || statsData.defective_by_dept.cs || 0);
-                    statsData.defective.it = (statsData.defective_by_dept.IT || statsData.defective_by_dept.it || 0);
-                    statsData.defective.total = kpi.defective || 0;
-
-                    // Render dynamic financial allocation chart & budget breakdown
-                    const grossMap = statsData.revenue_by_dept;
-                    const sharesMap = (data.financials && data.financials.dept_shares) ? data.financials.dept_shares : {};
-                    renderAllocationChart(grossMap, sharesMap);
-
-                    computationsPayload = data.computations_data;
-                    } catch(e) { alert('JS Crash: ' + e.message + ' at ' + e.stack); }
+                if (data.status === "success") {
+                    try {
+                        sessionStorage.setItem('bookletlog_dashboard_stats_cache', JSON.stringify(data));
+                    } catch(e) {}
+                    applyDashboardData(data, periodQuery);
                 } else {
-                    alert('Dashboard API Error: ' + data.message);
+                    console.error("Dashboard API Error:", data.message);
                 }
             })
             .catch(err => console.error("Dashboard failed to load:", err));
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // 1. Instant 0ms cache hydration for all top cards, charts, and DSS
+        initDashboardFromCache();
+
+        // 2. Parallel background fetch for fresh data
+        fetchDashboardData(currentDashboardPeriod || "");
+        checkSystemInitialization();
+        if (typeof fetchExpertSystemData === 'function') {
+            fetchExpertSystemData();
+        }
+
+        // 3. Background WebSocket sync
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                fetchDashboardData(currentDashboardPeriod || "");
+                if (typeof fetchExpertSystemData === 'function') {
+                    fetchExpertSystemData();
+                }
+            });
+        }
+    });
 
     // --- TRANSPARENT COMPUTATIONS RENDERER ---
     function printComputations() {
@@ -1024,6 +1125,8 @@
             </div>
         `;
 
+        const ordinals = ["", "1st", "2nd", "3rd", "4th"];
+
         depts.forEach((dept, index) => {
             let deptHasData = false;
             
@@ -1043,7 +1146,7 @@
                 for(let y = 1; y <= 4; y++) {
                     const rows = comp[dept][y.toString()];
                     if(rows && rows.length > 0) {
-                        deptHtml += `<h3 style="margin-top: 20px; color: #34495e;">${y} Year Sections</h3>`;
+                        deptHtml += `<h3 style="margin-top: 20px; color: #34495e;">${ordinals[y]} Year Sections</h3>`;
                         deptHtml += `
                             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.9rem;" border="1">
                                 <thead>
@@ -1070,7 +1173,7 @@
                         });
                         deptHtml += `
                                 <tr>
-                                    <th colspan="4" style="padding: 10px; text-align: right; font-style: italic;">Total for ${y} Year ${dept}</th>
+                                    <th colspan="4" style="padding: 10px; text-align: right; font-style: italic;">Total for ${ordinals[y]} Year ${dept}</th>
                                     <th style="padding: 10px; text-align: right; background-color: #f8f9fa;">₱${summ[dept][y.toString()].toFixed(2)}</th>
                                 </tr>
                             </tbody>
@@ -1155,7 +1258,7 @@
         depts.forEach(dept => {
             html += `<tr><th colspan="2" style="padding: 12px; background-color: #e9ecef; text-align: left;">${deptNames[dept]}</th></tr>`;
             for(let y = 1; y <= 4; y++) {
-                html += `<tr><td style="padding: 10px; padding-left: 30px;">${y} Year</td><td style="padding: 10px; text-align: right;">₱${(summ[dept][y.toString()] || 0).toFixed(2)}</td></tr>`;
+                html += `<tr><td style="padding: 10px; padding-left: 30px;">${ordinals[y]} Year</td><td style="padding: 10px; text-align: right;">₱${(summ[dept][y.toString()] || 0).toFixed(2)}</td></tr>`;
             }
             html += `<tr><th style="padding: 10px; text-align: right; font-style: italic;">Gross ${dept} Revenue</th><th style="padding: 10px; text-align: right; color: #000;">₱${(summ[dept]["total"] || 0).toFixed(2)}</th></tr>`;
         });
@@ -1461,8 +1564,13 @@
 
                 const bufferText = (bufPct === 0) ? '+0 pcs (No Buffer)' : `+${(d.buffer_booklets || 0).toLocaleString()} pcs`;
                 const sheetsNeeded = d.sheets_needed !== undefined ? d.sheets_needed : ((d.target_production || 0) * sheetsPerB);
+                const courseRoundedReams = (d.reams_needed !== undefined) ? d.reams_needed : (sheetsNeeded > 0 ? Math.ceil(sheetsNeeded / 500) : 0);
+                const courseProcuredSheets = courseRoundedReams * 500;
+                const courseExcessSheets = d.excess_sheets !== undefined ? d.excess_sheets : Math.max(0, courseProcuredSheets - sheetsNeeded);
+                const courseExcessBooklets = d.excess_booklets_yield !== undefined ? d.excess_booklets_yield : (sheetsPerB > 0 ? Math.floor(courseExcessSheets / sheetsPerB) : 0);
                 const paperText = d.paper_required_text || (d.target_production === 0 ? '0 Sheets (Demand Met)' : `${Math.floor(sheetsNeeded / 500)} Ream(s) & ${sheetsNeeded % 500} Sheet(s)`);
-                const totalSheetsSubtext = (d.target_production > 0) ? `(${sheetsNeeded.toLocaleString()} sheets total)` : '(Demand Met)';
+                const mainReamsDisplay = (d.target_production === 0) ? '0 Whole Reams' : `${courseRoundedReams} Whole Reams`;
+                const totalSheetsSubtext = (d.target_production > 0) ? `(${paperText} • ${sheetsNeeded.toLocaleString()} sheets)` : '(Demand Met)';
 
                 return `
                     <div id="course-card-${deptCode.toLowerCase()}" style="background: white; border: 2px solid ${color}40; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-width: 0; box-sizing: border-box; overflow: hidden; border-top: 4px solid ${color};">
@@ -1476,7 +1584,7 @@
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.88rem; color: #334155; min-width: 0;">
                             <div style="min-width: 0;">
-                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Enrolled Students</span>
+                                <span style="color: #64748b; font-size: 0.8rem; display: block;">Booklet Demand</span>
                                 <strong style="font-size: 1.1rem; color: #0f172a;">${(d.headcount || 0).toLocaleString()}</strong>
                             </div>
                             <div style="min-width: 0;">
@@ -1499,10 +1607,22 @@
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>
-                                <strong style="font-size: 1.15rem; color: ${color};">${escapeHtml(paperText)}</strong>
+                                <strong style="font-size: 1.15rem; color: ${color};">${escapeHtml(mainReamsDisplay)}</strong>
                                 <small style="display: block; color: #64748b; font-size: 0.75rem;">${escapeHtml(totalSheetsSubtext)}</small>
                             </div>
                         </div>
+                        ${(d.prev_excess_sheets && d.prev_excess_sheets > 0) ? `
+                        <div style="margin-top: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
+                            <span style="color: #1e40af; font-weight: 600;">📥 Prior Excess Credited:</span>
+                            <span style="color: #2563eb; font-weight: 700;">−${(d.prev_excess_sheets || 0).toLocaleString()} Sheets <span style="font-weight: normal; color: #64748b;">(Gross: ${(d.gross_sheets_needed || 0).toLocaleString()} → Net: ${(d.net_sheets_needed || sheetsNeeded).toLocaleString()})</span></span>
+                        </div>
+                        ` : ''}
+                        ${(d.target_production > 0 && courseExcessSheets > 0) ? `
+                        <div style="margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+                            <span style="color: #166534; font-weight: 600;">🌿 Residual Excess Reserve:</span>
+                            <span style="color: #15803d; font-weight: 700;">+${courseExcessSheets.toLocaleString()} Sheets (~${courseExcessBooklets.toLocaleString()} extra booklets)</span>
+                        </div>
+                        ` : ''}
                     </div>
                 `;
             }).join('');
@@ -1577,6 +1697,9 @@
 
         // Shortage / Production Needed View:
         const totalReams = rec.total_reams_to_procure || 0;
+        const sumCourseRounded = (rec.sum_course_rounded_reams !== undefined && rec.sum_course_rounded_reams !== null)
+            ? rec.sum_course_rounded_reams
+            : (rec.course_allocations ? rec.course_allocations.reduce((acc, c) => acc + (c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500)), 0) : totalReams);
         const totalSheetsNum = rec.total_sheets_needed || 0;
         const exactReams = Math.floor(totalSheetsNum / 500);
         const looseSheets = totalSheetsNum % 500;
@@ -1609,44 +1732,55 @@
                 </div>
 
                 <!-- Hero Metric Cards Grid -->
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 16px;">
                     <!-- Reams to Procure -->
                     <div style="background: white; border: 2px solid #3b82f630; border-top: 3px solid #2563eb; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
                         <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
                             📦 Recommended Reams to Procure
                         </span>
                         <strong style="font-size: 1.5rem; color: #1d4ed8; display: block; line-height: 1.2;">
-                            ${totalReams} Ream(s)
+                            ${sumCourseRounded} Whole Ream(s)
                         </strong>
-                        <span style="font-size: 0.78rem; color: #64748b;">${procuredSheets} sheets (@ 500 sheets/ream)</span>
+                        <span style="font-size: 0.78rem; color: #64748b;">${(sumCourseRounded * 500).toLocaleString()} sheets total (@ 500 sheets/ream)</span>
                     </div>
 
-                    <!-- Exact Paper Demand -->
+                    <!-- Net Paper Required per Course -->
                     <div style="background: white; border: 2px solid #e2e8f0; border-top: 3px solid #0284c7; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
-                        <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
+                        <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 6px;">
                             📄 Net Paper Required
                         </span>
-                        <strong style="font-size: 1.35rem; color: #0369a1; display: block; line-height: 1.25;">
-                            ${escapeHtml(paperMainDisplay)}
-                        </strong>
-                        <span style="font-size: 0.78rem; color: #64748b; display: block; margin-top: 4px;">
-                             For ${targetBooklets} booklets (${totalDeficit} deficit + ${bufferBooklets} buffer)
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            ${(rec.course_allocations || []).map((c, idx) => {
+                                const cReams = c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500) || 0;
+                                const isLast = idx === (rec.course_allocations.length - 1);
+                                const borderStyle = isLast ? '' : 'border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; margin-bottom: 3px;';
+                                const prevCreditedText = (c.prev_excess_sheets && c.prev_excess_sheets > 0)
+                                    ? ` <span style="color: #0284c7; font-size: 0.72rem; font-weight: normal;">(credited ${c.prev_excess_sheets.toLocaleString()} leftover sh)</span>`
+                                    : '';
+                                return `
+                                    <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; ${borderStyle}">
+                                        <strong style="font-size: 1.15rem; color: #0369a1; font-weight: 700;">${cReams} Reams${prevCreditedText}</strong>
+                                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600; text-align: right;">(${escapeHtml(c.paper_required_text)}) - ${escapeHtml(c.code)}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <span style="font-size: 0.76rem; color: #64748b; display: block; margin-top: 6px; border-top: 1px solid #f1f5f9; padding-top: 5px;">
+                            Combined: ${escapeHtml(paperMainDisplay)} (${totalSheets} sheets for ${targetBooklets} booklets)
                         </span>
                     </div>
 
                     <!-- Reserve Stock Surplus -->
                     <div style="background: white; border: 2px solid #e2e8f0; border-top: 3px solid #10b981; border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
                         <span style="font-size: 0.78rem; text-transform: uppercase; color: #64748b; font-weight: 700; display: block; margin-bottom: 4px;">
-                            🛡️ Safety Buffer & Yield Reserve
+                            🌿 Safety Buffer & Yield Reserve
                         </span>
                         <strong style="font-size: 1.5rem; color: #047857; display: block; line-height: 1.2;">
                             +${excessSheets} Sheets
                         </strong>
-                        <span style="font-size: 0.78rem; color: #64748b;">Yields ~+${excessBooklets} extra reserve booklets</span>
+                        <span style="font-size: 0.78rem; color: #64748b;">Yields up to ~${excessBooklets} reserve booklets</span>
                     </div>
                 </div>
-
-                
 
                 <!-- Action Steps Checklist -->
                 <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px;">
@@ -1672,6 +1806,9 @@
         fetch('/api/reorder-decision-expert')
         .then(r => r.json())
         .then(data => {
+            try {
+                sessionStorage.setItem('bookletlog_dashboard_dss_cache', JSON.stringify(data));
+            } catch(e) {}
             renderExpertRecommendation(data.recommendation, data.advice, data.color);
             if (data.course_production && data.course_production.courses) {
                 updateCourseBreakdownUI(data.course_production);
@@ -1679,7 +1816,9 @@
         }).catch(err => {
             console.error("Expert System Error:", err);
             const box = document.getElementById('expertAdviceBox');
-            if (box) box.innerHTML = `<div style="padding: 12px; color: #ef4444; font-weight: bold;">Error loading expert system recommendation.</div>`;
+            if (box && !sessionStorage.getItem('bookletlog_dashboard_dss_cache')) {
+                box.innerHTML = `<div style="padding: 12px; color: #ef4444; font-weight: bold;">Error loading expert system recommendation.</div>`;
+            }
         });
     }
     
@@ -1693,20 +1832,16 @@
 <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
 <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
     <div class="app-dialog-card">
-        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px;">🛑</div>
-        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem;">Confirm Logout</h3>
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">🛑</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Confirm Logout</h3>
         <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
-        <div id="appDialogActions" style="display: flex; gap: 10px; justify-content: center;">
+        <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
             <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
-            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: white;">Log Out</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Log Out</button>
         </div>
     </div>
+</div>
 </div>
 
 </body>
 </html>
-
-
-
-
-

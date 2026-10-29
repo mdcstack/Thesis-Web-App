@@ -519,3 +519,125 @@ When navigating to the Booklet Template Studio (`/booklet-template`):
   - `/api/academic-programs`: 200 OK.
   - `/api/booklet-template/status`: 200 OK, returns live status dictionaries for all active programs.
   - `/api/booklet-template?department=CS&slot=1`: 200 OK, returns active configuration.
+
+
+---
+
+## 39. Interactive Generated PDF Batches Picker & Flexible Course Supply Pack Staging in QR Registration
+
+### Context & Problem:
+In `templates/qr_registration.html`, assembling reams generated in the PDF Generator into physical Supply Packs previously required administrators/clerks to manually type or copy-paste long Batch IDs (e.g. `BATCH-202610260001`). This created operational friction, especially when preparing multiple packs across different flexible academic courses (CS, IT, etc.) set in System Settings.
+
+### Solution Applied:
+1. **Backend Endpoint (`GET /api/pending-batches`) in [app/main.py](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/main.py)**:
+   - Queries all `models.MasterBatch` rows where status is not active or `pack_qr_id` is null within the active semester period.
+   - Maps each batch to its dynamic academic program (`code`, `name`, `color_hex`, `course_prefix`) and booklet cover template name (`BookletTemplateConfig`).
+   - Mathematically sorts batches by course, template slot, and control sequence number.
+   - Summarizes pending batches, ream counts, and booklet yields grouped by flexible courses.
+2. **Dual-Panel Interactive Workspace in [templates/qr_registration.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/qr_registration.html)**:
+   - **Left Panel ("📄 Generated PDF Batches - Pending Assembly")**:
+     - Dynamic Course Filter Tabs ("🌐 All", "CS", "IT", etc.) with live count badges and academic course theme colors.
+     - Search & filter input to quickly find batches by Batch ID, Control numbers, or SRN range.
+     - "⚡ Stage Contiguous" button to stage sequential batches in 1 click.
+     - Interactive batch cards displaying Course Badge, Ream & Booklet Yield, Control and SRN ranges, and "+ Stage Batch" button.
+     - Course & template homogeneity guards: automatically dims and locks batches of differing courses or templates once an initial batch is staged.
+   - **Right Panel ("📦 Supply Pack Bundle Builder")**:
+     - Retains manual input field (`#batchIdInput`) and `#btnAddBatch` button for manual typing fallback as requested.
+     - Pack Locked Banner showing current target course, color, template, and a "Reset All" button.
+     - Staged Batches List (`#batchListUI`) with sequence badges (`#1`, `#2`), booklet counts, control ranges, and `✕ Remove` buttons.
+     - Live Pack Summary Metrics: Total Staged Reams, Total Booklet Yield, and real-time client-side Contiguity Validator indicator (`✅ Seamless Contiguity` or `⚠️ Gap Detected`).
+     - "Combine & Generate Label" button with printable label and HTML5 Canvas sticker auto-downloader.
+   - **LAN Synchronization**:
+     - Listens to real-time events (`window.lanSync.onUpdate`) to auto-refresh pending batches whenever new PDFs are generated or packs are activated.
+
+### Verification Results:
+- `py -m py_compile app/main.py`: Passed with 0 errors.
+- `jinja2.Environment.get_template('qr_registration.html')`: Passed cleanly with 0 errors.
+- Node.js script syntax validation (`node --check`): Passed with 0 errors.
+
+
+---
+
+## 40. Fix "Unable to load pending batches" in QR Registration
+
+### Context & Problem:
+When navigating to the QR Registration page (`/qr-registration`), the pending batches picker panel displayed:
+> `⚠️ Unable to load pending batches.`
+
+Even after generating a new PDF batch in the PDF Generator, the batch did not appear in the pending list.
+
+### Root Cause Analysis:
+In [app/main.py](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/main.py) within `@app.get("/api/pending-batches")`:
+- Line 652 referenced `p.course_prefix`.
+- The SQLAlchemy model `models.AcademicProgram` defines the column as `section_prefix` (e.g. `BSCS`, `BSIT`), not `course_prefix`.
+- When called, the Python runtime raised `AttributeError: 'AcademicProgram' object has no attribute 'course_prefix'`, crashing the endpoint with HTTP 500.
+
+### Solution Applied:
+1. **Resolved Attribute Error in `app/main.py`**:
+   - Updated the mapping to safely retrieve `getattr(p, 'section_prefix', p.code.upper())`.
+   - Hardened the database query to only retrieve batches where `pack_qr_id.is_(None)` and `status != 'active'`, matching active semester period or unassigned periods.
+   - Wrapped endpoint execution in `try...except` to log tracebacks and return structured error JSON on failures.
+2. **Enhanced Frontend Error Handling in `templates/qr_registration.html`**:
+   - In `loadPendingBatches()`, improved error parsing to display server-provided detail messages if any network issue occurs.
+
+### Verification Results:
+- `py -m py_compile app/main.py`: Passed cleanly with 0 errors.
+- Direct database & `TestClient` verification:
+  - `GET /api/pending-batches`: Returned `HTTP 200 OK`.
+  - Correctly identified 1 pending batch (`BATCH-20261026000001`, Department: `CS`, Booklets: 100, Control Range: `1ST26-CS-0001` → `1ST26-CS-0100`).
+- Jinja2 template and JavaScript validation: Passed cleanly with 0 errors.
+
+
+---
+
+## 41. Lock PDF Batch Conversion When Course Demand Is Met & Consequence Box Cleanup
+
+### Context & Problem:
+Every batch conversion executed in `templates/pdf_generator.html` registers a `MasterBatch` with its ream count and price, adding paper material costs tracked in `templates/expenditure_report.html`. Previously, even when all student headcounts for a course section had been completely fulfilled (net target = 0 or satisfied), the user could still proceed with batch conversion, generating excess booklets, committing unnecessary control serial numbers, and inflating material expenses in the expenditure report.
+
+### Solution Applied:
+1. **Dynamic Button Locking & Demand Fulfilled Notice in [templates/pdf_generator.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/pdf_generator.html)**:
+   - When the student headcount demand for the selected course is satisfied (`d.is_satisfied || d.target_production <= 0 || d.reams_needed <= 0`):
+     - The button displays `🔒 Demand Fulfilled for {Course} (0 Reams Needed)` with soft emerald styling.
+     - Raw ream input `#reamCount` is disabled and set to 0.
+     - `#overprintAdvisoryBox` displays a clean green banner explaining that all required booklets have been produced.
+     - Clicking the button triggers an informative alert stating that all student requirements for the course in the current active exam period are fulfilled, and batch conversion is locked to prevent unnecessary paper consumption and unneeded material expenditures.
+   - If class sections have not yet been enrolled, the button displays `⚠️ Awaiting Enrollments for {Course}`.
+   - When legitimate remaining student demand exists, the button displays `Execute Batch PDF Conversion ({N} Ream(s) Recommended)`.
+2. **Clean Removal of `#confirmModalConsequenceBox` & Zero-Target Overproduction Warning**:
+   - Deleted `#confirmModalConsequenceBox` from the modal HTML markup in `templates/pdf_generator.html`.
+   - Cleaned up JavaScript in `showConfirmModal()`, eliminating references to `confirmModalConsequenceBox`, `consequencePaperText`, `consequenceCourseText`, `consequenceDemandText`, and the obsolete zero-target warning branch (`⚠️ Overproduction Warning: Zero Student Target`).
+3. **Strict Backend Demand Guard in [app/main.py](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/main.py)**:
+   - In `@app.post("/api/register-ream")`, added a verification check using `calculate_course_production_metrics(db, current_period)`.
+   - If the course demand is already fulfilled (`is_satisfied == true` or `target_production <= 0`), the request is rejected with HTTP 400 (`Production Locked: Examination booklet demand for {department} in {current_period} is already fully satisfied...`).
+
+### Verification Results:
+- `py -m py_compile app/main.py`: Passed cleanly with 0 errors.
+- `POST /api/register-ream` on CS (where demand is met): Returned `HTTP 400 Bad Request` with `Production Locked` detail message.
+- `GET /generator`: Returned `HTTP 200 OK`; verified `confirmModalConsequenceBox` is eliminated and `Demand Fulfilled for` logic is active.
+- Jinja2 template and Node.js script syntax checks: Passed with 0 errors.
+
+
+---
+
+## 42. PDF Generator Target Yield Badge Scaling & In-App Custom Dialog Upgrade
+
+### Context & Problem:
+In `templates/pdf_generator.html`:
+1. **Oversized Text in Yield Display**: When course demand was fulfilled, `#yieldDisplay` displayed `0 (Demand Met)` inside `.yield-display .number` (which carries `font-size: 2rem`), resulting in huge text that stretched the layout.
+2. **Lousy Native Alert (`192.168.55.100:8000 says`)**: When clicking `🔒 Demand Fulfilled for CS (0 Reams Needed)`, the browser used native `alert()`, showing the unstyled browser popup prefixed with `192.168.55.100:8000 says`.
+
+### Solution Applied:
+1. **Target Yield Typography Proportional Scaling**:
+   - In `updateCourseDemandUI()`, updated `#yieldDisplay` to render `0` as the primary number, accompanied by a compact, styled badge:  
+     `0 <span style="font-size: 0.78rem; font-weight: 700; color: #047857; background: #d1fae5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 12px; display: inline-block; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.3px;">Demand Met</span>`
+   - Keeps the layout neat, prevents wrapping/overflow, and matches the design language of the application.
+2. **Custom In-App Dialog (`showAppAlert`)**:
+   - Added `showAppAlert(title, message, type = 'warning', confirmText = 'OK')` in `templates/pdf_generator.html`, utilizing the existing `#appDialogModal` component.
+   - Configured `type = 'locked'` with a 🎯 icon, emerald top border (`#059669`), formatted HTML bullet points, and an `Understood` confirmation button.
+   - Replaced all raw `alert(...)` invocations in `registerReam()` and error callbacks with `await showAppAlert(...)`.
+
+### Verification Results:
+- `jinja2.Environment.get_template('pdf_generator.html')`: Passed cleanly with 0 errors.
+- `node --check` across script blocks in `pdf_generator.html`: Validated with 0 errors.
+- `GET /generator` via TestClient: Returned `HTTP 200 OK`, confirmed `showAppAlert` and `Demand Met</span>` presence.

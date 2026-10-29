@@ -3,12 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Expenditure &amp; ROI Report - BOOKLETLOG</title>
+    <title>Expenditure Report - BOOKLETLOG</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
-/* Main Layout */
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        @keyframes fadeInReport {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .financial-content-fade {
+            animation: fadeInReport 0.25s ease-out forwards;
+        }
+
+        /* Main Layout */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; flex-wrap: wrap; gap: 15px; }
         
@@ -118,7 +130,7 @@
         <div class="print-header">
             <h2 style="margin: 0; font-size: 1.5rem;">Cavite State University – Imus Campus</h2>
             <h3 style="margin: 5px 0; font-size: 1.2rem; font-weight: normal;">Department of Computer Studies</h3>
-            <h3 style="margin: 10px 0 0 0; font-size: 1.4rem;">Expenditure &amp; Return on Investment (ROI) Statement</h3>
+            <h3 style="margin: 10px 0 0 0; font-size: 1.4rem;">Expenditure &amp; Financial Statement</h3>
             <p style="margin-top: 10px; font-weight: bold;" id="printDateLabel">Generated on: </p>
             <p style="margin-top: 5px; font-weight: bold;"><strong>Exam Period:</strong> <span class="activePeriodText">Loading...</span></p>
         </div>
@@ -126,7 +138,7 @@
         <!-- Top Header Navigation Bar (On-Screen) -->
         <div class="header-bar no-print">
             <div>
-                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">💰 Expenditure &amp; ROI Report</h2>
+                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">💰 Expenditure Report</h2>
                 <p style="color: #7f8c8d; margin-top: 5px; font-size: 0.95rem;">
                     <strong>Active Period:</strong> <span class="activePeriodText">Loading...</span>
                 </p>
@@ -142,37 +154,27 @@
             </div>
         </div>
 
-        <!-- Loading State Indicator -->
-        <div id="loadingIndicator" style="text-align: center; padding: 50px; color: #7f8c8d;">
-            <h3>⏳ Loading Financial Ledger Data...</h3>
-            <p style="margin-top: 10px;">Please wait while the system compiles the balance sheet and expenditure metrics.</p>
-        </div>
-
-        <!-- Main Dynamic Content Container -->
-        <div id="financialContent" style="display: none;">
+        <!-- Main Dynamic Content Container (Rendered Instantly) -->
+        <div id="financialContent">
             
             <!-- Topline KPI & ROI Metrics -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 25px;">
                 <div class="card" style="border-left-color: #3498db;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Gross Sales Revenue</span>
-                    <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGross">₱0.00</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Total booklet sales billed</p>
+                    <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGross">₱--</h2>
+                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiGrossSub">Realized Cash Collections</p>
                 </div>
                 <div class="card" style="border-left-color: #e74c3c;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Direct Material Cost</span>
-                    <h2 style="color: #e74c3c; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiProductionCost">₱0.00</h2>
+                    <h2 style="color: #e74c3c; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiProductionCost">₱--</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Paper ream raw material expense</p>
                 </div>
                 <div class="card" style="border-left-color: #27ae60;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Net Operating Income</span>
-                    <h2 style="color: #27ae60; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiNetIncome">₱0.00</h2>
+                    <h2 style="color: #27ae60; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiNetIncome">₱--</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Net operating surplus retained</p>
                 </div>
-                <div class="card" style="border-left-color: #f39c12;">
-                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Return on Investment (ROI)</span>
-                    <h2 style="color: #d35400; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiROI">0.0%</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiMargin">Profit Margin: 0.0%</p>
-                </div>
+                
             </div>
 
             <!-- Balance Sheet Card -->
@@ -190,7 +192,7 @@
                         <tbody>
                             <tr>
                                 <td style="font-weight: bold; color: #0f172a;">Beginning Fund Balance</td>
-                                <td style="text-align: right; font-weight: bold;" id="bsBeginning">₱0.00</td>
+                                <td style="text-align: right; font-weight: bold;" id="bsBeginning">₱--</td>
                                 <td style="color: #64748b; font-size: 0.85rem;" id="bsBeginningNote">Opening inventory equity for active semester</td>
                             </tr>
                         </tbody>
@@ -242,6 +244,8 @@
                                 <td style="text-align: center;" id="prodReamsCount">0 Reams</td>
                                 <td style="text-align: right; font-weight: 600;" id="prodReamsTotal">₱0.00</td>
                             </tr>
+                            <!-- DYNAMIC PER-COURSE TARGET PAPER BREAKDOWN ROWS -->
+                            <tbody id="prodTargetPaperRowsContainer"></tbody>
                             <tr>
                                 <td style="font-weight: 600;">Unit Acquisition Cost (per Ream)</td>
                                 <td style="text-align: center;" id="prodReamPrice">₱250.00 / ream</td>
@@ -284,7 +288,10 @@
                     <table style="width: 100%;">
                         <tbody>
                             <tr style="background-color: #2c3e50; color: white;">
-                                <th style="padding: 14px 18px; text-align: left; font-weight: bold;">Gross Sales Revenue</th>
+                                <th style="padding: 14px 18px; text-align: left; font-weight: bold;">
+                                    <div>Gross Sales Revenue (Realized Cash)</div>
+                                    <div style="font-size: 0.78rem; font-weight: normal; color: #cbd5e1; margin-top: 2px;" id="isGrossSub">Total Billed: ₱0.00 | Net Pending: ₱0.00</div>
+                                </th>
                                 <th style="padding: 14px 18px; text-align: right; font-weight: 800; font-size: 1.15rem;" id="isGross">₱0.00</th>
                             </tr>
                             <tr style="background-color: #f8fafc;">
@@ -304,11 +311,11 @@
                             </tr>
                             <tr>
                                 <td style="padding: 12px 18px; color: #334155;">Less: Campus IGP Remittance (20%)</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="isUniShare">- ₱0.00</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="isUniShare">₱0.00</td>
                             </tr>
                             <tr>
                                 <td style="padding: 12px 18px; color: #334155;">Less: Cost of Direct Materials (Paper &amp; Staples)</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="isProdCost">- ₱0.00</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="isProdCost">₱0.00</td>
                             </tr>
                             <tr style="background-color: #27ae60; color: white;">
                                 <th style="padding: 16px 18px; text-align: left; font-size: 1.2rem; font-weight: 800;">Net Operating Surplus (DCS)</th>
@@ -376,45 +383,66 @@
 
         let activePeriod = "";
 
-        window.onload = function() {
-            fetch('/api/active-period')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        activePeriod = data.active_period;
-                        document.querySelectorAll('.activePeriodText').forEach(el => el.innerText = activePeriod);
-                        loadExpenditureData(activePeriod);
+        // Trigger immediate data load upon DOM ready
+        const FINANCIAL_CACHE_KEY = 'bookletlog_expenditure_cache';
+
+        function restoreExpenditureCache() {
+            try {
+                const raw = sessionStorage.getItem(FINANCIAL_CACHE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.financials) {
+                        if (parsed.active_period) {
+                            activePeriod = parsed.active_period;
+                            document.querySelectorAll('.activePeriodText').forEach(el => el.innerText = activePeriod);
+                        }
+                        renderExpenditureReport(parsed);
+                        return true;
                     }
-                })
-                .catch(err => {
-                    console.error("Failed to fetch active period:", err);
-                    loadExpenditureData("");
-                });
+                }
+            } catch (e) {
+                console.warn("Could not read expenditure report cache:", e);
+            }
+            return false;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Instant 0ms synchronous render from cache
+            restoreExpenditureCache();
+
+            // 2. Fetch fresh data in the background (stale-while-revalidate)
+            loadExpenditureData("", true);
 
             if (window.lanSync) {
                 window.lanSync.onUpdate(() => {
-                    if (activePeriod) {
-                        loadExpenditureData(activePeriod, true);
-                    }
+                    loadExpenditureData(activePeriod, true);
                 });
             }
-        };
+        });
 
-        function loadExpenditureData(period, isBackground = false) {
-            fetch(`/api/dashboard-stats?period=${encodeURIComponent(period)}`)
+        function loadExpenditureData(period = "", isBackground = false) {
+            const url = period ? `/api/dashboard-stats?period=${encodeURIComponent(period)}` : `/api/dashboard-stats`;
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('loadingIndicator').style.display = 'none';
                     if (data.status === "success" && data.financials) {
-                        document.getElementById('financialContent').style.display = 'block';
+                        if (data.active_period) {
+                            activePeriod = data.active_period;
+                            document.querySelectorAll('.activePeriodText').forEach(el => el.innerText = activePeriod);
+                        }
+                        try {
+                            sessionStorage.setItem(FINANCIAL_CACHE_KEY, JSON.stringify(data));
+                        } catch (e) {}
                         renderExpenditureReport(data);
                     } else if (!isBackground) {
-                        alert("Could not load financial data: " + (data.message || "Unknown error"));
+                        alert("Could not load financial data: " + (data.message || 'Unknown server response'));
                     }
                 })
                 .catch(err => {
-                    document.getElementById('loadingIndicator').style.display = 'none';
-                    if (!isBackground) alert("Error loading expenditure report: " + err);
+                    console.error("Error loading expenditure report:", err);
+                    if (!isBackground) {
+                        alert("Error loading expenditure report: " + err);
+                    }
                 });
         }
 
@@ -423,13 +451,9 @@
             const kpi = data.kpi || {};
 
             const gross = fin.gross_revenue || 0;
-            const prodCost = fin.production_cost || 0;
-            const netIncome = fin.net_income || 0;
             const ar = fin.accounts_receivable || 0;
             const ap = fin.accounts_payable || 0;
             const beginning = fin.beginning_balance || 0;
-            const csShare = fin.cs_share || 0;
-            const itShare = fin.it_share || 0;
             const subtotal = fin.combined_subtotal || 0;
             const uniShare = fin.igp_share || 0;
             const bookletPrice = fin.booklet_price || 2.50;
@@ -438,22 +462,61 @@
             const reamsConverted = kpi.reams_converted || 0;
             const totalGenerated = kpi.total_generated || 0;
 
-            // ROI & Margin calculation
+            // Distributed Booklets and Actual Materials Consumed
+            const distributedBooklets = (kpi.issued !== undefined ? kpi.issued : (fin.distributed_booklets || 0));
+            const sheetsPerBooklet = data.sheets_per_booklet || fin.sheets_per_booklet || 6;
+            const actualSheetsConsumed = distributedBooklets * sheetsPerBooklet;
+            const actualReamsPart = Math.floor(actualSheetsConsumed / 500);
+            const actualSheetsPart = actualSheetsConsumed % 500;
+            const wholeReamsPurchased = reamsConverted > 0 ? reamsConverted : (actualSheetsConsumed > 0 ? Math.ceil(actualSheetsConsumed / 500) : 0);
+
+            // FIX: Ensure paper and staples costs reflect whole commercial purchasing units
+            const paperCost = fin.paper_cost !== undefined ? fin.paper_cost : (wholeReamsPurchased * reamPrice);
+            const staplesBoxPrice = fin.staples_box_price !== undefined ? fin.staples_box_price : 50.0;
+            const staplesPerBox = fin.staples_per_box !== undefined ? fin.staples_per_box : 1000;
+            const staplesPerBooklet = fin.staples_per_booklet !== undefined ? fin.staples_per_booklet : 2;
+            
+            // Actual staples consumed by distributed booklets
+            const actualStaplesConsumed = fin.distributed_staples_consumed !== undefined ? fin.distributed_staples_consumed : (distributedBooklets * staplesPerBooklet);
+            const staplesNeeded = Math.max(actualStaplesConsumed, totalGenerated * staplesPerBooklet);
+            
+            const wholeBoxesToBuy = fin.whole_boxes_to_buy !== undefined ? fin.whole_boxes_to_buy : (staplesPerBox > 0 ? Math.ceil(staplesNeeded / staplesPerBox) : 0);
+            
+            // Recompute unified costs based on strictly rounded up whole boxes for staples
+            const computedStaplesCost = wholeBoxesToBuy * staplesBoxPrice;
+            const computedProdCost = paperCost + computedStaplesCost;
+            
+            // Recompute dynamic Net Income using the overridden computedProdCost
+            const computedNetIncome = subtotal - uniShare - computedProdCost;
+
+            // ROI & Margin calculation based on recomputed logic
             let roiPct = 0;
-            if (prodCost > 0) {
-                roiPct = ((netIncome / prodCost) * 100);
+            if (computedProdCost > 0) {
+                roiPct = ((computedNetIncome / computedProdCost) * 100);
             }
             let marginPct = 0;
             if (gross > 0) {
-                marginPct = ((netIncome / gross) * 100);
+                marginPct = ((computedNetIncome / gross) * 100);
             }
 
             // 1. Topline Cards
-            document.getElementById('kpiGross').innerText = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('kpiProductionCost').innerText = `₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('kpiNetIncome').innerText = `₱${netIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('kpiROI').innerText = `${roiPct.toFixed(1)}%`;
-            document.getElementById('kpiMargin').innerText = `Profit Margin: ${marginPct.toFixed(1)}%`;
+            document.getElementById('kpiGross').innerText = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const kpiGrossSub = document.getElementById('kpiGrossSub');
+            if (kpiGrossSub) {
+                if (ar > 0) {
+                    kpiGrossSub.innerText = `Realized Cash (₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending on account)`;
+                } else if (totalBilled > 0) {
+                    kpiGrossSub.innerText = `100% Realized Cash (₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} settled)`;
+                } else {
+                    kpiGrossSub.innerText = `Realized Cash Collections`;
+                }
+            }
+            document.getElementById('kpiProductionCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            document.getElementById('kpiNetIncome').innerText = `₱${computedNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            const kpiRoiEl = document.getElementById('kpiROI');
+            if (kpiRoiEl) kpiRoiEl.innerText = `${roiPct.toFixed(1)}%`;
+            const kpiMarginEl = document.getElementById('kpiMargin');
+            if (kpiMarginEl) kpiMarginEl.innerText = `Profit Margin: ${marginPct.toFixed(1)}%`;
 
             // 2. Balance Sheet - Dynamic Per-Course Accounts Receivable
             const totalBilled = fin.total_billed || 0;
@@ -531,40 +594,94 @@
             }
 
             document.getElementById('bsAP').innerText = `₱${ap.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('bsProdCost').innerText = `₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Output the newly calculated matching production cost
+            document.getElementById('bsProdCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
             // 3. Cost of Production & Direct Materials
-            const sheetsPerBooklet = data.sheets_per_booklet || 5;
             const yieldPerReam = data.yield_per_ream || Math.floor(500 / sheetsPerBooklet);
             const noteEl = document.getElementById('prodBookletsNote');
             if (noteEl) {
                 noteEl.innerText = `(500 sheets ÷ ${sheetsPerBooklet} sheets/booklet = ${yieldPerReam} pcs/ream)`;
             }
 
-            const paperCost = fin.paper_cost !== undefined ? fin.paper_cost : prodCost;
-            const staplesCost = fin.staples_cost !== undefined ? fin.staples_cost : 0.0;
-            const staplesBoxPrice = fin.staples_box_price !== undefined ? fin.staples_box_price : 50.0;
-            const staplesPerBox = fin.staples_per_box !== undefined ? fin.staples_per_box : 1000;
-            const staplesPerBooklet = fin.staples_per_booklet !== undefined ? fin.staples_per_booklet : 2;
-            const totalStaplesConsumed = fin.total_staples_consumed !== undefined ? fin.total_staples_consumed : (totalGenerated * staplesPerBooklet);
-            const staplesBoxesConsumed = fin.staples_boxes_consumed !== undefined ? fin.staples_boxes_consumed : (staplesPerBox > 0 ? (totalStaplesConsumed / staplesPerBox) : 0);
-            const wholeBoxesToBuy = fin.whole_boxes_to_buy !== undefined ? fin.whole_boxes_to_buy : (staplesPerBox > 0 ? Math.ceil(totalStaplesConsumed / staplesPerBox) : 0);
+            // Combine exact paper sheets across flexible courses from backend metrics
+            const targetPaperMap = fin.course_target_paper || (data.kpi ? data.kpi.course_target_paper : null);
+            const totalTargetSheets = (fin.total_target_sheets !== undefined) ? fin.total_target_sheets : (data.kpi ? data.kpi.total_target_sheets : 0);
+            const totalTargetBooklets = (fin.total_target_booklets !== undefined) ? fin.total_target_booklets : (data.kpi ? data.kpi.total_target_booklets : 0);
 
-            document.getElementById('prodReamsCount').innerText = `${reamsConverted} Whole Reams (${(reamsConverted * 500).toLocaleString()} paper sheets)`;
+            // Determine display ream and sheet values: prefer multi-course target sheets if available, fallback to distributed sheets
+            const effectiveSheets = (totalTargetSheets > 0) ? totalTargetSheets : actualSheetsConsumed;
+            const effectiveWholeReams = (fin.combined_whole_reams_to_procure !== undefined && fin.combined_whole_reams_to_procure > 0)
+                ? fin.combined_whole_reams_to_procure
+                : (wholeReamsPurchased > 0 ? wholeReamsPurchased : Math.ceil(effectiveSheets / 500));
+            const effectiveReamsPart = Math.floor(effectiveSheets / 500);
+            const effectiveSheetsPart = effectiveSheets % 500;
+
+            const reamWord = effectiveWholeReams === 1 ? 'Ream' : 'Reams';
+            const rWord = effectiveReamsPart === 1 ? 'ream' : 'reams';
+            const sWord = effectiveSheetsPart === 1 ? 'paper sheet' : 'paper sheets';
+
+            document.getElementById('prodReamsCount').innerText = `${effectiveWholeReams} Whole ${reamWord} (${effectiveReamsPart} ${rWord} & ${effectiveSheetsPart.toLocaleString()} ${sWord})`;
             document.getElementById('prodReamsTotal').innerText = `₱${paperCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             document.getElementById('prodReamPrice').innerText = `₱${reamPrice.toFixed(2)} / ream`;
 
+            // Populate Dynamic Per-Course Actual & Converted Paper Breakdown Rows
+            const actualPaperMap = fin.course_actual_paper || (data.kpi ? data.kpi.course_actual_paper : null);
+            const targetContainer = document.getElementById('prodTargetPaperRowsContainer');
+            if (targetContainer) {
+                if (progs && progs.length > 0) {
+                    targetContainer.innerHTML = progs.map(p => {
+                        const actualItem = actualPaperMap ? actualPaperMap[p.code] : null;
+                        const distBooklets = actualItem ? actualItem.booklets_distributed : (data.issued_by_dept ? (data.issued_by_dept[p.code] || 0) : 0);
+                        const sheetsUsed = actualItem ? actualItem.sheets_consumed : (distBooklets * sheetsPerBooklet);
+                        const cReams = Math.floor(sheetsUsed / 500);
+                        const cSheets = sheetsUsed % 500;
+                        const crWord = cReams === 1 ? 'ream' : 'reams';
+                        const csWord = cSheets === 1 ? 'paper sheet' : 'paper sheets';
+
+                        let desc = '0 paper sheets';
+                        let subLabel = `${distBooklets.toLocaleString()} booklets distributed`;
+                        if (sheetsUsed > 0) {
+                            desc = `${cReams} ${crWord} & ${cSheets.toLocaleString()} ${csWord} (${sheetsUsed.toLocaleString()} total sheets)`;
+                        } else if (actualItem && actualItem.converted_sheets > 0) {
+                            desc = `${actualItem.reams_converted} ${actualItem.reams_converted === 1 ? 'ream' : 'reams'} converted (${actualItem.converted_sheets.toLocaleString()} total sheets)`;
+                            subLabel = `${actualItem.reams_converted} reams in production`;
+                        }
+
+                        return `
+                            <tr style="background-color: #fafafa;">
+                                <td style="padding-left: 24px; color: #475569; font-size: 0.88rem;">
+                                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: ${p.color || '#3498db'}; margin-right: 6px;"></span>
+                                    └ ${escapeHtml(p.name)} (${escapeHtml(p.code)}): ${subLabel}
+                                </td>
+                                <td style="text-align: center; color: #64748b; font-size: 0.86rem;">
+                                    ${desc}
+                                </td>
+                                <td style="text-align: right; color: #94a3b8; font-size: 0.82rem;">
+                                    ${distBooklets.toLocaleString()} pcs × ${sheetsPerBooklet} sheets/pc
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    targetContainer.innerHTML = '';
+                }
+            }
+
+            // Updated Staples Display
+            const boxWord = wholeBoxesToBuy === 1 ? 'Box' : 'Boxes';
             if (document.getElementById('prodStaplesCount')) {
-                document.getElementById('prodStaplesCount').innerText = `${totalStaplesConsumed.toLocaleString()} Staples (${staplesBoxesConsumed.toFixed(2)} boxes / ${wholeBoxesToBuy} whole boxes to buy)`;
+                document.getElementById('prodStaplesCount').innerText = `${wholeBoxesToBuy} Whole ${boxWord} (${actualStaplesConsumed.toLocaleString()} staples used)`;
             }
             if (document.getElementById('prodStaplesTotal')) {
-                document.getElementById('prodStaplesTotal').innerText = `₱${staplesCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('prodStaplesTotal').innerText = `₱${computedStaplesCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
             if (document.getElementById('prodStaplesPrice')) {
-                document.getElementById('prodStaplesPrice').innerText = `₱${staplesBoxPrice.toFixed(2)} / box (${staplesPerBox.toLocaleString()} pcs @ ${staplesPerBooklet} staples/booklet)`;
+                document.getElementById('prodStaplesPrice').innerText = `₱${staplesBoxPrice.toFixed(2)} / box (${staplesPerBox.toLocaleString()} pcs for ${staplesPerBooklet} staples/booklet)`;
             }
             if (document.getElementById('prodDirectMaterialsTotal')) {
-                document.getElementById('prodDirectMaterialsTotal').innerText = `₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                document.getElementById('prodDirectMaterialsTotal').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
 
             document.getElementById('prodBookletsYield').innerText = `${totalGenerated.toLocaleString()} pcs`;
@@ -572,6 +689,10 @@
 
             // 4. Income Statement Waterfall - Dynamic Per-Course Program Allocations (1%)
             document.getElementById('isGross').innerText = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const isGrossSub = document.getElementById('isGrossSub');
+            if (isGrossSub) {
+                isGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Net Pending: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
             
             const isAllocContainer = document.getElementById('isProgramAllocationRowsContainer');
             if (isAllocContainer) {
@@ -582,12 +703,15 @@
                         const shareVal = (fin.dept_shares && fin.dept_shares[p.code] !== undefined)
                             ? fin.dept_shares[p.code]
                             : (p.code === 'CS' ? (fin.cs_share || 0) : (p.code === 'IT' ? (fin.it_share || 0) : 0));
+                        const paidVal = (fin.collected_by_dept && fin.collected_by_dept[p.code] !== undefined)
+                            ? fin.collected_by_dept[p.code]
+                            : (p.code === 'CS' ? (fin.cs_collected || 0) : (p.code === 'IT' ? (fin.it_collected || 0) : 0));
 
                         return `
                             <tr>
                                 <td style="padding: 12px 18px; color: #334155;">
                                     <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${p.color || '#3498db'}; margin-right: 6px;"></span>
-                                    Less: ${escapeHtml(p.name)} (${escapeHtml(p.code)}) Program Allocation (1%)
+                                    Less: ${escapeHtml(p.name)} (${escapeHtml(p.code)}) Program Allocation (1% of ₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} collected)
                                 </td>
                                 <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;">
                                     - ₱${shareVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
@@ -600,15 +724,16 @@
 
             document.getElementById('isSubtotal').innerText = `₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             document.getElementById('isUniShare').innerText = `- ₱${uniShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('isProdCost').innerText = `- ₱${prodCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('isNetIncome').innerText = `₱${netIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Reflect new rounded cost calculation
+            document.getElementById('isProdCost').innerText = `- ₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            document.getElementById('isNetIncome').innerText = `₱${computedNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
 
         function printFinancialStatement() {
             document.getElementById('printDateLabel').innerText = "Generated on: " + new Date().toLocaleString();
             window.print();
         }
-
 
         function toggleNotifPanel() {
             const panel = document.getElementById('notifPanel');
@@ -778,4 +903,3 @@
 
 </body>
 </html>
-

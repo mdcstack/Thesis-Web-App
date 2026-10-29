@@ -9,24 +9,146 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
         
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
-        .card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); width: 100%; max-width: 600px; text-align: center; margin-top: 20px; }
+        .main-content { flex: 1; padding: 25px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
+        
+        .reg-workspace {
+            display: grid;
+            grid-template-columns: minmax(360px, 1.15fr) minmax(340px, 1fr);
+            gap: 24px;
+            max-width: 1240px;
+            width: 100%;
+            margin: 0 auto;
+            align-items: start;
+        }
+
+        .panel-card {
+            background: white;
+            padding: 28px 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Filter Pills Bar */
+        .filter-pills-bar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 14px;
+            scrollbar-width: thin;
+        }
+        .course-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.84rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #475569;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .course-pill:hover {
+            border-color: #94a3b8;
+            background: #f1f5f9;
+        }
+        .course-pill.active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+        .course-pill-badge {
+            display: inline-block;
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: rgba(0,0,0,0.08);
+        }
+        .course-pill.active .course-pill-badge {
+            background: rgba(255,255,255,0.25);
+            color: white;
+        }
+
+        /* Pending Batch Card */
+        .pending-batch-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            transition: all 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .pending-batch-card:hover {
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .pending-batch-card.is-staged {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+        .pending-batch-card.is-locked-out {
+            opacity: 0.55;
+            background: #f8fafc;
+        }
+        .btn-stage {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 5px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-stage:hover:not(:disabled) {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+        .btn-stage:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-stage.staged-active {
+            background: #10b981;
+            color: white;
+            cursor: default;
+        }
         
         /* Dynamic List Styles */
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
-        .input-group input { flex: 1; padding: 15px; font-size: 1.1rem; border: 2px solid #ccc; border-radius: 5px; }
-        .btn-add { background-color: #f39c12; color: white; border: none; padding: 0 25px; border-radius: 5px; font-weight: bold; cursor: pointer; }
+        .input-group input { flex: 1; padding: 12px 14px; font-size: 0.98rem; border: 2px solid #cbd5e1; border-radius: 6px; outline: none; }
+        .input-group input:focus { border-color: #3b82f6; }
+        .btn-add { background-color: #f39c12; color: white; border: none; padding: 0 22px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.15s; }
         .btn-add:hover { background-color: #e67e22; }
         
         .batch-list { list-style: none; padding: 0; margin-bottom: 20px; text-align: left; }
-        .batch-item { background: #ecf0f1; margin-bottom: 8px; padding: 12px 15px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 1.1rem; }
-        .remove-btn { color: #e74c3c; cursor: pointer; font-weight: bold; border: none; background: none; font-size: 1.2rem; }
+        .batch-item { background: #f8fafc; margin-bottom: 8px; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-family: monospace; font-size: 0.95rem; border: 1px solid #e2e8f0; }
+        .remove-btn { color: #e74c3c; cursor: pointer; font-weight: bold; border: none; background: none; font-size: 1.3rem; padding: 2px 6px; line-height: 1; }
+        .remove-btn:hover { color: #c0392b; }
         
-        .btn-primary { background-color: #3498db; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; font-size: 1.1rem; cursor: pointer; font-weight: bold; }
+        .btn-primary { background-color: #3498db; color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 1.05rem; cursor: pointer; font-weight: bold; transition: all 0.15s ease; }
+        .btn-primary:hover:not(:disabled) { background-color: #2980b9; transform: translateY(-1px); }
+        .btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; transform: none; }
         
-        .qr-label-container { display: none; margin-top: 30px; padding: 20px; border: 2px dashed #bdc3c7; border-radius: 8px; background: #fff; }
+        .qr-label-container { display: none; margin-top: 25px; padding: 20px; border: 2px dashed #bdc3c7; border-radius: 8px; background: #fff; text-align: center; }
         .qr-label-container img { max-width: 200px; margin: 10px 0; }
-        .btn-print { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+        .btn-print { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1rem; cursor: pointer; margin-top: 10px; font-weight: bold; }
+        .btn-print:hover { background-color: #219150; }
         
         @media print {
             body * { visibility: hidden; }
@@ -36,24 +158,13 @@
             .btn-print { display: none; }
         }
 
-
         .desktop-only { display: inline-block !important; }
         /* Responsive Mobile Layout Fixes */
-        @media (max-width: 900px) {
+        @media (max-width: 960px) {
+            .reg-workspace { grid-template-columns: 1fr; }
             .desktop-only { display: none !important; }
-            .input-group input { flex: 1; width: 60px; padding: 15px; font-size: 1.1rem; border: 2px solid #ccc; border-radius: 5px; }
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-.main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
-            
-            .pos-grid { flex-direction: column; }
-            .control-panel { max-width: 100%; flex: auto; }
-            .receipt-panel { max-width: 100%; flex: auto; margin-top: 15px; }
-            
-            .header-bar { flex-direction: column; text-align: center; gap: 10px; height: auto; }
-            .header-bar div { display: flex; flex-direction: column; width: 100%; }
-            
-            .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
-            .charts-grid { grid-template-columns: 1fr; }
+            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
 
             /* Mobile Top-Floating Dynamic Pill */
             #toastContainer {
@@ -74,10 +185,6 @@
                 box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.22), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
                 font-size: 0.84rem !important;
             }
-        }
-
-        @media (max-width: 600px) {
-            .kpi-grid { grid-template-columns: 1fr; }
         }
 
         @media (max-width: 900px) { .mobile-hide { display: none !important; } }
@@ -121,10 +228,6 @@
             0% { transform: scale(0.92); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
         }
-        @keyframes toastSlideIn {
-            0% { transform: translateX(100%); opacity: 0; }
-            100% { transform: translateX(0); opacity: 1; }
-        }
 
         .app-dialog-card {
             background: #ffffff;
@@ -153,7 +256,6 @@
         .dialog-btn:active {
             transform: translateY(0);
         }
-
     </style>
 </head>
 <body>
@@ -161,44 +263,117 @@
 {% include 'sidebar.html' %}
 
     <div class="main-content">
-        <div class="card">
-            <h2 style="margin-bottom: 10px; color: #2c3e50;">Bundle & Activate Supply</h2>
-            <p style="margin-bottom: 25px; color: #7f8c8d; font-size: 0.95rem;">
-                Scan or enter pending Batch IDs. The system will verify they are contiguous and bundle them into a single Supply Pack.
-            </p>
-            
-            <div class="input-group">
-                <input type="text" id="batchIdInput" placeholder="Enter BATCH ID..." autocomplete="off">
-                <button class="btn-add" id="btnAddBatch" onclick="addBatch()">Add</button>
-            </div>
-            
-            <!-- Active Bundle Target Course Banner -->
-            <div id="bundleCourseBanner" style="display: none; margin-bottom: 15px; padding: 10px 14px; border-radius: 6px; background: #eff6ff; border: 1px solid #bfdbfe; text-align: left; font-size: 0.88rem;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-weight: bold; color: #1e40af;">🎯 Pack Target Course:</span>
-                        <span id="targetCourseBadge" style="padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; background: #2563eb; color: white;">CS</span>
-                        <span id="targetCourseName" style="color: #1e3a8a; font-weight: 600;">Computer Science</span>
+        <div class="reg-workspace">
+            <!-- LEFT PANEL: Generated PDF Batches (Pending Assembly) -->
+            <div class="panel-card" id="pendingPanel">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <h2 style="font-size: 1.25rem; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <span>📄 Generated PDF Batches</span>
+                            <span id="pendingTotalBadge" style="background: #e2e8f0; color: #334155; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 12px;">0 Pending</span>
+                        </h2>
+                        <p style="color: #64748b; font-size: 0.86rem;">
+                            PDF batches generated in PDF Generator awaiting physical pack bundling.
+                        </p>
                     </div>
-                    <span id="targetTemplateName" style="font-size: 0.8rem; color: #64748b; font-style: italic;">Template 1</span>
+                    <button type="button" id="btnRefreshPending" onclick="loadPendingBatches(true)" title="Refresh pending batches" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 7px 12px; border-radius: 6px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 0.82rem; transition: background 0.15s;">
+                        <span>🔄</span> Refresh
+                    </button>
+                </div>
+
+                <!-- Dynamic Course Filter Pills -->
+                <div class="filter-pills-bar" id="courseFilterPills">
+                    <!-- Dynamic Pills rendered via JS -->
+                </div>
+
+                <!-- Search & Quick Action Toolbar -->
+                <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 170px; position: relative;">
+                        <input type="text" id="pendingSearchInput" placeholder="🔍 Search Batch ID or Control..." oninput="handlePendingSearch()" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; box-sizing: border-box; outline: none;">
+                    </div>
+                    <button type="button" id="btnStageAllVisible" onclick="stageAllVisibleContiguous()" title="Stage all visible batches in sequential order" style="background: #e0f2fe; border: 1px solid #7dd3fc; color: #0369a1; padding: 7px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s ease;">
+                        ⚡ Stage Contiguous
+                    </button>
+                </div>
+
+                <!-- Scrollable Pending Batches List Container -->
+                <div id="pendingBatchContainer" style="max-height: 520px; overflow-y: auto; padding-right: 4px;">
+                    <div style="text-align: center; padding: 30px 10px; color: #94a3b8; font-size: 0.9rem;">
+                        Loading pending batches...
+                    </div>
                 </div>
             </div>
 
-            <ul class="batch-list" id="batchListUI"></ul>
-            
-            <button class="btn-primary" id="submitBtn" onclick="activateBatches()">Combine & Generate Label</button>
-            <p id="statusMsg" style="margin-top: 15px; font-weight: bold;"></p>
+            <!-- RIGHT PANEL: Supply Pack Bundle Builder -->
+            <div class="panel-card" id="bundlePanel">
+                <h2 style="font-size: 1.25rem; color: #1e293b; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                    <span>📦 Supply Pack Bundle Builder</span>
+                </h2>
+                <p style="color: #64748b; font-size: 0.86rem; margin-bottom: 16px;">
+                    Bundle staged batches into a single labeled Supply Pack for distribution.
+                </p>
 
-            <div class="qr-label-container" id="printableLabel">
-                <h3 style="font-size: 1.2rem; margin-bottom: 6px;">BOOKLETLOG SUPPLY PACK</h3>
-                <div id="labelDeptBadge" style="display: inline-block; padding: 4px 14px; border-radius: 20px; font-weight: bold; font-size: 0.85rem; margin-bottom: 10px; background: #2563eb; color: white; letter-spacing: 0.5px;">CS - COMPUTER SCIENCE</div>
-                <p id="labelPackId" style="font-family: monospace; font-size: 1.15rem; color: #166534; font-weight: bold; margin-bottom: 4px;"></p>
-                <p id="labelBookletCount" style="color: #1e293b; font-size: 0.95rem; font-weight: bold; margin-bottom: 3px;"></p>
-                <p id="labelRanges" style="font-family: monospace; font-size: 0.85rem; color: #475569; margin-bottom: 8px;"></p>
-                <img id="qrImage" src="" alt="Pack QR Code">
-                <p id="labelTemplateName" style="font-size: 0.82rem; color: #64748b; font-style: italic; margin-top: 4px; margin-bottom: 6px;"></p>
-                <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
-                <button class="btn-print desktop-only" onclick="window.print()">🖨️ Print Pack Label</button>
+                <!-- Retained Manual Input Field & Add Button -->
+                <div class="input-group" style="margin-bottom: 14px;">
+                    <input type="text" id="batchIdInput" placeholder="Enter BATCH ID manually..." autocomplete="off">
+                    <button class="btn-add" id="btnAddBatch" onclick="addBatch()">Add</button>
+                </div>
+
+                <!-- Active Bundle Target Course Banner -->
+                <div id="bundleCourseBanner" style="display: none; margin-bottom: 14px; padding: 10px 14px; border-radius: 6px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 0.86rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-weight: bold; color: #1e40af;">🎯 Pack Locked:</span>
+                            <span id="targetCourseBadge" style="padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; background: #2563eb; color: white;">CS</span>
+                            <span id="targetCourseName" style="color: #1e3a8a; font-weight: 600;">Computer Science</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="targetTemplateName" style="font-size: 0.8rem; color: #64748b; font-style: italic;">Template 1</span>
+                            <button type="button" onclick="clearStagedBatches()" style="background: none; border: none; color: #ef4444; font-size: 0.78rem; font-weight: bold; cursor: pointer; text-decoration: underline;">Reset All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Staged Batches List UI -->
+                <ul class="batch-list" id="batchListUI" style="margin-bottom: 14px; max-height: 240px; overflow-y: auto;">
+                    <li style="padding: 18px 12px; text-align: center; color: #94a3b8; font-size: 0.86rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; font-family: inherit;">
+                        No batches staged yet. Click <strong>+ Stage</strong> from the left panel or enter a Batch ID above.
+                    </li>
+                </ul>
+
+                <!-- Live Pack Summary Metrics Card -->
+                <div id="packSummaryCard" style="display: none; margin-bottom: 16px; padding: 12px 14px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 0.86rem;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 10px;">
+                        <div style="background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                            <div style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Total Staged</div>
+                            <div id="summaryReams" style="font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-top: 2px;">0 Reams</div>
+                        </div>
+                        <div style="background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0; text-align: center;">
+                            <div style="color: #64748b; font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Total Yield</div>
+                            <div id="summaryYield" style="font-size: 1.15rem; font-weight: 700; color: #2563eb; margin-top: 2px;">0 Booklets</div>
+                        </div>
+                    </div>
+                    <!-- Live Contiguity Validator -->
+                    <div id="summaryContiguity" style="padding: 6px 10px; border-radius: 6px; font-weight: 600; font-size: 0.82rem; text-align: center; background: #f1f5f9; color: #475569;">
+                        Awaiting batch selection...
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="submitBtn" onclick="activateBatches()">Combine & Generate Label</button>
+                <p id="statusMsg" style="margin-top: 12px; font-weight: bold; font-size: 0.88rem; text-align: center;"></p>
+
+                <!-- Printable Pack Label -->
+                <div class="qr-label-container" id="printableLabel">
+                    <h3 style="font-size: 1.2rem; margin-bottom: 6px;">BOOKLETLOG SUPPLY PACK</h3>
+                    <div id="labelDeptBadge" style="display: inline-block; padding: 4px 14px; border-radius: 20px; font-weight: bold; font-size: 0.85rem; margin-bottom: 10px; background: #2563eb; color: white; letter-spacing: 0.5px;">CS - COMPUTER SCIENCE</div>
+                    <p id="labelPackId" style="font-family: monospace; font-size: 1.15rem; color: #166534; font-weight: bold; margin-bottom: 4px;"></p>
+                    <p id="labelBookletCount" style="color: #1e293b; font-size: 0.95rem; font-weight: bold; margin-bottom: 3px;"></p>
+                    <p id="labelRanges" style="font-family: monospace; font-size: 0.85rem; color: #475569; margin-bottom: 8px;"></p>
+                    <img id="qrImage" src="" alt="Pack QR Code">
+                    <p id="labelTemplateName" style="font-size: 0.82rem; color: #64748b; font-style: italic; margin-top: 4px; margin-bottom: 6px;"></p>
+                    <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
+                    <button class="btn-print desktop-only" onclick="window.print()">🖨️ Print Pack Label</button>
+                </div>
             </div>
         </div>
     </div>
@@ -237,33 +412,47 @@
                 const confirmBtn = document.getElementById('appDialogConfirmBtn');
                 const cancelBtn = document.getElementById('appDialogCancelBtn');
 
-                let borderCol = '#3498db';
-                let icon = 'ℹ️';
-                let btnBg = '#3498db';
+                let borderCol = '#f59e0b';
+                let icon = '⚠️';
+                let defaultBg = '#3498db';
 
-                if (type === 'warning') {
-                    borderCol = '#f59e0b';
-                    icon = '⚠️';
-                    btnBg = '#f59e0b';
-                } else if (type === 'error') {
+                if (type === 'danger' || type === 'error') {
                     borderCol = '#ef4444';
-                    icon = '❌';
-                    btnBg = '#ef4444';
+                    icon = '🛑';
+                    defaultBg = '#e74c3c';
+                } else if (type === 'info') {
+                    borderCol = '#3b82f6';
+                    icon = 'ℹ️';
+                    defaultBg = '#3b82f6';
                 } else if (type === 'success') {
                     borderCol = '#10b981';
                     icon = '✅';
-                    btnBg = '#10b981';
+                    defaultBg = '#10b981';
                 }
 
                 if (card) card.style.borderTopColor = borderCol;
                 if (iconEl) iconEl.innerText = icon;
                 if (titleEl) titleEl.innerText = title;
-                if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                if (msgEl) {
+                    if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<strong') || message.includes('<p'))) {
+                        msgEl.style.whiteSpace = 'normal';
+                        msgEl.innerHTML = message;
+                    } else {
+                        msgEl.style.whiteSpace = 'pre-line';
+                        msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+                    }
+                }
 
-                confirmBtn.innerText = confirmText;
-                confirmBtn.style.background = btnBg;
-                confirmBtn.style.color = '#ffffff';
-                cancelBtn.style.display = 'none';
+                if (confirmBtn) {
+                    confirmBtn.innerText = confirmText;
+                    confirmBtn.className = 'dialog-btn';
+                    confirmBtn.style.background = defaultBg;
+                    confirmBtn.style.color = '#ffffff';
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'none';
+                }
 
                 confirmBtn.onclick = () => {
                     modal.style.display = 'none';
@@ -275,98 +464,70 @@
         }
 
         function showAppConfirm(title, message, options = {}) {
-        return new Promise(resolve => {
-            const {
-                type = 'warning',
-                confirmText = 'Confirm',
-                cancelText = 'Cancel',
-                confirmBg = null,
-                confirmClass = null
-            } = options;
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    resolve(confirm(`${title}\n\n${message}`));
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
 
-            const modal = document.getElementById('appDialogModal');
-            if (!modal) {
-                resolve(window.confirm(`${title}
+                const type = options.type || 'question';
+                const confirmText = options.confirmText || 'Confirm';
+                const cancelText = options.cancelText || 'Cancel';
+                const confirmBg = options.confirmBg || '#3b82f6';
 
-${message}`));
-                return;
-            }
-            const card = modal.querySelector('.app-dialog-card');
-            const iconEl = document.getElementById('appDialogIcon');
-            const titleEl = document.getElementById('appDialogTitle');
-            const msgEl = document.getElementById('appDialogMsg');
-            const confirmBtn = document.getElementById('appDialogConfirmBtn');
-            const cancelBtn = document.getElementById('appDialogCancelBtn');
+                let borderCol = '#3b82f6';
+                let icon = '❓';
+                if (type === 'danger') {
+                    borderCol = '#ef4444';
+                    icon = '🛑';
+                } else if (type === 'warning') {
+                    borderCol = '#f59e0b';
+                    icon = '⚠️';
+                }
 
-            let borderCol = '#f59e0b';
-            let icon = '⚠️';
-            let defaultBg = '#3498db';
-
-            if (type === 'danger') {
-                borderCol = '#ef4444';
-                icon = '🛑';
-                defaultBg = '#e74c3c';
-            } else if (type === 'question') {
-                borderCol = '#3b82f6';
-                icon = '❓';
-                defaultBg = '#3498db';
-            } else if (type === 'info') {
-                borderCol = '#3b82f6';
-                icon = 'ℹ️';
-                defaultBg = '#3b82f6';
-            } else if (type === 'success') {
-                borderCol = '#10b981';
-                icon = '✅';
-                defaultBg = '#10b981';
-            }
-
-            if (card) card.style.borderTopColor = borderCol;
-            if (iconEl) iconEl.innerText = icon;
-            if (titleEl) titleEl.innerText = title;
-            if (msgEl) {
-                if (typeof message === 'string' && (message.includes('<div') || message.includes('<span') || message.includes('<table') || message.includes('<strong') || message.includes('<p'))) {
-                    msgEl.style.whiteSpace = 'normal';
-                    msgEl.innerHTML = message;
-                } else {
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) {
                     msgEl.style.whiteSpace = 'pre-line';
                     msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
                 }
-            }
 
-            if (confirmBtn) {
-                confirmBtn.innerText = confirmText;
-                if (confirmClass) {
-                    confirmBtn.className = confirmClass;
-                    confirmBtn.style.background = '';
-                    confirmBtn.style.color = '';
-                } else {
+                if (confirmBtn) {
+                    confirmBtn.innerText = confirmText;
                     confirmBtn.className = 'dialog-btn';
-                    confirmBtn.style.background = confirmBg || defaultBg;
+                    confirmBtn.style.background = confirmBg;
                     confirmBtn.style.color = '#ffffff';
                 }
-            }
 
-            if (cancelBtn) {
-                cancelBtn.className = 'dialog-btn';
-                cancelBtn.style.display = 'inline-block';
-                cancelBtn.style.background = '#e2e8f0';
-                cancelBtn.style.color = '#475569';
-                cancelBtn.innerText = cancelText;
-            }
+                if (cancelBtn) {
+                    cancelBtn.className = 'dialog-btn';
+                    cancelBtn.style.display = 'inline-block';
+                    cancelBtn.style.background = '#e2e8f0';
+                    cancelBtn.style.color = '#475569';
+                    cancelBtn.innerText = cancelText;
+                }
 
-            confirmBtn.onclick = () => {
-                modal.style.display = 'none';
-                resolve(true);
-            };
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
 
-            cancelBtn.onclick = () => {
-                modal.style.display = 'none';
-                resolve(false);
-            };
+                cancelBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
 
-            modal.style.display = 'flex';
-        });
-    }
+                modal.style.display = 'flex';
+            });
+        }
 
         function showToast(message, type = 'success', title = null) {
             const container = document.getElementById('toastContainer');
@@ -408,7 +569,6 @@ ${message}`));
                 }, 260);
             };
 
-            // Tap anywhere on toast to dismiss immediately
             toast.onclick = dismissToast;
 
             toast.innerHTML = `
@@ -430,7 +590,6 @@ ${message}`));
                 toast.style.transform = isMobile ? 'translateY(0)' : 'translateX(0)';
             });
 
-            // Fast 2.2s auto-dismiss on mobile, 3.8s on desktop
             const displayDuration = isMobile ? 2200 : 3800;
             setTimeout(() => {
                 if (toast.parentElement && !isDismissed) {
@@ -441,11 +600,11 @@ ${message}`));
 
         async function logout() {
             const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
-            type: 'danger',
-            confirmText: 'Log Out',
-            cancelText: 'Cancel',
-            confirmBg: '#e74c3c'
-        });
+                type: 'danger',
+                confirmText: 'Log Out',
+                cancelText: 'Cancel',
+                confirmBg: '#e74c3c'
+            });
             if (!confirmed) return;
 
             fetch('/api/logout', {
@@ -504,93 +663,18 @@ ${message}`));
         }
 
         function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        let data = {};
-        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
-            data = dataOrMessage;
-        } else {
-            data = {
-                message: dataOrMessage,
-                reams_needed: reamsArg,
-                deficit_booklets: deficitBookletsArg,
-                deficit_sheets: deficitSheetsArg
-            };
+        if (typeof window.showDSSModal === 'function') {
+            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
         }
-
-        const bCount = Number(data.deficit_booklets || 0);
-        const sCount = Number(data.deficit_sheets || 0);
-        const bufBooklets = Number(data.buffer_booklets || 0);
-        const bufSheets = Number(data.buffer_sheets || 0);
-        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
-        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
-        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
-        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
-
-        if (document.getElementById('dssModal')) return;
-
-        const bufferRowHtml = bufBooklets > 0 ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
-                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🎯 Target Production:</span>
-                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
-            </div>
-        ` : '';
-
-        const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-                    
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                            <span style="font-weight: 600;">📦 Net Deficit:</span>
-                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
-                        </div>
-                        ${bufferRowHtml}
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
-                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
-                    </p>
-                    
-                    <div style="display: flex; justify-content: center;">
-                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-                            Acknowledge & Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
     function dismissDSS() {
-            sessionStorage.setItem('dss_acknowledged', 'true');
-            const modal = document.getElementById('dssModal');
-            if (modal) modal.remove();
-            const panel = document.getElementById('notifPanel');
-            if (panel) {
-                panel.style.display = 'block'; 
-                setTimeout(() => { panel.style.display = 'none'; }, 2500);
-            }
+        if (typeof window.dismissDSS === 'function') {
+            window.dismissDSS();
         }
+    }
 
-        // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
-        if (window.lanSync) {
-            window.lanSync.onUpdate(() => {
-                fetchDSSAlert();
-            });
-        }
-
-
+        // --- DYNAMIC COURSES & ACADEMIC PROGRAMS ---
         let activeProgramsMap = {};
         async function loadAcademicProgramsForRegistration() {
             try {
@@ -600,7 +684,7 @@ ${message}`));
                     const list = Array.isArray(data) ? data : (data.programs || []);
                     if (Array.isArray(list)) {
                         list.forEach(p => {
-                            activeProgramsMap[p.code] = p;
+                            activeProgramsMap[p.code.toUpperCase()] = p;
                         });
                     }
                 }
@@ -611,21 +695,330 @@ ${message}`));
         loadAcademicProgramsForRegistration();
 
         function getRegCourseColor(dept) {
-            if (activeProgramsMap[dept] && activeProgramsMap[dept].color_hex) {
-                return activeProgramsMap[dept].color_hex;
+            const key = (dept || "").toUpperCase();
+            if (activeProgramsMap[key] && activeProgramsMap[key].color_hex) {
+                return activeProgramsMap[key].color_hex;
             }
-            return dept === 'IT' ? '#7c3aed' : '#2563eb';
+            return key === 'IT' ? '#7c3aed' : '#2563eb';
         }
 
         function getRegCourseLabel(dept) {
-            if (activeProgramsMap[dept]) {
-                return `${activeProgramsMap[dept].name} (${dept})`;
+            const key = (dept || "").toUpperCase();
+            if (activeProgramsMap[key]) {
+                return `${activeProgramsMap[key].name} (${key})`;
             }
-            return dept === 'IT' ? 'Information Technology (IT)' : 'Computer Science (CS)';
+            return key === 'IT' ? 'Information Technology (IT)' : 'Computer Science (CS)';
         }
 
+        // =========================================================================
+        // PENDING BATCHES PICKER & INTERACTIVE STAGING LOGIC
+        // =========================================================================
+        let allPendingBatches = [];
+        let availableCourses = [];
+        let selectedCourseFilter = 'ALL';
         let batchesToActivate = [];
 
+        async function loadPendingBatches(showFeedback = false) {
+            const container = document.getElementById('pendingBatchContainer');
+            const totalBadge = document.getElementById('pendingTotalBadge');
+
+            if (showFeedback) {
+                showToast("Refreshing generated batches...", "info", "Refreshing");
+            }
+
+            try {
+                const res = await fetch('/api/pending-batches');
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || `Server error (HTTP ${res.status})`);
+                }
+                const data = await res.json();
+
+                allPendingBatches = data.batches || [];
+                availableCourses = data.courses || [];
+                
+                if (totalBadge) {
+                    totalBadge.innerText = `${allPendingBatches.length} Pending`;
+                }
+
+                renderCourseFilterPills();
+                renderPendingBatches();
+
+                if (showFeedback) {
+                    showToast(`Found ${allPendingBatches.length} pending batches.`, "success", "Updated");
+                }
+            } catch (err) {
+                console.error("Error loading pending batches:", err);
+                if (container) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 25px 10px; color: #ef4444; font-size: 0.88rem;">
+                            ⚠️ Unable to load pending batches.<br>
+                            <span style="font-size: 0.78rem; color: #64748b; display: block; margin: 4px 0 8px;">${err.message || 'Network error'}</span>
+                            <button onclick="loadPendingBatches(true)" style="margin-top: 6px; padding: 6px 14px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">Try Again</button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function renderCourseFilterPills() {
+            const bar = document.getElementById('courseFilterPills');
+            if (!bar) return;
+
+            const totalCount = allPendingBatches.length;
+            let html = `
+                <div class="course-pill ${selectedCourseFilter === 'ALL' ? 'active' : ''}" onclick="setCourseFilter('ALL')">
+                    <span>🌐 All</span>
+                    <span class="course-pill-badge">${totalCount}</span>
+                </div>
+            `;
+
+            availableCourses.forEach(c => {
+                const isSelected = selectedCourseFilter === c.code;
+                const dotCol = c.color || getRegCourseColor(c.code);
+                const count = c.pending_batches || 0;
+                html += `
+                    <div class="course-pill ${isSelected ? 'active' : ''}" onclick="setCourseFilter('${c.code}')" style="${isSelected ? `background: ${dotCol}; border-color: ${dotCol};` : ''}">
+                        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isSelected ? '#ffffff' : dotCol};"></span>
+                        <span>${c.code}</span>
+                        <span class="course-pill-badge">${count}</span>
+                    </div>
+                `;
+            });
+
+            bar.innerHTML = html;
+        }
+
+        function setCourseFilter(code) {
+            selectedCourseFilter = code;
+            renderCourseFilterPills();
+            renderPendingBatches();
+        }
+
+        function handlePendingSearch() {
+            renderPendingBatches();
+        }
+
+        function getFilteredPendingBatches() {
+            const query = (document.getElementById('pendingSearchInput')?.value || '').trim().toLowerCase();
+            return allPendingBatches.filter(b => {
+                // Course filter
+                if (selectedCourseFilter !== 'ALL' && b.department !== selectedCourseFilter) {
+                    return false;
+                }
+                // Text search
+                if (query) {
+                    const matchBatch = (b.batch_id || '').toLowerCase().includes(query);
+                    const matchStart = (b.start_control_num || '').toLowerCase().includes(query);
+                    const matchEnd = (b.end_control_num || '').toLowerCase().includes(query);
+                    const matchSrn = (b.start_srn || '').toLowerCase().includes(query) || (b.end_srn || '').toLowerCase().includes(query);
+                    const matchTpl = (b.template_name || '').toLowerCase().includes(query);
+                    return matchBatch || matchStart || matchEnd || matchSrn || matchTpl;
+                }
+                return true;
+            });
+        }
+
+        function renderPendingBatches() {
+            const container = document.getElementById('pendingBatchContainer');
+            if (!container) return;
+
+            const filtered = getFilteredPendingBatches();
+
+            if (allPendingBatches.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;">
+                        <div style="font-size: 2.4rem; margin-bottom: 8px;">📦</div>
+                        <h4 style="color: #1e293b; margin-bottom: 6px; font-size: 1.05rem;">All Generated Batches Packaged!</h4>
+                        <p style="color: #64748b; font-size: 0.84rem; max-width: 320px; margin: 0 auto 16px auto; line-height: 1.45;">
+                            There are currently no loose PDF reams waiting for assembly. To create more supply packs, generate reams in the PDF Generator.
+                        </p>
+                        ${activeUser && activeUser.role === 'Admin' ? `
+                            <a href="/generator" style="display: inline-block; padding: 8px 18px; background: #2563eb; color: white; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 0.85rem;">
+                                ➔ Go to PDF Generator
+                            </a>
+                        ` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 30px 16px; color: #64748b; font-size: 0.88rem;">
+                        No pending batches match the current filter or search criteria.
+                    </div>
+                `;
+                return;
+            }
+
+            const activeStagedDept = batchesToActivate.length > 0 ? batchesToActivate[0].department : null;
+            const activeStagedSlot = batchesToActivate.length > 0 ? batchesToActivate[0].template_slot : null;
+            const stagedIdSet = new Set(batchesToActivate.map(b => b.batch_id));
+
+            let html = '';
+            filtered.forEach(b => {
+                const isStaged = stagedIdSet.has(b.batch_id);
+                const isDeptMismatch = activeStagedDept !== null && b.department !== activeStagedDept;
+                const isSlotMismatch = activeStagedSlot !== null && b.template_slot !== activeStagedSlot;
+                const isLockedOut = isDeptMismatch || isSlotMismatch;
+
+                const courseCol = b.department_color || getRegCourseColor(b.department);
+
+                let cardClass = 'pending-batch-card';
+                if (isStaged) cardClass += ' is-staged';
+                if (isLockedOut) cardClass += ' is-locked-out';
+
+                let btnHtml = '';
+                if (isStaged) {
+                    btnHtml = `
+                        <button class="btn-stage staged-active" onclick="removeBatch('${b.batch_id}')" title="Click to remove from staged bundle">
+                            ✓ Staged (Remove)
+                        </button>
+                    `;
+                } else if (isDeptMismatch) {
+                    btnHtml = `
+                        <button class="btn-stage" onclick="showCourseMismatchModal('${activeStagedDept}', '${b.department}', '${b.batch_id}')" style="background: #f1f5f9; color: #ef4444; border: 1px solid #fca5a5;" title="Cannot mix courses in one supply pack">
+                            🚫 Different Course
+                        </button>
+                    `;
+                } else if (isSlotMismatch) {
+                    btnHtml = `
+                        <button class="btn-stage" onclick="showToast('Template Mismatch: All batches in a pack must use the same cover template.', 'error', 'Template Mismatch')" style="background: #f1f5f9; color: #dc2626; border: 1px solid #fca5a5;" title="Cannot mix templates">
+                            🚫 Different Cover
+                        </button>
+                    `;
+                } else {
+                    btnHtml = `
+                        <button class="btn-stage" onclick="stageBatch('${b.batch_id}')">
+                            + Stage Batch
+                        </button>
+                    `;
+                }
+
+                html += `
+                    <div class="${cardClass}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                <span style="background: ${courseCol}; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.72rem; letter-spacing: 0.3px;">
+                                    ${b.department}
+                                </span>
+                                <span style="font-family: monospace; font-weight: 700; color: #0f172a; font-size: 0.95rem;">
+                                    ${b.batch_id}
+                                </span>
+                            </div>
+                            <span style="font-size: 0.75rem; color: #64748b; font-style: italic;">
+                                ${b.template_name || 'Template ' + b.template_slot}
+                            </span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 0.82rem; color: #334155; background: #f8fafc; padding: 8px 10px; border-radius: 6px;">
+                            <div>
+                                <div style="font-weight: 600; color: #1e293b; margin-bottom: 2px;">
+                                    📊 ${b.ream_count || 1} Ream (${b.total_yield} Booklets)
+                                </div>
+                                <div style="font-family: monospace; color: #475569; font-size: 0.78rem;">
+                                    Ctrl: <span style="color: #0369a1; font-weight: 600;">${b.start_control_num}</span> → <span style="color: #0369a1; font-weight: 600;">${b.end_control_num}</span>
+                                </div>
+                                ${b.start_srn && b.start_srn !== 'N/A' ? `
+                                    <div style="font-family: monospace; color: #64748b; font-size: 0.74rem; margin-top: 1px;">
+                                        SRN: ${b.start_srn} → ${b.end_srn}
+                                    </div>
+                                ` : ''}
+                            </div>
+                            <div>
+                                ${btnHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Stage a batch directly into batchesToActivate
+        function stageBatch(batchId) {
+            const batch = allPendingBatches.find(b => b.batch_id === batchId);
+            if (!batch) {
+                // If not in pending array, try manual add
+                document.getElementById('batchIdInput').value = batchId;
+                addBatch();
+                return;
+            }
+
+            if (batchesToActivate.some(b => b.batch_id === batchId)) {
+                showToast(`Batch "${batchId}" is already staged.`, "warning", "Already Staged");
+                return;
+            }
+
+            // Validate homogeneity
+            if (batchesToActivate.length > 0) {
+                const primaryDept = batchesToActivate[0].department;
+                if (batch.department !== primaryDept) {
+                    showCourseMismatchModal(primaryDept, batch.department, batch.batch_id);
+                    return;
+                }
+                if (batch.template_slot !== batchesToActivate[0].template_slot) {
+                    showToast(`Template Mismatch: Batch ${batch.batch_id} uses "${batch.template_name}", but current bundle is locked to "${batchesToActivate[0].template_name}".`, "error", "Template Mismatch");
+                    return;
+                }
+            }
+
+            batchesToActivate.push(batch);
+            renderList();
+            renderPendingBatches();
+            showToast(`Batch ${batch.batch_id} staged (${batch.total_yield} booklets).`, "info", "Batch Staged");
+        }
+
+        // 1-Click "Stage Contiguous" Helper
+        function stageAllVisibleContiguous() {
+            const visibleBatches = getFilteredPendingBatches();
+            if (visibleBatches.length === 0) {
+                showToast("No pending batches available to stage.", "warning", "No Batches");
+                return;
+            }
+
+            const targetDept = batchesToActivate.length > 0 ? batchesToActivate[0].department : visibleBatches[0].department;
+            const targetSlot = batchesToActivate.length > 0 ? batchesToActivate[0].template_slot : visibleBatches[0].template_slot;
+
+            // Filter compatible batches
+            const compatible = visibleBatches.filter(b => 
+                b.department === targetDept && 
+                b.template_slot === targetSlot &&
+                !batchesToActivate.some(sb => sb.batch_id === b.batch_id)
+            );
+
+            if (compatible.length === 0) {
+                showToast("No additional compatible batches found to stage.", "warning", "None Available");
+                return;
+            }
+
+            // Sort compatible by starting control number
+            compatible.sort((a, b) => (a.start_num || 0) - (b.start_num || 0));
+
+            let addedCount = 0;
+            compatible.forEach(b => {
+                batchesToActivate.push(b);
+                addedCount++;
+            });
+
+            renderList();
+            renderPendingBatches();
+            showToast(`Staged ${addedCount} batch(es) for ${targetDept}.`, "success", "Batches Staged");
+        }
+
+        function clearStagedBatches() {
+            if (batchesToActivate.length === 0) return;
+            batchesToActivate = [];
+            renderList();
+            renderPendingBatches();
+            showToast("Staged bundle reset.", "info", "Bundle Cleared");
+        }
+
+        // =========================================================================
+        // MANUAL INPUT & STAGED LIST MANAGEMENT
+        // =========================================================================
         document.getElementById("batchIdInput").addEventListener("keypress", function(event) {
             if (event.key === "Enter") {
                 event.preventDefault();
@@ -654,7 +1047,15 @@ ${message}`));
             const val = input.value.trim();
             if (!val) return;
 
-            if (batchesToActivate.some(b => b.batch_id === val)) {
+            // Check if already in pending array
+            const foundPending = allPendingBatches.find(b => b.batch_id.toUpperCase() === val.toUpperCase());
+            if (foundPending) {
+                stageBatch(foundPending.batch_id);
+                input.value = '';
+                return;
+            }
+
+            if (batchesToActivate.some(b => b.batch_id.toUpperCase() === val.toUpperCase())) {
                 showToast(`Batch "${val}" is already added to the bundle list.`, "warning", "Duplicate Batch");
                 input.value = '';
                 input.focus();
@@ -707,6 +1108,7 @@ ${message}`));
                 msg.innerText = "";
                 input.value = '';
                 renderList();
+                renderPendingBatches();
                 showToast(`Batch ${data.batch_id} added (${data.total_yield} booklets).`, "info", "Batch Staged");
             } catch (err) {
                 console.error(err);
@@ -722,16 +1124,33 @@ ${message}`));
         function removeBatch(batchId) {
             batchesToActivate = batchesToActivate.filter(b => b.batch_id !== batchId);
             renderList();
+            renderPendingBatches();
             showToast(`Batch ${batchId} removed from bundle.`, "info", "Batch Removed");
+        }
+
+        // Helper to extract integer from control number "1ST26-0042" -> 42
+        function extractCtrlNum(ctrlStr) {
+            if (!ctrlStr) return 0;
+            const parts = String(ctrlStr).split('-');
+            const last = parts[parts.length - 1];
+            const parsed = parseInt(last, 10);
+            return isNaN(parsed) ? 0 : parsed;
         }
 
         function renderList() {
             const ul = document.getElementById('batchListUI');
             const banner = document.getElementById('bundleCourseBanner');
+            const summaryCard = document.getElementById('packSummaryCard');
             ul.innerHTML = '';
 
             if (batchesToActivate.length === 0) {
                 if (banner) banner.style.display = 'none';
+                if (summaryCard) summaryCard.style.display = 'none';
+                ul.innerHTML = `
+                    <li style="padding: 18px 12px; text-align: center; color: #94a3b8; font-size: 0.86rem; border: 1px dashed #cbd5e1; border-radius: 6px; background: #f8fafc; font-family: inherit;">
+                        No batches staged yet. Click <strong>+ Stage</strong> from the left panel or enter a Batch ID above.
+                    </li>
+                `;
                 return;
             }
 
@@ -749,34 +1168,68 @@ ${message}`));
                 tpl.innerText = primary.template_name || `Template ${primary.template_slot}`;
             }
 
-            batchesToActivate.forEach(b => {
+            // Sort batches sequentially by start control number
+            batchesToActivate.sort((a, b) => extractCtrlNum(a.start_control_num) - extractCtrlNum(b.start_control_num));
+
+            // Populate staged list
+            batchesToActivate.forEach((b, idx) => {
                 const li = document.createElement('li');
                 li.className = 'batch-item';
-                li.style.display = 'flex';
-                li.style.justifyContent = 'space-between';
-                li.style.alignItems = 'center';
-                li.style.padding = '10px 14px';
-                li.style.background = '#f8fafc';
-                li.style.border = '1px solid #e2e8f0';
-                li.style.borderRadius = '6px';
-                li.style.marginBottom = '8px';
 
                 li.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="background: ${getRegCourseColor(b.department)}; color: white; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">
+                        <span style="background: #e2e8f0; color: #334155; font-size: 0.75rem; font-weight: bold; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            #${idx + 1}
+                        </span>
+                        <span style="background: ${getRegCourseColor(b.department)}; color: white; padding: 2px 7px; border-radius: 4px; font-weight: bold; font-size: 0.72rem;">
                             ${b.department}
                         </span>
                         <div>
-                            <div style="font-weight: bold; font-family: monospace; color: #1e293b; font-size: 0.95rem;">${b.batch_id}</div>
-                            <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">
+                            <div style="font-weight: bold; font-family: monospace; color: #1e293b; font-size: 0.92rem;">${b.batch_id}</div>
+                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
                                 ${b.total_yield} Booklets | Ctrl: ${b.start_control_num} - ${b.end_control_num}
                             </div>
                         </div>
                     </div>
-                    <button class="remove-btn" onclick="removeBatch('${b.batch_id}')" title="Remove Batch" style="color: #ef4444; background: none; border: none; font-size: 1.3rem; cursor: pointer; padding: 4px 8px;">×</button>
+                    <button class="remove-btn" onclick="removeBatch('${b.batch_id}')" title="Remove Batch">×</button>
                 `;
                 ul.appendChild(li);
             });
+
+            // Update Summary Card & Contiguity Validation
+            if (summaryCard) {
+                summaryCard.style.display = 'block';
+                const totalReams = batchesToActivate.reduce((acc, b) => acc + (b.ream_count || 1), 0);
+                const totalYield = batchesToActivate.reduce((acc, b) => acc + (b.total_yield || 0), 0);
+                
+                document.getElementById('summaryReams').innerText = `${totalReams} Ream(s)`;
+                document.getElementById('summaryYield').innerText = `${totalYield.toLocaleString()} Booklets`;
+
+                const contiguityEl = document.getElementById('summaryContiguity');
+                
+                // Validate contiguity
+                let hasGap = false;
+                let gapMsg = '';
+                for (let i = 0; i < batchesToActivate.length - 1; i++) {
+                    const currentEnd = extractCtrlNum(batchesToActivate[i].end_control_num);
+                    const nextStart = extractCtrlNum(batchesToActivate[i + 1].start_control_num);
+                    if (nextStart !== currentEnd + 1) {
+                        hasGap = true;
+                        gapMsg = `Gap: ${batchesToActivate[i].end_control_num} does not connect to ${batchesToActivate[i+1].start_control_num}`;
+                        break;
+                    }
+                }
+
+                if (hasGap) {
+                    contiguityEl.style.background = '#fef2f2';
+                    contiguityEl.style.color = '#dc2626';
+                    contiguityEl.innerHTML = `⚠️ <strong>Contiguity Warning:</strong> ${gapMsg}`;
+                } else {
+                    contiguityEl.style.background = '#f0fdf4';
+                    contiguityEl.style.color = '#166534';
+                    contiguityEl.innerHTML = `✅ <strong>Seamless Contiguity:</strong> All control numbers connect seamlessly.`;
+                }
+            }
         }
 
         async function activateBatches() {
@@ -845,7 +1298,8 @@ ${message}`));
                     );
                     
                     batchesToActivate = []; 
-                    renderList(); 
+                    renderList();
+                    loadPendingBatches(); // Refresh pending list to remove activated batches
                 } else {
                     msg.style.color = "red";
                     msg.innerText = `❌ Error: ${data.detail}`;
@@ -949,82 +1403,86 @@ ${message}`));
             };
             qrImg.src = base64QR;
         }
-    
-    // --- REAL-TIME SESSION POLLING ---
-    // This constantly checks if another device has logged in and instantly kicks this device out.
-    let isSessionExpiredHandled = false;
-    setInterval(() => {
-        if (isSessionExpiredHandled) return;
-        const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
-        if(currentUser && currentUser.session_token) {
-            fetch('/api/verify-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
-            })
-            .then(res => res.json())
-            .then(async data => {
-                if (data && data.status !== "valid" && !isSessionExpiredHandled) {
-                    isSessionExpiredHandled = true;
-                    await showAppAlert("Session Expired", "Your account was accessed from another device or your session has expired.", "error");
-                    localStorage.clear();
-                    window.location.href = '/login';
-                }
-            }).catch(e => console.error("Session verification error:", e));
+
+        // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
+        if (window.lanSync) {
+            window.lanSync.onUpdate(() => {
+                fetchDSSAlert();
+                loadPendingBatches(); // Automatically refresh pending batches whenever a PDF is generated or pack is activated
+            });
         }
-    }, 3000); // Checks every 3 seconds
 
-</script>
+        // Initial Load on Page Open
+        loadPendingBatches();
 
-<script>
+        // --- REAL-TIME SESSION POLLING ---
+        let isSessionExpiredHandled = false;
+        setInterval(() => {
+            if (isSessionExpiredHandled) return;
+            const currentUser = JSON.parse(localStorage.getItem('bookletlog_user'));
+            if(currentUser && currentUser.session_token) {
+                fetch('/api/verify-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: currentUser.username, session_token: currentUser.session_token })
+                })
+                .then(res => res.json())
+                .then(async data => {
+                    if (data && data.status !== "valid" && !isSessionExpiredHandled) {
+                        isSessionExpiredHandled = true;
+                        await showAppAlert("Session Expired", "Your account was accessed from another device or your session has expired.", "error");
+                        localStorage.clear();
+                        window.location.href = '/login';
+                    }
+                }).catch(e => console.error("Session verification error:", e));
+            }
+        }, 3000);
+    </script>
 
-</script>
-
-<!-- COURSE & TEMPLATE MISMATCH WARNING MODAL -->
-<div id="courseMismatchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
-    <div style="background: white; border-radius: 12px; width: 90%; max-width: 480px; padding: 25px 25px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; text-align: center;">
-        <div style="font-size: 2.8rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-        <h3 style="color: #c0392b; margin-bottom: 6px; font-size: 1.3rem;">Cannot Combine Different Covers</h3>
-        <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 18px;">Course Template Mismatch Detected</p>
-        
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; text-align: left; font-size: 0.9rem; margin-bottom: 18px;">
-            <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #3b82f6; color: white;">CURRENT BUNDLE</span>
-                <span id="modalCurrentDept" style="color: #1e293b; font-weight: bold;">Computer Science (CS)</span>
+    <!-- COURSE & TEMPLATE MISMATCH WARNING MODAL -->
+    <div id="courseMismatchModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.65); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+        <div style="background: white; border-radius: 12px; width: 90%; max-width: 480px; padding: 25px 25px 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; text-align: center;">
+            <div style="font-size: 2.8rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
+            <h3 style="color: #c0392b; margin-bottom: 6px; font-size: 1.3rem;">Cannot Combine Different Covers</h3>
+            <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 18px;">Course Template Mismatch Detected</p>
+            
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; text-align: left; font-size: 0.9rem; margin-bottom: 18px;">
+                <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #3b82f6; color: white;">CURRENT BUNDLE</span>
+                    <span id="modalCurrentDept" style="color: #1e293b; font-weight: bold;">Computer Science (CS)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #ef4444; color: white;">INCOMING BATCH</span>
+                    <span id="modalIncomingDept" style="color: #1e293b; font-weight: bold;">Information Technology (IT)</span>
+                </div>
+                <div id="modalIncomingBatchId" style="font-family: monospace; font-size: 0.8rem; color: #64748b; padding-top: 4px; border-top: 1px dashed #cbd5e1;">BATCH-XXXX</div>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <span style="font-size: 0.75rem; font-weight: bold; padding: 2px 7px; border-radius: 4px; background: #ef4444; color: white;">INCOMING BATCH</span>
-                <span id="modalIncomingDept" style="color: #1e293b; font-weight: bold;">Information Technology (IT)</span>
-            </div>
-            <div id="modalIncomingBatchId" style="font-family: monospace; font-size: 0.8rem; color: #64748b; padding-top: 4px; border-top: 1px dashed #cbd5e1;">BATCH-XXXX</div>
+
+            <p style="color: #475569; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px; text-align: left; background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 12px; border-radius: 0 4px 4px 0;">
+                A physical supply box must only contain booklets with identical course templates. Combining different booklet covers inside one box causes distribution errors during exam issuing.
+            </p>
+
+            <button onclick="closeMismatchModal()" style="background: #2c3e50; color: white; border: none; padding: 11px 30px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;">
+                Understood
+            </button>
         </div>
-
-        <p style="color: #475569; font-size: 0.88rem; line-height: 1.5; margin-bottom: 20px; text-align: left; background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 12px; border-radius: 0 4px 4px 0;">
-            A physical supply box must only contain booklets with identical course templates. Combining different booklet covers inside one box causes distribution errors during exam issuing.
-        </p>
-
-        <button onclick="closeMismatchModal()" style="background: #2c3e50; color: white; border: none; padding: 11px 30px; border-radius: 6px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;">
-            Understood
-        </button>
     </div>
-</div>
 
-<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
-<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
+    <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
         <div class="app-dialog-card">
             <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">🛑</div>
-            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Confirm Logout</h3>
-            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Notification</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;"></div>
             <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
                 <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
-                <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Log Out</button>
+                <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">OK</button>
             </div>
         </div>
     </div>
-</div>
 
-<!-- IN-APP TOAST NOTIFICATION CONTAINER -->
-<div id="toastContainer"></div>
+    <!-- IN-APP TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer"></div>
 
 </body>
 </html>

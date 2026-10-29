@@ -8,6 +8,7 @@
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
+        @keyframes spin { to { transform: rotate(360deg); } }
 /* Main Content */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; }
         .card { background: white; padding: 25px;width: max-content; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
@@ -57,9 +58,6 @@
         .btn-execute:hover { background-color: #d68910; }
         .btn-cancel { background-color: #bdc3c7; color: #2c3e50; }
         .btn-cancel:hover { background-color: #95a5a6; }
-
-        /* Auth Inputs */
-        .auth-input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; text-align: center; }
 
         /* App Custom Dialog Modal */
         @keyframes modalPopIn {
@@ -198,28 +196,6 @@
         </div>
     </div>
 
-    <!-- ADMIN OVERRIDE AUTHORIZATION MODAL (Password Only) -->
-    <div class="modal-overlay" id="adminAuthModal">
-        <div class="modal-card" style="border-top-color: #c0392b; max-width: 400px;">
-            <h3 style="color: #c0392b; margin-bottom: 10px;">🔒 Admin Override Required</h3>
-            <p style="color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">
-                Only System Administrators have the clearance to process returns. Please ask an Admin to enter their password to proceed.
-            </p>
-            
-            <div class="form-group" style="text-align: center;">
-                <!-- Input for username and password -->
-                <input type="text" id="authAdminUser" class="auth-input" placeholder="Admin Username" style="margin-bottom: 10px;">
-                <input type="password" id="authAdminPass" class="auth-input" placeholder="Admin Password">
-                <div id="authErrorMsg" style="color: #e74c3c; font-size: 0.85rem; margin-bottom: 10px; display: none; font-weight: bold;"></div>
-            </div>
-            
-            <div class="btn-group">
-                <button class="btn-cancel" onclick="closeAdminAuthModal()">Cancel</button>
-                <button class="btn-execute" style="background-color: #c0392b;" onclick="verifyAdminAuth()">Authorize</button>
-            </div>
-        </div>
-    </div>
-
     <!-- RETURN TO LOOSE STOCK MODAL -->
     <div class="modal-overlay" id="returnModal">
         <div class="modal-card">
@@ -262,9 +238,6 @@
     let matchedKeys = null; 
     let systemActivePeriod = "";
     
-    // Temporarily holds the target return data while waiting for Admin to login
-    let pendingReturnAction = null; 
-
     // --- IN-APP MODAL DIALOG SYSTEM ---
     function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
         return new Promise(resolve => {
@@ -469,17 +442,37 @@ ${message}`));
         });
     }
 
-    // --- DATA FETCHING & CHRONOLOGICAL SORTING ---
+    // --- INSTANT CACHE & DATA FETCHING ---
+    function initHistoryFromCache() {
+        try {
+            const cached = sessionStorage.getItem('bookletlog_history_cache');
+            const cachedPeriod = sessionStorage.getItem('bookletlog_history_period');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    globalHistory = parsed;
+                    if (cachedPeriod) systemActivePeriod = cachedPeriod;
+                    populateDropdowns();
+                    applyFilters();
+                    return true;
+                }
+            }
+        } catch(e) {
+            console.warn("Failed to load history cache:", e);
+        }
+        return false;
+    }
+
     function fetchData(isBackground = false) {
         const returnModal = document.getElementById('returnModal');
-        const adminModal = document.getElementById('adminAuthModal');
-        if (isBackground && ((returnModal && returnModal.style.display === 'flex') || (adminModal && adminModal.style.display === 'flex'))) {
+        if (isBackground && returnModal && returnModal.style.display === 'flex') {
             return;
         }
 
         const tbody = document.getElementById('tableBody');
-        if (!isBackground) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Loading records...</td></tr>';
+        // Only show loading placeholder if table is completely empty to prevent flickering
+        if (!isBackground && (!globalHistory || globalHistory.length === 0)) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #64748b; padding: 25px;"><span style="display: inline-block; animation: spin 0.8s linear infinite; margin-right: 8px;">⏳</span> Loading records...</td></tr>';
         }
         
         fetch(`/api/history-data`)
@@ -494,46 +487,52 @@ ${message}`));
                     return dateB - dateA; 
                 });
                 
+                try {
+                    sessionStorage.setItem('bookletlog_history_cache', JSON.stringify(globalHistory));
+                    sessionStorage.setItem('bookletlog_history_period', systemActivePeriod);
+                } catch(e) {}
+
                 populateDropdowns();
                 applyFilters();
             }
         })
         .catch(err => {
-            if (!isBackground) {
-                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error connecting to server.</td></tr>';
+            if (!isBackground && (!globalHistory || globalHistory.length === 0)) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red; padding: 20px;">Error connecting to server.</td></tr>';
             }
         });
     }
 
-    
-        async function loadHistoryAcademicPrograms() {
-            try {
-                const res = await fetch('/api/academic-programs');
-                const data = await res.json();
-                if (data.status === 'success' && data.programs) {
-                    const sel = document.getElementById('filterDept');
-                    if (sel) {
-                        const cur = sel.value;
-                        let opts = '<option value="">-- All Departments --</option>';
-                        data.programs.forEach(p => {
-                            opts += `<option value="${p.code}">${p.name} (${p.code})</option>`;
-                        });
-                        sel.innerHTML = opts;
-                        if (cur) sel.value = cur;
-                    }
+    async function loadHistoryAcademicPrograms() {
+        try {
+            const res = await fetch('/api/academic-programs');
+            const data = await res.json();
+            if (data.status === 'success' && data.programs) {
+                const sel = document.getElementById('filterDept');
+                if (sel) {
+                    const cur = sel.value;
+                    let opts = '<option value="">-- All Departments --</option>';
+                    data.programs.forEach(p => {
+                        opts += `<option value="${p.code}">${p.name} (${p.code})</option>`;
+                    });
+                    sel.innerHTML = opts;
+                    if (cur) sel.value = cur;
                 }
-            } catch(e) {}
-        }
+            }
+        } catch(e) {}
+    }
 
-        window.onload = function() {
-            loadHistoryAcademicPrograms();
-        fetchData(false);
+    document.addEventListener('DOMContentLoaded', () => {
+        loadHistoryAcademicPrograms();
+        const hasCache = initHistoryFromCache();
+        // If data was populated instantly from cache, do silent background sync; otherwise standard fetch
+        fetchData(hasCache);
         if (window.lanSync) {
             window.lanSync.onUpdate(() => {
                 fetchData(true);
             });
         }
-    };
+    });
 
     let isHistDateRangeActive = false;
 
@@ -731,7 +730,7 @@ ${message}`));
             } 
             else if (systemActivePeriod === row.exam_period || row.exam_period === "Legacy (No Period)") {
                 let safeTeacher = row.teacher.replace(/'/g, "\\'"); 
-                actionHtml = `<button class="return-btn" onclick="requestReturnAccess(${row.enrollment_id}, '${safeTeacher}', '${row.exam_period}')">↩ Process Return</button>`;
+                actionHtml = `<button class="return-btn" onclick="openReturnModal(${row.enrollment_id}, '${safeTeacher}', '${row.exam_period}')">↩ Process Return</button>`;
             }
             else {
                 actionHtml = `<span class="badge" style="background-color: #95a5a6; padding: 6px 12px; display: inline-block; cursor: not-allowed;" title="This specific exam period has ended.">🔒 Period Closed</span>`;
@@ -814,83 +813,6 @@ ${message}`));
         });
     }
 
-    // --- ADMIN AUTHORIZATION OVERRIDE LOGIC ---
-
-    function requestReturnAccess(enrollmentId, teacherName, examPeriod) {
-        if (activeUser.role === 'Admin') {
-            // Admin is logged in. Skip prompt.
-            openReturnModal(enrollmentId, teacherName, examPeriod);
-        } else {
-            // Clerk is logged in. Prompt for override password.
-            pendingReturnAction = { enrollmentId, teacherName, examPeriod };
-            
-            document.getElementById('authAdminUser').value = '';
-            document.getElementById('authAdminPass').value = '';
-            document.getElementById('authErrorMsg').style.display = 'none';
-            document.getElementById('adminAuthModal').style.display = 'flex';
-            
-            // Automatically focus the username input
-            setTimeout(() => document.getElementById('authAdminUser').focus(), 100);
-        }
-    }
-
-    function closeAdminAuthModal() {
-        document.getElementById('adminAuthModal').style.display = 'none';
-        pendingReturnAction = null;
-    }
-
-    // Allow pressing "Enter" in the password field to submit
-    document.getElementById('authAdminPass').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
-            verifyAdminAuth();
-        }
-    });
-
-    function verifyAdminAuth() {
-        const user = document.getElementById('authAdminUser').value.trim(); 
-        const pass = document.getElementById('authAdminPass').value;
-        const errorMsg = document.getElementById('authErrorMsg');
-
-        if (!user || !pass) {
-            errorMsg.innerText = "Please enter both Admin username and password.";
-            errorMsg.style.display = "block";
-            return;
-        }
-
-        // Check credentials against the backend stateless endpoint
-        fetch('/api/authorize-admin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, password: pass })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                
-                // 1. EXACT FIX: Capture the target data BEFORE closing the modal!
-                const targetEnrollment = pendingReturnAction.enrollmentId;
-                const targetTeacher = pendingReturnAction.teacherName;
-                const targetPeriod = pendingReturnAction.examPeriod;
-
-                // 2. Now safely close the auth modal (which resets pendingReturnAction to null)
-                closeAdminAuthModal();
-                
-                // 3. Open the Return modal using our safely captured variables
-                openReturnModal(targetEnrollment, targetTeacher, targetPeriod);
-                
-            } else {
-                errorMsg.innerText = "Access Denied: " + (data.message || "Invalid credentials.");
-                errorMsg.style.display = "block";
-            }
-        })
-        .catch(err => {
-            // Fallback: If your FastAPI login expects form-data instead of JSON, 
-            // you will see this network error. Let me know if that happens!
-            errorMsg.innerText = "Network error connecting to database.";
-            errorMsg.style.display = "block";
-        });
-    }
-
     // --- STANDARD RETURN LOGIC ---
 
     function onReturnReasonChange() {
@@ -945,7 +867,6 @@ ${message}`));
 
     function closeReturnModal() { 
         document.getElementById('returnModal').style.display = 'none'; 
-        pendingReturnAction = null;
     }
 
     function filterModalControls() {
@@ -1031,10 +952,14 @@ ${message}`));
                 clerk_name: activeUser.username
             })
         }).then(res => res.json()).then(async (data) => {
+            if (actionBtn) {
+                actionBtn.disabled = false;
+                actionBtn.innerText = originalText;
+            }
             if(data.status === "success") {
                 closeReturnModal();
                 await showAppAlert("Return Processed", data.message, "success");
-                window.location.reload();
+                fetchData(true); // Seamless in-place table update without full page reload
             } else {
                 if (actionBtn) {
                     actionBtn.disabled = false;
@@ -1089,82 +1014,14 @@ ${message}`));
     }
 
     function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        let data = {};
-        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
-            data = dataOrMessage;
-        } else {
-            data = {
-                message: dataOrMessage,
-                reams_needed: reamsArg,
-                deficit_booklets: deficitBookletsArg,
-                deficit_sheets: deficitSheetsArg
-            };
+        if (typeof window.showDSSModal === 'function') {
+            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
         }
-
-        const bCount = Number(data.deficit_booklets || 0);
-        const sCount = Number(data.deficit_sheets || 0);
-        const bufBooklets = Number(data.buffer_booklets || 0);
-        const bufSheets = Number(data.buffer_sheets || 0);
-        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
-        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
-        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
-        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
-
-        if (document.getElementById('dssModal')) return;
-
-        const bufferRowHtml = bufBooklets > 0 ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
-                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🎯 Target Production:</span>
-                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
-            </div>
-        ` : '';
-
-        const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-                    
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                            <span style="font-weight: 600;">📦 Net Deficit:</span>
-                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
-                        </div>
-                        ${bufferRowHtml}
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
-                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
-                    </p>
-                    
-                    <div style="display: flex; justify-content: center;">
-                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-                            Acknowledge & Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
 
     function dismissDSS() {
-        sessionStorage.setItem('dss_acknowledged', 'true');
-        const modal = document.getElementById('dssModal');
-        if (modal) modal.remove();
-        const panel = document.getElementById('notifPanel');
-        if (panel) {
-            panel.style.display = 'block'; 
-            setTimeout(() => { panel.style.display = 'none'; }, 2500);
+        if (typeof window.dismissDSS === 'function') {
+            window.dismissDSS();
         }
     }
 

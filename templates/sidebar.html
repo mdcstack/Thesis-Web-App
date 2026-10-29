@@ -94,7 +94,7 @@
     <a href="/generator" class="nav-link mobile-hide" data-route="/generator">🖨️ PDF Generator</a> 
     <a href="/qr-registration" class="nav-link mobile-hide" data-route="/qr-registration">📥 QR Registration</a>
     <a href="/distribution" class="nav-link" data-route="/distribution">🛒 Point of Distribution</a>
-    <a href="/history" class="nav-link" data-route="/history">📜 Transaction Trail</a>
+    <a href="/history" class="nav-link" data-route="/history">📜 Process Return</a>
     <a href="/payment-tracking" class="nav-link" data-route="/payment-tracking">💳 Payment Tracking</a>
 
     <!-- User Profile & Unified Logout -->
@@ -131,7 +131,7 @@
         if (modal) modal.remove();
     };
 
-    // Universal Decision Support Alert Modal Renderer (Buffer-Aware)
+    // Universal Decision Support Alert Modal Renderer (Buffer-Aware, Excess-Credited & Course-Aligned)
     window.showDSSModal = function(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
         let data = {};
         if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
@@ -151,39 +151,71 @@
         const bufSheets = Number(data.buffer_sheets || 0);
         const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
         const targetProduction = Number(data.target_production || (bCount + bufBooklets));
-        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
-        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
+        const grossSheets = Number(data.gross_sheets_needed || (sCount + bufSheets));
+        const prevExcess = Number(data.prev_excess_credited || 0);
+        const netSheets = Number(data.total_sheets_needed || (grossSheets - prevExcess));
+        const exactReams = Math.floor(netSheets / 500);
+        const looseSheets = netSheets % 500;
+        const reams = Number(data.sum_course_rounded_reams || data.reams_needed || (netSheets > 0 ? Math.ceil(netSheets / 500) : 0));
 
         if (document.getElementById('dssModal')) return;
+
+        // Course breakdown formatted pills
+        const courseParts = [];
+        if (data.courses && typeof data.courses === 'object') {
+            for (const [code, info] of Object.entries(data.courses)) {
+                const cReams = info.reams_needed !== undefined ? info.reams_needed : 0;
+                courseParts.push(`<strong>${code}:</strong> ${cReams} Ream${cReams !== 1 ? 's' : ''}`);
+            }
+        }
+        const courseBreakdownHtml = courseParts.length > 0 ? `
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #fecdd3; font-size: 0.8rem; color: #7f1d1d; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                <span style="font-weight: 600;">📚 Course Demand:</span>
+                <span>${courseParts.join(' • ')}</span>
+            </div>
+        ` : '';
 
         const bufferRowHtml = bufBooklets > 0 ? `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
                 <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
                 <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
             </div>
+        ` : '';
+
+        const excessRowHtml = prevExcess > 0 ? `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🎯 Target Production:</span>
-                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
+                <span style="font-weight: 600;">📥 Prior Excess Credited:</span>
+                <span style="font-weight: 700; color: #0284c7;">−${prevExcess.toLocaleString()} sheets</span>
             </div>
         ` : '';
 
         const modalHtml = `
             <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
+                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 490px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
                     <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
                     <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
                     <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
                     
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
+                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.9rem; color: #9f1239; line-height: 1.55;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
                             <span style="font-weight: 600;">📦 Net Deficit:</span>
                             <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
                         </div>
                         ${bufferRowHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">🎯 Target Production:</span>
+                            <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${grossSheets.toLocaleString()} gross sheets)</span>
+                        </div>
+                        ${excessRowHtml}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
+                            <span style="font-weight: 600;">📄 Net Paper Needed:</span>
+                            <span style="font-weight: 700; color: #1e293b;">${netSheets.toLocaleString()} sheets (${exactReams} Ream${exactReams !== 1 ? 's' : ''} & ${looseSheets} sh)</span>
+                        </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
                             <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
+                            <span style="font-weight: 800; font-size: 1.08rem; color: #991b1b;">${reams} whole Ream(s)</span>
                         </div>
+                        ${courseBreakdownHtml}
                     </div>
                     
                     <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
@@ -201,53 +233,75 @@
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     };
 
-    // --- UNIVERSAL DSS NOTIFICATION CONTROLLER ---
+    // --- UNIVERSAL DSS NOTIFICATION CONTROLLER & INSTANT CACHE HYDRATION ---
+    const DSS_ALERT_CACHE_KEY = 'bookletlog_dss_alert_cache';
+
+    function applyDSSAlertToUI(data) {
+        if (!data) return;
+        const badge = document.getElementById('notifBadge');
+        const panel = document.getElementById('notifPanel');
+        const bell = document.getElementById('notifBell');
+        if (!badge || !panel || !bell) return;
+
+        const userStr = localStorage.getItem('bookletlog_user');
+        let currentUser = null;
+        try { currentUser = JSON.parse(userStr); } catch (e) {}
+        const isAdmin = currentUser && currentUser.role === 'Admin';
+
+        if (data.alert) {
+            badge.style.display = 'inline-block';
+            bell.style.color = '#ffffff';
+            panel.style.borderLeftColor = '#e74c3c';
+            if (isAdmin) {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
+            } else {
+                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f59e0b; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
+            }
+        } else {
+            badge.style.display = 'none';
+            bell.style.color = '#bdc3c7';
+
+            if (data.is_configured === false || data.status === 'awaiting_settings') {
+                panel.style.borderLeftColor = '#f59e0b';
+                if (isAdmin) {
+                    panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet.<br><br><a href="/settings" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Configure System Settings ➔</a>`;
+                } else {
+                    panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters have not been established yet. Awaiting Administrator setup in Settings.`;
+                }
+            } else if (data.has_enrollments === false) {
+                panel.style.borderLeftColor = '#64748b';
+                if (isAdmin) {
+                    panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>`;
+                } else {
+                    panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.`;
+                }
+            } else {
+                panel.style.borderLeftColor = '#27ae60';
+                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+            }
+        }
+    }
+
+    // 1. Instant 0ms synchronous render from session cache (eliminates badge disappear/flicker)
+    (function hydrateSidebarAlertFromCache() {
+        try {
+            const raw = sessionStorage.getItem(DSS_ALERT_CACHE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                applyDSSAlertToUI(parsed);
+            }
+        } catch (e) {}
+    })();
+
+    // 2. Network revalidation (background fetch)
     window.refreshSidebarDSSAlert = function() {
         fetch('/api/dss-alert')
             .then(res => res.json())
             .then(data => {
-                const badge = document.getElementById('notifBadge');
-                const panel = document.getElementById('notifPanel');
-                const bell = document.getElementById('notifBell');
-                if (!badge || !panel || !bell) return;
-
-                const userStr = localStorage.getItem('bookletlog_user');
-                let currentUser = null;
-                try { currentUser = JSON.parse(userStr); } catch (e) {}
-                const isAdmin = currentUser && currentUser.role === 'Admin';
-
-                if (data.alert) {
-                    badge.style.display = 'inline-block';
-                    bell.style.color = '#ffffff';
-                    panel.style.borderLeftColor = '#e74c3c';
-                    if (isAdmin) {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                    } else {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f59e0b; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                    }
-                } else {
-                    badge.style.display = 'none';
-                    bell.style.color = '#bdc3c7';
-
-                    if (data.is_configured === false || data.status === 'awaiting_settings') {
-                        panel.style.borderLeftColor = '#f59e0b';
-                        if (isAdmin) {
-                            panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet.<br><br><a href="/settings" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Configure System Settings ➔</a>`;
-                        } else {
-                            panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters have not been established yet. Awaiting Administrator setup in Settings.`;
-                        }
-                    } else if (data.has_enrollments === false) {
-                        panel.style.borderLeftColor = '#64748b';
-                        if (isAdmin) {
-                            panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>`;
-                        } else {
-                            panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.`;
-                        }
-                    } else {
-                        panel.style.borderLeftColor = '#27ae60';
-                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                    }
-                }
+                try {
+                    sessionStorage.setItem(DSS_ALERT_CACHE_KEY, JSON.stringify(data));
+                } catch(e) {}
+                applyDSSAlertToUI(data);
             })
             .catch(err => {
                 console.warn("Could not load DSS alert in sidebar:", err);

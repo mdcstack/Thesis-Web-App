@@ -20,6 +20,7 @@
             position: fixed; 
             top: 0; 
             left: 0; 
+            right: 0;
             width: 100%; 
             z-index: 2000; 
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
@@ -32,9 +33,10 @@
         .header h1 { font-size: 1.6rem; margin: 0; letter-spacing: 0.5px; }
         .header p { margin-top: 6px; font-size: 0.95rem; color: #cbd5e1; }
 
-        /* Main Container */
-        .container { flex: 1; padding: 30px; max-width: 1250px; margin: 0 auto; width: 100%; }
-        .card { background: white; padding: 25px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 25px; border: 1px solid #e2e8f0; }
+        /* Main Container - Widened to 1500px to stretch across browser space */
+        .container { flex: 1; padding: 30px; max-width: 1500px; margin: 0 auto; width: 100%; }
+        
+        .card { background: white; padding: 25px 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); margin-bottom: 25px; border: 1px solid #e2e8f0; width: 100%; margin-left: auto; margin-right: auto; }
 
         /* Card Header (Title & Buttons Layout) */
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
@@ -45,17 +47,19 @@
         .btn-action-top { border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-size: 0.92rem; font-weight: 600; transition: 0.2s; display: flex; align-items: center; gap: 6px; text-decoration: none; }
         .btn-nav-receipts { background-color: #0284c7; color: white; }
         .btn-nav-receipts:hover { background-color: #0369a1; }
-        .btn-clear { background-color: #64748b; color: white; }
-        .btn-clear:hover { background-color: #475569; }
-        .btn-refresh { background-color: #334155; color: white; }
-        .btn-refresh:hover { background-color: #1e293b; }
         .btn-print-soa { background-color: #16a34a; color: white; }
         .btn-print-soa:hover { background-color: #15803d; }
 
         /* Filter Section Styles */
         .filter-container { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; border-left: 4px solid #0284c7; align-items: center; }
-        .filter-container select, .filter-container input { flex: 1 1 200px; padding: 10px 12px; font-size: 0.95rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b; }
+        
+        /* Adjusted flex-basis to fit on one row */
+        .filter-container select, .filter-container input { flex: 1 1 140px; padding: 0 12px; height: 44px; font-size: 0.95rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b; }
         .filter-container select:focus, .filter-container input:focus { outline: none; border-color: #0284c7; box-shadow: 0 0 0 2px rgba(2,132,199,0.2); }
+        
+        /* Icon Refresh Button inside Filters */
+        .btn-refresh-icon { background-color: #334155; color: white; border: none; width: 44px; height: 44px; border-radius: 6px; cursor: pointer; font-size: 1.2rem; transition: 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .btn-refresh-icon:hover { background-color: #1e293b; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 
         /* KPI Metric Cards */
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 25px; }
@@ -134,7 +138,7 @@
 
     <!-- Desktop Header -->
     <div class="header no-print">
-        <h1>Cavite State University – Imus Campus</h1>
+        <h1>Transaction Profile Overview</h1>
         <p>Faculty Overall Transaction Profile &amp; Statement of Account</p>
     </div>
 
@@ -157,24 +161,28 @@
                     <p id="viewSubtitle">Select an instructor to view their complete financial ledger, class distributions, and installment payment history.</p>
                 </div>
                 <div class="card-actions">
-                    <a href="/receipts" class="btn-action-top btn-nav-receipts" title="Switch to per-transaction receipt portal">🧾 Per-Transaction Receipts</a>
+                    <a href="/receipts" class="btn-action-top btn-nav-receipts" title="Switch to per-transaction receipt portal">🧾 Receipt Portal</a>
                     <button class="btn-action-top btn-print-soa" onclick="printStatement()" id="btnPrintStatement" style="display: none;" title="Print official faculty statement of account">🖨️ Print Statement / Clearance</button>
-                    <button class="btn-action-top btn-clear" onclick="clearFilters()" title="Reset filters">❌ Clear</button>
-                    <button class="btn-action-top btn-refresh" onclick="refreshData()" title="Pull fresh data from server">🔄 Refresh</button>
                 </div>
             </div>
 
-            <!-- FILTERS -->
+            <!-- FILTERS: Search -> Instructor -> Department -> Section -> Refresh -->
             <div class="filter-container no-print">
+                <input type="text" id="searchInput" placeholder="🔍 Search instructor, section, subject..." oninput="applyFilters()" style="flex: 1.5;">
+
                 <select id="selectInstructor" onchange="onInstructorChange()">
-                    <option value="">-- All Faculty / Directory Overview --</option>
+                    <option value="">-- All Instructors --</option>
                 </select>
 
                 <select id="filterDept" onchange="applyFilters()">
-                    <option value="">-- All Departments / Courses --</option>
+                    <option value="">-- All Departments --</option>
+                </select>
+                
+                <select id="filterSection" onchange="applyFilters()">
+                    <option value="">-- All Sections --</option>
                 </select>
 
-                <input type="text" id="searchInput" placeholder="🔍 Search instructor, section, subject..." oninput="applyFilters()">
+                <button class="btn-refresh-icon" onclick="refreshData()" title="Clear filters & Refresh">🔄</button>
             </div>
 
             <!-- INSTRUCTOR SUMMARY HERO BANNER (Shown when an instructor is selected) -->
@@ -288,11 +296,10 @@
                                 <th style="text-align: right;">Amount Paid</th>
                                 <th style="text-align: right;">Balance After</th>
                                 <th>Received By</th>
-                                <th>Notes / Remarks</th>
                             </tr>
                         </thead>
                         <tbody id="instructorPaymentsBody">
-                            <tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 15px;">No installment records</td></tr>
+                            <tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 15px;">No installment records</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -412,11 +419,10 @@
                                     <th style="padding: 6px; text-align: right;">Amount Paid</th>
                                     <th style="padding: 6px; text-align: right;">Balance After</th>
                                     <th style="padding: 6px; text-align: left;">Received By</th>
-                                    <th style="padding: 6px; text-align: left;">Notes / Remarks</th>
                                 </tr>
                             </thead>
                             <tbody id="r-payment-history-body">
-                                <tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 8px;">No installment records</td></tr>
+                                <tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 8px;">No installment records</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -429,7 +435,8 @@
 
             <div class="no-print">
                 <button class="btn-print" onclick="window.print()">
-                    <span>🖨️ Print / Save Receipt as PDF</span>
+                    <span class="desktop-only">🖨️ Print / Save as PDF</span>
+                    <span class="mobile-only">📱 Save Receipt to Phone (PDF)</span>
                 </button>
                 <button class="btn-close" onclick="closeReceipt()">Close</button>
             </div>
@@ -471,7 +478,6 @@
     };
 
     function fetchProfileData(isBackground = false) {
-        // Fetch both profiles and raw receipts in parallel
         Promise.all([
             fetch('/api/public-instructor-profiles').then(r => r.json()),
             fetch('/api/public-receipts').then(r => r.json())
@@ -500,7 +506,7 @@
         // 1. Populate Instructor Dropdown
         const instSelect = document.getElementById('selectInstructor');
         const curInst = selectedTeacherName || instSelect.value;
-        let instHtml = '<option value="">-- All Faculty / Directory Overview --</option>';
+        let instHtml = '<option value="">-- All Instructors --</option>';
         globalInstructors.forEach(inst => {
             instHtml += `<option value="${escapeHtml(inst.teacher_name)}">${escapeHtml(inst.teacher_name)} (${inst.department || 'CS'})</option>`;
         });
@@ -513,17 +519,34 @@
         // 2. Populate Department Dropdown
         const deptSelect = document.getElementById('filterDept');
         const curDept = deptSelect.value;
-        let deptHtml = '<option value="">-- All Departments / Courses --</option>';
+        let deptHtml = '<option value="">-- All Departments --</option>';
         globalPrograms.forEach(p => {
             deptHtml += `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`;
         });
         deptSelect.innerHTML = deptHtml;
         if (curDept) deptSelect.value = curDept;
+
+        // 3. Populate Sections Dropdown
+        const sectionSelect = document.getElementById('filterSection');
+        if (sectionSelect) {
+            const curSec = sectionSelect.value;
+            let sections = new Set();
+            globalInstructors.forEach(inst => {
+                if (inst.classes) {
+                    inst.classes.forEach(c => sections.add(c.section));
+                }
+            });
+            let secHtml = '<option value="">-- All Sections --</option>';
+            Array.from(sections).sort().forEach(s => {
+                secHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+            });
+            sectionSelect.innerHTML = secHtml;
+            if (curSec) sectionSelect.value = curSec;
+        }
     }
 
     function onInstructorChange() {
         selectedTeacherName = document.getElementById('selectInstructor').value || null;
-        // Update URL query param cleanly without reloading
         const url = new URL(window.location);
         if (selectedTeacherName) {
             url.searchParams.set('instructor', selectedTeacherName);
@@ -551,6 +574,7 @@
         selectedTeacherName = null;
         document.getElementById('selectInstructor').value = "";
         document.getElementById('filterDept').value = "";
+        if (document.getElementById('filterSection')) document.getElementById('filterSection').value = "";
         document.getElementById('searchInput').value = "";
         
         const url = new URL(window.location);
@@ -561,6 +585,7 @@
     }
 
     function refreshData() {
+        clearFilters();
         fetchProfileData();
     }
 
@@ -605,12 +630,17 @@
         document.getElementById('viewSubtitle').innerText = "Select an instructor to view their complete financial ledger, class distributions, and installment payment history.";
 
         const deptFilter = document.getElementById('filterDept').value;
+        const sectionFilter = document.getElementById('filterSection') ? document.getElementById('filterSection').value : "";
         const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
 
         let filtered = globalInstructors;
 
         if (deptFilter) {
             filtered = filtered.filter(inst => inst.department === deptFilter || (inst.classes && inst.classes.some(c => c.department === deptFilter)));
+        }
+
+        if (sectionFilter) {
+            filtered = filtered.filter(inst => inst.classes && inst.classes.some(c => c.section === sectionFilter));
         }
 
         if (searchVal) {
@@ -771,7 +801,7 @@
         const payments = inst.payments || [];
 
         if (payments.length === 0) {
-            paymentsTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px; font-style: italic;">No installment payments recorded yet. Total balance remains outstanding.</td></tr>';
+            paymentsTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px; font-style: italic;">No installment payments recorded yet. Total balance remains outstanding.</td></tr>';
         } else {
             payments.forEach(p => {
                 const tr = document.createElement('tr');
@@ -781,7 +811,6 @@
                     <td style="text-align: right; font-weight: bold; color: #16a34a;">₱${parseFloat(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                     <td style="text-align: right; font-weight: bold; color: ${parseFloat(p.balance_after) <= 0 ? '#16a34a' : '#dc2626'};">₱${parseFloat(p.balance_after).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                     <td>${escapeHtml(p.recorded_by || 'System Clerk')}</td>
-                    <td style="color: #64748b;">${escapeHtml(p.notes || '-')}</td>
                 `;
                 paymentsTbody.appendChild(tr);
             });
@@ -814,7 +843,7 @@
         // Financial Breakdown: Due, Paid, Remaining Balance
         const due = data.amount_due !== undefined ? parseFloat(data.amount_due) : parseFloat(data.amount);
         const paid = data.amount_paid !== undefined ? parseFloat(data.amount_paid) : 0.0;
-        const balance = data.balance !== undefined ? parseFloat(data.balance) : Math.max(0.0, due - paid);
+        const balance = data.balance !== undefined ? parseFloat(data.balance) : Math.max(0.0, due - paid); 
 
         const dueEl = document.getElementById('r-amount-due-box');
         if (dueEl) dueEl.innerText = `₱${due.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -855,7 +884,7 @@
         if (historyTbody) {
             const payments = data.payments || [];
             if (payments.length === 0) {
-                historyTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 10px; font-style: italic;">No installment payments recorded yet (Pending Collection).</td></tr>`;
+                historyTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #7f8c8d; padding: 10px; font-style: italic;">No installment payments recorded yet (Pending Collection).</td></tr>`;
             } else {
                 historyTbody.innerHTML = payments.map(p => `
                     <tr style="border-bottom: 1px solid #eee;">
@@ -863,7 +892,6 @@
                         <td style="padding: 6px; text-align: right; font-weight: bold; color: #27ae60;">₱${parseFloat(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td style="padding: 6px; text-align: right; font-weight: bold; color: ${parseFloat(p.balance_after) <= 0 ? '#27ae60' : '#e74c3c'};">₱${parseFloat(p.balance_after).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         <td style="padding: 6px;">${escapeHtml(p.recorded_by || 'System Clerk')}</td>
-                        <td style="padding: 6px; color: #555;">${escapeHtml(p.notes || '-')}</td>
                     </tr>
                 `).join('');
             }
@@ -871,7 +899,7 @@
 
         const logUl = document.getElementById('r-log');
         logUl.innerHTML = "";
-        (data.log || []).forEach(entry => {
+        data.log.forEach(entry => {
             let li = document.createElement('li');
             li.innerHTML = "- " + entry;
             logUl.appendChild(li);
@@ -890,4 +918,3 @@
 </script>
 </body>
 </html>
-

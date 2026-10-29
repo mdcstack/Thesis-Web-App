@@ -320,6 +320,55 @@
                     <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="clearFieldError('department_ream_budget');">
                     <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).</div>
                     
+                    <!-- Prior Semester Financial Carryover Advisory Card -->
+                    <div id="carryover_advisory_card" style="display: none; margin-top: 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                            <div style="font-weight: 700; color: #15803d; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+                                <span>🏛️</span> <span>Prior Semester Rollover Reserves (<span id="carryover_period_name">--</span>)</span>
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button type="button" id="btn_use_carryover_only" onclick="applyCarryoverAsBudget()" style="background: #16a34a; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" title="Set budget directly to previous unspent budget + DCS profit">
+                                    ⚡ Set as Beginning Balance
+                                </button>
+                                <button type="button" id="btn_add_carryover_to_rec" onclick="addCarryoverToRecommendation()" style="background: #0284c7; color: white; border: none; padding: 6px 12px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; cursor: pointer; transition: all 0.2s;" title="Add previous rollover to active period recommended material budget">
+                                    + Add to Recommended Budget
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Transparent Accounting Ledger Breakdown -->
+                        <div style="background: #ffffff; border: 1px solid #dcfce7; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 0.84rem; color: #334155;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 8px;">
+                                <div>
+                                    <span style="color: #64748b; font-size: 0.73rem; text-transform: uppercase; font-weight: 600; display: block;">Prior Allocated Budget:</span>
+                                    <strong style="color: #1e293b; font-size: 0.95rem;">₱<span id="carryover_prev_budget">0.00</span></strong>
+                                </div>
+                                <div>
+                                    <span style="color: #64748b; font-size: 0.73rem; text-transform: uppercase; font-weight: 600; display: block;">Total Material Deductions:</span>
+                                    <strong style="color: #dc2626; font-size: 0.95rem;">− ₱<span id="carryover_prev_deductions">0.00</span></strong>
+                                    <div style="font-size: 0.72rem; color: #64748b;">(<span id="carryover_prev_reams">0</span> Reams Converted + Staples)</div>
+                                </div>
+                                <div>
+                                    <span style="color: #64748b; font-size: 0.73rem; text-transform: uppercase; font-weight: 600; display: block;">Unspent Budget Balance:</span>
+                                    <strong style="color: #15803d; font-size: 0.95rem;">= ₱<span id="carryover_unspent_budget">0.00</span></strong>
+                                </div>
+                                <div>
+                                    <span style="color: #64748b; font-size: 0.73rem; text-transform: uppercase; font-weight: 600; display: block;">Prior DCS Net Profit:</span>
+                                    <strong style="color: #0284c7; font-size: 0.95rem;">+ ₱<span id="carryover_net_profit">0.00</span></strong>
+                                </div>
+                            </div>
+                            <div style="border-top: 1px dashed #bbf7d0; padding-top: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                                <span style="color: #166534; font-weight: 700;">Combined Rollover Available:</span>
+                                <span style="font-size: 1.05rem; font-weight: 800; color: #15803d;">₱<span id="carryover_total_amount">0.00</span></span>
+                            </div>
+                        </div>
+
+                        <!-- Course Leftover Sheets Credited Notice -->
+                        <div id="carryover_course_sheets_notice" style="display: none; font-size: 0.8rem; color: #166534; background: #dcfce7; border-radius: 4px; padding: 6px 10px; font-weight: 500;">
+                            📦 <strong>Excess Raw Paper Sheets Credited:</strong> <span id="carryover_course_sheets_text">--</span>
+                        </div>
+                    </div>
+
                     <!-- Clean, Structured Intelligent Recommendation Advisory Card -->
                     <div id="budget_recommendation_card" style="margin-top: 10px; background: #ffffff; border: 1px solid #d1fae5; border-left: 5px solid #10b981; border-radius: 8px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: all 0.25s ease;">
                         <!-- Top Row: Status Title Badge & Apply Button -->
@@ -344,14 +393,15 @@
                             </div>
 
                             <!-- Detailed Metrics Grid -->
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.82rem;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.82rem;">
                                 <div>
-                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Student Headcount</div>
-                                    <div id="rec_metric_students" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">0 students</div>
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Booklet Demand</div>
+                                    <div id="rec_metric_students" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">0 booklets</div>
                                 </div>
                                 <div>
                                     <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Paper Reams</div>
                                     <div id="rec_metric_reams" style="font-weight: 700; color: #2563eb; font-size: 0.95rem; margin-top: 2px;">0 reams</div>
+                                    <div id="rec_metric_reams_breakdown" style="font-size: 0.75rem; color: #64748b; margin-top: 4px; font-weight: 600; display: flex; flex-direction: column; gap: 3px;">-</div>
                                 </div>
                                 <div>
                                     <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Staples Boxes</div>
@@ -368,7 +418,9 @@
                         <div id="rec_pending_container" style="display: none; padding: 4px 0; color: #334155; font-size: 0.85rem; line-height: 1.5;">
                             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                 <span style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 0.85rem; font-weight: 700; padding: 4px 10px; border-radius: 6px;">
-                                    👥 <span id="rec_pending_count">0</span> Enrolled Students Detected
+                                    👥 <span style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-size: 0.85rem; font-weight: 700; padding: 4px 10px; border-radius: 6px;">
+                                    📘 <span id="rec_pending_count">0</span> Booklet Demand Detected
+                                </span> Enrolled Students Detected
                                 </span>
                             </div>
                             <p style="margin: 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
@@ -762,6 +814,10 @@
 
 
     <script>
+        const SETTINGS_CACHE_KEY = 'bookletlog_settings_cache';
+        const PERIOD_CONFIGS_CACHE_KEY = 'bookletlog_period_configs_cache';
+        const ACADEMIC_PROGRAMS_CACHE_KEY = 'bookletlog_academic_programs_cache';
+
         // --- AUTHENTICATION GUARD & RBAC ---
         const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         
@@ -924,123 +980,12 @@
         });
     }
 
-        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
-        fetch('/api/dss-alert')
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('notifBadge');
-                const panel = document.getElementById('notifPanel');
-                const bell = document.getElementById('notifBell');
 
-                if (data.has_enrollments === false) {
-                    badge.style.display = 'none';
-                    panel.style.borderLeftColor = '#64748b';
-                    panel.innerHTML = '📋 <strong>Awaiting Enrollments:</strong><br>No classes enrolled yet. Add or import classes in Manage Classes to activate decision support forecasts.';
-                } else if (data.alert) {
-                    badge.style.display = 'inline-block';
-                    bell.style.color = 'white'; 
-                    
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                    
-                    if (!sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data);
-                    }
-                } else {
-                    badge.style.display = 'none';
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                }
-            });
-
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        let data = {};
-        if (typeof dataOrMessage === 'object' && dataOrMessage !== null) {
-            data = dataOrMessage;
-        } else {
-            data = {
-                message: dataOrMessage,
-                reams_needed: reamsArg,
-                deficit_booklets: deficitBookletsArg,
-                deficit_sheets: deficitSheetsArg
-            };
-        }
-
-        const bCount = Number(data.deficit_booklets || 0);
-        const sCount = Number(data.deficit_sheets || 0);
-        const bufBooklets = Number(data.buffer_booklets || 0);
-        const bufSheets = Number(data.buffer_sheets || 0);
-        const bufPct = Number(data.buffer_percent !== undefined ? data.buffer_percent : 0);
-        const targetProduction = Number(data.target_production || (bCount + bufBooklets));
-        const totalSheets = Number(data.total_sheets_needed || (sCount + bufSheets));
-        const reams = Number(data.reams_needed || Math.ceil(totalSheets / 500));
-
-        if (document.getElementById('dssModal')) return;
-
-        const bufferRowHtml = bufBooklets > 0 ? `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🛡️ Safety Buffer (+${bufPct}%):</span>
-                <span style="font-weight: 700; color: #7e22ce;">+${bufBooklets.toLocaleString()} booklets (+${bufSheets.toLocaleString()} sheets)</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                <span style="font-weight: 600;">🎯 Target Production:</span>
-                <span style="font-weight: 700; color: #0369a1;">${targetProduction.toLocaleString()} booklets (${totalSheets.toLocaleString()} sheets)</span>
-            </div>
-        ` : '';
-
-        const modalHtml = `
-            <div id="dssModal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
-                <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
-                    <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
-                    <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
-                    
-                    <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; text-align: left; font-size: 0.92rem; color: #9f1239; line-height: 1.55;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; border-bottom: 1px dashed #fecdd3; padding-bottom: 6px;">
-                            <span style="font-weight: 600;">📦 Net Deficit:</span>
-                            <span style="font-weight: 700; color: #be123c;">${bCount.toLocaleString()} booklets (${sCount.toLocaleString()} sheets)</span>
-                        </div>
-                        ${bufferRowHtml}
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 2px;">
-                            <span style="font-weight: 700; font-size: 0.95rem;">🛒 Procurement Demand:</span>
-                            <span style="font-weight: 800; font-size: 1.05rem; color: #991b1b;">${reams} whole Ream(s)</span>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin: 0 0 24px 0;">
-                        To fulfill upcoming examination demand across enrolled class sections with your configured safety buffer, please procure the recommended paper stock before distribution begins.
-                    </p>
-                    
-                    <div style="display: flex; justify-content: center;">
-                        <button onclick="dismissDSS()" style="background-color: #2c3e50; color: white; border: none; padding: 12px 36px; border-radius: 6px; font-weight: 700; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 3px 8px rgba(44,62,80,0.25);" onmouseover="this.style.backgroundColor='#1a252f'; this.style.transform='translateY(-1px)';" onmouseout="this.style.backgroundColor='#2c3e50'; this.style.transform='none';">
-                            Acknowledge & Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHtml);
-    }
-
-    function dismissDSS() {
-            sessionStorage.setItem('dss_acknowledged', 'true');
-            const modal = document.getElementById('dssModal');
-            if (modal) modal.remove();
-            
-            const panel = document.getElementById('notifPanel');
-            if (panel) {
-                panel.style.display = 'block'; 
-                setTimeout(() => { panel.style.display = 'none'; }, 2500);
-            }
-        }
 
         // --- CORE SETTINGS LOGIC ---
         let currentTotalDemand = 0;
         let computedRecommendedBudget = 0;
+        let courseDemandList = [];
 
         function updateDependentFieldsState() {
             const periodEl = document.getElementById('active_period');
@@ -1286,12 +1231,45 @@
             const staplesPerBooklet = staplePerBEl ? (parseInt(staplePerBEl.value.trim(), 10) || 2) : 2;
             const staplesPerBox = staplePerBoxEl ? (parseInt(staplePerBoxEl.value.trim(), 10) || 1000) : 1000;
 
-            if (currentTotalDemand > 0 && yieldPerReam > 0 && reamPrice > 0) {
+            const bufferEl = document.getElementById('reorder_buffer_percent');
+            const bufferPct = bufferEl ? (parseFloat(bufferEl.value.trim()) || 0.0) : 0.0;
+
+            let totalBookletsDemand = 0;
+            let totalRoundedReams = 0;
+            let courseBreakdownParts = [];
+
+            if (courseDemandList && courseDemandList.length > 0) {
+                courseDemandList.forEach(c => {
+                    const cTarget = bufferPct > 0 ? Math.ceil(c.headcount * (1 + (bufferPct / 100))) : c.headcount;
+                    const cGrossSheets = cTarget * sheets;
+                    
+                    const prevExcess = (currentPreviousCourseExcess && currentPreviousCourseExcess[c.code]) 
+                        ? (currentPreviousCourseExcess[c.code].excess_sheets || 0) 
+                        : (c.prev_excess_sheets || 0);
+                    
+                    const cNetSheets = Math.max(0, cGrossSheets - prevExcess);
+                    const cReams = cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0;
+                    
+                    totalBookletsDemand += cTarget;
+                    totalRoundedReams += cReams;
+                    
+                    if (prevExcess > 0) {
+                        courseBreakdownParts.push(`<div style="line-height: 1.35;"><strong>${c.code}:</strong> ${cReams} Ream${cReams !== 1 ? 's' : ''} <span style="font-weight: normal; color: #64748b;">(Gross ${cGrossSheets.toLocaleString()} sh − ${prevExcess.toLocaleString()} leftover sh credited = ${cNetSheets.toLocaleString()} net sh)</span></div>`);
+                    } else {
+                        courseBreakdownParts.push(`<div style="line-height: 1.35;"><strong>${c.code}:</strong> ${cReams} Ream${cReams !== 1 ? 's' : ''} <span style="font-weight: normal; color: #64748b;">(${cNetSheets.toLocaleString()} sh)</span></div>`);
+                    }
+                });
+            } else {
+                totalBookletsDemand = currentTotalDemand;
+                totalRoundedReams = yieldPerReam > 0 ? Math.ceil(totalBookletsDemand / yieldPerReam) : 0;
+            }
+
+            if (totalBookletsDemand > 0 && yieldPerReam > 0 && reamPrice > 0) {
                 // --- STATE 1: ACTIVE RECOMMENDATION READY ---
-                const reamsNeeded = Math.ceil(currentTotalDemand / yieldPerReam);
+                const reamsNeeded = totalRoundedReams;
                 const paperBudget = reamsNeeded * reamPrice;
 
-                const totalStaplesNeeded = currentTotalDemand * (staplesPerBooklet > 0 ? staplesPerBooklet : 2);
+                const totalStaplesNeeded = totalBookletsDemand * (staplesPerBooklet > 0 ? staplesPerBooklet : 2);
                 const boxCapacity = staplesPerBox > 0 ? staplesPerBox : 1000;
                 const stapleBoxesNeeded = Math.ceil(totalStaplesNeeded / boxCapacity);
                 const staplesBudget = stapleBoxesNeeded * stapleBoxPrice;
@@ -1304,7 +1282,7 @@
                     card.style.background = '#ffffff';
                 }
                 if (cardTitle) {
-                    cardTitle.innerHTML = '<span style="color: #059669;">⚡</span> <span>Demand-Driven Material Budget Recommendation</span>';
+                    cardTitle.innerHTML = '<span style="color: #059669;">✨</span> <span>Demand-Driven Material Budget Recommendation</span>';
                     cardTitle.style.color = '#065f46';
                 }
 
@@ -1315,10 +1293,12 @@
                 const metricStudents = document.getElementById('rec_metric_students');
                 const metricYield = document.getElementById('rec_metric_yield');
                 const metricReams = document.getElementById('rec_metric_reams');
+                const metricReamsBreakdown = document.getElementById('rec_metric_reams_breakdown');
                 const metricStaples = document.getElementById('rec_metric_staples');
 
-                if (metricStudents) metricStudents.innerText = `${currentTotalDemand.toLocaleString()} students`;
+                if (metricStudents) metricStudents.innerText = `${totalBookletsDemand.toLocaleString()} booklets`;
                 if (metricReams) metricReams.innerText = `${reamsNeeded} ream${reamsNeeded !== 1 ? 's' : ''} (₱${paperBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                if (metricReamsBreakdown) metricReamsBreakdown.innerHTML = courseBreakdownParts.length > 0 ? courseBreakdownParts.join('') : '-';
                 if (metricStaples) metricStaples.innerText = `${stapleBoxesNeeded} box${stapleBoxesNeeded !== 1 ? 'es' : ''} (₱${staplesBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
                 if (metricYield) metricYield.innerText = `${yieldPerReam} booklets / ream`;
 
@@ -1329,9 +1309,9 @@
                 if (applyBtn) {
                     applyBtn.style.display = 'inline-block';
                     applyBtn.disabled = !isUnlocked;
-                    applyBtn.innerText = `⚡ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                    applyBtn.innerText = `✨ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
                 }
-            } else if (currentTotalDemand > 0) {
+            } else if (totalBookletsDemand > 0 || currentTotalDemand > 0) {
                 // --- STATE 2: ENROLLED HEADCOUNT DETECTED, AWAITING PARAMETERS ---
                 computedRecommendedBudget = 0.0;
                 
@@ -1341,13 +1321,12 @@
                     card.style.background = '#f8fafc';
                 }
                 if (cardTitle) {
-                    cardTitle.innerHTML = '<span style="color: #2563eb;">⏳</span> <span>Enrolled Headcount Detected — Awaiting Parameters</span>';
+                    cardTitle.innerHTML = '<span style="color: #2563eb;">⚙️</span> <span>Awaiting Cost & Consumption Parameters</span>';
                     cardTitle.style.color = '#1e40af';
                 }
                 if (pendingCountEl) {
-                    pendingCountEl.innerText = currentTotalDemand.toLocaleString();
+                    pendingCountEl.innerText = (totalBookletsDemand || currentTotalDemand).toLocaleString();
                 }
-
                 if (recActiveEl) recActiveEl.style.display = 'none';
                 if (recPendingEl) recPendingEl.style.display = 'block';
                 if (recZeroEl) recZeroEl.style.display = 'none';
@@ -1375,6 +1354,115 @@
                 if (applyBtn) {
                     applyBtn.style.display = 'none';
                     applyBtn.disabled = true;
+                }
+            }
+        }
+
+        let currentPreviousCarryover = 0.0;
+        let currentPreviousUnspent = 0.0;
+        let currentPreviousProfit = 0.0;
+        let currentPreviousPeriodName = "";
+        let currentPreviousSummary = null;
+        let currentPreviousCourseExcess = {};
+
+        function renderPreviousPeriodSummary(prevSum) {
+            const carryCard = document.getElementById('carryover_advisory_card');
+            if (!carryCard) return;
+
+            if (prevSum && prevSum.has_previous_period && (prevSum.total_carryover_available > 0 || (prevSum.course_excess_sheets && Object.keys(prevSum.course_excess_sheets).length > 0))) {
+                currentPreviousCarryover = prevSum.total_carryover_available || 0.0;
+                currentPreviousUnspent = prevSum.prev_unspent_budget || 0.0;
+                currentPreviousProfit = prevSum.prev_net_profit || 0.0;
+                currentPreviousPeriodName = prevSum.prev_period_name || "";
+                currentPreviousSummary = prevSum;
+                currentPreviousCourseExcess = prevSum.course_excess_sheets || {};
+
+                const elPeriod = document.getElementById('carryover_period_name');
+                const elPrevBudget = document.getElementById('carryover_prev_budget');
+                const elPrevDeductions = document.getElementById('carryover_prev_deductions');
+                const elPrevReams = document.getElementById('carryover_prev_reams');
+                const elUnspent = document.getElementById('carryover_unspent_budget');
+                const elProfit = document.getElementById('carryover_net_profit');
+                const elTotal = document.getElementById('carryover_total_amount');
+
+                if (elPeriod) elPeriod.innerText = currentPreviousPeriodName;
+                if (elPrevBudget) elPrevBudget.innerText = (prevSum.prev_budget || 0.0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                if (elPrevDeductions) elPrevDeductions.innerText = (prevSum.prev_prod_cost || 0.0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                if (elPrevReams) elPrevReams.innerText = (prevSum.prev_reams_conv || 0).toLocaleString();
+                if (elUnspent) elUnspent.innerText = currentPreviousUnspent.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                if (elProfit) elProfit.innerText = currentPreviousProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                if (elTotal) elTotal.innerText = currentPreviousCarryover.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                // Course excess sheets notice
+                const noticeEl = document.getElementById('carryover_course_sheets_notice');
+                const textEl = document.getElementById('carryover_course_sheets_text');
+                const courseExcessParts = [];
+                let totalExcessSheets = 0;
+                if (prevSum.course_excess_sheets) {
+                    for (const [code, info] of Object.entries(prevSum.course_excess_sheets)) {
+                        const excess = info.excess_sheets || 0;
+                        totalExcessSheets += excess;
+                        if (excess > 0) {
+                            courseExcessParts.push(`${code}: ${excess.toLocaleString()} leftover sheets`);
+                        }
+                    }
+                }
+                if (noticeEl && textEl) {
+                    if (courseExcessParts.length > 0) {
+                        textEl.innerText = `${courseExcessParts.join(' • ')} (Total: ${totalExcessSheets.toLocaleString()} sheets credited)`;
+                        noticeEl.style.display = 'block';
+                    } else {
+                        noticeEl.style.display = 'none';
+                    }
+                }
+
+                carryCard.style.display = 'block';
+            } else {
+                currentPreviousCarryover = 0.0;
+                currentPreviousSummary = null;
+                currentPreviousCourseExcess = {};
+                carryCard.style.display = 'none';
+            }
+        }
+
+        function applyCarryoverAsBudget() {
+            if (currentPreviousCarryover > 0) {
+                const budgetInput = document.getElementById('department_ream_budget');
+                if (budgetInput) {
+                    budgetInput.value = currentPreviousCarryover.toFixed(2);
+                    clearFieldError('department_ream_budget');
+                    
+                    budgetInput.classList.remove('applied-pulse');
+                    void budgetInput.offsetWidth;
+                    budgetInput.classList.add('applied-pulse');
+                    setTimeout(() => budgetInput.classList.remove('applied-pulse'), 1500);
+
+                    const btn = document.getElementById('btn_use_carryover_only');
+                    if (btn) {
+                        btn.innerText = '✅ Applied Rollover';
+                        setTimeout(() => { if (btn) btn.innerText = '⚡ Set as Beginning Balance'; }, 2000);
+                    }
+                }
+            }
+        }
+
+        function addCarryoverToRecommendation() {
+            const budgetInput = document.getElementById('department_ream_budget');
+            if (budgetInput) {
+                const baseRec = computedRecommendedBudget > 0 ? computedRecommendedBudget : 0.0;
+                const combined = Math.round((baseRec + currentPreviousCarryover + Number.EPSILON) * 100) / 100;
+                budgetInput.value = combined.toFixed(2);
+                clearFieldError('department_ream_budget');
+
+                budgetInput.classList.remove('applied-pulse');
+                void budgetInput.offsetWidth;
+                budgetInput.classList.add('applied-pulse');
+                setTimeout(() => budgetInput.classList.remove('applied-pulse'), 1500);
+
+                const btn = document.getElementById('btn_add_carryover_to_rec');
+                if (btn) {
+                    btn.innerText = `✅ Added (₱${combined.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                    setTimeout(() => { if (btn) btn.innerText = '+ Add to Recommended Budget'; }, 2000);
                 }
             }
         }
@@ -1493,7 +1581,16 @@
                 const res = await fetch(`/api/period-configuration?period=${encodeURIComponent(fullPeriod)}`);
                 const data = await res.json();
                 
-                if (data.total_demand !== undefined) currentTotalDemand = data.total_demand;
+                if (data.total_booklet_demand !== undefined || data.total_demand !== undefined) {
+                    currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
+                }
+                courseDemandList = data.course_demands || [];
+            if (data.previous_summary) {
+                renderPreviousPeriodSummary(data.previous_summary);
+            }
+
+                // Handle Prior Semester Carryover Advisory Card
+                renderPreviousPeriodSummary(data.previous_period_summary);
 
                 if (data.found) {
                     // Populate archived parameters for this period
@@ -1656,6 +1753,10 @@
                     }
                     showSaveSuccessModal(data.message, payload);
                     loadPeriodConfigurationsHistory();
+                    fetchSettings(true);
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
                 } else {
                     if (alertBox) {
                         alertBox.className = 'alert error';
@@ -1702,6 +1803,55 @@
             updateDependentFieldsState();
         }
 
+        function renderPeriodConfigurationsTable(list) {
+            const tbody = document.getElementById('periodArchiveTableBody');
+            if (!tbody) return;
+
+            if (!list || list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 24px;">No archived period configurations found.</td></tr>';
+                return;
+            }
+
+            const activePeriod = getFullAcademicPeriod();
+
+            tbody.innerHTML = list.map(item => {
+                const isActive = item.academic_period === activePeriod;
+                const statusBadge = isActive
+                    ? '<span class="badge-active">ACTIVE</span>'
+                    : '<span class="badge-archived">ARCHIVED</span>';
+
+                return `
+                    <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}">
+                        <td><strong>${escapeHtml(item.academic_period)}</strong></td>
+                        <td><code style="background:#eef2f7; padding:3px 8px; border-radius:4px; font-weight:bold; color:#2563eb; font-family:monospace;">${escapeHtml(item.semester_prefix || '-')}</code></td>
+                        <td>₱${Number(item.ream_price).toFixed(2)}</td>
+                        <td>₱${Number(item.booklet_price).toFixed(2)}</td>
+                        <td>${item.sheets_per_booklet} sheets</td>
+                        <td>${item.yield_per_ream} pcs/ream</td>
+                        <td style="color:#059669; font-weight:bold;">₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td>${item.reorder_buffer_percent}%</td>
+                        <td>${escapeHtml(item.configured_by || 'Admin')}</td>
+                        <td style="color:#64748b; font-size:0.84rem;">${escapeHtml(item.updated_at || '-')}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function restorePeriodConfigsCache() {
+            try {
+                const raw = sessionStorage.getItem(PERIOD_CONFIGS_CACHE_KEY);
+                if (raw) {
+                    const list = JSON.parse(raw);
+                    if (Array.isArray(list) && list.length > 0) {
+                        renderPeriodConfigurationsTable(list);
+                        return true;
+                    }
+                }
+            } catch (e) {}
+            return false;
+        }
+
         async function loadPeriodConfigurationsHistory() {
             const tbody = document.getElementById('periodArchiveTableBody');
             if (!tbody) return;
@@ -1709,110 +1859,120 @@
             try {
                 const res = await fetch('/api/period-configurations');
                 const list = await res.json();
-
-                if (!list || list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #94a3b8; padding: 24px;">No archived period configurations found.</td></tr>';
-                    return;
+                if (Array.isArray(list)) {
+                    try { sessionStorage.setItem(PERIOD_CONFIGS_CACHE_KEY, JSON.stringify(list)); } catch (e) {}
+                    renderPeriodConfigurationsTable(list);
                 }
-
-                const activePeriod = getFullAcademicPeriod();
-
-                tbody.innerHTML = list.map(item => {
-                    const isActive = item.academic_period === activePeriod;
-                    const statusBadge = isActive
-                        ? '<span class="badge-active">ACTIVE</span>'
-                        : '<span class="badge-archived">ARCHIVED</span>';
-
-                    return `
-                        <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}">
-                            <td><strong>${item.academic_period}</strong></td>
-                            <td><code style="background:#eef2f7; padding:3px 8px; border-radius:4px; font-weight:bold; color:#2563eb; font-family:monospace;">${item.semester_prefix || '-'}</code></td>
-                            <td>₱${Number(item.ream_price).toFixed(2)}</td>
-                            <td>₱${Number(item.booklet_price).toFixed(2)}</td>
-                            <td>${item.sheets_per_booklet} sheets</td>
-                            <td>${item.yield_per_ream} pcs/ream</td>
-                            <td style="color:#059669; font-weight:bold;">₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                            <td>${item.reorder_buffer_percent}%</td>
-                            <td>${item.configured_by || 'Admin'}</td>
-                            <td style="color:#64748b; font-size:0.84rem;">${item.updated_at || '-'}</td>
-                            <td>${statusBadge}</td>
-                        </tr>
-                    `;
-                }).join('');
             } catch(err) {
                 console.error("Error fetching period history:", err);
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #e74c3c; padding: 24px;">Error loading configuration audit log.</td></tr>';
+                if (tbody && !tbody.children.length) {
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; color: #e74c3c; padding: 24px;">Error loading configuration audit log.</td></tr>';
+                }
             }
         }
 
-        async function fetchSettings() {
+        function populateSettingsFields(data) {
+            if (!data) return;
+            currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
+            courseDemandList = data.course_demands || [];
+            
+            const isUnset = !data.active_period || data.active_period === "UNSET" || data.active_period.includes("UNSET") || !data.is_initialized;
+            
+            const prefixBadge = document.getElementById('generated_prefix_badge');
+            const activePeriodEl = document.getElementById('active_period');
+            const ayStartEl = document.getElementById('ay_start_year');
+            const ayEndEl = document.getElementById('ay_end_year');
+            const reamPriceEl = document.getElementById('ream_price');
+            const sheetsEl = document.getElementById('sheets_per_booklet');
+            const bookletPriceEl = document.getElementById('booklet_price');
+            const reorderBufferEl = document.getElementById('reorder_buffer_percent');
+            const budgetEl = document.getElementById('department_ream_budget');
+            const staplesBoxEl = document.getElementById('staples_box_price');
+            const staplesPerBookletEl = document.getElementById('staples_per_booklet');
+            const staplesPerBoxEl = document.getElementById('staples_per_box');
+
+            if (isUnset) {
+                if (prefixBadge) {
+                    prefixBadge.innerText = "--";
+                    prefixBadge.style.color = "#94a3b8";
+                }
+                if (activePeriodEl) activePeriodEl.value = '';
+                if (ayStartEl) ayStartEl.value = '';
+                if (ayEndEl) ayEndEl.value = '';
+                if (reamPriceEl) reamPriceEl.value = '';
+                if (sheetsEl) sheetsEl.value = '';
+                if (bookletPriceEl) bookletPriceEl.value = '';
+                if (reorderBufferEl) reorderBufferEl.value = '';
+                if (budgetEl) budgetEl.value = '';
+                if (staplesBoxEl) staplesBoxEl.value = '';
+                if (staplesPerBookletEl) staplesPerBookletEl.value = '';
+                if (staplesPerBoxEl) staplesPerBoxEl.value = '';
+            } else {
+                if (prefixBadge) {
+                    prefixBadge.innerText = data.current_semester_name || "--";
+                    prefixBadge.style.color = "#2c3e50";
+                }
+                if (reamPriceEl) reamPriceEl.value = data.ream_price && data.ream_price > 0 ? data.ream_price : '';
+                if (sheetsEl) sheetsEl.value = data.sheets_per_booklet && data.sheets_per_booklet > 0 ? data.sheets_per_booklet : '';
+                if (bookletPriceEl) bookletPriceEl.value = data.booklet_price && data.booklet_price > 0 ? data.booklet_price : '';
+                if (reorderBufferEl) reorderBufferEl.value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
+                if (budgetEl) budgetEl.value = data.department_ream_budget && data.department_ream_budget > 0 ? data.department_ream_budget : '';
+                if (staplesBoxEl) staplesBoxEl.value = (data.staples_box_price !== null && data.staples_box_price > 0) ? data.staples_box_price : '';
+                if (staplesPerBookletEl) staplesPerBookletEl.value = (data.staples_per_booklet !== null && data.staples_per_booklet > 0) ? data.staples_per_booklet : '';
+                if (staplesPerBoxEl) staplesPerBoxEl.value = (data.staples_per_box !== null && data.staples_per_box > 0) ? data.staples_per_box : '';
+                updateStaplesPreview();
+                
+                let fullPeriod = data.active_period || "";
+                let parts = fullPeriod.split(" | ");
+                let periodTerm = parts[0] || "";
+                if (periodTerm === "1st Sem - Midterms") periodTerm = "1st Sem - Midterm Exam";
+                else if (periodTerm === "1st Sem - Finals") periodTerm = "1st Sem - Final Exam";
+                else if (periodTerm === "2nd Sem - Midterms") periodTerm = "2nd Sem - Midterm Exam";
+                else if (periodTerm === "2nd Sem - Finals") periodTerm = "2nd Sem - Final Exam";
+                if (activePeriodEl) activePeriodEl.value = periodTerm;
+                
+                let ayStr = parts[1] || "";
+                let match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
+                if (match) {
+                    if (ayStartEl) ayStartEl.value = match[1];
+                    if (ayEndEl) ayEndEl.value = match[2];
+                } else {
+                    if (ayStartEl) ayStartEl.value = '';
+                    if (ayEndEl) ayEndEl.value = '';
+                }
+                updateGeneratedPrefix();
+            }
+
+            updateYieldPreview();
+            updateBufferPreview();
+            updateRecommendationBox();
+            updateDependentFieldsState();
+        }
+
+        function restoreSettingsCache() {
+            try {
+                const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && typeof parsed === 'object') {
+                        populateSettingsFields(parsed);
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not read settings cache:", e);
+            }
+            return false;
+        }
+
+        async function fetchSettings(isBackground = false) {
             try {
                 let res = await fetch('/api/settings');
                 let data = await res.json();
-                
-                currentTotalDemand = data.total_demand || 0;
-                
-                const isUnset = !data.active_period || data.active_period === "UNSET" || data.active_period.includes("UNSET") || !data.is_initialized;
-                
-                if (isUnset) {
-                    // Truly uninitialized / clean-slate state: keep all fields completely blank to force active user input
-                    document.getElementById('generated_prefix_badge').innerText = "--";
-                    document.getElementById('generated_prefix_badge').style.color = "#94a3b8";
-                    
-                    document.getElementById('active_period').value = '';
-                    document.getElementById('ay_start_year').value = '';
-                    document.getElementById('ay_end_year').value = '';
-                    
-                    document.getElementById('ream_price').value = '';
-                    document.getElementById('sheets_per_booklet').value = '';
-                    document.getElementById('booklet_price').value = '';
-                    document.getElementById('reorder_buffer_percent').value = '';
-                    document.getElementById('department_ream_budget').value = '';
-                    document.getElementById('staples_box_price').value = '';
-                    document.getElementById('staples_per_booklet').value = '';
-                    document.getElementById('staples_per_box').value = '';
-                } else {
-                    document.getElementById('generated_prefix_badge').innerText = data.current_semester_name || "--";
-                    document.getElementById('generated_prefix_badge').style.color = "#2c3e50";
-                    
-                    document.getElementById('ream_price').value = data.ream_price && data.ream_price > 0 ? data.ream_price : '';
-                    document.getElementById('sheets_per_booklet').value = data.sheets_per_booklet && data.sheets_per_booklet > 0 ? data.sheets_per_booklet : '';
-                    document.getElementById('booklet_price').value = data.booklet_price && data.booklet_price > 0 ? data.booklet_price : '';
-                    document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
-                    document.getElementById('department_ream_budget').value = data.department_ream_budget && data.department_ream_budget > 0 ? data.department_ream_budget : '';
-                    document.getElementById('staples_box_price').value = (data.staples_box_price !== null && data.staples_box_price > 0) ? data.staples_box_price : '';
-                    document.getElementById('staples_per_booklet').value = (data.staples_per_booklet !== null && data.staples_per_booklet > 0) ? data.staples_per_booklet : '';
-                    document.getElementById('staples_per_box').value = (data.staples_per_box !== null && data.staples_per_box > 0) ? data.staples_per_box : '';
-                    updateStaplesPreview();
-                    
-                    let fullPeriod = data.active_period || "";
-                    let parts = fullPeriod.split(" | ");
-                    let periodTerm = parts[0] || "";
-                    if (periodTerm === "1st Sem - Midterms") periodTerm = "1st Sem - Midterm Exam";
-                    else if (periodTerm === "1st Sem - Finals") periodTerm = "1st Sem - Final Exam";
-                    else if (periodTerm === "2nd Sem - Midterms") periodTerm = "2nd Sem - Midterm Exam";
-                    else if (periodTerm === "2nd Sem - Finals") periodTerm = "2nd Sem - Final Exam";
-                    document.getElementById('active_period').value = periodTerm;
-                    
-                    let ayStr = parts[1] || "";
-                    let match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
-                    if (match) {
-                        document.getElementById('ay_start_year').value = match[1];
-                        document.getElementById('ay_end_year').value = match[2];
-                    } else {
-                        document.getElementById('ay_start_year').value = '';
-                        document.getElementById('ay_end_year').value = '';
-                    }
-                    updateGeneratedPrefix();
-                }
-
-                updateYieldPreview();
-                updateBufferPreview();
-                updateRecommendationBox();
-                updateDependentFieldsState();
-
-                loadPeriodConfigurationsHistory();
-    
+                try {
+                    sessionStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(data));
+                } catch (e) {}
+                populateSettingsFields(data);
             } catch (err) {
                 console.error("Error loading settings", err);
                 updateDependentFieldsState();
@@ -1982,14 +2142,19 @@
         });
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 1. Instant 0ms synchronous UI hydration from cache
+            restoreSettingsCache();
+            restorePeriodConfigsCache();
+            restoreAcademicProgramsCache();
             updateDependentFieldsState();
-            loadAcademicPrograms();
+
+            // 2. Parallel background fetch (eliminating waterfall & asset delay)
+            Promise.all([
+                fetchSettings(true),
+                loadPeriodConfigurationsHistory(),
+                loadAcademicPrograms()
+            ]);
         });
-        updateDependentFieldsState();
-        window.onload = () => {
-            fetchSettings();
-            loadAcademicPrograms();
-        };
 
         // --- REAL-TIME SESSION POLLING ---
         setInterval(() => {
@@ -2016,8 +2181,9 @@
             window.lanSync.onUpdate((payload) => {
                 if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET") {
                     fetch('/api/settings').then(r => r.json()).then(data => {
-                        if (data && data.total_demand !== undefined) {
-                            currentTotalDemand = data.total_demand;
+                        if (data && (data.total_booklet_demand !== undefined || data.total_demand !== undefined)) {
+                            currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
+                            courseDemandList = data.course_demands || [];
                             updateRecommendationBox();
                         }
                     }).catch(e => console.error("LAN sync settings refresh error:", e));
@@ -2031,6 +2197,21 @@
     // --- ACADEMIC PROGRAMS & SECTION PREFIX MANAGEMENT ---
     let cachedAcademicPrograms = [];
 
+    function restoreAcademicProgramsCache() {
+        try {
+            const raw = sessionStorage.getItem(ACADEMIC_PROGRAMS_CACHE_KEY);
+            if (raw) {
+                const programs = JSON.parse(raw);
+                if (Array.isArray(programs) && programs.length > 0) {
+                    cachedAcademicPrograms = programs;
+                    renderAcademicProgramsTable(programs);
+                    return true;
+                }
+            }
+        } catch (e) {}
+        return false;
+    }
+
     async function loadAcademicPrograms() {
         const tbody = document.getElementById('academicProgramsTableBody');
         if (!tbody) return;
@@ -2039,13 +2220,18 @@
             const data = await res.json();
             if (data.status === 'success' && data.programs) {
                 cachedAcademicPrograms = data.programs;
+                try {
+                    sessionStorage.setItem(ACADEMIC_PROGRAMS_CACHE_KEY, JSON.stringify(data.programs));
+                } catch (e) {}
                 renderAcademicProgramsTable(data.programs);
-            } else {
+            } else if (!tbody.children.length) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Failed to load programs: ${data.message || 'Unknown error'}</td></tr>`;
             }
         } catch (err) {
             console.error("Failed to fetch academic programs:", err);
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Error connecting to server.</td></tr>`;
+            if (!tbody.children.length) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Error connecting to server.</td></tr>`;
+            }
         }
     }
 

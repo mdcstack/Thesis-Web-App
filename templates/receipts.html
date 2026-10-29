@@ -33,10 +33,9 @@
         .header { background-color: #2c3e50; color: white; padding: 20px 40px; text-align: center; width: 100%; }
         .header h1 { font-size: 1.5rem; margin: 0; letter-spacing: 1px; }
 
-        /* Main Container */
-        .container { flex: 1; padding: 40px; max-width: 1200px; margin: 0 auto; width: 100%; }
+        /* Main Container - Widened to 1500px to stretch across browser space */
+        .container { flex: 1; padding: 40px; max-width: 1500px; margin: 0 auto; width: 100%; }
         
-        /* FIX: Changed width to 100% and added margin: 0 auto to center it properly */
         .card { 
             background: white; 
             padding: 30px; 
@@ -54,18 +53,20 @@
         
         .card-actions { display: flex; gap: 10px; }
         .btn-action-top { border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 0.95rem; font-weight: bold; transition: 0.3s; display: flex; align-items: center; gap: 6px; }
-        .btn-clear { background-color: #e74c3c; color: white; }
-        .btn-clear:hover { background-color: #c0392b; }
-        .btn-refresh { background-color: #34495e; color: white; }
-        .btn-refresh:hover { background-color: #2c3e50; }
 
         /* Filter Section Styles */
-        .filter-container { display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; align-items: center; }
-        .filter-container > select { flex: 1 1 180px; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
+        .filter-container { display: flex; gap: 12px; margin-bottom: 25px; flex-wrap: wrap; background: #ecf0f1; padding: 15px; border-radius: 6px; border-left: 4px solid #3498db; align-items: center; }
+        
+        /* Adjusted flex-basis to let items fit on one line more easily */
+        .filter-container > select { flex: 1 1 140px; padding: 0 12px; height: 44px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
 
         /* Dedicated Date Range Wrapper */
-        .date-range-group { display: flex; flex: 2 1 320px; gap: 10px; align-items: center; }
-        .date-range-group input[type="date"] { flex: 1; width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
+        .date-range-group { display: flex; flex: 1 1 280px; gap: 10px; align-items: center; }
+        .date-range-group input[type="date"] { flex: 1; width: 100%; padding: 0 12px; height: 44px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; }
+
+        /* Icon Refresh Button inside Filters */
+        .btn-refresh-icon { background-color: #34495e; color: white; border: none; width: 44px; height: 44px; border-radius: 4px; cursor: pointer; font-size: 1.2rem; transition: background 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .btn-refresh-icon:hover { background-color: #2c3e50; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 
         /* Table Styles */
         table { width: 100%; border-collapse: collapse; min-width: 600px; }
@@ -100,28 +101,21 @@
         @media (max-width: 900px) {
             .mobile-only { display: inline-block !important; }
             .desktop-only { display: none !important; }
-            /* 1. Hide the old desktop header entirely */
             .header { display: none !important; }
-            
-            /* 2. Turn ON the new fixed mobile top bar */
             .mobile-top-bar { display: flex; align-items: center; justify-content: flex-start; }
-            
-            /* 3. Push the rest of the page down so it doesn't hide behind the new fixed bar */
             body { padding-top: 60px; min-height: 100vh; min-height: 100dvh; }
             .container { padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; }
         }
-
-        @media (max-width: 900px) { .mobile-hide { display: none !important; } }
     </style>
 </head>
 <body>
 
-    <!-- NEW: Mobile-only Fixed Top Bar -->
+    <!-- Mobile-only Fixed Top Bar -->
     <div class="mobile-top-bar no-print">
         <div class="mobile-title">Public Receipt Portal</div>
     </div>
 
-    <!-- EXISTING: Desktop Header -->
+    <!-- Desktop Header -->
     <div class="header no-print">
         <h1> Public Receipt Portal</h1>
     </div>
@@ -138,8 +132,6 @@
                 <div class="card-actions">
                     <a href="/transaction-profile" class="btn-action-top" style="background-color: #2980b9; color: white; text-decoration: none;" title="View Overall Instructor Balances & Profiles">👤 Instructor Overall Profiles</a>
                     <a href="/distribution" id="backBtn" class="btn-action-top" style="background-color: #f39c12; color: white; text-decoration: none; display: none;">⬅ Back to Distribution</a>
-                    <button class="btn-action-top btn-clear" onclick="clearFilters()" title="Clear all search filters">❌ Clear Filters</button>
-                    <button class="btn-action-top btn-refresh" onclick="refreshData()" title="Pull latest records from server">🔄 Refresh Data</button>
                 </div>
             </div>
 
@@ -158,12 +150,17 @@
                 </select>
 
                 <select id="filterDept" onchange="onDeptChange()">
-                    <option value="">-- All Departments / Courses --</option>
+                    <option value="">-- All Departments --</option>
                 </select>
 
                 <select id="filterSection" onchange="applyFilters()">
                     <option value="">-- All Sections --</option>
                 </select>
+
+                <!-- Refresh / Reset Button inside the filter bar -->
+                <button type="button" onclick="refreshData()" class="btn-refresh-icon" title="Clear filters & Refresh">
+                    🔄
+                </button>
             </div>
 
             <div style="overflow-x: auto;">
@@ -361,12 +358,6 @@
         clearFilterInputs();
         fetchData();
     }
-
-    function clearFilters() {
-        clearFilterInputs();
-        updateSectionDropdown(""); 
-        applyFilters();
-    }
     
     function clearFilterInputs() {
         document.getElementById('filterStartDate').value = "";
@@ -389,7 +380,7 @@
         const deptSelect = document.getElementById('filterDept');
         if (deptSelect) {
             const curDept = deptSelect.value;
-            let deptHtml = '<option value="">-- All Departments / Courses --</option>';
+            let deptHtml = '<option value="">-- All Departments --</option>';
             globalPrograms.forEach(p => {
                 deptHtml += `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`;
             });
@@ -527,8 +518,6 @@
         // Financial Breakdown: Due, Paid, Remaining Balance
         const due = data.amount_due !== undefined ? parseFloat(data.amount_due) : parseFloat(data.amount);
         const paid = data.amount_paid !== undefined ? parseFloat(data.amount_paid) : 0.0;
-        
-        // FIX: Replaced newline calculation error with `due - paid`
         const balance = data.balance !== undefined ? parseFloat(data.balance) : Math.max(0.0, due - paid); 
 
         const dueEl = document.getElementById('r-amount-due-box');
