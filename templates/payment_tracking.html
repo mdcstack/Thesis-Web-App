@@ -806,7 +806,11 @@ function renderTable() {
         if (periodVal !== 'All') {
             const normPeriodVal = (periodVal || '').trim().toLowerCase();
             const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
-            const hasPaymentInPeriod = (enr.payments || []).some(p => (p.payment_period || '').trim().toLowerCase() === normPeriodVal);
+            const hasPaymentInPeriod = (enr.payments || []).some(p => {
+                const pColl = (p.collection_period || p.payment_period || '').trim().toLowerCase();
+                const pPay = (p.payment_period || '').trim().toLowerCase();
+                return pColl === normPeriodVal || pPay === normPeriodVal;
+            });
             periodMatch = (normEnrPeriod === normPeriodVal) || hasPaymentInPeriod || isRecentlyProcessed;
         }
 
@@ -831,19 +835,18 @@ function renderTable() {
             const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
             if (normEnrPeriod === normPeriodVal) {
                 tExpected += (enr.amount_due || 0);
-                tCollected += (enr.amount_paid || 0);
-                tOutstanding += (enr.balance || 0);
-            } else {
-                (enr.payments || []).forEach(p => {
-                    if ((p.payment_period || '').trim().toLowerCase() === normPeriodVal) {
-                        tCollected += (p.amount || 0);
-                    }
-                });
+                const dept = enr.department || 'Other';
+                deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
             }
-            const dept = enr.department || 'Other';
-            deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
+            // Realized cash collections received during this period
+            (enr.payments || []).forEach(p => {
+                const pColl = (p.collection_period || p.payment_period || '').trim().toLowerCase();
+                if (pColl === normPeriodVal) {
+                    tCollected += (p.amount || 0);
+                }
+            });
         });
-        tOutstanding = Math.max(0, tExpected - tCollected);
+        tOutstanding = Object.values(deptTotals).reduce((a, b) => a + b, 0);
     }
 
     const isFiltered = Boolean(searchVal || statusVal !== 'All' || teacherVal !== 'All' || deptVal !== 'All' || sectionVal !== 'All' || periodVal !== 'All');

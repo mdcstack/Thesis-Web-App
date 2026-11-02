@@ -145,12 +145,11 @@
     <a href="/history" class="nav-link staff-op" data-route="/history">📜 Process Return</a>
     <a href="/payment-tracking" class="nav-link staff-op" data-route="/payment-tracking">💳 Payment Tracking</a>
     <a href="/transaction-profile" class="nav-link viewer-nav" data-route="/transaction-profile">👤 Transaction Profile</a>
-    <a href="/receipts" class="nav-link viewer-nav" data-route="/receipts">🧾 Official Receipts</a>
+    <a href="/receipts" class="nav-link viewer-only" id="navReceipts" data-route="/receipts">🧾 Official Receipts</a>
 
     <!-- User Profile & Unified Logout -->
     <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
         <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 2px;">Loading...</p>
-        <p id="loggedInUsernameSub" style="color: #94a3b8; font-size: 0.78rem; margin-bottom: 4px; display: none;">@username</p>
         <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
         <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
             <span style="font-size: 1rem;">🚪</span> Log Out
@@ -415,16 +414,11 @@
 
             // Synchronous 0ms user profile hydration
             const userEl = document.getElementById('loggedInUser');
-            const subEl = document.getElementById('loggedInUsernameSub');
             const roleEl = document.getElementById('loggedInRole');
 
             if (userEl && user) {
                 if (user.full_name) {
                     userEl.innerText = user.full_name;
-                    if (subEl && user.username) {
-                        subEl.innerText = '@' + user.username;
-                        subEl.style.display = 'block';
-                    }
                 } else if (user.username) {
                     userEl.innerText = user.username.toUpperCase();
                 }
@@ -449,18 +443,21 @@
                 if (topUtility) topUtility.style.display = 'none';
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'block');
                 if (navUsers) navUsers.innerHTML = '👤 My Account & Security';
             } else if (user && user.role === 'Staff') {
                 if (headerTitle) headerTitle.innerText = 'Staff Portal';
                 if (topUtility) topUtility.style.display = 'block';
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
+                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
                 if (navUsers) navUsers.innerHTML = '👤 My Account';
             } else {
                 if (headerTitle) headerTitle.innerText = 'Bookledger';
                 if (topUtility) topUtility.style.display = 'block';
                 document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
+                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
                 if (navUsers) navUsers.innerHTML = '👥 Manage Users';
             }
         } catch (e) {

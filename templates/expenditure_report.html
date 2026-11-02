@@ -765,33 +765,51 @@
                 const targetBooklets = cMetric ? (cMetric.target_production || 0) : 0;
                 const sheetsNeeded = cMetric ? (cMetric.sheets_needed || 0) : (distBooklets * sheetsPerBooklet);
 
+                // Excess paper sheets carried over from previous semester (Stock on Hand)
+                const prevExcess = (cMetric && cMetric.prev_excess_sheets !== undefined)
+                    ? cMetric.prev_excess_sheets
+                    : (actualItem && actualItem.prev_excess_sheets !== undefined ? actualItem.prev_excess_sheets : 0);
+
+                // Gross requirement demanded/printed
+                const grossSheets = convertedSheets > 0
+                    ? convertedSheets
+                    : (cMetric && cMetric.gross_sheets_needed ? cMetric.gross_sheets_needed : (sheetsNeeded > 0 ? (sheetsNeeded + prevExcess) : (distBooklets * sheetsPerBooklet)));
+
+                // Net sheets deficit to be fulfilled by procuring bond paper reams
+                const netSheets = Math.max(0, grossSheets - prevExcess);
+
                 let courseWholeReams = 0;
-                let totalSheets = 0;
                 let subLabel = '';
                 let desc = '0 Ream(s) & 0 Sheet(s)';
                 let rightCol = `${distBooklets.toLocaleString()} pcs × ${sheetsPerBooklet} sheets/pc`;
 
                 if (convertedSheets > 0 || convertedReams > 0) {
-                    courseWholeReams = convertedReams > 0 ? convertedReams : Math.ceil(convertedSheets / 500);
-                    totalSheets = convertedSheets;
-                    const rPart = Math.floor(totalSheets / 500);
-                    const sPart = totalSheets % 500;
-                    subLabel = `${courseWholeReams} reams in production`;
-                    desc = `${rPart} Ream(s) & ${sPart} Sheet(s) (${totalSheets.toLocaleString()} total sheets)`;
-                } else if (sheetsNeeded > 0) {
-                    courseWholeReams = (cMetric && cMetric.reams_needed !== undefined) ? cMetric.reams_needed : Math.ceil(sheetsNeeded / 500);
-                    totalSheets = sheetsNeeded;
-                    const rPart = Math.floor(totalSheets / 500);
-                    const sPart = totalSheets % 500;
-                    subLabel = `${courseWholeReams} reams in production`;
-                    desc = `${rPart} Ream(s) & ${sPart} Sheet(s) (${totalSheets.toLocaleString()} total sheets)`;
+                    courseWholeReams = convertedReams > 0 ? convertedReams : (cMetric && cMetric.reams_needed !== undefined ? cMetric.reams_needed : (netSheets > 0 ? Math.ceil(netSheets / 500) : 0));
+                    const rPart = Math.floor(netSheets / 500);
+                    const sPart = netSheets % 500;
+                    subLabel = `${courseWholeReams} ${courseWholeReams === 1 ? 'ream' : 'reams'} in production`;
+                    if (prevExcess > 0) {
+                        desc = `<div>${rPart} Ream(s) & ${sPart} Sheet(s) net</div><div style="font-size: 0.74rem; color: #64748b; font-weight: normal; margin-top: 2px;">(Gross: ${grossSheets.toLocaleString()} sh − ${prevExcess.toLocaleString()} sh Stock on Hand)</div>`;
+                    } else {
+                        desc = `<div>${rPart} Ream(s) & ${sPart} Sheet(s)</div><div style="font-size: 0.74rem; color: #64748b; font-weight: normal; margin-top: 2px;">(${grossSheets.toLocaleString()} total sheets)</div>`;
+                    }
+                } else if (grossSheets > 0 || netSheets > 0) {
+                    courseWholeReams = (cMetric && cMetric.reams_needed !== undefined) ? cMetric.reams_needed : (netSheets > 0 ? Math.ceil(netSheets / 500) : 0);
+                    const rPart = Math.floor(netSheets / 500);
+                    const sPart = netSheets % 500;
+                    subLabel = `${courseWholeReams} ${courseWholeReams === 1 ? 'ream' : 'reams'} in production`;
+                    if (prevExcess > 0) {
+                        desc = `<div>${rPart} Ream(s) & ${sPart} Sheet(s) net</div><div style="font-size: 0.74rem; color: #64748b; font-weight: normal; margin-top: 2px;">(Gross: ${grossSheets.toLocaleString()} sh − ${prevExcess.toLocaleString()} sh Stock on Hand)</div>`;
+                    } else {
+                        desc = `<div>${rPart} Ream(s) & ${sPart} Sheet(s)</div><div style="font-size: 0.74rem; color: #64748b; font-weight: normal; margin-top: 2px;">(${grossSheets.toLocaleString()} total sheets)</div>`;
+                    }
                     rightCol = `${targetBooklets.toLocaleString()} pcs × ${sheetsPerBooklet} sheets/pc`;
                 } else {
                     subLabel = `0 reams in production`;
                 }
 
                 computedWholeReamsSum += courseWholeReams;
-                computedTotalSheetsSum += totalSheets;
+                computedTotalSheetsSum += netSheets;
 
                 return `
                     <tr style="background-color: #fafafa;">
@@ -814,7 +832,7 @@
 
             // Summary Row: Exact Sum of the individual course whole reams used in production
             const finalReamsWhole = computedWholeReamsSum > 0 ? computedWholeReamsSum : (wholeReamsPurchased > 0 ? wholeReamsPurchased : Math.ceil(computedTotalSheetsSum / 500));
-            const finalSheetsTotal = computedTotalSheetsSum > 0 ? computedTotalSheetsSum : (finalReamsWhole * 500);
+            const finalSheetsTotal = computedTotalSheetsSum;
             const finalReamsPart = Math.floor(finalSheetsTotal / 500);
             const finalSheetsPart = finalSheetsTotal % 500;
 
@@ -822,7 +840,16 @@
             const rWord = finalReamsPart === 1 ? 'ream' : 'reams';
             const sWord = finalSheetsPart === 1 ? 'paper sheet' : 'paper sheets';
 
-            document.getElementById('prodReamsCount').innerText = `${finalReamsWhole} Whole ${reamWord} (${finalReamsPart} ${rWord} & ${finalSheetsPart.toLocaleString()} ${sWord})`;
+            const totalPrevExcess = cpMetrics.total_prev_excess_credited || (progs.reduce((sum, p) => sum + ((coursesMap[p.code] && coursesMap[p.code].prev_excess_sheets) || 0), 0));
+
+            if (totalPrevExcess > 0) {
+                document.getElementById('prodReamsCount').innerHTML = `
+                    <div>${finalReamsWhole} Whole ${reamWord} (${finalReamsPart} ${rWord} & ${finalSheetsPart.toLocaleString()} ${sWord})</div>
+                    <div style="font-size: 0.74rem; color: #64748b; font-weight: normal; margin-top: 2px;">(${finalSheetsTotal.toLocaleString()} net sh deficit • ${totalPrevExcess.toLocaleString()} sh credited from prior stock)</div>
+                `;
+            } else {
+                document.getElementById('prodReamsCount').innerText = `${finalReamsWhole} Whole ${reamWord} (${finalReamsPart} ${rWord} & ${finalSheetsPart.toLocaleString()} ${sWord})`;
+            }
             
             const finalPaperCost = finalReamsWhole * reamPrice;
             document.getElementById('prodReamsTotal').innerText = `₱${finalPaperCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -904,7 +931,11 @@
             document.getElementById('isGross').innerText = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const isGrossSub = document.getElementById('isGrossSub');
             if (isGrossSub) {
-                isGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Net Pending: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (fin.prior_debt_collected && fin.prior_debt_collected > 0) {
+                    isGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (₱${(fin.current_exam_collected || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} current + ₱${fin.prior_debt_collected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} prior debt collected) | Net Pending: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                } else {
+                    isGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Net Pending: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                }
             }
             
             let totalProgramShares = 0;

@@ -3303,6 +3303,8 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
     prev_issued_count = len(prev_issued_booklets)
 
     # Materials cost in previous period
+    if prev_reams_conv == 0 and prev_issued_count > 0:
+        prev_reams_conv = math.ceil((prev_issued_count * prev_sheets_b) / 500)
     prev_paper_cost = round(prev_reams_conv * prev_ream_p, 2)
     prev_st_needed = max(prev_issued_count * prev_st_per_b, prev_generated_b * prev_st_per_b)
     prev_whole_boxes = math.ceil(prev_st_needed / prev_st_per_box) if prev_st_needed > 0 and prev_st_per_box > 0 else 0
@@ -3313,7 +3315,13 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
 
     # Realized cash collections & Net Operating Surplus in previous period (strictly aligned with expenditure report)
     prev_period_payments = db.query(models.PaymentRecord).filter(
-        models.PaymentRecord.payment_period == prev_period
+        or_(
+            models.PaymentRecord.collection_period == prev_period,
+            and_(
+                models.PaymentRecord.collection_period.is_(None),
+                models.PaymentRecord.payment_period == prev_period
+            )
+        )
     ).all()
     prev_collected = round(sum(pr.amount for pr in prev_period_payments), 2)
     prev_billed = round(sum((b.unit_price if b.unit_price is not None else prev_booklet_p) for b in prev_issued_booklets), 2)
@@ -3712,7 +3720,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         comp_summary = {code: {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0} for code in prog_codes}
         dept_counts = {code: 0 for code in prog_codes}
 
-        # Realized Cash Collections strictly scoped to payments collected during active_period
+        # Realized Cash Collections strictly scoped to payments collected during active_period (for cash register & KPI totals)
         period_payments = db.query(models.PaymentRecord).filter(
             or_(
                 models.PaymentRecord.collection_period == active_period,
@@ -3722,9 +3730,15 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 )
             )
         ).all()
+
+        all_db_payments = db.query(models.PaymentRecord).all()
+
+        # Enrollment row payments: strictly payments attributed to active_period transactions
         enr_payments_map = {}
-        for pr in period_payments:
-            enr_payments_map[pr.enrollment_id] = round(enr_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
+        for pr in all_db_payments:
+            p_period = pr.payment_period or pr.collection_period
+            if p_period == active_period:
+                enr_payments_map[pr.enrollment_id] = round(enr_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
 
         # Prior Unpaid Balance Carryover: ONLY computed and carried over when viewing the ACTIVE SEMESTER.
         # Archived semesters are frozen historical snapshots representing strictly that semester's transactions.
@@ -3749,10 +3763,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 price = float(b.unit_price) if b.unit_price is not None else float(booklet_price)
                 prior_billed_by_enr[b.enrollment_id] += price
 
-            all_db_payments = db.query(models.PaymentRecord).all()
             prior_payments = [
                 pr for pr in all_db_payments
-                if parse_period_chronological_rank(pr.collection_period or pr.payment_period) < target_rank
+                if parse_period_chronological_rank(pr.payment_period or pr.collection_period) < target_rank
             ]
             for pr in prior_payments:
                 prior_paid_by_enr[pr.enrollment_id] += float(pr.amount)
@@ -3887,9 +3900,18 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 
         # Realized cash collections strictly from payments collected during active_period
         collected_by_dept = {code: 0.0 for code in prog_codes}
+        current_exam_collected = 0.0
+        prior_debt_collected = 0.0
         for pr in period_payments:
             dept = resolve_enrollment_department(pr.enrollment, db)
             collected_by_dept[dept] = round(collected_by_dept.get(dept, 0.0) + pr.amount, 2)
+            pr_exam_period = pr.payment_period or pr.collection_period
+            if pr_exam_period == active_period:
+                current_exam_collected += float(pr.amount)
+            else:
+                prior_debt_collected += float(pr.amount)
+        current_exam_collected = round(current_exam_collected, 2)
+        prior_debt_collected = round(prior_debt_collected, 2)
 
         # Semester Total Billed strictly reflects the current semester's actual billings
         cs_billed = current_billed_by_dept.get("CS", 0.0)
@@ -3922,7 +3944,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         combined_subtotal = total_gross - total_dept_shares
         igp_share = combined_subtotal * 0.20
         
-        paper_cost = reams_converted * ream_price
+        effective_reams = reams_converted if reams_converted > 0 else (course_metrics.get("sum_course_rounded_reams", 0) or 0)
+        paper_cost = effective_reams * ream_price
         total_staples_consumed = total_generated * staples_per_booklet
         distributed_staples_consumed = total_issued * staples_per_booklet
         staples_needed = max(distributed_staples_consumed, total_staples_consumed)
@@ -3949,16 +3972,26 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             c_sheets = dept_c_info.get("sheets_total", 0)
             c_reams = dept_c_info.get("reams_whole", 0)
             
+            c_metric = course_metrics.get("courses", {}).get(code, {})
+            prev_excess = c_metric.get("prev_excess_sheets", 0)
+            gross_sheets = c_sheets if c_sheets > 0 else (c_metric.get("gross_sheets_needed", sheets_used))
+            net_sheets = max(0, gross_sheets - prev_excess)
+            course_reams_needed = c_reams if c_reams > 0 else (c_metric.get("reams_needed", math.ceil(net_sheets / 500) if net_sheets > 0 else 0))
+
             course_actual_paper[code] = {
                 "code": code,
                 "name": p_info["name"],
                 "color": p_info.get("color", "#3498db"),
                 "booklets_distributed": dist_b,
                 "sheets_consumed": sheets_used,
+                "gross_sheets": gross_sheets,
+                "prev_excess_sheets": prev_excess,
+                "net_sheets": net_sheets,
                 "reams_whole": r_whole,
                 "sheets_remainder": s_rem,
                 "reams_converted": c_reams,
                 "converted_sheets": c_sheets,
+                "reams_needed": course_reams_needed,
                 "display": f"{r_whole} ream(s) & {s_rem} paper sheets ({sheets_used:,} sheets)" if sheets_used > 0 else (
                     f"{c_reams} ream(s) converted ({c_sheets:,} sheets)" if c_sheets > 0 else "0 paper sheets"
                 )
@@ -4029,6 +4062,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "cs_collected": cs_collected,
             "it_collected": it_collected,
             "total_collected": total_collected,
+            "current_exam_collected": current_exam_collected,
+            "prior_debt_collected": prior_debt_collected,
             "collected_by_dept": collected_by_dept,
             "accounts_payable": igp_share,
             "paper_cost": paper_cost,
@@ -5482,6 +5517,7 @@ def get_payment_tracking(department: str = "ALL", period: Optional[str] = None, 
                         "payment_date": p_iso,
                         "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
                         "payment_period": pr.payment_period or resolved_period,
+                        "collection_period": pr.collection_period or pr.payment_period or resolved_period,
                         "recorded_by": resolve_display_clerk(pr.recorded_by, clerk_map),
                         "notes": pr.notes or ""
                     })
