@@ -1,9 +1,24 @@
 @echo off
-title BOOKLETLOG Secure LAN Server
+title BOOKLETLOG Diagnostic Server Console
 cd /d "%~dp0"
-IF NOT EXIST server.crt (
-    echo Generating local security certificates...
-    py -c "from werkzeug.serving import make_ssl_devcert; make_ssl_devcert('./server', host='192.168.55.100')"
+color 0b
+
+echo ==============================================================
+echo   BOOKLETLOG - Interactive Server Console
+echo ==============================================================
+echo.
+
+REM Resolve python executable
+set PYTHON_BIN=python
+where python >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    if exist "C:\Users\Matt\AppData\Local\Programs\Python\Python314\python.exe" (
+        set PYTHON_BIN="C:\Users\Matt\AppData\Local\Programs\Python\Python314\python.exe"
+    ) else (
+        set PYTHON_BIN=py
+    )
 )
-py run_servers.py
+
+%PYTHON_BIN% run_servers.py
+echo.
 pause

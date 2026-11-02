@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Booklet Template & Alignment - BOOKLETLOG</title>
+    <title>Booklet Template & Alignment - Bookledger</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { display: flex; height: 100vh; background-color: #f4f6f9; }
@@ -34,6 +34,9 @@
         /* Two Column Layout */
         .template-workspace { display: grid; grid-template-columns: 1.4fr 1fr; gap: 25px; align-items: start; }
         
+        /* Preset Slot Buttons */
+        .preset-slot-btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; cursor: pointer; transition: all 0.2s ease; user-select: none; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; }
+        .preset-slot-btn:hover:not(.active) { border-color: #94a3b8 !important; background: #f1f5f9 !important; color: #334155 !important; transform: translateY(-1px); }
         /* Canvas Card */
         .canvas-card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 3px 12px rgba(0,0,0,0.06); border-top: 4px solid #3498db; }
         .canvas-title { font-size: 1.15rem; color: #2c3e50; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -256,50 +259,7 @@
 </head>
 <body>
 
-    <div class="mobile-header no-print">
-        <div class="hamburger" onclick="toggleSidebar()">☰</div>
-        <div class="mobile-title">BOOKLETLOG</div>
-    </div>
-    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
-
-    <!-- SIDEBAR -->
-    <div class="sidebar no-print">
-        <!-- Notification Bell & Settings Icon Toolbar -->
-        <div style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-                <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                    🔔
-                    <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-                </div>
-                <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                    ⚙️
-                </a>
-            </div>
-            
-            <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-                Loading alerts...
-            </div>
-        </div>
-
-        <div class="sidebar-header">Proposed System</div>
-        <a href="/dashboard" class="nav-link">📊 Dashboard</a>
-        <a href="/enrollments" class="nav-link admin-only">🎓 Manage Classes</a>
-        <a href="/manage_users" class="nav-link" id="navManageUsers">👥 Manage Users</a>
-        <a href="/booklet-template" class="nav-link admin-only active mobile-hide">📄 Booklet Template</a>
-        <a href="/generator" class="nav-link mobile-hide">🖨️ PDF Generator</a> 
-        <a href="/qr-registration" class="nav-link mobile-hide">📥 QR Registration</a>
-        <a href="/distribution" class="nav-link">🛒 Point of Distribution</a>
-        <a href="/history" class="nav-link">📜 Transaction Trail</a>
-        <a href="/payment-tracking" class="nav-link">💳 Payment Tracking</a>
-
-        <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-            <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 5px;">Loading...</p>
-            <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-            <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-                <span style="font-size: 1rem;">🚪</span> Log Out
-            </button>
-        </div>
-    </div>
+    {% include 'sidebar.html' %}
 
     <!-- MAIN CONTENT -->
     <div class="main-content">
@@ -339,15 +299,15 @@
         <!-- Template Preset Slots Bar -->
         <div class="preset-tabs-bar" style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; background: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; flex-wrap: wrap;">
             <span style="font-weight: 700; color: #2c3e50; font-size: 0.95rem; margin-right: 8px;">2. Select Template Slot:</span>
-            <button type="button" class="preset-slot-btn" id="btnSlot1" onclick="switchSlot(1)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #3498db; background: #3498db; color: white; cursor: pointer; transition: all 0.2s;">
+            <button type="button" class="preset-slot-btn active" id="btnSlot1" onclick="switchSlot(1)">
                 📄 <span id="labelSlot1">Template 1</span>
                 <span id="badgeSlot1" style="background: rgba(255,255,255,0.25); font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
             </button>
-            <button type="button" class="preset-slot-btn" id="btnSlot2" onclick="switchSlot(2)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
+            <button type="button" class="preset-slot-btn" id="btnSlot2" onclick="switchSlot(2)">
                 📄 <span id="labelSlot2">Template 2</span>
                 <span id="badgeSlot2" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
             </button>
-            <button type="button" class="preset-slot-btn" id="btnSlot3" onclick="switchSlot(3)" style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 0.9rem; border: 2px solid #cbd5e1; background: #f8fafc; color: #64748b; cursor: pointer; transition: all 0.2s;">
+            <button type="button" class="preset-slot-btn" id="btnSlot3" onclick="switchSlot(3)">
                 📄 <span id="labelSlot3">Template 3</span>
                 <span id="badgeSlot3" style="background: #e2e8f0; color: #475569; font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 800;">...</span>
             </button>
@@ -554,12 +514,12 @@
                     </div>
 
                     <p style="font-size: 0.85rem; color: #555; margin-bottom: 12px; line-height: 1.4;">
-                        Upload the official front-cover PDF for <strong id="uploadDeptNameText">Computer Science (CS)</strong> (<span id="uploadSlotNameText" style="font-weight: 600; color: #2563eb;">Template 1</span>).
+                        Upload the official front-cover PDF for <strong id="uploadDeptNameText">Computer Science (CS)</strong> (<span id="uploadSlotNameText" style="font-weight: 600; color: #2563eb;">Slot 1</span>).
                     </p>
                     <div class="dropzone" onclick="document.getElementById('pdfFileInput').click()">
                         <div style="font-size: 2rem; margin-bottom: 6px;">📄</div>
                         <div style="font-weight: bold; color: #2c3e50; font-size: 0.95rem;">Click to browse or drop replacement PDF</div>
-                        <div style="font-size: 0.75rem; color: #888; margin-top: 4px;">Accepts .pdf files only &bull; Uploads to <span id="uploadDeptBadgeText">CS</span> <span id="uploadSlotBadgeText">Template 1</span></div>
+                        <div style="font-size: 0.75rem; color: #888; margin-top: 4px;">Accepts .pdf files only &bull; Uploads to <span id="uploadDeptBadgeText">CS</span> <span id="uploadSlotBadgeText">Slot 1</span></div>
                         <input type="file" id="pdfFileInput" accept=".pdf" style="display: none;" onchange="handleFileUpload(event)">
                     </div>
                 </div>
@@ -641,6 +601,8 @@
     </div>
 
     <script>
+        const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || '{}');
+
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -871,6 +833,19 @@
                 if (!btn) continue;
                 const isSelected = s === currentSlot;
                 btn.classList.toggle('active', isSelected);
+                const prog = cachedAcademicPrograms.find(p => p.code === currentDept);
+                const activeColor = prog ? (prog.color_hex || '#3498db') : (currentDept === 'CS' ? '#2563eb' : (currentDept === 'IT' ? '#7c3aed' : '#3498db'));
+                if (isSelected) {
+                    btn.style.background = activeColor;
+                    btn.style.borderColor = activeColor;
+                    btn.style.color = '#ffffff';
+                    btn.style.boxShadow = '0 3px 10px rgba(0,0,0,0.18)';
+                } else {
+                    btn.style.background = '#f8fafc';
+                    btn.style.borderColor = '#cbd5e1';
+                    btn.style.color = '#64748b';
+                    btn.style.boxShadow = 'none';
+                }
 
                 if (badge && latestDeptStatuses && latestDeptStatuses[currentDept] && latestDeptStatuses[currentDept].slots) {
                     const slotInfo = latestDeptStatuses[currentDept].slots.find(x => x.slot === s);
@@ -937,7 +912,6 @@
         }
 
         function checkUserSession() {
-            const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || '{}');
             if (activeUser && activeUser.username && activeUser.session_token) {
                 fetch('/api/verify-session', {
                     method: 'POST',
@@ -1009,7 +983,19 @@
 
             // Populate template name input
             const nameInput = document.getElementById('templateNameInput');
-            if (nameInput) nameInput.value = data.template_name || `Template ${slot}`;
+            const slotName = data.template_name || `Template ${slot}`;
+            if (nameInput) nameInput.value = slotName;
+
+            const uploadCardTitle = document.getElementById('uploadCardTitle');
+            if (uploadCardTitle) uploadCardTitle.innerText = dept;
+            const uploadSlotTitle = document.getElementById('uploadSlotTitle');
+            if (uploadSlotTitle) uploadSlotTitle.innerText = slotName;
+            const uploadSlotNameText = document.getElementById('uploadSlotNameText');
+            if (uploadSlotNameText) uploadSlotNameText.innerText = `Slot ${slot}`;
+            const uploadSlotBadgeText = document.getElementById('uploadSlotBadgeText');
+            if (uploadSlotBadgeText) uploadSlotBadgeText.innerText = `Slot ${slot}`;
+            const uploadDeptBadgeText = document.getElementById('uploadDeptBadgeText');
+            if (uploadDeptBadgeText) uploadDeptBadgeText.innerText = dept;
 
             // Load live cover template background if PDF file exists on disk
             const activePdfName = document.getElementById('activePdfName');
@@ -1399,6 +1385,22 @@
 
             // Tap anywhere on toast to dismiss immediately
             toast.onclick = dismissToast;
+            toast._dismissToast = dismissToast;
+
+            // Enforce max 3 toast notifications: dismiss oldest (topmost) toast first
+            const MAX_TOASTS = 3;
+            const activeToasts = Array.from(container.children).filter(el => !el.classList.contains('toast-dismissing'));
+            while (activeToasts.length >= MAX_TOASTS) {
+                const oldest = activeToasts.shift();
+                oldest.classList.add('toast-dismissing');
+                if (typeof oldest._dismissToast === 'function') {
+                    oldest._dismissToast();
+                } else {
+                    oldest.style.opacity = '0';
+                    oldest.style.transform = isMobile ? 'translateY(-20px)' : 'translateX(40px)';
+                    setTimeout(() => { if (oldest.parentElement) oldest.remove(); }, 260);
+                }
+            }
 
             toast.innerHTML = `
                 <div style="font-size: 1.25rem; line-height: 1; flex-shrink: 0; margin-top: 1px;">${icon}</div>
@@ -1466,7 +1468,7 @@
                     const uploadSlotTitle = document.getElementById('uploadSlotTitle');
                     if (uploadSlotTitle) uploadSlotTitle.innerText = tName;
                     const uploadSlotNameText = document.getElementById('uploadSlotNameText');
-                    if (uploadSlotNameText) uploadSlotNameText.innerText = tName;
+                    if (uploadSlotNameText) uploadSlotNameText.innerText = `Slot ${currentSlot}`;
                     const labelSlot = document.getElementById(`labelSlot${currentSlot}`);
                     if (labelSlot) labelSlot.innerText = tName;
 
@@ -1731,47 +1733,8 @@
             }
         }
 
-        // --- NOTIFICATION & POLLING ---
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
+        // (Notification, DSS Alerts and Sidebar Drawer are unified via sidebar.html)
 
-        fetch('/api/dss-alert').then(response => response.json()).then(data => {
-            const badge = document.getElementById('notifBadge');
-            const panel = document.getElementById('notifPanel');
-            const bell = document.getElementById('notifBell');
-            if (!badge || !panel || !bell) return;
-            if (data.alert) {
-                badge.style.display = 'inline-block';
-                bell.style.color = 'white'; 
-                if (activeUser && activeUser.role === 'Admin') {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                } else {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                }
-            } else {
-                badge.style.display = 'none';
-                if (data.has_enrollments === false) {
-                    panel.style.borderLeftColor = '#64748b';
-                    if (activeUser && activeUser.role === 'Admin') {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                    } else {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                    }
-                } else {
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                }
-            }
-        }).catch(err => console.log('Alert check error:', err));
-
-        function toggleSidebar() {
-            document.querySelector('.sidebar').classList.toggle('active');
-            document.querySelector('.sidebar-overlay').classList.toggle('active');
-        }
-
-        
     // --- IN-APP CONFIRMATION DIALOG SYSTEM ---
     function showAppConfirm(title, message, options = {}) {
         return new Promise(resolve => {

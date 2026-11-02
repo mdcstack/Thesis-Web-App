@@ -146,6 +146,36 @@ def render_template_preview_image(pdf_path=None, output_png_path=None, departmen
                 pass
         return None
 
+    # 1. Try pypdfium2 (Lightweight, ~10MB, official Google PDFium engine)
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(pdf_path)
+        if len(pdf) > 0:
+            page = pdf[0]
+            # scale=2 gives crisp 1684x1192 resolution for A4 landscape
+            pil_image = page.render(scale=2.0).to_pil()
+            pil_image.save(output_png_path, format="PNG")
+            return output_png_path
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"Notice: pypdfium2 render failed ({e}), trying fallback engines...")
+
+    # 2. Try PyMuPDF (fitz)
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        if len(doc) > 0:
+            page = doc[0]
+            pix = page.get_pixmap(dpi=150)
+            pix.save(output_png_path)
+            return output_png_path
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"Notice: PyMuPDF render failed ({e}), trying fallback engines...")
+
+    # 3. Try PySide6.QtPdf (Qt engine)
     try:
         from PySide6.QtGui import QGuiApplication
         from PySide6.QtCore import QSize
@@ -164,9 +194,34 @@ def render_template_preview_image(pdf_path=None, output_png_path=None, departmen
             img = doc.render(0, QSize(target_width, target_height))
             img.save(output_png_path)
             return output_png_path
+    except ImportError:
+        pass
     except Exception as e:
-        print(f"Warning: Failed to render PDF preview with PySide6 for {dept} slot {slot_num}: {e}")
-        
+        print(f"Notice: PySide6 render failed ({e}), trying fallback placeholder generator...")
+
+    # 4. Safe Placeholder Fallback (Ensures 404 NEVER occurs even if no rasterizer is installed)
+    try:
+        from PIL import Image, ImageDraw
+        w, h = 1684, 1192
+        img = Image.new("RGBA", (w, h), (248, 250, 252, 255))
+        draw = ImageDraw.Draw(img)
+        # Draw border & grid guidelines
+        draw.rectangle([(20, 20), (w - 20, h - 20)], outline=(203, 213, 225, 255), width=4)
+        draw.line([(w // 2, 20), (w // 2, h - 20)], fill=(226, 232, 240, 255), width=2)
+        # Informative text
+        pdf_name = os.path.basename(pdf_path)
+        msg1 = f"PDF Template Uploaded: {pdf_name}"
+        msg2 = f"Department: {dept} | Slot: {slot_num}"
+        msg3 = "Tip: Run 'pip install pypdfium2 pillow' or 'pip install PySide6' to enable high-res PDF rendering."
+        draw.text((w // 2, h // 2 - 40), msg1, fill=(30, 41, 59, 255), anchor="mm")
+        draw.text((w // 2, h // 2), msg2, fill=(100, 116, 139, 255), anchor="mm")
+        draw.text((w // 2, h // 2 + 40), msg3, fill=(148, 163, 184, 255), anchor="mm")
+        img.save(output_png_path, format="PNG")
+        print(f"Notice: Generated fallback preview placeholder at {output_png_path} (install pypdfium2 or PySide6 for full PDF rendering)")
+        return output_png_path
+    except Exception as e:
+        print(f"Warning: Failed to render preview image for {dept} slot {slot_num}: {e}")
+
     return None
 
 def draw_qr_code(canvas_obj, x, y, size, data):

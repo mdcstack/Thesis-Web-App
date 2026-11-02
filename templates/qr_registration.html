@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Registration - Proposed System</title>
+    <title>QR Registration - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
         
-        .main-content { flex: 1; padding: 25px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
+        .main-content { flex: 1; min-width: 0; padding: 25px; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; }
         
         .reg-workspace {
             display: grid;
@@ -159,9 +159,14 @@
         }
 
         .desktop-only { display: inline-block !important; }
-        /* Responsive Mobile Layout Fixes */
-        @media (max-width: 960px) {
+        /* Responsive Desktop Card Grid Collapse (Preserves Sidebar on the Left) */
+        @media (max-width: 1100px) {
             .reg-workspace { grid-template-columns: 1fr; }
+        }
+
+        /* Mobile Off-Canvas Drawer Alignment (Strictly Synchronized with sidebar.html) */
+        @media (max-width: 900px) {
+            .mobile-hide { display: none !important; }
             .desktop-only { display: none !important; }
             body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
             .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
@@ -186,8 +191,6 @@
                 font-size: 0.84rem !important;
             }
         }
-
-        @media (max-width: 900px) { .mobile-hide { display: none !important; } }
 
         /* Toast Notifications (Desktop Base Styles) */
         #toastContainer {
@@ -364,7 +367,7 @@
 
                 <!-- Printable Pack Label -->
                 <div class="qr-label-container" id="printableLabel">
-                    <h3 style="font-size: 1.2rem; margin-bottom: 6px;">BOOKLETLOG SUPPLY PACK</h3>
+                    <h3 style="font-size: 1.2rem; margin-bottom: 6px;">BOOKLEDGER SUPPLY PACK</h3>
                     <div id="labelDeptBadge" style="display: inline-block; padding: 4px 14px; border-radius: 20px; font-weight: bold; font-size: 0.85rem; margin-bottom: 10px; background: #2563eb; color: white; letter-spacing: 0.5px;">CS - COMPUTER SCIENCE</div>
                     <p id="labelPackId" style="font-family: monospace; font-size: 1.15rem; color: #166534; font-weight: bold; margin-bottom: 4px;"></p>
                     <p id="labelBookletCount" style="color: #1e293b; font-size: 0.95rem; font-weight: bold; margin-bottom: 3px;"></p>
@@ -570,6 +573,22 @@
             };
 
             toast.onclick = dismissToast;
+            toast._dismissToast = dismissToast;
+
+            // Enforce max 3 toast notifications: dismiss oldest (topmost) toast first
+            const MAX_TOASTS = 3;
+            const activeToasts = Array.from(container.children).filter(el => !el.classList.contains('toast-dismissing'));
+            while (activeToasts.length >= MAX_TOASTS) {
+                const oldest = activeToasts.shift();
+                oldest.classList.add('toast-dismissing');
+                if (typeof oldest._dismissToast === 'function') {
+                    oldest._dismissToast();
+                } else {
+                    oldest.style.opacity = '0';
+                    oldest.style.transform = isMobile ? 'translateY(-20px)' : 'translateX(40px)';
+                    setTimeout(() => { if (oldest.parentElement) oldest.remove(); }, 260);
+                }
+            }
 
             toast.innerHTML = `
                 <div style="font-size: 1.25rem; line-height: 1; flex-shrink: 0; margin-top: 1px;">${icon}</div>
@@ -619,60 +638,6 @@
                 window.location.href = '/login';
             });
         }
-
-        // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
-        function fetchDSSAlert() {
-            fetch('/api/dss-alert')
-                .then(response => response.json())
-                .then(data => {
-                    const badge = document.getElementById('notifBadge');
-                    const panel = document.getElementById('notifPanel');
-                    const bell = document.getElementById('notifBell');
-                    if (!badge || !panel || !bell) return;
-
-                    if (data.has_enrollments === false) {
-                        badge.style.display = 'none';
-                        panel.style.borderLeftColor = '#64748b';
-                        panel.innerHTML = '📋 <strong>Awaiting Enrollments:</strong><br>No classes enrolled yet. Add or import classes in Manage Classes to activate decision support forecasts.';
-                    } else if (data.alert) {
-                        badge.style.display = 'inline-block';
-                        bell.style.color = 'white'; 
-                        
-                        if (activeUser.role === 'Admin') {
-                            panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                        } else {
-                            panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                        }
-                        
-                        if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                            showDSSModal(data);
-                        }
-                    } else {
-                        badge.style.display = 'none';
-                        panel.style.borderLeftColor = '#27ae60'; 
-                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                    }
-                })
-                .catch(e => console.error("DSS alert error:", e));
-        }
-        fetchDSSAlert();
-
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        if (typeof window.showDSSModal === 'function') {
-            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
-        }
-    }
-
-    function dismissDSS() {
-        if (typeof window.dismissDSS === 'function') {
-            window.dismissDSS();
-        }
-    }
 
         // --- DYNAMIC COURSES & ACADEMIC PROGRAMS ---
         let activeProgramsMap = {};
@@ -1337,7 +1302,7 @@
             // Draw Title
             ctx.font = "bold 20px Arial";
             ctx.fillStyle = "#000000";
-            ctx.fillText("BOOKLETLOG SUPPLY PACK", canvas.width / 2, 38);
+            ctx.fillText("BOOKLEDGER SUPPLY PACK", canvas.width / 2, 38);
             
             // Draw Department Banner / Badge
             const department = dept || "CS";
@@ -1407,7 +1372,9 @@
         // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
         if (window.lanSync) {
             window.lanSync.onUpdate(() => {
-                fetchDSSAlert();
+                if (typeof window.refreshSidebarDSSAlert === 'function') {
+                    window.refreshSidebarDSSAlert();
+                }
                 loadPendingBatches(); // Automatically refresh pending batches whenever a PDF is generated or pack is activated
             });
         }

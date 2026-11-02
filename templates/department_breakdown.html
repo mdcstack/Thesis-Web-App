@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Departmental Revenue &amp; Cost Allocation Statement - BOOKLETLOG</title>
+    <title>Departmental Breakdown - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -127,11 +127,15 @@
         <div class="header-bar no-print">
             <div>
                 <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">📑 Departmental Revenue &amp; Cost Allocation Statement</h2>
-                <p style="color: #7f8c8d; margin-top: 5px; font-size: 0.95rem;">
-                    <strong>Active Period:</strong> <span class="activePeriodText">Loading...</span>
-                </p>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap;">
+                    <span style="color: #64748b; font-size: 0.95rem; font-weight: 600;">Exam Period:</span>
+                    <select id="periodFilterSelect" onchange="onPeriodFilterChange(this.value)" style="padding: 5px 12px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.9rem; font-weight: 600; color: #1e293b; background: #ffffff; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <option value="">Loading periods...</option>
+                    </select>
+                    <span id="periodStatusBadge" style="background-color: #27ae60; color: white; padding: 3px 9px; border-radius: 12px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">ACTIVE SEMESTER</span>
+                </div>
             </div>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                 <button class="btn-action btn-back" onclick="window.location.href='/dashboard'">
                     ← Back to Dashboard
                 </button>
@@ -149,7 +153,7 @@
                 <div class="card" style="border-left-color: #8e44ad;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Gross Sales Revenue</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGrossRevenue">₱0.00</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiGrossSub">Realized Cash Collections</p>
+                    <div style="color: #64748b; font-size: 0.85rem; margin-top: 4px; line-height: 1.4;" id="kpiGrossSub">Realized Cash Collections</div>
                 </div>
                 <div class="card" style="border-left-color: #27ae60;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Net Operating Surplus (DCS)</span>
@@ -159,7 +163,7 @@
                 <div class="card" style="border-left-color: #3498db;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Direct Material Consumption</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.45rem; font-weight: 800;" id="kpiPaperUsage">0 Reams + 0 Sheets</h2>
-                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiPaperDetails">CS: 0R 0s | IT: 0R 0s</p>
+                    <div style="color: #475569; font-size: 0.82rem; margin-top: 6px; line-height: 1.5;" id="kpiPaperDetails">CS: 0R 0s | IT: 0R 0s</div>
                     
                 </div>
             </div>
@@ -167,43 +171,47 @@
             <!-- Department Rosters Container -->
             <div id="deptRostersContainer"></div>
 
-            <!-- Executive Revenue Waterfall Card -->
+            <!-- Income Statement Card -->
             <div class="card" style="border-left-color: #27ae60;">
-                <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Income Statement &amp; Revenue Allocation Waterfall</h3>
+                <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Income Statement</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
                         <tbody>
                             <tr style="background-color: #2c3e50; color: white;">
-                                <th style="padding: 14px 18px; text-align: left; font-weight: bold;">
+                                <th colspan="2" style="padding: 14px 18px; text-align: left; font-weight: bold;">
                                     <div>Gross Sales Revenue (Realized Cash)</div>
                                     <div style="font-size: 0.78rem; font-weight: normal; color: #cbd5e1; margin-top: 2px;" id="wfGrossSub">Total Billed: ₱0.00 | Net Pending: ₱0.00</div>
                                 </th>
-                                <th style="padding: 14px 18px; text-align: right; font-weight: 800; font-size: 1.15rem;" id="wfGross">₱0.00</th>
+                                <th style="padding: 14px 18px; text-align: right; font-weight: 800; font-size: 1.15rem; width: 160px; white-space: nowrap;" id="wfGross">₱0.00</th>
                             </tr>
                             <tr style="background-color: #f8fafc;">
-                                <td colspan="2" style="padding: 10px 18px; font-weight: bold; color: #64748b; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Operating Deductions &amp; Transfers</td>
+                                <td colspan="3" style="padding: 10px 18px; font-weight: bold; color: #64748b; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px;">Operating Deductions &amp; Transfers</td>
                             </tr>
-                            <tbody id="wfDynamicDeductions">
+                        </tbody>
+                        <!-- DYNAMIC PER-COURSE 1% PROGRAM ALLOCATION ROWS -->
+                        <tbody id="wfDynamicDeductions">
                             <tr>
-                                <td style="padding: 12px 18px; color: #334155;">Less: CS Program Allocation (1%)</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfCSShare">₱0.00</td>
+                                <td colspan="3" style="padding: 12px 18px; color: #7f8c8d; text-align: center;">Loading Program Allocations...</td>
                             </tr>
-                            <tr>
-                                <td style="padding: 12px 18px; color: #334155;">Less: IT Program Allocation (1%)</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfITShare">₱0.00</td>
-                            </tr>
-                            </tbody>
-                            <tr style="background-color: #edf2f7; font-weight: bold;">
-                                <td style="padding: 12px 18px; color: #1e293b;">Adjusted Gross Revenue</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #1e293b;" id="wfSubtotal">₱0.00</td>
-                            </tr>
+                        </tbody>
+                        <tbody>
                             <tr>
                                 <td style="padding: 12px 18px; color: #334155;">Less: Campus IGP Remittance (20%)</td>
-                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;" id="wfUniShare">₱0.00</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600; width: 140px; white-space: nowrap;" id="wfUniShare">- ₱0.00</td>
+                                <td style="padding: 12px 18px; width: 160px;"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px 18px; color: #334155;">Less: Cost of Direct Materials (Paper &amp; Staples)</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600; width: 140px; white-space: nowrap;" id="wfProdCost">- ₱0.00</td>
+                                <td style="padding: 12px 18px; width: 160px;"></td>
+                            </tr>
+                            <tr style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-weight: bold;">
+                                <td colspan="2" style="padding: 12px 18px; color: #1e293b;">Total Operating Deductions</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #b91c1c; font-weight: 700; font-size: 1.05rem; width: 160px; white-space: nowrap;" id="wfTotalDeductions">- ₱0.00</td>
                             </tr>
                             <tr style="background-color: #27ae60; color: white;">
-                                <th style="padding: 16px 18px; text-align: left; font-size: 1.2rem; font-weight: 800;">Net Operating Surplus (DCS)</th>
-                                <th style="padding: 16px 18px; text-align: right; font-size: 1.35rem; font-weight: 800;" id="wfNetProfit">₱0.00</th>
+                                <th colspan="2" style="padding: 16px 18px; text-align: left; font-size: 1.2rem; font-weight: 800;">Net Operating Surplus (DCS)</th>
+                                <th style="padding: 16px 18px; text-align: right; font-size: 1.35rem; font-weight: 800; width: 160px; white-space: nowrap;" id="wfNetProfit">₱0.00</th>
                             </tr>
                         </tbody>
                     </table>
@@ -261,8 +269,11 @@
             }
         }
 
-        const DEPT_CACHE_KEY = 'bookletlog_dept_breakdown_cache';
+        const DEPT_CACHE_KEY = 'bookletlog_dept_breakdown_cache_v2';
         let activePeriod = "";
+        let currentSystemActivePeriod = "";
+        const urlParams = new URLSearchParams(window.location.search);
+        let selectedPeriod = urlParams.get('period') || "";
 
         function restoreDepartmentCache() {
             try {
@@ -270,12 +281,13 @@
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     if (parsed && parsed.computations_data) {
-                        if (parsed.active_period) {
-                            activePeriod = parsed.active_period;
+                        // Only show cache if viewing active period or if cached period matches URL request
+                        if (!selectedPeriod || parsed.active_period === selectedPeriod) {
+                            activePeriod = parsed.active_period || "";
                             document.querySelectorAll('.activePeriodText').forEach(el => el.innerText = activePeriod);
+                            renderBreakdown(parsed.computations_data, activePeriod, parsed.financials);
+                            return true;
                         }
-                        renderBreakdown(parsed.computations_data, activePeriod);
-                        return true;
                     }
                 }
             } catch (e) {
@@ -284,16 +296,83 @@
             return false;
         }
 
+        async function populatePeriodFilter() {
+            try {
+                const res = await fetch('/api/period-configurations');
+                const list = await res.json();
+                const sel = document.getElementById('periodFilterSelect');
+                if (!sel || !Array.isArray(list)) return;
+
+                sel.innerHTML = '';
+                list.forEach(cfg => {
+                    const periodName = cfg.academic_period || cfg.exam_period || '';
+                    if (!periodName) return;
+
+                    const isActive = Boolean(cfg.is_active || (currentSystemActivePeriod && periodName === currentSystemActivePeriod));
+                    if (isActive && !currentSystemActivePeriod) {
+                        currentSystemActivePeriod = periodName;
+                    }
+                    const opt = document.createElement('option');
+                    opt.value = periodName;
+                    opt.textContent = isActive 
+                        ? `${periodName} (Current Active)` 
+                        : `${periodName} (Archived)`;
+                    if (selectedPeriod && periodName === selectedPeriod) {
+                        opt.selected = true;
+                    } else if (!selectedPeriod && isActive) {
+                        opt.selected = true;
+                    }
+                    sel.appendChild(opt);
+                });
+
+                updatePeriodStatusBadge();
+            } catch (e) {
+                console.warn("Could not load period configurations:", e);
+            }
+        }
+
+        function updatePeriodStatusBadge() {
+            const badge = document.getElementById('periodStatusBadge');
+            if (!badge) return;
+            const isHistorical = selectedPeriod && currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
+            if (isHistorical) {
+                badge.style.backgroundColor = '#64748b';
+                badge.innerText = 'ARCHIVED / HISTORICAL';
+            } else {
+                badge.style.backgroundColor = '#27ae60';
+                badge.innerText = 'ACTIVE SEMESTER';
+            }
+        }
+
+        function onPeriodFilterChange(val) {
+            selectedPeriod = val;
+            const url = new URL(window.location.href);
+            if (val && currentSystemActivePeriod && val !== currentSystemActivePeriod) {
+                url.searchParams.set('period', val);
+            } else {
+                url.searchParams.delete('period');
+            }
+            window.history.replaceState({}, '', url.toString());
+
+            updatePeriodStatusBadge();
+            loadDepartmentBreakdownData(selectedPeriod, false);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            // 1. Instant 0ms synchronous render from cache
+            // 1. Instant 0ms synchronous render from cache if applicable
             restoreDepartmentCache();
 
-            // 2. Fetch fresh data in the background (stale-while-revalidate)
-            loadDepartmentBreakdownData(activePeriod, true);
+            // 2. Populate period filter dropdown
+            populatePeriodFilter();
+
+            // 3. Fetch fresh data in the background (stale-while-revalidate)
+            // By passing selectedPeriod (which defaults to "" unless explicitly set in URL),
+            // the server automatically loads the current active period
+            loadDepartmentBreakdownData(selectedPeriod, true);
 
             if (window.lanSync) {
                 window.lanSync.onUpdate(() => {
-                    loadDepartmentBreakdownData(activePeriod, true);
+                    loadDepartmentBreakdownData(selectedPeriod, true);
                 });
             }
         });
@@ -307,15 +386,27 @@
                         if (data.active_period) {
                             activePeriod = data.active_period;
                             document.querySelectorAll('.activePeriodText').forEach(el => el.innerText = activePeriod);
+                            if (!period) {
+                                currentSystemActivePeriod = activePeriod;
+                                const sel = document.getElementById('periodFilterSelect');
+                                if (sel && (!selectedPeriod || selectedPeriod === activePeriod)) {
+                                    sel.value = activePeriod;
+                                }
+                            }
+                            updatePeriodStatusBadge();
                         }
-                        try {
-                            sessionStorage.setItem(DEPT_CACHE_KEY, JSON.stringify({
-                                computations_data: data.computations_data,
-                                active_period: activePeriod,
-                                timestamp: Date.now()
-                            }));
-                        } catch (e) {}
-                        renderBreakdown(data.computations_data, activePeriod);
+                        // Only cache when viewing the true active period
+                        if (!period || period === currentSystemActivePeriod) {
+                            try {
+                                sessionStorage.setItem(DEPT_CACHE_KEY, JSON.stringify({
+                                    computations_data: data.computations_data,
+                                    financials: data.financials,
+                                    active_period: activePeriod,
+                                    timestamp: Date.now()
+                                }));
+                            } catch (e) {}
+                        }
+                        renderBreakdown(data.computations_data, activePeriod, data.financials);
                     } else if (!isBackground) {
                         alert("Could not load computation data: " + (data.message || "Unknown error"));
                     }
@@ -325,7 +416,7 @@
                 });
         }
 
-        function renderBreakdown(computationsPayload, periodStr) {
+        function renderBreakdown(computationsPayload, periodStr, financialsPayload) {
             const comp = computationsPayload.records || {};
             const summ = computationsPayload.summary || {};
             const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 6;
@@ -382,10 +473,14 @@
                 const dShare = dGross * 0.01;
                 totalDeptBudget += dShare;
 
+                const dPrior = (computationsPayload.prior_ar_by_dept && computationsPayload.prior_ar_by_dept[dept] !== undefined)
+                    ? computationsPayload.prior_ar_by_dept[dept]
+                    : 0;
                 deptStats[dept] = {
                     gross: dGross,
                     billed: dBilled,
                     pending: dPending,
+                    prior: dPrior,
                     booklets: dBooklets,
                     sheets: dSheets,
                     reams: dReams,
@@ -403,60 +498,82 @@
             const totalLoose = totalSheets % 500;
             const subtotalBalance = combinedGross - totalDeptBudget;
             const universityShare = subtotalBalance * 0.20;
-            const dcsNetProfit = subtotalBalance - universityShare;
+
+            // Direct Materials cost matching expenditure report
+            const fin = financialsPayload || computationsPayload.financials || {};
+            const productionCost = fin.production_cost !== undefined ? fin.production_cost : 0;
+            const totalDeductions = totalDeptBudget + universityShare + productionCost;
+            const dcsNetProfit = combinedGross - totalDeductions;
 
             // Populate Topline Cards
             document.getElementById('kpiGrossRevenue').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const kpiGrossSub = document.getElementById('kpiGrossSub');
             if (kpiGrossSub) {
                 if (totalPending > 0) {
-                    kpiGrossSub.innerText = `Realized Cash (₱${totalPending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending on account)`;
+                    kpiGrossSub.innerHTML = `<div>Realized Cash</div><div style="color: #b45309; font-size: 0.78rem; margin-top: 2px; font-weight: 600;">(₱${totalPending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending on account)</div>`;
                 } else if (totalBilled > 0) {
-                    kpiGrossSub.innerText = `100% Realized Cash (₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} fully settled)`;
+                    kpiGrossSub.innerHTML = `<div>100% Realized Cash</div><div style="color: #166534; font-size: 0.78rem; margin-top: 2px;">(₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} fully settled)</div>`;
                 } else {
                     kpiGrossSub.innerText = `Realized Cash Collections`;
                 }
             }
-            document.getElementById('kpiNetProfit').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const kpiNetEl = document.getElementById('kpiNetProfit');
+            if (kpiNetEl) {
+                kpiNetEl.innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                kpiNetEl.style.color = (totalPending > 0 || dcsNetProfit < 0) ? '#e74c3c' : '#27ae60';
+            }
             document.getElementById('kpiPaperUsage').innerText = `${totalReams} Ream(s) and ${totalLoose} paper sheets`;
             
-            const paperDetailsStr = programs.map(p => {
-                const s = deptStats[p.code];
-                return `${p.code}: ${s.reams}R ${s.loose}s (${s.sheets.toLocaleString()} sheets)`;
-            }).join(' | ') + ` [${sheetsPerBooklet} sheets/pc]`;
-            document.getElementById('kpiPaperDetails').innerText = paperDetailsStr;
+            const paperDetailsHtml = programs.map((p, idx) => {
+                const s = deptStats[p.code] || { reams: 0, loose: 0, sheets: 0 };
+                const isLast = idx === programs.length - 1;
+                const specSuffix = isLast ? ` <span style="color: #64748b; font-size: 0.75rem; font-weight: normal;">[${sheetsPerBooklet} sheets/pc]</span>` : '';
+                return `<div style="margin-top: 2px;"><strong>${escapeHtml(p.code)}:</strong> ${s.reams}R ${s.loose}s (${s.sheets.toLocaleString()} sheets)${specSuffix}</div>`;
+            }).join('');
+            document.getElementById('kpiPaperDetails').innerHTML = paperDetailsHtml;
 
             // Populate Waterfall Ledger
             document.getElementById('wfGross').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const wfGrossSub = document.getElementById('wfGrossSub');
             if (wfGrossSub) {
-                wfGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Net Pending: ₱${totalPending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                const totalPrior = Object.values(computationsPayload.prior_ar_by_dept || {}).reduce((a, b) => a + b, 0);
+                const priorNote = totalPrior > 0 ? ` | Prior Debt: ₱${totalPrior.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '';
+                wfGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${priorNote} | Net Pending: ₱${totalPending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
-            document.getElementById('wfSubtotal').innerText = `₱${subtotalBalance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('wfUniShare').innerText = `- ₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            document.getElementById('wfNetProfit').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            if (document.getElementById('wfUniShare')) {
+                document.getElementById('wfUniShare').innerText = `- ₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('wfProdCost')) {
+                document.getElementById('wfProdCost').innerText = `- ₱${productionCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('wfTotalDeductions')) {
+                document.getElementById('wfTotalDeductions').innerText = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            if (document.getElementById('wfNetProfit')) {
+                document.getElementById('wfNetProfit').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
 
-            // Render dynamic program deductions in the waterfall ledger
+            // Render dynamic program deductions in the waterfall ledger (3 columns)
             const wfDeductionsEl = document.getElementById('wfDynamicDeductions');
             if (wfDeductionsEl) {
-                wfDeductionsEl.innerHTML = programs.map(p => {
-                    const s = deptStats[p.code] || { share: 0, gross: 0 };
-                    return `
-                        <tr>
-                            <td style="padding: 12px 18px; color: #334155;">
-                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${p.color_hex || '#3498db'}; margin-right: 6px;"></span>
-                                Less: ${escapeHtml(p.name)} (${escapeHtml(p.code)}) Program Allocation (1% of ₱${s.gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} collected)
-                            </td>
-                            <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600;">- ₱${s.share.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        </tr>
-                    `;
-                }).join('');
-            } else {
-                if (document.getElementById('wfCSShare')) {
-                    document.getElementById('wfCSShare').innerText = `- ₱${(deptStats['CS'] ? deptStats['CS'].share : 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                }
-                if (document.getElementById('wfITShare')) {
-                    document.getElementById('wfITShare').innerText = `- ₱${(deptStats['IT'] ? deptStats['IT'].share : 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (programs.length === 0) {
+                    wfDeductionsEl.innerHTML = `<tr><td colspan="3" style="padding: 10px 18px; color: #7f8c8d; text-align: center;">No registered programs found.</td></tr>`;
+                } else {
+                    wfDeductionsEl.innerHTML = programs.map(p => {
+                        const s = deptStats[p.code] || { share: 0, gross: 0 };
+                        return `
+                            <tr>
+                                <td style="padding: 12px 18px; color: #334155;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${p.color_hex || '#3498db'}; margin-right: 6px;"></span>
+                                    Less: ${escapeHtml(p.name)} (${escapeHtml(p.code)}) Program Allocation (1% of ₱${s.gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} collected)
+                                </td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600; width: 140px; white-space: nowrap;">
+                                    - ₱${s.share.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                </td>
+                                <td style="padding: 12px 18px; width: 160px;"></td>
+                            </tr>
+                        `;
+                    }).join('');
                 }
             }
 
@@ -489,7 +606,7 @@
                                 Realized Gross Revenue: ₱${s.gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                             </span>
                             <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">
-                                Billed: ₱${s.billed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Pending: ₱${s.pending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                Billed: ₱${s.billed.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${s.prior > 0 ? ` | Prior Debt: ₱${s.prior.toFixed(2)}` : ''} | Pending: ₱${s.pending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                             </div>
                         </div>
                     </div>
@@ -534,31 +651,74 @@
                                 const rowLoose = sUsed % 500;
                                 const rowReamsDisplay = rowReams > 0 ? `${rowReams} Ream(s) + ${rowLoose} sheets` : `0 Reams + ${rowLoose} sheets`;
                                 const paidVal = (r.amount_paid !== undefined) ? r.amount_paid : (r.amount || 0);
-                                const dueVal = (r.amount_due !== undefined) ? r.amount_due : (r.headcount * bookletPrice);
-                                const pendingVal = (r.pending_balance !== undefined) ? r.pending_balance : Math.max(0, dueVal - paidVal);
 
-                                let statusHtml = '';
-                                if (pendingVal === 0 && dueVal > 0) {
-                                    statusHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
-                                } else if (paidVal > 0 && pendingVal > 0) {
-                                    statusHtml = `<span style="color: #d97706; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${pendingVal.toFixed(2)} Pending (Billed: ₱${dueVal.toFixed(2)})</span>`;
+                                const isHistoricalView = (computationsPayload.is_active_semester === false) ||
+                                    Boolean(selectedPeriod && currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod);
+
+                                const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * bookletPrice);
+                                // Prior debt only exists in the active semester
+                                const priorDebt = (!isHistoricalView && r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
+                                const dueVal = isHistoricalView ? currBilled : ((r.amount_due !== undefined) ? r.amount_due : (currBilled + priorDebt));
+                                const currentPending = Math.max(0, currBilled - paidVal);
+                                const totalPending = Math.max(0, dueVal - paidVal);
+
+                                // Line 1: Paid Transaction
+                                const paidLineHtml = `<div style="color: ${paidVal > 0 ? '#166534' : '#64748b'}; font-size: 0.95rem; font-weight: 700;">₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+
+                                // Line 2: Pending Status Badge
+                                let pendingBadgeHtml = '';
+                                if (priorDebt > 0) {
+                                    // When prior debt exists in the active semester, Line 2 is the current transaction pending
+                                    if (currentPending === 0) {
+                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
+                                    } else {
+                                        const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
+                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
+                                    }
                                 } else {
-                                    statusHtml = `<span style="color: #dc2626; font-size: 0.75rem; font-weight: 600;">⚠️ Unpaid (Billed: ₱${dueVal.toFixed(2)})</span>`;
+                                    // When no prior debt (including all historical/archived views)
+                                    if (totalPending === 0 && dueVal > 0) {
+                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
+                                    } else if (totalPending > 0) {
+                                        const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
+                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${totalPending.toFixed(2)} Pending</span>`;
+                                    } else {
+                                        pendingBadgeHtml = `<span style="color: #64748b; font-size: 0.75rem; font-weight: 500;">No Balance Due</span>`;
+                                    }
                                 }
+
+                                // Line 3: Prior Debt (strictly ONLY rendered if priorDebt > 0 and NOT in historical view)
+                                let priorDebtLineHtml = '';
+                                if (priorDebt > 0 && !isHistoricalView) {
+                                    priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${priorDebt.toFixed(2)} prior debt</div>`;
+                                }
+
+                                // Line 4 (or Line 3 if no prior debt): Billed Amount
+                                let billedLineHtml = '';
+                                if (dueVal > 0) {
+                                    billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
+                                }
+
+                                const bookletUnitsDisplay = (r.headcount > 0)
+                                    ? `<div style="font-weight: bold; color: #0f172a;">${r.headcount} pcs</div>`
+                                    : `<div style="font-weight: 600; color: #64748b;">0 pcs</div><div style="font-size: 0.72rem; color: #94a3b8; font-weight: normal;">(No issuance this period)</div>`;
+
+                                const materialUsageDisplay = (r.headcount > 0)
+                                    ? `<div>${rowReamsDisplay}</div><div style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(${sUsed.toLocaleString()} sheets)</div>`
+                                    : `<div style="color: #94a3b8; font-size: 0.85rem;">—</div>`;
 
                                 rostersHtml += `
                                 <tr>
                                     <td style="font-weight: 600; color: #0f172a;">${escapeHtml(r.teacher)}</td>
                                     <td>${escapeHtml(r.subject)}</td>
                                     <td><strong style="color: #2563eb;">${escapeHtml(r.section)}</strong></td>
-                                    <td style="text-align: center; font-weight: bold;">${r.headcount} pcs</td>
-                                    <td style="text-align: center; color: #2c3e50; font-weight: 600;">
-                                        <div>${rowReamsDisplay}</div>
-                                        <div style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(${sUsed.toLocaleString()} sheets)</div>
-                                    </td>
+                                    <td style="text-align: center;">${bookletUnitsDisplay}</td>
+                                    <td style="text-align: center; color: #2c3e50; font-weight: 600;">${materialUsageDisplay}</td>
                                     <td style="text-align: right; font-weight: 600;">
-                                        <div style="color: ${paidVal > 0 ? '#166534' : '#64748b'}; font-size: 0.95rem;">₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-                                        <div style="margin-top: 2px;">${statusHtml}</div>
+                                        ${paidLineHtml}
+                                        <div style="margin-top: 2px;">${pendingBadgeHtml}</div>
+                                        ${priorDebtLineHtml}
+                                        ${billedLineHtml}
                                     </td>
                                 </tr>
                                 `;

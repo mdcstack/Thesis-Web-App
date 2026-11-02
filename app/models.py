@@ -90,6 +90,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     username = Column(String(50), unique=True, index=True)
+    full_name = Column(String(100), nullable=True)
     password = Column(String(255))
     role = Column(String(20))
     department = Column(String(10))
@@ -185,6 +186,8 @@ class PaymentRecord(Base):
     amount = Column(Float, nullable=False)
     balance_after = Column(Float, nullable=False)
     payment_date = Column(DateTime, default=datetime.now)
+    payment_period = Column(String(100), nullable=True, index=True)  # Receipt period being settled e.g. "1st Sem - Midterms"
+    collection_period = Column(String(100), nullable=True, index=True) # Cash basis period when payment was collected
     recorded_by = Column(String(100), default="System Clerk")
     notes = Column(String(255), nullable=True)
 

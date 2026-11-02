@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Trail - Proposed System</title>
+    <title>Process Return &amp; Audit Trail - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -974,55 +974,6 @@ ${message}`));
             }
             await showAppAlert("Network Error", "Could not process return. Please check your network connection and try again.", "error");
         });
-    }
-
-    // --- DSS ALERT ---
-    fetch('/api/dss-alert').then(res => res.json()).then(data => {
-        const badge = document.getElementById('notifBadge');
-        const panel = document.getElementById('notifPanel');
-        const bell = document.getElementById('notifBell');
-        if (data.alert) {
-            badge.style.display = 'inline-block';
-            bell.style.color = 'white'; 
-            if (activeUser.role === 'Admin') {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-            } else {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-            }
-            if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                showDSSModal(data);
-            }
-        } else {
-            badge.style.display = 'none';
-            if (data.has_enrollments === false) {
-                panel.style.borderLeftColor = '#64748b';
-                if (activeUser && activeUser.role === 'Admin') {
-                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                } else {
-                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                }
-            } else {
-                panel.style.borderLeftColor = '#27ae60'; 
-                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-            }
-        }
-    });
-
-    function toggleNotifPanel() {
-        const panel = document.getElementById('notifPanel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-
-    function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        if (typeof window.showDSSModal === 'function') {
-            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
-        }
-    }
-
-    function dismissDSS() {
-        if (typeof window.dismissDSS === 'function') {
-            window.dismissDSS();
-        }
     }
 
     // --- REAL-TIME SESSION POLLING ---

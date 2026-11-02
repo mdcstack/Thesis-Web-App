@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Tracking - BOOKLETLOG</title>
+    <title>Payment Tracking - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -302,22 +302,10 @@
             <div class="filter-container">
                 <input type="text" id="searchInput" placeholder="🔍 Search Instructor, Section, or Subject..." style="flex: 1.5; min-width: 280px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 2px solid #3498db; border-radius: 4px; background-color: #fff; outline: none; transition: 0.3s; flex-shrink: 0;">
 
-                <!-- Date Filter with Dedicated Range Toggle -->
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; flex-shrink: 0;">
-                    <div style="display: flex; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
-                        <label id="dateLabel" for="fromDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">Date:</label>
-                        <input type="date" id="fromDate" title="Filter by date" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
-                    </div>
-
-                    <div id="toDateGroup" style="display: none; align-items: center; background: white; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; height: 44px; min-width: 150px;">
-                        <label for="toDate" style="font-size: 0.85rem; font-weight: bold; color: #7f8c8d; margin-right: 6px; white-space: nowrap;">To:</label>
-                        <input type="date" id="toDate" title="End date (Optional)" style="border: none; outline: none; font-size: 0.9rem; color: #2c3e50; width: 100%; background: transparent; cursor: pointer; padding: 0;">
-                    </div>
-
-                    <button type="button" id="toggleDateRangeBtn" onclick="toggleDateRangeMode()" class="btn-toggle-range" title="Toggle date range (From - To)">
-                        📅 Range
-                    </button>
-                </div>
+                <!-- Exam Semester Period Filter -->
+                <select id="filterPeriod" onchange="onPeriodChange()" style="flex: 1.2; min-width: 200px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 2px solid #3498db; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0; font-weight: 600; color: #2c3e50;" title="Filter by Examination Semester Period">
+                    <option value="All">-- All Exam Periods --</option>
+                </select>
 
                 <!-- Instructor Filter -->
                 <select id="filterTeacher" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
@@ -353,7 +341,7 @@
                 <thead>
                     <tr>
                         <th onclick="sortTable('teacher_name')" style="cursor: pointer; min-width: 180px;">Instructor ↕️</th>
-                        <th onclick="sortTable('section')" style="cursor: pointer; min-width: 220px;">Section &amp; Subject ↕️</th>
+                        <th onclick="sortTable('section')" style="cursor: pointer; min-width: 200px;">Section &amp; Subject ↕️</th>
                         <th onclick="sortTable('distribution_date')" style="cursor: pointer; min-width: 130px;">Issued Date ↕️</th>
                         <th onclick="sortTable('amount_due')" style="cursor: pointer; min-width: 120px;">Amount Due ↕️</th>
                         <th onclick="sortTable('amount_paid')" style="cursor: pointer; min-width: 120px;">Amount Paid ↕️</th>
@@ -379,6 +367,7 @@
                 <div id="calcModalSubtitle" style="font-size: 0.9rem; color: #555; text-align: left;">
                     <strong id="calcInstructorName">Instructor</strong> &bull; <span id="calcSectionSubject">Section &bull; Subject</span>
                     <span id="calcDeptBadge" class="badge" style="background-color: #3498db; color: white; margin-left: 6px; font-size: 0.75rem;">CS</span>
+                    <small id="calcPeriodBadge" style="color: #3498db; font-weight: bold; margin-left: 8px;">[Exam Period]</small>
                 </div>
             </div>
             <button onclick="closeBreakdownModal()" style="background: none; border: none; font-size: 1.6rem; color: #95a5a6; cursor: pointer; line-height: 1;" title="Close Modal">&times;</button>
@@ -444,7 +433,8 @@
                     <thead style="background: #f8f9fa; border-bottom: 2px solid #e1e8ed; position: sticky; top: 0; z-index: 1;">
                         <tr>
                             <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; width: 35px; text-align: center;">#</th>
-                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 150px;">Date &amp; Time</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 140px;">Date &amp; Time</th>
+                            <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 130px;">Payment Period</th>
                             <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 100px; text-align: right;">Amount Paid</th>
                             <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 110px; text-align: right;">Balance After</th>
                             <th style="padding: 8px 10px; color: #2c3e50; font-weight: bold; min-width: 110px;">Received By</th>
@@ -474,8 +464,10 @@
         <p style="color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">Enter the amount received from the instructor.</p>
         
         <input type="hidden" id="payEnrollmentId">
+        <input type="hidden" id="payPeriod">
         <div style="background: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 20px; text-align: center; border: 1px solid #ecf0f1;">
             <h4 id="payInstructorName" style="color: #2c3e50; margin-bottom: 8px; font-size: 1.1rem;">Instructor</h4>
+            <div id="payPeriodBadge" style="margin-bottom: 8px;"></div>
             <h2 style="color: #e74c3c; font-size: 2.2rem; font-weight: bold;">₱<span id="payBalance">0.00</span></h2>
             <p style="color: #7f8c8d; font-size: 0.85rem; margin-top: 4px; font-weight: bold; text-transform: uppercase;">Remaining Balance</p>
         </div>
@@ -504,6 +496,10 @@
                 <span id="confirmInstructor" style="font-weight: bold; color: #2c3e50;">-</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem;">
+                <span style="color: #7f8c8d; font-weight: bold;">Exam Period:</span>
+                <span id="confirmPeriod" style="font-weight: bold; color: #2980b9;">-</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem;">
                 <span style="color: #7f8c8d; font-weight: bold;">Current Outstanding:</span>
                 <span id="confirmCurrentBalance" style="font-weight: bold; color: #e74c3c;">₱0.00</span>
             </div>
@@ -527,7 +523,7 @@
 </div>
 
 <script>
-const PAYMENT_CACHE_KEY = 'bookletlog_payment_cache';
+const PAYMENT_CACHE_KEY = 'bookletlog_payment_cache_v2';
 let globalPaymentData = [];
 
 function renderSkeletonRows() {
@@ -539,6 +535,7 @@ function renderSkeletonRows() {
             <tr class="skeleton-row">
                 <td><div class="skeleton-line" style="width: 140px;"></div></td>
                 <td><div class="skeleton-line" style="width: 180px;"></div></td>
+                <td><div class="skeleton-line" style="width: 110px;"></div></td>
                 <td><div class="skeleton-line" style="width: 90px;"></div></td>
                 <td><div class="skeleton-line" style="width: 70px;"></div></td>
                 <td><div class="skeleton-line" style="width: 70px;"></div></td>
@@ -553,14 +550,17 @@ function renderSkeletonRows() {
 
 function restorePaymentCache() {
     try {
+        sessionStorage.removeItem('bookletlog_payment_cache'); // Purge legacy unseparated cache
         const raw = sessionStorage.getItem(PAYMENT_CACHE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed.data) && parsed.data.length > 0) {
+            if (Array.isArray(parsed.data) && parsed.data.length > 0 && parsed.data[0].receipt_key && parsed.data[0].exam_period) {
                 globalPaymentData = parsed.data;
                 populateDropdowns();
                 renderTable();
                 return true;
+            } else {
+                sessionStorage.removeItem(PAYMENT_CACHE_KEY);
             }
         }
     } catch (e) {
@@ -571,41 +571,64 @@ function restorePaymentCache() {
 let allSections = [];
 let currentSortColumn = null;
 let currentSortOrder = 'asc';
-let isDateRangeActive = false;
+let activeExamPeriod = "";
+let hasInitializedPeriod = false;
+let recentlyProcessedReceiptKey = null;
+let recentlyProcessedId = null;
 
-function toggleDateRangeMode(forceState) {
-    if (typeof forceState === 'boolean') {
-        isDateRangeActive = forceState;
-    } else {
-        isDateRangeActive = !isDateRangeActive;
-    }
-
-    const btn = document.getElementById('toggleDateRangeBtn');
-    const toDateGroup = document.getElementById('toDateGroup');
-    const dateLabel = document.getElementById('dateLabel');
-    const fromDateInput = document.getElementById('fromDate');
-    const toDateInput = document.getElementById('toDate');
-
-    if (isDateRangeActive) {
-        btn.classList.add('active');
-        btn.innerHTML = '📅 Range ✓';
-        btn.title = 'Switch to single date mode';
-        dateLabel.textContent = 'From:';
-        fromDateInput.title = 'Start issuance date';
-        toDateGroup.style.display = 'flex';
-        if (fromDateInput.value) {
-            toDateInput.min = fromDateInput.value;
+async function populatePeriodFilter(activePeriodFromServer) {
+    const periodSelect = document.getElementById('filterPeriod');
+    if (!periodSelect) return;
+    
+    try {
+        const res = await fetch('/api/period-configurations');
+        const data = await res.json();
+        const configs = Array.isArray(data) ? data : (data.configurations || []);
+        
+        const periodSet = new Set();
+        configs.forEach(c => {
+            const p = c.academic_period || c.exam_period;
+            if (p) periodSet.add(p);
+            if (c.is_active && !activeExamPeriod) {
+                activeExamPeriod = p;
+            }
+        });
+        
+        if (activePeriodFromServer) {
+            activeExamPeriod = activePeriodFromServer;
         }
-    } else {
-        btn.classList.remove('active');
-        btn.innerHTML = '📅 Range';
-        btn.title = 'Toggle date range (From - To)';
-        dateLabel.textContent = 'Date:';
-        fromDateInput.title = 'Issuance date';
-        toDateGroup.style.display = 'none';
-        toDateInput.value = '';
-        toDateInput.removeAttribute('min');
+        
+        // Also capture periods present in globalPaymentData
+        globalPaymentData.forEach(item => {
+            if (item.exam_period) periodSet.add(item.exam_period);
+            (item.payments || []).forEach(p => {
+                if (p.payment_period) periodSet.add(p.payment_period);
+            });
+        });
+        
+        const curValue = periodSelect.value;
+        const periods = Array.from(periodSet);
+        
+        let html = '<option value="All">-- All Exam Periods --</option>';
+        periods.forEach(p => {
+            const isActive = (p === activeExamPeriod);
+            const label = isActive ? `${p} (Active)` : p;
+            html += `<option value="${escapeHtml(p)}">${escapeHtml(label)}</option>`;
+        });
+        periodSelect.innerHTML = html;
+        
+        if (curValue && (curValue === 'All' || periods.includes(curValue))) {
+            periodSelect.value = curValue;
+        } else {
+            periodSelect.value = 'All';
+        }
+        hasInitializedPeriod = true;
+    } catch (e) {
+        console.warn("Could not load /api/period-configurations:", e);
     }
+}
+
+function onPeriodChange() {
     renderTable();
 }
 
@@ -650,18 +673,10 @@ document.addEventListener("DOMContentLoaded", function() {
     document.getElementById('statusFilter').addEventListener('change', renderTable);
     document.getElementById('filterTeacher').addEventListener('change', renderTable);
     document.getElementById('filterSection').addEventListener('change', renderTable);
-    
-    document.getElementById('fromDate').addEventListener('change', function() {
-        const toDateInput = document.getElementById('toDate');
-        if (isDateRangeActive && this.value) {
-            toDateInput.min = this.value;
-            if (toDateInput.value && toDateInput.value < this.value) {
-                toDateInput.value = '';
-            }
-        }
-        renderTable();
-    });
-    document.getElementById('toDate').addEventListener('change', renderTable);
+    const filterPeriodEl = document.getElementById('filterPeriod');
+    if (filterPeriodEl) {
+        filterPeriodEl.addEventListener('change', onPeriodChange);
+    }
     
     document.getElementById('payAmount').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -693,12 +708,16 @@ function loadPaymentData(isBackground = false) {
     .then(res => {
         if (res.status === 'success') {
             globalPaymentData = res.data;
+            if (res.active_period) {
+                activeExamPeriod = res.active_period;
+            }
             try {
                 sessionStorage.setItem(PAYMENT_CACHE_KEY, JSON.stringify({
                     data: res.data,
                     timestamp: Date.now()
                 }));
             } catch (e) {}
+            populatePeriodFilter(res.active_period);
             populateDropdowns();
             renderTable();
         } else if (!isBackground) {
@@ -769,8 +788,7 @@ function renderTable() {
     const teacherVal = document.getElementById('filterTeacher').value;
     const deptVal = document.getElementById('filterDept').value;
     const sectionVal = document.getElementById('filterSection').value;
-    const fromDate = document.getElementById('fromDate').value;
-    const toDate = document.getElementById('toDate').value;
+    const periodVal = document.getElementById('filterPeriod') ? document.getElementById('filterPeriod').value : 'All';
     
     let filteredData = globalPaymentData.filter(enr => {
         const searchMatch = !searchVal || 
@@ -778,41 +796,57 @@ function renderTable() {
             enr.section.toLowerCase().includes(searchVal) || 
             enr.subject.toLowerCase().includes(searchVal);
                             
-        const statusMatch = statusVal === 'All' || enr.payment_status === statusVal;
+        const isRecentlyProcessed = Boolean(recentlyProcessedReceiptKey && enr.receipt_key === recentlyProcessedReceiptKey);
+        const statusMatch = statusVal === 'All' || enr.payment_status === statusVal || isRecentlyProcessed;
         const teacherMatch = teacherVal === 'All' || enr.teacher_name === teacherVal;
         const deptMatch = deptVal === 'All' || (enr.department && enr.department === deptVal);
         const sectionMatch = sectionVal === 'All' || enr.section === sectionVal;
         
-        let dateMatch = true;
-        if (isDateRangeActive) {
-            if (fromDate && toDate) {
-                dateMatch = Boolean(enr.distribution_date && enr.distribution_date >= fromDate && enr.distribution_date <= toDate);
-            } else if (fromDate) {
-                dateMatch = Boolean(enr.distribution_date && enr.distribution_date >= fromDate);
-            } else if (toDate) {
-                dateMatch = Boolean(enr.distribution_date && enr.distribution_date <= toDate);
-            }
-        } else {
-            if (fromDate) {
-                dateMatch = Boolean(enr.distribution_date && enr.distribution_date === fromDate);
-            }
+        let periodMatch = true;
+        if (periodVal !== 'All') {
+            const normPeriodVal = (periodVal || '').trim().toLowerCase();
+            const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
+            const hasPaymentInPeriod = (enr.payments || []).some(p => (p.payment_period || '').trim().toLowerCase() === normPeriodVal);
+            periodMatch = (normEnrPeriod === normPeriodVal) || hasPaymentInPeriod || isRecentlyProcessed;
         }
 
-        return searchMatch && statusMatch && teacherMatch && deptMatch && sectionMatch && dateMatch;
+        return searchMatch && statusMatch && teacherMatch && deptMatch && sectionMatch && periodMatch;
     });
     
-    // Dynamic KPI Totals strictly calculated on filteredData
+    // Dynamic KPI Totals strictly calculated on filteredData & period attribution
     let tExpected = 0, tCollected = 0, tOutstanding = 0;
     const deptTotals = {};
-    filteredData.forEach(enr => {
-        tExpected += enr.amount_due;
-        tCollected += enr.amount_paid;
-        tOutstanding += enr.balance;
-        const dept = enr.department || 'Other';
-        deptTotals[dept] = (deptTotals[dept] || 0) + enr.balance;
-    });
 
-    const isFiltered = Boolean(searchVal || statusVal !== 'All' || teacherVal !== 'All' || deptVal !== 'All' || sectionVal !== 'All' || fromDate || (isDateRangeActive && toDate));
+    if (periodVal === 'All') {
+        filteredData.forEach(enr => {
+            tExpected += (enr.amount_due || 0);
+            tCollected += (enr.amount_paid || 0);
+            tOutstanding += (enr.balance || 0);
+            const dept = enr.department || 'Other';
+            deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
+        });
+    } else {
+        const normPeriodVal = (periodVal || '').trim().toLowerCase();
+        filteredData.forEach(enr => {
+            const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
+            if (normEnrPeriod === normPeriodVal) {
+                tExpected += (enr.amount_due || 0);
+                tCollected += (enr.amount_paid || 0);
+                tOutstanding += (enr.balance || 0);
+            } else {
+                (enr.payments || []).forEach(p => {
+                    if ((p.payment_period || '').trim().toLowerCase() === normPeriodVal) {
+                        tCollected += (p.amount || 0);
+                    }
+                });
+            }
+            const dept = enr.department || 'Other';
+            deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
+        });
+        tOutstanding = Math.max(0, tExpected - tCollected);
+    }
+
+    const isFiltered = Boolean(searchVal || statusVal !== 'All' || teacherVal !== 'All' || deptVal !== 'All' || sectionVal !== 'All' || periodVal !== 'All');
     const scopeEl = document.getElementById('filterScopeNotice');
     if (scopeEl) {
         if (isFiltered) {
@@ -826,7 +860,7 @@ function renderTable() {
     tbody.innerHTML = '';
     
     if (filteredData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #7f8c8d; padding: 30px;">No payment records found matching your filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #7f8c8d; padding: 30px;">No payment records found matching your filters.</td></tr>';
     } else {
         filteredData.forEach(enr => {
             
@@ -846,6 +880,7 @@ function renderTable() {
                 section: enr.section,
                 subject: enr.subject,
                 department: enr.department,
+                exam_period: enr.exam_period || '',
                 student_headcount: enr.student_headcount || 0,
                 distributed_count: enr.distributed_count || 0,
                 loose_returned: enr.loose_returned || 0,
@@ -859,26 +894,31 @@ function renderTable() {
                 payments: enr.payments || []
             }).replace(/"/g, '&quot;');
 
+            const isRecentlyProcessed = Boolean(recentlyProcessedReceiptKey && enr.receipt_key === recentlyProcessedReceiptKey);
+            const rowStyle = isRecentlyProcessed ? 'background-color: #eafaf1; transition: background-color 2s ease;' : '';
             const row = `
-                <tr>
-                    <td style="font-weight: bold; color: #2c3e50;">${enr.teacher_name}</td>
+                <tr id="row-${escapeHtml(enr.receipt_key || enr.id)}" style="${rowStyle}">
                     <td>
-                        <div style="font-weight: bold; color: #2c3e50;">${enr.section}</div>
-                        <small style="color: #7f8c8d;">${enr.subject}</small>
+                        <div style="font-weight: bold; color: #2c3e50;">${escapeHtml(enr.teacher_name)}</div>
+                        <small style="color: #3498db; font-weight: bold;">[${escapeHtml(enr.exam_period || activeExamPeriod || 'Unknown Period')}]</small>
+                    </td>
+                    <td>
+                        <div style="font-weight: bold; color: #2c3e50;">${escapeHtml(enr.section)}</div>
+                        <small style="color: #7f8c8d;">${escapeHtml(enr.subject)}</small>
                     </td>
                     <td style="font-size: 0.9rem; color: #555; white-space: nowrap;">
-                        ${enr.date_display || 'N/A'}
+                        ${escapeHtml(enr.date_display || 'N/A')}
                     </td>
                     <td style="font-weight: bold; color: #2c3e50;">
                         ₱${enr.amount_due.toFixed(2)}
-                        <span style="cursor:pointer; font-size:1.1rem; color: #3498db; margin-left: 8px; opacity: 0.85; transition: opacity 0.2s;" onclick="openBreakdownModal(${enr.id})" title="View Calculation Breakdown">ℹ️</span>
+                        <span style="cursor:pointer; font-size:1.1rem; color: #3498db; margin-left: 8px; opacity: 0.85; transition: opacity 0.2s;" onclick="openBreakdownModal('${escapeHtml(enr.receipt_key || enr.id)}')" title="View Calculation Breakdown">ℹ️</span>
                     </td>
                     <td style="font-weight: bold; color: #2c3e50;">₱${enr.amount_paid.toFixed(2)}</td>
                     <td style="font-weight: bold; color: #e74c3c;">₱${enr.balance.toFixed(2)}</td>
                     <td><span class="badge" style="background-color: ${badgeBg}; color: ${badgeText};">${enr.payment_status}</span></td>
                     <td>
                         <button class="btn-action" 
-                            onclick="openPaymentModal(${enr.id}, '${enr.teacher_name.replace("'", "\\'")}', ${enr.balance})"
+                            onclick="openPaymentModal(${enr.id}, '${escapeHtml(enr.teacher_name).replace("'", "\\'")}', ${enr.balance}, '${escapeHtml(enr.exam_period || '').replace("'", "\\'")}', ${enr.amount_due}, ${enr.amount_paid})"
                             ${enr.balance <= 0 ? 'disabled' : ''}>
                             Pay
                         </button>
@@ -912,24 +952,23 @@ function clearFilters() {
     document.getElementById('filterDept').value = 'All';
     updateSectionDropdown('All');
     document.getElementById('filterSection').value = 'All';
-    document.getElementById('fromDate').value = '';
-    document.getElementById('toDate').value = '';
-    if (isDateRangeActive) {
-        toggleDateRangeMode(false);
-    } else {
-        renderTable();
+    if (document.getElementById('filterPeriod')) {
+        document.getElementById('filterPeriod').value = 'All';
     }
+    renderTable();
 }
 
 let currentBreakdownData = null;
 
 function openBreakdownModal(input) {
     let data = null;
-    if (typeof input === 'number' || (typeof input === 'string' && !input.trim().startsWith('{'))) {
-        const id = parseInt(input);
-        data = globalPaymentData.find(e => e.id === id);
+    if (typeof input === 'object' && input !== null) {
+        data = input;
+    } else if (typeof input === 'string' && input.trim().startsWith('{')) {
+        try { data = JSON.parse(input); } catch(e) {}
     } else {
-        data = typeof input === 'string' ? JSON.parse(input) : input;
+        const strInput = String(input);
+        data = globalPaymentData.find(e => e.receipt_key === strInput) || globalPaymentData.find(e => String(e.id) === strInput);
     }
     if (!data) return;
     currentBreakdownData = data;
@@ -940,6 +979,10 @@ function openBreakdownModal(input) {
     const deptBadge = document.getElementById('calcDeptBadge');
     if (deptBadge) {
         deptBadge.textContent = data.department || 'CS';
+    }
+    const periodBadge = document.getElementById('calcPeriodBadge');
+    if (periodBadge) {
+        periodBadge.textContent = `[${data.exam_period || activeExamPeriod || 'Unknown Period'}]`;
     }
 
     // Formula table
@@ -989,6 +1032,9 @@ function openBreakdownModal(input) {
                         <td style="padding: 8px 10px; color: #2c3e50; font-weight: 500; white-space: nowrap;">
                             ${escapeHtml(payDate)}
                         </td>
+                        <td style="padding: 8px 10px; font-weight: 600; color: #2980b9; font-size: 0.82rem;">
+                            ${escapeHtml(data.exam_period || 'N/A')}
+                        </td>
                         <td style="padding: 8px 10px; text-align: right; color: #27ae60; font-weight: bold;">
                             +₱${paidAmt}
                         </td>
@@ -1013,7 +1059,7 @@ function openBreakdownModal(input) {
             } else {
                 historyBody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; color: #7f8c8d; padding: 18px 10px; font-style: italic;">
+                        <td colspan="6" style="text-align: center; color: #7f8c8d; padding: 18px 10px; font-style: italic;">
                             🔴 No payment installments recorded yet (Unpaid).
                         </td>
                     </tr>
@@ -1036,6 +1082,9 @@ function openBreakdownModal(input) {
                         <td style="padding: 8px 10px; text-align: center; font-weight: bold; color: #7f8c8d;">${index + 1}</td>
                         <td style="padding: 8px 10px; color: #2c3e50; font-weight: 500; white-space: nowrap;">
                             ${escapeHtml(p.date_display || p.payment_date || 'N/A')}
+                        </td>
+                        <td style="padding: 8px 10px; font-weight: 600; color: #2980b9; font-size: 0.82rem;">
+                            ${escapeHtml(p.payment_period || data.exam_period || 'N/A')}
                         </td>
                         <td style="padding: 8px 10px; text-align: right; color: #27ae60; font-weight: bold;">
                             +₱${p.amount.toFixed(2)}
@@ -1084,7 +1133,7 @@ function triggerPaymentFromBreakdown() {
     if (!currentBreakdownData) return;
     const enr = currentBreakdownData;
     closeBreakdownModal();
-    openPaymentModal(enr.id, enr.teacher_name, enr.balance);
+    openPaymentModal(enr.id, enr.teacher_name, enr.balance, enr.exam_period, enr.amount_due, enr.amount_paid);
 }
 
 function closeBreakdownModal() {
@@ -1094,10 +1143,18 @@ function closeBreakdownModal() {
 
 let pendingPayment = null;
 
-function openPaymentModal(id, instructor, balance) {
+function openPaymentModal(id, instructor, balance, period, due, paid) {
+    const resolvedPeriod = period || activeExamPeriod || '';
     document.getElementById('payEnrollmentId').value = id;
     document.getElementById('payInstructorName').textContent = instructor;
     document.getElementById('payBalance').textContent = balance.toFixed(2);
+    if (document.getElementById('payPeriod')) {
+        document.getElementById('payPeriod').value = resolvedPeriod;
+    }
+    const badgeEl = document.getElementById('payPeriodBadge');
+    if (badgeEl) {
+        badgeEl.innerHTML = `<span class="badge" style="background-color: #e8f4fd; color: #1976d2; border: 1px solid #b3d7ff; font-weight: 600; padding: 4px 8px; border-radius: 4px;">[${escapeHtml(resolvedPeriod || 'Unknown Period')}]</span>`;
+    }
     
     document.getElementById('payAmount').value = balance.toFixed(2);
     document.getElementById('payAmount').max = balance;
@@ -1129,16 +1186,22 @@ function reviewPayment() {
     }
 
     const newBalance = Math.max(0, currentBalance - amount);
+    const payPeriod = document.getElementById('payPeriod') ? document.getElementById('payPeriod').value : '';
 
     pendingPayment = {
         id: id,
         instructor: instructor,
         currentBalance: currentBalance,
         amount: amount,
-        newBalance: newBalance
+        newBalance: newBalance,
+        period: payPeriod,
+        receiptKey: `${id}_${payPeriod}`
     };
 
     document.getElementById('confirmInstructor').textContent = instructor;
+    if (document.getElementById('confirmPeriod')) {
+        document.getElementById('confirmPeriod').textContent = payPeriod ? `[${payPeriod}]` : '[Unknown Period]';
+    }
     document.getElementById('confirmCurrentBalance').textContent = `₱${currentBalance.toFixed(2)}`;
     document.getElementById('confirmAmountTendered').textContent = `₱${amount.toFixed(2)}`;
     
@@ -1182,6 +1245,7 @@ function submitConfirmedPayment() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             amount: pendingPayment.amount,
+            period: pendingPayment.period,
             recorded_by: recordedBy
         })
     })
@@ -1190,6 +1254,12 @@ function submitConfirmedPayment() {
         btn.disabled = false;
         btn.textContent = "Confirm & Process";
         if (res.status === 'success') {
+            recentlyProcessedReceiptKey = res.receipt_key || pendingPayment.receiptKey;
+            recentlyProcessedId = pendingPayment.id;
+            const statusFilter = document.getElementById('statusFilter');
+            if (statusFilter && statusFilter.value !== 'All') {
+                statusFilter.value = 'All';
+            }
             closeConfirmModal();
             loadPaymentData();
         } else {

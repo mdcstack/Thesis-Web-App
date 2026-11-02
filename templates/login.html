@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proposed System - Login</title>
+    <title>Sign In - Bookledger</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
         body { background-color: #2c3e50; display: flex; justify-content: center; align-items: center; height: 100vh; }
@@ -53,7 +53,7 @@
 <body>
 
     <div class="login-card">
-        <h2>Proposed System</h2>
+        <h2>Bookledger</h2>
         <p>Offline Inventory & Distribution System</p>
 
         <div class="error" id="errorMsg">Invalid credentials.</div>
@@ -71,7 +71,57 @@
             </div>
             <button type="submit" id="loginBtn" class="btn-submit">Sign In</button>
         </form>
+
+        <div style="margin-top: 20px; border-top: 1px solid #edf2f7; padding-top: 15px;">
+            <button type="button" onclick="openMobileWifiModal()" style="background: none; border: 1px solid #cbd5e1; color: #475569; padding: 7px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;">
+                <span>📱</span> Connect Mobile Device (Wi-Fi QR)
+            </button>
+        </div>
     </div>
+
+<!-- MOBILE WI-FI ACCESS MODAL -->
+<div id="mobileWifiModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 480px; padding: 24px 22px; text-align: center; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #10b981; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="color: #1e293b; font-size: 1.2rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>📱</span> Connect Mobile Device
+            </h3>
+            <button onclick="closeMobileWifiModal()" style="border: none; background: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.4; margin-bottom: 14px;">
+            Connect your phone or tablet to the same Wi-Fi router, then scan this QR code:
+        </p>
+
+        <!-- Mode Tabs: Instant Mobile (HTTP) vs Camera Scanner (HTTPS) -->
+        <div style="display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 8px; margin-bottom: 14px;">
+            <button id="wifiTabHttp" onclick="switchWifiTab('http')" style="flex: 1; padding: 8px 6px; border-radius: 6px; border: none; font-weight: 600; font-size: 0.82rem; cursor: pointer; background: white; color: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                ⚡ Instant View (Zero Warnings)
+            </button>
+            <button id="wifiTabHttps" onclick="switchWifiTab('https')" style="flex: 1; padding: 8px 6px; border-radius: 6px; border: none; font-weight: 600; font-size: 0.82rem; cursor: pointer; background: transparent; color: #64748b;">
+                📷 Camera QR Scanner (HTTPS)
+            </button>
+        </div>
+
+        <!-- Dynamic QR Code Container -->
+        <div style="background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 14px; margin-bottom: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px;">
+            <img id="wifiQrImage" src="" alt="Mobile Wi-Fi QR Code" style="width: 175px; height: 175px; border-radius: 8px; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+            <div id="wifiQrLoading" style="color: #64748b; font-size: 0.9rem; font-weight: 500;">
+                Detecting LAN Router IP...
+            </div>
+            <div id="wifiUrlText" style="margin-top: 10px; font-family: monospace; font-size: 0.92rem; font-weight: 700; color: #0369a1; background: #e0f2fe; padding: 5px 12px; border-radius: 6px; word-break: break-all;">
+                Loading...
+            </div>
+        </div>
+
+        <div id="wifiHelpNote" style="font-size: 0.8rem; color: #475569; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; line-height: 1.45;">
+            ⚡ <strong>Instant View (Port 8080):</strong> Zero warnings on all mobile browsers! Perfect for reviewing receipts, student balances, and inventory.
+        </div>
+
+        <button onclick="closeMobileWifiModal()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 0.9rem; cursor: pointer; width: 100%;">
+            Done / Close
+        </button>
+    </div>
+</div>
 
 <script>
     // Clear any old sessions on the login page
@@ -132,11 +182,19 @@
                 // Save the session securely to the device
                 localStorage.setItem('bookletlog_user', JSON.stringify(data.user));
                 
-                // Route them to the correct dashboard based on role
-                if (data.user.role === 'Admin') {
+                // Check if user was redirected from a protected page
+                const urlParams = new URLSearchParams(window.location.search);
+                const redirectTarget = urlParams.get('redirect');
+                if (redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')) {
+                    window.location.href = redirectTarget;
+                } else if (data.user.role === 'Admin') {
                     window.location.href = '/dashboard';
-                } else {
+                } else if (data.user.role === 'Staff') {
                     window.location.href = '/distribution';
+                } else if (data.user.role === 'Viewer') {
+                    window.location.href = '/transaction-profile';
+                } else {
+                    window.location.href = '/transaction-profile';
                 }
             } else {
                 errorMsg.innerText = data.message;
@@ -146,6 +204,84 @@
             }
         });
     }
+
+    let currentNetworkInfo = null;
+    let currentWifiTab = 'http';
+
+    async function openMobileWifiModal() {
+        const modal = document.getElementById('mobileWifiModal');
+        if (modal) modal.style.display = 'flex';
+        await fetchNetworkInfo();
+    }
+
+    async function fetchNetworkInfo() {
+        try {
+            const res = await fetch('/api/network-info');
+            const data = await res.json();
+            if (data.status === 'success') {
+                currentNetworkInfo = data;
+                renderWifiModalTab();
+            }
+        } catch (e) {
+            console.warn("Could not fetch network info:", e);
+            const urlEl = document.getElementById('wifiUrlText');
+            if (urlEl) urlEl.innerText = window.location.origin;
+        }
+    }
+
+    function closeMobileWifiModal() {
+        const modal = document.getElementById('mobileWifiModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function switchWifiTab(mode) {
+        currentWifiTab = mode;
+        const tabHttp = document.getElementById('wifiTabHttp');
+        const tabHttps = document.getElementById('wifiTabHttps');
+        if (mode === 'http') {
+            tabHttp.style.background = 'white';
+            tabHttp.style.color = '#0f172a';
+            tabHttp.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            tabHttps.style.background = 'transparent';
+            tabHttps.style.color = '#64748b';
+            tabHttps.style.boxShadow = 'none';
+        } else {
+            tabHttps.style.background = 'white';
+            tabHttps.style.color = '#0f172a';
+            tabHttps.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+            tabHttp.style.background = 'transparent';
+            tabHttp.style.color = '#64748b';
+            tabHttp.style.boxShadow = 'none';
+        }
+        renderWifiModalTab();
+    }
+
+    function renderWifiModalTab() {
+        if (!currentNetworkInfo) return;
+        const img = document.getElementById('wifiQrImage');
+        const load = document.getElementById('wifiQrLoading');
+        const urlText = document.getElementById('wifiUrlText');
+        const help = document.getElementById('wifiHelpNote');
+
+        if (currentWifiTab === 'http') {
+            if (currentNetworkInfo.http_qr) {
+                img.src = currentNetworkInfo.http_qr;
+                img.style.display = 'block';
+                load.style.display = 'none';
+            }
+            urlText.innerText = currentNetworkInfo.http_url;
+            help.innerHTML = `⚡ <strong>Instant View (Port 8080):</strong> Zero warnings on all mobile browsers! Perfect for reviewing receipts, student balances, and inventory.`;
+        } else {
+            if (currentNetworkInfo.https_qr) {
+                img.src = currentNetworkInfo.https_qr;
+                img.style.display = 'block';
+                load.style.display = 'none';
+            }
+            urlText.innerText = currentNetworkInfo.https_url;
+            help.innerHTML = `📷 <strong>Camera QR Scanner (Port 8000):</strong> Required for camera barcode scanning. If Chrome prompts "Connection not private", tap <em>Advanced &rarr; Proceed</em> once to grant camera permission.`;
+        }
+    }
+
 </script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Users - BOOKLETLOG</title>
+    <title>Manage Users - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -279,15 +279,19 @@
                     <h3>👤 My Account Profile</h3>
                 </div>
                 <div class="profile-box">
+                    <div class="profile-row" id="staffFullNameRow" style="display: none;">
+                        <span class="profile-label">Full Name:</span>
+                        <span class="profile-value" id="staffFullName" style="font-weight: 700; color: #0f172a;">-</span>
+                    </div>
                     <div class="profile-row">
-                        <span class="profile-label">Username:</span>
-                        <span class="profile-value" id="staffUsername">-</span>
+                        <span class="profile-label">Current Username:</span>
+                        <span class="profile-value" id="staffUsername" style="font-family: monospace;">-</span>
                     </div>
                     <div class="profile-row">
                         <span class="profile-label">System Role:</span>
-                        <span class="profile-value"><span class="badge badge-staff">👤 Staff Clerk</span></span>
+                        <span class="profile-value" id="staffRoleBadge"><span class="badge badge-staff">👤 Staff Clerk</span></span>
                     </div>
-                    <div class="profile-row">
+                    <div class="profile-row" id="staffDeptRow">
                         <span class="profile-label">Assigned Department:</span>
                         <span class="profile-value" id="staffDept">-</span>
                     </div>
@@ -296,7 +300,32 @@
                         <span class="profile-value" style="color: #16a34a;">🟢 Active (Online)</span>
                     </div>
                 </div>
+            </div>
 
+            <!-- Inline Change Username Card -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>✏️ Change My Username</h3>
+                </div>
+                <form onsubmit="handleSelfChangeUsername(event)">
+                    <div class="form-group">
+                        <label>New Username</label>
+                        <input type="text" id="selfNewUsername" placeholder="Enter new username (3-30 characters)" required minlength="3" maxlength="30" pattern="^[a-zA-Z0-9_\.\-]+$" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.95rem;">
+                        <small style="display: block; color: #64748b; font-size: 0.78rem; margin-top: 4px;">Letters, numbers, underscores, hyphens, and periods allowed.</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Current Password (for verification)</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="selfUsernameVerifyPassword" placeholder="Confirm current password" required autocomplete="current-password">
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfUsernameVerifyPassword', this)" title="Show password" aria-label="Show password">
+                                <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary" id="btnSelfChangeUsername">
+                        <span>Save New Username</span>
+                    </button>
+                </form>
             </div>
 
             <!-- Staff Inline Change Password Card -->
@@ -365,6 +394,13 @@
                     </div>
                 </div>
                 <div class="kpi-card">
+                    <div class="kpi-icon" style="background: #fef3c7; color: #b45309;">👁️</div>
+                    <div class="kpi-details">
+                        <div class="kpi-label">Faculty Viewers</div>
+                        <div class="kpi-value" id="kpiTotalViewers">-</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
                     <div class="kpi-icon green">🟢</div>
                     <div class="kpi-details">
                         <div class="kpi-label">Active Sessions</div>
@@ -389,6 +425,7 @@
                             <option value="ALL">All Roles</option>
                             <option value="Admin">Admin</option>
                             <option value="Staff">Staff</option>
+                            <option value="Viewer">Viewer (Faculty)</option>
                         </select>
                         <select id="deptFilter" class="filter-select" onchange="filterUsers()">
                             <option value="ALL">All Departments</option>
@@ -429,8 +466,13 @@
                         
                         <form onsubmit="handleCreateUser(event)">
                             <div class="form-group">
+                                <label>Full Name</label>
+                                <input type="text" id="newFullName" placeholder="e.g., Dr. Maria Santos" autocomplete="off" maxlength="100">
+                                <div class="input-hint">Display name for the account holder.</div>
+                            </div>
+                            <div class="form-group">
                                 <label>Username</label>
-                                <input type="text" id="newUsername" placeholder="e.g., clerk_it_01" required autocomplete="off" minlength="3" maxlength="30" oninput="handleUsernameInput(this)">
+                                <input type="text" id="newUsername" placeholder="e.g., maria_santos" required autocomplete="off" minlength="3" maxlength="30" oninput="handleUsernameInput(this)">
                                 <div id="newUsernameHint" class="input-hint">Allowed: letters, numbers, underscores, dots (3–30 chars, no spaces).</div>
                             </div>
                             
@@ -448,6 +490,7 @@
                                 <label>System Role</label>
                                 <select id="newRole" onchange="handleNewRoleChange()">
                                     <option value="Staff">Staff / Clerk</option>
+                                    <option value="Viewer">Viewer (Faculty / Instructor)</option>
                                     <option value="Admin">Administrator</option>
                                 </select>
                             </div>
@@ -510,6 +553,10 @@
             <form onsubmit="submitEditUser(event)">
                 <input type="hidden" id="editUserId">
                 <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="editFullName" placeholder="e.g., Dr. Maria Santos" maxlength="100">
+                </div>
+                <div class="form-group">
                     <label>Username</label>
                     <input type="text" id="editUsername" disabled style="background: #f1f5f9; cursor: not-allowed;">
                 </div>
@@ -517,6 +564,7 @@
                     <label>Role</label>
                     <select id="editRole" onchange="handleEditRoleChange()">
                         <option value="Staff">Staff / Clerk</option>
+                        <option value="Viewer">Viewer (Faculty / Instructor)</option>
                         <option value="Admin">Administrator</option>
                     </select>
                 </div>
@@ -653,10 +701,10 @@
 
             // RBAC View Enforcement
             if (activeUser.role !== 'Admin') {
-                // Staff Portal Mode
-                if (navLink) navLink.innerHTML = '👤 My Account';
-                if (pageTitle) pageTitle.innerHTML = '👤 My Account & Security Profile';
-                if (pageSubtitle) pageSubtitle.innerText = 'Manage your account credentials, view assigned departmental scope, and update your password.';
+                // Staff / Viewer Portal Mode
+                if (navLink) navLink.innerHTML = activeUser.role === 'Viewer' ? '👤 My Account & Security' : '👤 My Account';
+                if (pageTitle) pageTitle.innerHTML = activeUser.role === 'Viewer' ? '👤 Faculty Account & Security Profile' : '👤 My Account & Security Profile';
+                if (pageSubtitle) pageSubtitle.innerText = 'Manage your account credentials, view assigned departmental scope, and update your username or password.';
                 
                 if (topChangePwBtn) topChangePwBtn.style.display = 'none';
                 if (adminPortalView) adminPortalView.style.display = 'none';
@@ -666,10 +714,28 @@
                 const adminOnlyEls = document.querySelectorAll('.admin-only');
                 adminOnlyEls.forEach(el => el.style.display = 'none');
 
-                // Populate Staff Profile
+                // Populate Staff/Viewer Profile
+                const staffFullNameRow = document.getElementById('staffFullNameRow');
+                const staffFullNameEl = document.getElementById('staffFullName');
                 const staffUserEl = document.getElementById('staffUsername');
+                const staffRoleBadgeEl = document.getElementById('staffRoleBadge');
                 const staffDeptEl = document.getElementById('staffDept');
+
+                if (activeUser.full_name) {
+                    if (staffFullNameRow) staffFullNameRow.style.display = 'flex';
+                    if (staffFullNameEl) staffFullNameEl.innerText = activeUser.full_name;
+                } else {
+                    if (staffFullNameRow) staffFullNameRow.style.display = 'none';
+                }
+
                 if (staffUserEl) staffUserEl.innerText = activeUser.username;
+                if (staffRoleBadgeEl) {
+                    if (activeUser.role === 'Viewer') {
+                        staffRoleBadgeEl.innerHTML = '<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">👤 Faculty (Viewer)</span>';
+                    } else {
+                        staffRoleBadgeEl.innerHTML = '<span class="badge badge-staff">👤 Staff Clerk</span>';
+                    }
+                }
                 if (staffDeptEl) staffDeptEl.innerText = activeUser.department ? `${activeUser.department} Department` : 'All Departments';
             } else {
                 // Admin Portal Mode
@@ -918,17 +984,20 @@
             const total = users.length;
             const admins = users.filter(u => u.role === 'Admin').length;
             const staff = users.filter(u => u.role === 'Staff').length;
+            const viewers = users.filter(u => u.role === 'Viewer').length;
             const online = users.filter(u => u.is_online).length;
 
             const totalEl = document.getElementById('kpiTotalUsers');
             const adminsEl = document.getElementById('kpiTotalAdmins');
             const staffEl = document.getElementById('kpiTotalStaff');
+            const viewersEl = document.getElementById('kpiTotalViewers');
             const onlineEl = document.getElementById('kpiActiveSessions');
             const countBadge = document.getElementById('userCountBadge');
 
             if (totalEl) totalEl.innerText = total;
             if (adminsEl) adminsEl.innerText = admins;
             if (staffEl) staffEl.innerText = staff;
+            if (viewersEl) viewersEl.innerText = viewers;
             if (onlineEl) onlineEl.innerText = online;
             if (countBadge) countBadge.innerText = `${total} Account${total === 1 ? '' : 's'}`;
         }
@@ -940,7 +1009,8 @@
             const deptVal = document.getElementById('deptFilter')?.value || 'ALL';
 
             const filtered = allUsers.filter(u => {
-                const matchesSearch = u.username.toLowerCase().includes(searchVal);
+                const fullName = (u.full_name || '').toLowerCase();
+                const matchesSearch = u.username.toLowerCase().includes(searchVal) || fullName.includes(searchVal);
                 const matchesRole = (roleVal === 'ALL') || (u.role === roleVal);
                 const matchesDept = (deptVal === 'ALL') || (u.department === deptVal);
                 return matchesSearch && matchesRole && matchesDept;
@@ -968,9 +1038,15 @@
                 const isSelf = (u.username.toLowerCase() === activeUser.username.toLowerCase());
                 const isRootAdmin = (u.username.toLowerCase() === 'admin');
                 
-                const roleBadge = (u.role === 'Admin') 
-                    ? `<span class="badge badge-admin">🛡️ Admin</span>`
-                    : `<span class="badge badge-staff">👤 Staff</span>`;
+                let roleBadge = `<span class="badge badge-staff">👤 Staff</span>`;
+                if (u.role === 'Admin') {
+                    roleBadge = `<span class="badge badge-admin">🛡️ Admin</span>`;
+                } else if (u.role === 'Viewer') {
+                    roleBadge = `<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">👁️ Viewer</span>`;
+                }
+
+                const displayName = (u.full_name && u.full_name.trim()) ? escapeHtml(u.full_name.trim()) : escapeHtml(u.username);
+                const usernameSubtext = `<div style="font-size: 0.8rem; color: #64748b; font-weight: normal; margin-top: 2px;">@${escapeHtml(u.username)}</div>`;
                 
                 let deptBadge = `<span class="badge badge-dept-all">All</span>`;
                 const matchedProg = (systemPrograms || []).find(p => p.code === u.department);
@@ -994,15 +1070,16 @@
                 return `
                     <tr>
                         <td>
-                            <strong style="color: #1e293b;">${escapeHtml(u.username)}</strong>
+                            <strong style="color: #1e293b; font-size: 0.95rem;">${displayName}</strong>
                             ${selfTag}
+                            ${usernameSubtext}
                         </td>
                         <td>${roleBadge}</td>
                         <td>${deptBadge}</td>
                         <td>${statusBadge}</td>
                         <td style="text-align: right;">
                             <div class="action-btn-group" style="justify-content: flex-end;">
-                                <button class="action-btn" title="Edit Role & Dept" onclick="openEditUserModal(${u.id}, '${escapeHtml(u.username)}', '${u.role}', '${u.department}')">
+                                <button class="action-btn" title="Edit Account" onclick="openEditUserModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name || '')}', '${u.role}', '${u.department}')">
                                     ✏️
                                 </button>
                                 <button class="action-btn" title="Reset Password" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}')">
@@ -1045,6 +1122,7 @@
 
             const usernameInput = document.getElementById('newUsername');
             const username = usernameInput.value.trim();
+            const fullName = (document.getElementById('newFullName')?.value || '').trim();
             const password = document.getElementById('newPassword').value;
             const role = document.getElementById('newRole').value;
             const department = (role === 'Admin') ? 'All' : document.getElementById('newDepartment').value;
@@ -1075,12 +1153,13 @@
             fetch('/api/users/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password, role, department })
+                body: JSON.stringify({ username, full_name: fullName, password, role, department })
             })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     showToast(data.message || `Account '${username}' created successfully!`, "success", "User Created");
+                    document.getElementById('newFullName').value = '';
                     document.getElementById('newUsername').value = '';
                     document.getElementById('newPassword').value = '';
                     document.getElementById('newRole').value = 'Staff';
@@ -1102,9 +1181,10 @@
         }
 
         // --- EDIT USER (ROLE & DEPT) ---
-        function openEditUserModal(id, username, role, department) {
+        function openEditUserModal(id, username, fullName, role, department) {
             document.getElementById('editUserId').value = id;
             document.getElementById('editUsername').value = username;
+            document.getElementById('editFullName').value = fullName || '';
             document.getElementById('editRole').value = role;
             
             const deptSelect = document.getElementById('editDepartment');
@@ -1141,6 +1221,7 @@
         function submitEditUser(e) {
             e.preventDefault();
             const id = document.getElementById('editUserId').value;
+            const fullName = (document.getElementById('editFullName')?.value || '').trim();
             const role = document.getElementById('editRole').value;
             const department = (role === 'Admin') ? 'All' : document.getElementById('editDepartment').value;
             const btn = document.getElementById('btnSaveEditUser');
@@ -1152,7 +1233,7 @@
             fetch(`/api/users/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role, department, updated_by: currentAdminName })
+                body: JSON.stringify({ full_name: fullName, role, department, updated_by: currentAdminName })
             })
             .then(res => res.json())
             .then(data => {
@@ -1406,6 +1487,76 @@
             });
         }
 
+        // --- SELF SERVICE: CHANGE MY USERNAME ---
+        function handleSelfChangeUsername(event) {
+            event.preventDefault();
+            const btn = document.getElementById('btnSelfChangeUsername');
+            const newUsername = (document.getElementById('selfNewUsername').value || '').trim();
+            const currentPassword = document.getElementById('selfUsernameVerifyPassword').value;
+
+            if (!newUsername || newUsername.length < 3 || newUsername.length > 30) {
+                showToast('Username must be between 3 and 30 characters.', 'warning', 'Validation Error');
+                return;
+            }
+
+            if (!/^[a-zA-Z0-9_.-]+$/.test(newUsername)) {
+                showToast('Username can only contain letters, numbers, underscores, hyphens, and periods.', 'warning', 'Invalid Format');
+                return;
+            }
+
+            if (newUsername.toLowerCase() === activeUser.username.toLowerCase()) {
+                showToast('New username cannot be identical to your current username.', 'warning', 'Same Username');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>Updating...</span>';
+
+            fetch('/api/users/change-username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: activeUser.username,
+                    new_username: newUsername,
+                    password: currentPassword
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message || 'Username updated successfully!', 'success', 'Username Updated');
+                    activeUser.username = data.username || newUsername;
+                    localStorage.setItem('bookletlog_user', JSON.stringify(activeUser));
+
+                    const staffUserEl = document.getElementById('staffUsername');
+                    if (staffUserEl) staffUserEl.innerText = activeUser.username;
+
+                    const loggedInUserEl = document.getElementById('loggedInUser');
+                    const loggedInSubEl = document.getElementById('loggedInUsernameSub');
+                    if (loggedInUserEl && !activeUser.full_name) {
+                        loggedInUserEl.innerText = activeUser.username.toUpperCase();
+                    }
+                    if (loggedInSubEl) {
+                        loggedInSubEl.innerText = '@' + activeUser.username;
+                        loggedInSubEl.style.display = 'block';
+                    }
+
+                    document.getElementById('selfNewUsername').value = '';
+                    document.getElementById('selfUsernameVerifyPassword').value = '';
+                } else {
+                    showToast(data.message || 'Failed to update username.', 'error', 'Update Failed');
+                }
+            })
+            .catch(err => {
+                console.error('Change username error:', err);
+                showToast('Network error updating username.', 'error', 'Network Error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Save New Username</span>';
+            });
+        }
+
         // --- REVOKE ACTIVE SESSION ---
         async function revokeUserSession(id, username) {
             const confirmed = await showAppConfirm(
@@ -1598,11 +1749,37 @@ ${message}`));
                 </div>
             `;
 
-            container.appendChild(toast);
-            setTimeout(() => {
+            let isDismissed = false;
+            const dismissToast = () => {
+                if (isDismissed) return;
+                isDismissed = true;
                 toast.style.opacity = '0';
                 toast.style.transform = isMobile ? 'translateY(-10px)' : 'translateX(100%)';
-                setTimeout(() => toast.remove(), 300);
+                setTimeout(() => { if (toast.parentElement) toast.remove(); }, 300);
+            };
+            toast.onclick = dismissToast;
+            toast._dismissToast = dismissToast;
+
+            // Enforce max 3 toast notifications: dismiss oldest (topmost) toast first
+            const MAX_TOASTS = 3;
+            const activeToasts = Array.from(container.children).filter(el => !el.classList.contains('toast-dismissing'));
+            while (activeToasts.length >= MAX_TOASTS) {
+                const oldest = activeToasts.shift();
+                oldest.classList.add('toast-dismissing');
+                if (typeof oldest._dismissToast === 'function') {
+                    oldest._dismissToast();
+                } else {
+                    oldest.style.opacity = '0';
+                    oldest.style.transform = isMobile ? 'translateY(-10px)' : 'translateX(100%)';
+                    setTimeout(() => { if (oldest.parentElement) oldest.remove(); }, 300);
+                }
+            }
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentElement && !isDismissed) {
+                    dismissToast();
+                }
             }, displayDuration);
         }
 
@@ -1659,61 +1836,6 @@ ${message}`));
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
-
-
-        // --- DECISION SUPPORT SYSTEM (DSS) ---
-        fetch('/api/dss-alert')
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('notifBadge');
-                const panel = document.getElementById('notifPanel');
-                const bell = document.getElementById('notifBell');
-    
-                if (data.alert) {
-                    badge.style.display = 'inline-block';
-                    bell.style.color = 'white'; 
-                    
-                    if (activeUser.role === 'Admin') {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                    } else {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                    }
-                    
-                    if (activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data);
-                    }
-                } else {
-                    badge.style.display = 'none';
-                    if (data.has_enrollments === false) {
-                        panel.style.borderLeftColor = '#64748b';
-                        if (activeUser && activeUser.role === 'Admin') {
-                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                        } else {
-                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                        }
-                    } else {
-                        panel.style.borderLeftColor = '#27ae60'; 
-                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                    }
-                }
-            }).catch(e => console.error("DSS Alert error:", e));
-    
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-        }
-    
-        function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        if (typeof window.showDSSModal === 'function') {
-            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
-        }
-    }
-
-    function dismissDSS() {
-        if (typeof window.dismissDSS === 'function') {
-            window.dismissDSS();
-        }
-    }
 
         // Close modals on clicking overlay outside card
         window.addEventListener('click', (e) => {

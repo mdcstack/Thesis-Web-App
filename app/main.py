@@ -7,7 +7,7 @@ import json
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, UploadFile, File
 import bcrypt
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_, text
 from pydantic import BaseModel
 import datetime
 from fastapi.responses import RedirectResponse, HTMLResponse, Response
@@ -82,6 +82,73 @@ def ensure_program_template_slots(dept_code: str, db: Session):
     except Exception:
         db.rollback()
 
+
+def generate_clean_instructor_username(name: str) -> str:
+    n = re.sub(r'^(dr\.|dr|engr\.|engr|prof\.|prof|mr\.|mr|ms\.|ms|mrs\.|mrs|atty\.|atty|dean)\s+', '', name.strip(), flags=re.IGNORECASE)
+    n = re.sub(r'\s*\([^)]*\)', '', n)
+    while True:
+        prev_n = n
+        n = re.sub(r',?\s+(phd|mit|mscs|msit|pece|cpa|ed\.?d|d\.?it|lpt|mba|ms|ma|bs)$', '', n.strip(), flags=re.IGNORECASE)
+        if n == prev_n:
+            break
+    n = n.replace('Ñ', 'N').replace('ñ', 'n')
+    clean = re.sub(r'[^a-zA-Z0-9]+', '_', n).strip('_').lower()
+    return clean or "faculty"
+
+def auto_provision_instructor_account(instructor_name: str, department: str, db: Session) -> tuple[Optional[models.User], bool]:
+    clean_name = instructor_name.strip()
+    if not clean_name:
+        return None, False
+
+    # Check if user already exists
+    existing = db.query(models.User).filter(
+        or_(
+            func.lower(models.User.full_name) == clean_name.lower(),
+            func.lower(models.User.username) == clean_name.lower()
+        )
+    ).first()
+    if existing:
+        if not existing.full_name:
+            existing.full_name = clean_name
+            db.commit()
+        return existing, False
+
+    base_username = generate_clean_instructor_username(clean_name)
+    candidate_username = base_username
+    counter = 1
+    while db.query(models.User).filter(func.lower(models.User.username) == candidate_username.lower()).first():
+        counter += 1
+        candidate_username = f"{base_username}_{counter}"
+
+    default_pw = "user12345"
+    hashed_pw = bcrypt.hashpw(default_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    new_user = models.User(
+        username=candidate_username,
+        full_name=clean_name,
+        password=hashed_pw,
+        role="Viewer",
+        department=department or "CS"
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    try:
+        if 'notify_lan_mutation' in globals() and callable(globals()['notify_lan_mutation']):
+            notify_lan_mutation("USER_UPDATED", {"action": "create", "username": new_user.username, "id": new_user.id}, db=db)
+    except Exception:
+        pass
+    return new_user, True
+
+def get_portal_authenticated_user(request: Request, db: Session) -> Optional[models.User]:
+    token = request.headers.get("X-Session-Token") or request.query_params.get("session_token") or request.query_params.get("token")
+    username = request.headers.get("X-Username") or request.query_params.get("username")
+    if not token:
+        return None
+    q = db.query(models.User).filter(models.User.session_token == token)
+    if username:
+        q = q.filter(models.User.username == username)
+    return q.first()
+
 def ensure_schema_migrations():
     try:
         from sqlalchemy import inspect, text
@@ -108,6 +175,14 @@ def ensure_schema_migrations():
         finally:
             db_prog_seed.close()
         
+        # 0. users table
+        if 'users' in tables:
+            columns = [c['name'] for c in inspector.get_columns('users')]
+            with engine.connect() as conn:
+                if 'full_name' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR(100) NULL"))
+                    conn.commit()
+
         # 1. system_settings
         if 'system_settings' in tables:
             columns = [c['name'] for c in inspector.get_columns('system_settings')]
@@ -142,6 +217,14 @@ def ensure_schema_migrations():
                     conn.commit()
                 if 'template_slot' not in columns:
                     conn.execute(text("ALTER TABLE master_batches ADD COLUMN template_slot INT DEFAULT 1"))
+                    conn.commit()
+
+        # 3b. payment_records: payment_period
+        if 'payment_records' in tables:
+            columns = [c['name'] for c in inspector.get_columns('payment_records')]
+            with engine.connect() as conn:
+                if 'payment_period' not in columns:
+                    conn.execute(text("ALTER TABLE payment_records ADD COLUMN payment_period VARCHAR(100) NULL"))
                     conn.commit()
 
         os.makedirs("static/templates", exist_ok=True)
@@ -201,6 +284,35 @@ def ensure_schema_migrations():
                         )
                         db_mig.add(new_cfg)
                         db_mig.commit()
+
+            # Ensure collection_period column exists in payment_records
+            try:
+                db_mig.execute(text("ALTER TABLE payment_records ADD COLUMN collection_period VARCHAR(100) NULL AFTER payment_period"))
+                db_mig.commit()
+            except Exception:
+                db_mig.rollback()
+
+            # Backfill any payment records where collection_period is null
+            try:
+                db_mig.execute(text("UPDATE payment_records SET collection_period = payment_period WHERE collection_period IS NULL OR collection_period = ''"))
+                db_mig.commit()
+            except Exception:
+                db_mig.rollback()
+
+            # Backfill any legacy payment records with null payment_period
+            unattributed_payments = db_mig.query(models.PaymentRecord).filter(
+                (models.PaymentRecord.payment_period == None) | (models.PaymentRecord.payment_period == "")
+            ).all()
+            if unattributed_payments:
+                active_settings = db_mig.query(models.SystemSettings).first()
+                current_active = active_settings.active_period if active_settings else "Legacy Period"
+                for pr in unattributed_payments:
+                    fb = db_mig.query(models.Booklet).filter(
+                        models.Booklet.enrollment_id == pr.enrollment_id,
+                        models.Booklet.status == "distributed"
+                    ).first()
+                    pr.payment_period = fb.exam_period if (fb and fb.exam_period) else current_active
+                db_mig.commit()
         finally:
             db_mig.close()
     except Exception as e:
@@ -214,6 +326,25 @@ app = FastAPI(title="BOOKLETLOG System")
 # Mount static files (PDFs, CSS) and HTML templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# Universal Starlette & Jinja2 TemplateResponse bridge:
+# Automatically normalizes legacy TemplateResponse("file.html", {"request": request})
+# and modern TemplateResponse(request, "file.html", context) across all Starlette & Python versions.
+_raw_template_response = templates.TemplateResponse
+
+def _safe_template_response(*args, **kwargs):
+    if args and isinstance(args[0], str):
+        name = args[0]
+        context = args[1] if len(args) > 1 and isinstance(args[1], dict) else kwargs.get("context", {})
+        request = context.get("request") if isinstance(context, dict) else kwargs.get("request")
+        if request is not None:
+            try:
+                return _raw_template_response(request=request, name=name, context=context)
+            except TypeError:
+                return _raw_template_response(request, name, context)
+    return _raw_template_response(*args, **kwargs)
+
+templates.TemplateResponse = _safe_template_response
 # 3. Database Dependency
 def get_db():
     db = SessionLocal()
@@ -326,6 +457,19 @@ def notify_lan_mutation(event_type: str, details: dict = None, db: Session = Non
         except Exception:
             pass
 
+
+# Auto-provision viewer accounts for existing teachers if any
+try:
+    _init_db = SessionLocal()
+    _existing_teachers = _init_db.query(models.Enrollment.teacher_name, models.Enrollment.department).distinct().all()
+    for _t_name, _dept in _existing_teachers:
+        if _t_name:
+            auto_provision_instructor_account(_t_name, _dept or "CS", _init_db)
+    _init_db.close()
+except Exception as _e:
+    print(f"Notice: Teacher auto-provisioning check: {_e}")
+
+
 @app.websocket("/ws/updates")
 async def websocket_updates(websocket: WebSocket):
     await manager.connect(websocket)
@@ -355,6 +499,136 @@ def get_sync_version(db: Session = Depends(get_db)):
     settings = db.query(models.SystemSettings).first()
     version = settings.data_version if settings and settings.data_version else 1
     return {"status": "success", "version": version}
+
+def get_system_lan_info(target_ip: Optional[str] = None):
+    import socket
+    import subprocess
+    import re
+
+    ethernet_ips = []
+    wifi_ips = []
+    other_ips = []
+
+    # 1. Hardware-level inspection via Windows ipconfig to strictly prioritize wired Ethernet over Wi-Fi
+    try:
+        proc = subprocess.run(['ipconfig'], capture_output=True, text=True, timeout=3)
+        current_adapter = ''
+        for line in proc.stdout.splitlines():
+            line_str = line.strip()
+            if not line_str:
+                continue
+            if 'adapter' in line_str.lower() and ':' in line_str:
+                current_adapter = line_str.lower()
+            elif 'ipv4' in line_str.lower() and ':' in line_str:
+                match = re.search(r':\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)', line_str)
+                if match:
+                    ip = match.group(1).strip()
+                    if not ip.startswith('127.') and not ip.startswith('169.254.'):
+                        if 'ethernet' in current_adapter and 'bluetooth' not in current_adapter and 'virtual' not in current_adapter:
+                            if ip not in ethernet_ips:
+                                ethernet_ips.append(ip)
+                        elif 'wireless' in current_adapter or 'wi-fi' in current_adapter or 'wifi' in current_adapter:
+                            if ip not in wifi_ips:
+                                wifi_ips.append(ip)
+                        else:
+                            if ip not in other_ips:
+                                other_ips.append(ip)
+    except Exception:
+        pass
+
+    raw_ips = ethernet_ips + other_ips + wifi_ips
+
+    # 2. Fallback to socket IP discovery
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith('127.') and not ip.startswith('169.254.') and ip not in raw_ips:
+                raw_ips.append(ip)
+    except Exception:
+        pass
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0)
+        s.connect(('10.254.254.254', 1))
+        p = s.getsockname()[0]
+        s.close()
+        if p and not p.startswith('127.') and not p.startswith('169.254.') and p not in raw_ips:
+            raw_ips.append(p)
+    except Exception:
+        pass
+
+    if not raw_ips:
+        raw_ips = ['127.0.0.1']
+
+    # Sort and prioritize: Ethernet first, then standard router subnets over secondary networks
+    def ip_priority(ip_str):
+        if ip_str in ethernet_ips:
+            return 0
+        if ip_str.startswith('192.168.0.'):
+            return 1
+        if ip_str.startswith('192.168.55.'):
+            return 2
+        if ip_str.startswith('192.168.1.'):
+            return 3
+        if ip_str.startswith('192.168.'):
+            return 4
+        if ip_str.startswith('10.'):
+            return 5
+        if ip_str.startswith('172.'):
+            return 6
+        return 7
+
+    sorted_ips = sorted(raw_ips, key=ip_priority)
+
+    # Human-friendly descriptions
+    adapter_list = []
+    for ip_str in sorted_ips:
+        if ip_str.startswith('192.168.0.'):
+            label = f"New Router LAN ({ip_str}) — Recommended"
+        elif ip_str.startswith('192.168.55.'):
+            label = f"Dedicated Kiosk Subnet ({ip_str})"
+        elif ip_str.startswith('192.168.1.'):
+            label = f"Local Router LAN ({ip_str})"
+        elif ip_str.startswith('192.168.28.'):
+            label = f"Secondary Wi-Fi / Hotspot ({ip_str})"
+        else:
+            label = f"Network Interface ({ip_str})"
+        adapter_list.append({"ip": ip_str, "label": label})
+
+    if target_ip and target_ip in raw_ips:
+        active_ip = target_ip
+    else:
+        active_ip = sorted_ips[0]
+
+    def make_qr_data_uri(text):
+        try:
+            qr = qrcode.QRCode(box_size=5, border=2)
+            qr.add_data(text)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color='black', back_color='white')
+            buf = BytesIO()
+            img.save(buf, format='PNG')
+            return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+        except Exception:
+            return ""
+
+    https_url = f"https://{active_ip}:8000"
+    http_url = f"http://{active_ip}:8080"
+
+    return {
+        "status": "success",
+        "primary_ip": active_ip,
+        "all_ips": adapter_list,
+        "https_url": https_url,
+        "http_url": http_url,
+        "https_qr": make_qr_data_uri(https_url),
+        "http_qr": make_qr_data_uri(http_url),
+    }
+
+@app.get("/api/network-info")
+def get_network_info(ip: Optional[str] = None):
+    return get_system_lan_info(target_ip=ip)
 
 
 
@@ -478,13 +752,25 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         )
 
     ream_count = request_data.ream_count
-    # Deterministic yield capacity based on paper sheets
-    yield_per_ream = 500 // settings.sheets_per_booklet
-    ream_capacity = ream_count * yield_per_ream
+    sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
+    
+    # Carryover-aware conversion capacity combining newly procured reams and vault carryover sheets
+    prev_excess = course_metric.get("prev_excess_sheets", 0) if course_metric else 0
+
+    existing_batches = db.query(models.MasterBatch).filter(
+        models.MasterBatch.department == department,
+        models.MasterBatch.registered_period == current_period
+    ).all()
+    reams_already_used = sum(b.ream_count for b in existing_batches)
+    sheets_already_consumed = sum(b.total_yield * (b.sheets_per_booklet or sheets_per_b) for b in existing_batches)
+    unused_carryover = max(0, (reams_already_used * 500 + prev_excess) - sheets_already_consumed)
+
+    total_sheets_available = (ream_count * 500) + unused_carryover
+    conversion_capacity = total_sheets_available // sheets_per_b if sheets_per_b > 0 else (ream_count * 83)
     
     # Cap total_yield to the exact net target_needed (deficit + safety buffer) so excess unassigned barcodes are never produced
     target_needed = course_metric.get("target_production", 0) if course_metric else 0
-    total_yield = min(ream_capacity, target_needed) if target_needed > 0 else ream_capacity
+    total_yield = min(conversion_capacity, target_needed) if target_needed > 0 else conversion_capacity
     
     # 1. Find the last generated reference number for THIS department (Per-course independent sequence)
     last_booklet = db.query(models.Booklet).join(models.MasterBatch).filter(
@@ -606,6 +892,7 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def read_dashboard(request: Request, db: Session = Depends(get_db)):
+    active_period = get_active_period(db)
     # 1. Total Enrolled Students (This is the Absolute Demand)
     total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     
@@ -627,7 +914,11 @@ def read_dashboard(request: Request, db: Session = Depends(get_db)):
         "fulfillment_rate": fulfillment_rate
     }
     
-    return templates.TemplateResponse("dashboard.html", {"request": request, "analytics": analytics})
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "analytics": analytics,
+        "active_period": active_period
+    })
 
 
 @app.get("/history", response_class=HTMLResponse)
@@ -1265,7 +1556,7 @@ async def release_pack_beacon(request: Request, db: Session = Depends(get_db)):
 @app.get("/", response_class=HTMLResponse)
 @app.get("/login", response_class=HTMLResponse)
 def read_login(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html")
 
 import uuid
 
@@ -1287,6 +1578,7 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
         "user": {
             "id": user.id,
             "username": user.username,
+            "full_name": user.full_name or user.username,
             "role": user.role,
             "department": user.department,
             "session_token": new_token
@@ -1313,6 +1605,7 @@ def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_
             "status": "valid",
             "id": user.id,
             "username": user.username,
+            "full_name": user.full_name or user.username,
             "role": user.role,
             "department": user.department,
             "updated_by": getattr(user, "updated_by", None) or "Administrator"
@@ -1460,6 +1753,18 @@ def check_dss_alert(db: Session = Depends(get_db)):
 
 @app.get("/enrollments", response_class=HTMLResponse)
 def read_enrollments(request: Request, db: Session = Depends(get_db)):
+    # Order by teacher, subject, and section to support neat nested grouping in template
+    enrollments = db.query(models.Enrollment).order_by(
+        models.Enrollment.teacher_name.asc(),
+        models.Enrollment.subject.asc(),
+        models.Enrollment.section.asc()
+    ).all()
+    return templates.TemplateResponse("enrollments.html", {"request": request, "enrollments": enrollments})
+
+
+
+    pass
+
     enrollments = db.query(models.Enrollment).all()
     return templates.TemplateResponse("enrollments.html", {"request": request, "enrollments": enrollments})
 
@@ -1478,8 +1783,14 @@ def create_enrollment(enr: schemas.EnrollmentCreate, db: Session = Depends(get_d
     db.add(new_enr)
     db.commit()
     db.refresh(new_enr)
+    was_prov = False
+    if enr.teacher_name.strip():
+        _, was_prov = auto_provision_instructor_account(enr.teacher_name.strip(), inferred_dept, db)
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "create", "section": section_upper, "id": new_enr.id}, db=db)
-    return {"status": "success", "message": "Class record added successfully!", "id": new_enr.id}
+    msg = "Class record added successfully!"
+    if was_prov:
+        msg += f" Faculty login account auto-provisioned (default password: user12345)."
+    return {"status": "success", "message": msg, "id": new_enr.id}
 
 @app.post("/api/enrollments/bulk-import")
 def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Depends(get_db)):
@@ -1523,13 +1834,30 @@ def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Dep
             added_count += 1
             
     db.commit()
+    prov_count = 0
+    unique_teachers = {}
+    for item in req.records:
+        t_name = item.teacher_name.strip()
+        sec_upper = item.section.strip().upper()
+        if t_name and t_name not in unique_teachers:
+            unique_teachers[t_name] = detect_department_from_section(sec_upper, db=db)
+    for t_name, dept in unique_teachers.items():
+        _, created = auto_provision_instructor_account(t_name, dept, db)
+        if created:
+            prov_count += 1
+
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "bulk_import", "added": added_count, "updated": updated_count}, db=db)
     
+    msg = f"Bulk import complete: {added_count} new class(es) added, {updated_count} existing class(es) updated."
+    if prov_count > 0:
+        msg += f" {prov_count} faculty Viewer account(s) auto-provisioned (default password: user12345)."
+
     return {
         "status": "success",
-        "message": f"Bulk import complete: {added_count} new class(es) added, {updated_count} existing class(es) updated.",
+        "message": msg,
         "added": added_count,
         "updated": updated_count,
+        "provisioned_accounts": prov_count,
         "total": added_count + updated_count
     }
 
@@ -1615,11 +1943,14 @@ def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_boo
             dist_dt = fb.date_distributed if (fb and getattr(fb, 'date_distributed', None)) else datetime.now()
         
         balance_after = round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2)
+        active_period = get_active_period(db)
+        fb_period = fb.exam_period if (fb and fb.exam_period) else active_period
         backfill_record = models.PaymentRecord(
             enrollment_id=enr.id,
             amount=unlogged_diff,
             balance_after=balance_after,
             payment_date=dist_dt,
+            payment_period=fb_period,
             recorded_by="System Clerk",
             notes="Initial / Reconciled Payment"
         )
@@ -1627,8 +1958,45 @@ def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_boo
         db.commit()
         db.refresh(enr)
 
+def get_user_display_name_map(db: Session) -> dict:
+    """Builds a case-insensitive map from username to user full_name (with clean fallback)."""
+    user_map = {}
+    users = db.query(models.User).all()
+    for u in users:
+        u_name = (u.username or "").strip().lower()
+        if not u_name:
+            continue
+        full_name = (u.full_name or "").strip()
+        if full_name:
+            user_map[u_name] = full_name
+        elif u_name in ("admin", "administrator"):
+            user_map[u_name] = "Administrator"
+        else:
+            user_map[u_name] = u.username.replace("_", " ").title()
+    return user_map
+
+def resolve_display_clerk(recorded_by: Optional[str], user_map: dict) -> str:
+    """Resolves an audit username or clerk string to their real registered name."""
+    raw = (recorded_by or "").strip()
+    if not raw:
+        return "System Clerk"
+    low = raw.lower()
+    if low in user_map:
+        return user_map[low]
+    if low in ("admin", "administrator"):
+        return "Administrator"
+    return raw
+
 @app.get("/api/public-receipts")
-def get_public_receipts(db: Session = Depends(get_db)):
+def get_public_receipts(request: Request, db: Session = Depends(get_db)):
+    auth_user = get_portal_authenticated_user(request, db)
+    if not auth_user:
+        return {
+            "status": "auth_required",
+            "message": "Authentication required. Please log in to view transactions.",
+            "programs": [],
+            "data": []
+        }
     try:
         active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).order_by(models.AcademicProgram.code).all()
         programs_data = [
@@ -1642,8 +2010,19 @@ def get_public_receipts(db: Session = Depends(get_db)):
             for p in active_programs
         ]
 
-        enrollments = db.query(models.Enrollment).all()
+        enrollments_query = db.query(models.Enrollment)
+        if auth_user.role.lower() == "viewer":
+            target_name = (auth_user.full_name or auth_user.username or "").strip()
+            enrollments_query = enrollments_query.filter(
+                or_(
+                    func.lower(models.Enrollment.teacher_name) == target_name.lower(),
+                    func.lower(models.Enrollment.teacher_name) == (auth_user.username or "").strip().lower()
+                )
+            )
+
+        enrollments = enrollments_query.all()
         receipts_data = []
+        clerk_map = get_user_display_name_map(db)
         
         settings = db.query(models.SystemSettings).first()
         booklet_price = settings.booklet_price if settings else 2.50
@@ -1735,7 +2114,7 @@ def get_public_receipts(db: Session = Depends(get_db)):
                             "balance_after": round(pr.balance_after, 2),
                             "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
                             "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
-                            "recorded_by": pr.recorded_by or "System Clerk",
+                            "recorded_by": resolve_display_clerk(pr.recorded_by, clerk_map),
                             "notes": pr.notes or ""
                         })
 
@@ -1780,7 +2159,15 @@ def public_transaction_profile_portal(request: Request):
     return templates.TemplateResponse("transaction_profile.html", {"request": request})
 
 @app.get("/api/public-instructor-profiles")
-def get_public_instructor_profiles(db: Session = Depends(get_db)):
+def get_public_instructor_profiles(request: Request, db: Session = Depends(get_db)):
+    auth_user = get_portal_authenticated_user(request, db)
+    if not auth_user:
+        return {
+            "status": "auth_required",
+            "message": "Authentication required. Please log in to view transactions.",
+            "programs": [],
+            "instructors": []
+        }
     try:
         active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).order_by(models.AcademicProgram.code).all()
         programs_data = [
@@ -1797,8 +2184,19 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
         settings = db.query(models.SystemSettings).first()
         booklet_price = settings.booklet_price if settings else 2.50
 
-        enrollments = db.query(models.Enrollment).all()
+        enrollments_query = db.query(models.Enrollment)
+        if auth_user.role.lower() == "viewer":
+            target_name = (auth_user.full_name or auth_user.username or "").strip()
+            enrollments_query = enrollments_query.filter(
+                or_(
+                    func.lower(models.Enrollment.teacher_name) == target_name.lower(),
+                    func.lower(models.Enrollment.teacher_name) == (auth_user.username or "").strip().lower()
+                )
+            )
+
+        enrollments = enrollments_query.all()
         instructors_map = {}
+        clerk_map = get_user_display_name_map(db)
 
         for enr in enrollments:
             teacher_clean = (enr.teacher_name or "Unknown").strip()
@@ -1810,10 +2208,8 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
                 models.Booklet.status == "distributed"
             ).order_by(models.Booklet.id).all()
 
-            if not distributed_booklets and (enr.amount_due or 0.0) <= 0:
-                continue
-
-            reconcile_enrollment_payments(enr, db)
+            if distributed_booklets or (enr.amount_due or 0.0) > 0:
+                reconcile_enrollment_payments(enr, db)
 
             if teacher_clean not in instructors_map:
                 instructors_map[teacher_clean] = {
@@ -1841,6 +2237,15 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
             inst["total_paid"] += paid
 
             # Class item
+            if qty == 0 and due == 0:
+                class_payment_status = "Not Issued"
+            elif bal <= 0 and due > 0:
+                class_payment_status = "Fully Paid"
+            elif paid > 0 and bal > 0:
+                class_payment_status = "Partially Paid"
+            else:
+                class_payment_status = enr.payment_status or "Unpaid"
+
             inst["classes"].append({
                 "enrollment_id": enr.id,
                 "section": enr.section,
@@ -1850,7 +2255,7 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
                 "amount_due": due,
                 "amount_paid": paid,
                 "balance": bal,
-                "payment_status": enr.payment_status or "Unpaid"
+                "payment_status": class_payment_status
             })
 
             # Payment records for this enrollment
@@ -1864,7 +2269,7 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
                     "balance_after": round(pr.balance_after, 2),
                     "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
                     "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
-                    "recorded_by": pr.recorded_by or "System Clerk",
+                    "recorded_by": resolve_display_clerk(pr.recorded_by, clerk_map),
                     "notes": pr.notes or ""
                 })
 
@@ -1874,15 +2279,32 @@ def get_public_instructor_profiles(db: Session = Depends(get_db)):
             inst["total_paid"] = round(inst["total_paid"], 2)
             inst["total_balance"] = round(max(0.0, inst["total_due"] - inst["total_paid"]), 2)
             
-            if inst["total_balance"] <= 0 and inst["total_due"] > 0:
-                inst["overall_status"] = "Fully Paid"
-            elif inst["total_paid"] > 0:
-                inst["overall_status"] = "Partially Paid"
+            if inst["total_due"] > 0:
+                if inst["total_balance"] <= 0:
+                    inst["overall_status"] = "Fully Paid"
+                elif inst["total_paid"] > 0:
+                    inst["overall_status"] = "Partially Paid"
+                else:
+                    inst["overall_status"] = "Unpaid"
             else:
-                inst["overall_status"] = "Unpaid"
+                inst["overall_status"] = "No Transactions"
 
             inst["payments"].sort(key=lambda x: x["payment_date"])
             instructors_list.append(inst)
+
+        if auth_user.role.lower() == "viewer" and not instructors_list:
+            target_name = (auth_user.full_name or auth_user.username or "").strip()
+            instructors_list = [{
+                "teacher_name": target_name,
+                "department": auth_user.department or "CS",
+                "total_due": 0.0,
+                "total_paid": 0.0,
+                "total_balance": 0.0,
+                "total_qty": 0,
+                "overall_status": "No Transactions",
+                "classes": [],
+                "payments": []
+            }]
 
         instructors_list.sort(key=lambda x: x["teacher_name"].lower())
 
@@ -2504,6 +2926,16 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
         if credit_to_apply > 0:
             enrollment.amount_paid = round(enrollment.amount_paid + credit_to_apply, 2)
             enrollment.replacement_credit = max(0.0, round(credit_available - credit_to_apply, 2))
+            credit_record = models.PaymentRecord(
+                enrollment_id=enrollment.id,
+                amount=credit_to_apply,
+                balance_after=round(max(0.0, enrollment.amount_due - enrollment.amount_paid), 2),
+                payment_date=datetime.now(),
+                payment_period=active_period,
+                recorded_by=req.clerk_name or "System Clerk",
+                notes="Defective Booklet Replacement Credit Applied"
+            )
+            db.add(credit_record)
         
         if enrollment.amount_due > 0 and enrollment.amount_paid >= enrollment.amount_due:
             enrollment.payment_status = "Fully Paid"
@@ -2790,6 +3222,29 @@ def reset_all_transactions(req: AdminResetRequest, db: Session = Depends(get_db)
 
 
 
+def parse_period_chronological_rank(period_str: Optional[str]) -> int:
+    """Computes a deterministic integer score for chronological comparison of examination periods."""
+    if not period_str or period_str == "UNSET" or "UNSET" in period_str:
+        return 0
+    ay_match = re.search(r'AY\s+(\d{4})', period_str)
+    start_year = int(ay_match.group(1)) if ay_match else 2000
+
+    term_rank = 1
+    p_lower = period_str.lower()
+    if "1st sem" in p_lower and ("midterm" in p_lower or "midterms" in p_lower):
+        term_rank = 1
+    elif "1st sem" in p_lower and ("final" in p_lower or "finals" in p_lower):
+        term_rank = 2
+    elif "2nd sem" in p_lower and ("midterm" in p_lower or "midterms" in p_lower):
+        term_rank = 3
+    elif "2nd sem" in p_lower and ("final" in p_lower or "finals" in p_lower):
+        term_rank = 4
+    elif "midyear" in p_lower:
+        term_rank = 5
+
+    return (start_year * 10) + term_rank
+
+
 def get_previous_period_financial_summary(current_period: Optional[str], db: Session):
     """
     Computes financial carryover from the chronologically preceding period configuration:
@@ -2798,10 +3253,15 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
     3. Total rollover equity available
     4. Course-by-course leftover excess paper sheets from rounded-up reams
     """
-    query = db.query(models.PeriodConfiguration)
+    configs = db.query(models.PeriodConfiguration).all()
     if current_period:
-        query = query.filter(models.PeriodConfiguration.academic_period != current_period)
-    prev_cfg = query.order_by(models.PeriodConfiguration.updated_at.desc(), models.PeriodConfiguration.id.desc()).first()
+        current_rank = parse_period_chronological_rank(current_period)
+        preceding_configs = [c for c in configs if parse_period_chronological_rank(c.academic_period) < current_rank]
+        preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+        prev_cfg = preceding_configs[0] if preceding_configs else None
+    else:
+        configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+        prev_cfg = configs[0] if configs else None
     
     if not prev_cfg:
         return {
@@ -2814,6 +3274,9 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
             "prev_prod_cost": 0.0,
             "prev_unspent_budget": 0.0,
             "prev_net_profit": 0.0,
+            "prev_collected": 0.0,
+            "prev_billed": 0.0,
+            "prev_pending_ar": 0.0,
             "total_carryover_available": 0.0,
             "course_excess_sheets": {}
         }
@@ -2833,10 +3296,11 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
     prev_reams_conv = sum([b.ream_count for b in prev_batches])
 
     # Booklets issued in previous period
-    prev_issued_count = db.query(models.Booklet).filter(
+    prev_issued_booklets = db.query(models.Booklet).filter(
         models.Booklet.exam_period == prev_period,
         models.Booklet.status == "distributed"
-    ).count()
+    ).all()
+    prev_issued_count = len(prev_issued_booklets)
 
     # Materials cost in previous period
     prev_paper_cost = round(prev_reams_conv * prev_ream_p, 2)
@@ -2847,14 +3311,23 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
 
     prev_unspent_budget = max(0.0, round(prev_budget - prev_prod_cost, 2))
 
-    # Net profit in previous period
-    prev_gross = round(prev_issued_count * prev_booklet_p, 2)
+    # Realized cash collections & Net Operating Surplus in previous period (strictly aligned with expenditure report)
+    prev_period_payments = db.query(models.PaymentRecord).filter(
+        models.PaymentRecord.payment_period == prev_period
+    ).all()
+    prev_collected = round(sum(pr.amount for pr in prev_period_payments), 2)
+    prev_billed = round(sum((b.unit_price if b.unit_price is not None else prev_booklet_p) for b in prev_issued_booklets), 2)
+    prev_pending_ar = max(0.0, round(prev_billed - prev_collected, 2))
+
+    prev_gross = prev_collected
     prev_dept_share = round(prev_gross * 0.01, 2)
     prev_subtotal = round(prev_gross - prev_dept_share, 2)
     prev_igp_share = round(prev_subtotal * 0.20, 2)
-    prev_net_profit = max(0.0, round(prev_subtotal - prev_igp_share - prev_prod_cost, 2))
+    prev_net_profit = round(prev_subtotal - prev_igp_share - prev_prod_cost, 2)
 
-    total_carryover = round(prev_unspent_budget + prev_net_profit, 2)
+    # Available cash rollover for procurement:
+    # Operating deficits due to uncollected receivables do not drag cash reserves negative or bloat new material production budget
+    total_carryover = max(0.0, round(prev_unspent_budget + max(0.0, prev_net_profit), 2))
 
     # Calculate excess paper sheets per course from previous period's rounded-up procurement
     active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
@@ -2871,7 +3344,8 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
             models.Booklet.exam_period == prev_period,
             models.Booklet.status == "distributed"
         ).count()
-        dept_consumed_sheets = dept_distributed * prev_sheets_b
+        # Consumed blank sheets = sheets actually printed into physical booklets during previous period batches
+        dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or prev_sheets_b) for b in dept_batches)
 
         # If batches were recorded on disk, calculate actual leftover sheets:
         if dept_reams > 0:
@@ -2903,6 +3377,9 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
         "prev_prod_cost": prev_prod_cost,
         "prev_unspent_budget": prev_unspent_budget,
         "prev_net_profit": prev_net_profit,
+        "prev_collected": prev_collected,
+        "prev_billed": prev_billed,
+        "prev_pending_ar": prev_pending_ar,
         "total_carryover_available": total_carryover,
         "course_excess_sheets": course_excess_map
     }
@@ -2968,15 +3445,17 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         
         remaining_demand = max(0, headcount - distributed)
         
-        # Available vault stock (packaged and activated supply packs or loose stock)
+        # Available vault stock (packaged and activated supply packs or loose stock) for active period
         available = db.query(models.Booklet).join(models.MasterBatch).filter(
             models.MasterBatch.department == dept,
+            models.MasterBatch.registered_period == active_period,
             models.Booklet.status.in_(["available", "loose_stock"])
         ).count()
 
-        # Pending generated stock (batches stamped/printed on PDF but not yet activated into supply packs)
+        # Pending generated stock (batches stamped/printed on PDF but not yet activated into supply packs) for active period
         pending_stock = db.query(models.Booklet).join(models.MasterBatch).filter(
             models.MasterBatch.department == dept,
+            models.MasterBatch.registered_period == active_period,
             models.Booklet.status == "pending"
         ).count()
         
@@ -2998,6 +3477,18 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         course_procured_sheets = reams_needed * 500
         course_excess_sheets = max(0, (course_procured_sheets + prev_excess) - gross_sheets_needed)
         course_excess_booklets = course_excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
+
+        # Baseline course allocation & material reserve across entire academic period
+        # (Preserves excess tracking transparency even after booklets are printed/generated)
+        base_demand_booklets = max(headcount, total_existing_stock) + (math.ceil(headcount * (buffer_pct / 100.0)) if buffer_pct > 0 else 0)
+        base_gross_sheets = base_demand_booklets * sheets_per_b
+        base_net_sheets = max(0, base_gross_sheets - prev_excess)
+        base_total_reams = math.ceil(base_net_sheets / 500) if base_net_sheets > 0 else 0
+        base_excess_sheets = max(0, (base_total_reams * 500 + prev_excess) - base_gross_sheets)
+        base_excess_booklets = base_excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
+
+        display_excess_sheets = course_excess_sheets if target_production > 0 else base_excess_sheets
+        display_excess_booklets = course_excess_booklets if target_production > 0 else base_excess_booklets
 
         if net_sheets_needed == 0:
             paper_required_text = "0 Sheets (Excess Stock Met)" if gross_sheets_needed > 0 else "0 Sheets (Demand Met)"
@@ -3031,8 +3522,8 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
             "sheets_remainder": sheets_remainder,
             "paper_required_text": paper_required_text,
             "reams_needed": reams_needed,
-            "excess_sheets": course_excess_sheets,
-            "excess_booklets_yield": course_excess_booklets,
+            "excess_sheets": display_excess_sheets,
+            "excess_booklets_yield": display_excess_booklets,
             "projected_yield": projected_yield,
             "prev_period_name": prev_period_name,
             "is_satisfied": bool(target_production == 0)
@@ -3091,7 +3582,10 @@ def get_course_production_metrics_endpoint(period: Optional[str] = None, db: Ses
 def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
     """Calculates KPIs, financial revenue, charts, LIVE INVENTORY, and Year Level Data."""
     try:
-        active_period = period if period else get_active_period(db)
+        system_active_period = get_active_period(db)
+        active_period = period if period else system_active_period
+        is_active_semester = bool(active_period == system_active_period)
+        prev_summary = get_previous_period_financial_summary(active_period, db)
         
         # Fetch issued booklets for the period
         issued_booklets = db.query(models.Booklet).filter(
@@ -3218,18 +3712,83 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         comp_summary = {code: {"1": 0, "2": 0, "3": 0, "4": 0, "total": 0} for code in prog_codes}
         dept_counts = {code: 0 for code in prog_codes}
 
-        for enr in enrollments:
-            b_count = db.query(models.Booklet).filter(
-                models.Booklet.enrollment_id == enr.id,
-                models.Booklet.exam_period == active_period,
-                models.Booklet.status == "distributed"
-            ).count()
+        # Realized Cash Collections strictly scoped to payments collected during active_period
+        period_payments = db.query(models.PaymentRecord).filter(
+            or_(
+                models.PaymentRecord.collection_period == active_period,
+                and_(
+                    models.PaymentRecord.collection_period.is_(None),
+                    models.PaymentRecord.payment_period == active_period
+                )
+            )
+        ).all()
+        enr_payments_map = {}
+        for pr in period_payments:
+            enr_payments_map[pr.enrollment_id] = round(enr_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
 
-            if b_count > 0:
-                amount_due = float(enr.amount_due if enr.amount_due is not None else (b_count * booklet_price))
-                amount_paid = float(enr.amount_paid or 0.0)
-                pending_balance = max(0.0, amount_due - amount_paid)
-                payment_status = enr.payment_status or ("Paid" if pending_balance == 0 and amount_due > 0 else ("Partial" if amount_paid > 0 else "Unpaid"))
+        # Prior Unpaid Balance Carryover: ONLY computed and carried over when viewing the ACTIVE SEMESTER.
+        # Archived semesters are frozen historical snapshots representing strictly that semester's transactions.
+        prior_billed_by_enr = defaultdict(float)
+        prior_paid_by_enr = defaultdict(float)
+        prior_unpaid_by_enr = {}
+        prior_ar_by_dept = {code: 0.0 for code in prog_codes}
+
+        if is_active_semester:
+            target_rank = parse_period_chronological_rank(active_period)
+
+            all_distributed_booklets = db.query(models.Booklet).filter(
+                models.Booklet.exam_period.isnot(None),
+                models.Booklet.exam_period != "",
+                models.Booklet.status == "distributed"
+            ).all()
+            prior_booklets = [
+                b for b in all_distributed_booklets
+                if parse_period_chronological_rank(b.exam_period) < target_rank
+            ]
+            for b in prior_booklets:
+                price = float(b.unit_price) if b.unit_price is not None else float(booklet_price)
+                prior_billed_by_enr[b.enrollment_id] += price
+
+            all_db_payments = db.query(models.PaymentRecord).all()
+            prior_payments = [
+                pr for pr in all_db_payments
+                if parse_period_chronological_rank(pr.collection_period or pr.payment_period) < target_rank
+            ]
+            for pr in prior_payments:
+                prior_paid_by_enr[pr.enrollment_id] += float(pr.amount)
+
+            for enr_id, p_billed in prior_billed_by_enr.items():
+                p_paid = prior_paid_by_enr.get(enr_id, 0.0)
+                unpaid_bal = max(0.0, round(p_billed - p_paid, 2))
+                if unpaid_bal > 0:
+                    prior_unpaid_by_enr[enr_id] = unpaid_bal
+
+            enr_lookup = {e.id: e for e in enrollments}
+            for enr_id, unpaid_bal in prior_unpaid_by_enr.items():
+                enr_obj = enr_lookup.get(enr_id)
+                if enr_obj:
+                    d = resolve_enrollment_department(enr_obj, db)
+                    prior_ar_by_dept[d] = round(prior_ar_by_dept.get(d, 0.0) + unpaid_bal, 2)
+
+        for enr in enrollments:
+            b_count = sum(1 for b in issued_booklets if b.enrollment_id == enr.id)
+            period_paid = enr_payments_map.get(enr.id, 0.0)
+            prior_unpaid = prior_unpaid_by_enr.get(enr.id, 0.0)
+
+            if b_count > 0 or period_paid > 0 or prior_unpaid > 0:
+                current_due = float(b_count * booklet_price) if b_count > 0 else 0.0
+                total_amount_due = round(current_due + prior_unpaid, 2)
+                amount_paid = float(period_paid)
+                pending_balance = max(0.0, round(total_amount_due - amount_paid, 2))
+
+                if b_count == 0 and period_paid > 0 and prior_unpaid == 0:
+                    payment_status = "Prior Period Collection"
+                elif pending_balance == 0 and total_amount_due > 0:
+                    payment_status = "Paid in Full"
+                elif amount_paid > 0:
+                    payment_status = "Partially Paid"
+                else:
+                    payment_status = "Unpaid"
 
                 dept = resolve_enrollment_department(enr, db)
                 if dept in dept_counts:
@@ -3245,26 +3804,37 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                         comp_summary[dept][y] += amount_paid
                         comp_summary[dept]["total"] += amount_paid
 
-                        # Track detailed billing metrics in summary
+                        # Track detailed billing metrics in summary (Current Semester Billed vs Total Due)
                         if f"{y}_billed" not in comp_summary[dept]:
                             comp_summary[dept][f"{y}_billed"] = 0.0
+                            comp_summary[dept][f"{y}_due"] = 0.0
                             comp_summary[dept][f"{y}_collected"] = 0.0
                             comp_summary[dept][f"{y}_pending"] = 0.0
-                        comp_summary[dept][f"{y}_billed"] += amount_due
+                        comp_summary[dept][f"{y}_billed"] += current_due
+                        comp_summary[dept][f"{y}_due"] += total_amount_due
                         comp_summary[dept][f"{y}_collected"] += amount_paid
                         comp_summary[dept][f"{y}_pending"] += pending_balance
 
                         if "total_billed" not in comp_summary[dept]:
                             comp_summary[dept]["total_billed"] = 0.0
+                            comp_summary[dept]["total_due"] = 0.0
+                            comp_summary[dept]["total_prior_debt"] = 0.0
                             comp_summary[dept]["total_collected"] = 0.0
                             comp_summary[dept]["total_pending"] = 0.0
-                        comp_summary[dept]["total_billed"] += amount_due
+                        comp_summary[dept]["total_billed"] += current_due
+                        comp_summary[dept]["total_due"] += total_amount_due
+                        comp_summary[dept]["total_prior_debt"] += prior_unpaid
                         comp_summary[dept]["total_collected"] += amount_paid
                         comp_summary[dept]["total_pending"] += pending_balance
 
                         sheets_used = b_count * sheets_per_b
                         s_reams = sheets_used // 500
                         s_loose = sheets_used % 500
+                        if b_count > 0:
+                            usage_text = f"{s_reams} Ream(s) and {s_loose} paper sheets"
+                        else:
+                            usage_text = "Prior Period Balance Carried Over"
+
                         comp_records[dept][y].append({
                             "teacher": enr.teacher_name,
                             "subject": enr.subject,
@@ -3272,11 +3842,13 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                             "headcount": b_count,
                             "sheets_used": sheets_used,
                             "reams_and_sheets": f"{s_reams}R {s_loose}s",
-                            "usage_display": f"{s_reams} Ream(s) and {s_loose} paper sheets",
+                            "usage_display": usage_text,
                             "whole_reams_to_buy": math.ceil(sheets_used / 500) if sheets_used > 0 else 0,
                             "amount": amount_paid,
                             "amount_paid": amount_paid,
-                            "amount_due": amount_due,
+                            "amount_due": total_amount_due,
+                            "current_billed": current_due,
+                            "prior_unpaid": prior_unpaid,
                             "pending_balance": pending_balance,
                             "payment_status": payment_status
                         })
@@ -3295,22 +3867,44 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         course_metrics = calculate_course_production_metrics(db, active_period)
 
         # --- 4. EXPENDITURE & ROI REPORT (FINANCIALS) ---
-        # Faculty Billed, Realized Cash Collections & Accounts Receivable
-        billed_by_dept = {code: sum(enr.amount_due for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
-        collected_by_dept = {code: sum(enr.amount_paid for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
-        ar_by_dept = {code: sum(max(0.0, enr.amount_due - enr.amount_paid) for enr in enrollments if resolve_enrollment_department(enr, db) == code) for code in prog_codes}
+        # Faculty Billed, Realized Cash Collections & Accounts Receivable (Scoped to Active Period)
+        active_period_enrollment_ids = {b.enrollment_id for b in issued_booklets if b.enrollment_id}
+        period_enrollments = [enr for enr in enrollments if enr.id in active_period_enrollment_ids]
 
-        cs_billed = billed_by_dept.get("CS", 0.0)
-        it_billed = billed_by_dept.get("IT", 0.0)
-        total_billed = sum(billed_by_dept.values())
+        # Calculate exact billed amounts for booklets distributed in active_period
+        current_billed_by_dept = {code: 0.0 for code in prog_codes}
+        for enr in period_enrollments:
+            dept = resolve_enrollment_department(enr, db)
+            enr_b_count = sum(1 for b in issued_booklets if b.enrollment_id == enr.id)
+            enr_billed = round(enr_b_count * booklet_price, 2)
+            current_billed_by_dept[dept] = round(current_billed_by_dept.get(dept, 0.0) + enr_billed, 2)
+
+        # Cumulative Billed across active semester (Current Billed + Prior Carried Over AR)
+        cumulative_billed_by_dept = {
+            code: round(current_billed_by_dept.get(code, 0.0) + prior_ar_by_dept.get(code, 0.0), 2)
+            for code in prog_codes
+        }
+
+        # Realized cash collections strictly from payments collected during active_period
+        collected_by_dept = {code: 0.0 for code in prog_codes}
+        for pr in period_payments:
+            dept = resolve_enrollment_department(pr.enrollment, db)
+            collected_by_dept[dept] = round(collected_by_dept.get(dept, 0.0) + pr.amount, 2)
+
+        # Semester Total Billed strictly reflects the current semester's actual billings
+        cs_billed = current_billed_by_dept.get("CS", 0.0)
+        it_billed = current_billed_by_dept.get("IT", 0.0)
+        total_billed = round(sum(current_billed_by_dept.values()), 2)
 
         cs_collected = collected_by_dept.get("CS", 0.0)
         it_collected = collected_by_dept.get("IT", 0.0)
-        total_collected = sum(collected_by_dept.values())
+        total_collected = round(sum(collected_by_dept.values()), 2)
 
+        # Accounts Receivable inherits cumulative uncollected debt across semesters
+        ar_by_dept = {code: max(0.0, round(cumulative_billed_by_dept.get(code, 0.0) - collected_by_dept.get(code, 0.0), 2)) for code in prog_codes}
         accounts_receivable_cs = ar_by_dept.get("CS", 0.0)
         accounts_receivable_it = ar_by_dept.get("IT", 0.0)
-        accounts_receivable = sum(ar_by_dept.values())
+        accounts_receivable = round(sum(ar_by_dept.values()), 2)
 
         # Real-Time Realized Cash Gross Sales Revenue (Recognizing actual collected payments)
         dept_gross = {code: collected_by_dept.get(code, 0.0) for code in prog_codes}
@@ -3408,18 +4002,30 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         beginning_balance = department_ream_budget
         reams_purchasing_power = int(department_ream_budget // ream_price) if ream_price > 0 else 0
 
+        has_prior_period = bool(prev_summary and prev_summary.get("has_previous_period"))
+        prior_rollover = float(prev_summary.get("total_carryover_available", 0.0)) if has_prior_period else 0.0
+        institutional_subsidy = max(0.0, round(beginning_balance - prior_rollover, 2)) if has_prior_period and beginning_balance > prior_rollover else 0.0
+
         financials = {
             "beginning_balance": beginning_balance,
+            "has_prior_period": has_prior_period,
+            "prior_rollover": prior_rollover,
+            "institutional_subsidy": institutional_subsidy,
+            "prev_period_name": prev_summary.get("prev_period_name", "") if has_prior_period else "",
             "department_ream_budget": department_ream_budget,
             "reams_purchasing_power": reams_purchasing_power,
             "accounts_receivable": accounts_receivable,
             "accounts_receivable_cs": accounts_receivable_cs,
             "accounts_receivable_it": accounts_receivable_it,
             "ar_by_dept": ar_by_dept,
+            "prior_ar_by_dept": prior_ar_by_dept,
+            "current_billed_by_dept": current_billed_by_dept,
             "cs_billed": cs_billed,
             "it_billed": it_billed,
             "total_billed": total_billed,
-            "billed_by_dept": billed_by_dept,
+            "billed_by_dept": current_billed_by_dept,
+            "cumulative_billed_by_dept": cumulative_billed_by_dept,
+            "total_cumulative_due": round(sum(cumulative_billed_by_dept.values()), 2),
             "cs_collected": cs_collected,
             "it_collected": it_collected,
             "total_collected": total_collected,
@@ -3544,12 +4150,16 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 "yield_per_ream": yield_per_r,
                 "dept_gross": dept_gross,
                 "dept_shares": dept_shares,
-                "dept_billed": billed_by_dept,
+                "dept_billed": current_billed_by_dept,
+                "current_billed_by_dept": current_billed_by_dept,
+                "cumulative_billed_by_dept": cumulative_billed_by_dept,
+                "prior_ar_by_dept": prior_ar_by_dept,
                 "dept_collected": collected_by_dept,
                 "dept_pending": ar_by_dept,
                 "total_billed": total_billed,
                 "total_collected": total_collected,
-                "total_pending": accounts_receivable
+                "total_pending": accounts_receivable,
+                "is_active_semester": is_active_semester
             },
             "financials": financials,
             "course_breakdown": course_metrics["courses"],
@@ -3642,12 +4252,19 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
     total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     has_enrollments = bool(enrollment_count > 0 and total_students > 0)
 
-    distributed = db.query(models.Booklet).filter(models.Booklet.status == "distributed").count()
-    pending_demand = max(0, total_students - distributed)
-    available_stock = db.query(models.Booklet).filter(models.Booklet.status.in_(["available", "loose_stock"])).count()
-    
     # Get active period and course breakdown
     period_name = get_active_period(db)
+
+    distributed = db.query(models.Booklet).join(models.MasterBatch).filter(
+        models.MasterBatch.registered_period == period_name,
+        models.Booklet.status == "distributed"
+    ).count()
+    pending_demand = max(0, total_students - distributed)
+    available_stock = db.query(models.Booklet).join(models.MasterBatch).filter(
+        models.MasterBatch.registered_period == period_name,
+        models.Booklet.status.in_(["available", "loose_stock"])
+    ).count()
+    
     course_metrics = calculate_course_production_metrics(db, period_name)
     sheets_per_b = course_metrics.get("sheets_per_booklet", 5)
     yield_per_r = course_metrics.get("yield_per_ream", 100)
@@ -3888,6 +4505,7 @@ def get_all_users(response: Response, db: Session = Depends(get_db)):
         user_list.append({
             "id": u.id,
             "username": u.username,
+            "full_name": u.full_name or u.username,
             "role": u.role,
             "department": u.department or "All",
             "is_online": bool(u.session_token)
@@ -3950,6 +4568,7 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
     
     new_user = models.User(
         username=req.username.strip(),
+        full_name=req.full_name.strip() if req.full_name else req.username.strip(),
         password=hashed_password,
         role=req.role,
         department=final_department
@@ -3958,7 +4577,11 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     
-    notify_lan_mutation("USER_UPDATED", {"action": "create", "username": new_user.username, "id": new_user.id}, db=db)
+    try:
+        if 'notify_lan_mutation' in globals() and callable(globals()['notify_lan_mutation']):
+            notify_lan_mutation("USER_UPDATED", {"action": "create", "username": new_user.username, "id": new_user.id}, db=db)
+    except Exception:
+        pass
     return {"status": "success", "message": f"Account '{new_user.username}' created successfully!", "id": new_user.id}
 
 @app.put("/api/users/{user_id}")
@@ -3973,6 +4596,8 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
     
     final_dept = "All" if req.role == "Admin" else req.department
     admin_actor = getattr(req, "updated_by", None) or "Administrator"
+    if req.full_name is not None and req.full_name.strip():
+        user.full_name = req.full_name.strip()
     user.role = req.role
     user.department = final_dept
     user.updated_by = admin_actor
@@ -3983,6 +4608,7 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
         "action": "update",
         "user_id": user_id,
         "username": user.username,
+        "full_name": user.full_name or user.username,
         "role": user.role,
         "department": final_dept,
         "updated_by": admin_actor
@@ -3993,6 +4619,7 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
         "user": {
             "id": user.id,
             "username": user.username,
+            "full_name": user.full_name or user.username,
             "role": user.role,
             "department": user.department,
             "updated_by": admin_actor
@@ -4017,6 +4644,57 @@ def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, d
     
     notify_lan_mutation("USER_UPDATED", {"action": "reset_password", "user_id": user_id, "username": user.username}, db=db)
     return {"status": "success", "message": f"Password for '{user.username}' has been reset successfully!"}
+
+
+@app.post("/api/users/change-username")
+def user_change_username(req: schemas.ChangeUsernameRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(func.lower(models.User.username) == req.username.strip().lower()).first()
+    if not user:
+        return {"status": "error", "message": "User not found."}
+
+    # Verify current password
+    if not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
+        return {"status": "error", "message": "Incorrect password. Please verify your password to update your username."}
+
+    # Root admin protection: cannot rename the primary 'admin' account
+    if user.username.lower() == "admin":
+        return {"status": "error", "message": "The system root 'admin' username cannot be renamed."}
+
+    new_clean = req.new_username.strip()
+    if new_clean.lower() == user.username.lower():
+        return {"status": "error", "message": "New username cannot be identical to your current username."}
+
+    is_valid, user_err = validate_username(new_clean, db)
+    if not is_valid:
+        return {"status": "error", "message": user_err}
+
+    old_username = user.username
+    user.username = new_clean
+    # Update any active claimed batch in MasterBatch
+    db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == old_username).update({models.MasterBatch.claimed_by: new_clean})
+    db.commit()
+    db.refresh(user)
+
+    notify_lan_mutation("USER_UPDATED", {
+        "action": "change_username",
+        "old_username": old_username,
+        "new_username": new_clean,
+        "user_id": user.id
+    }, db=db)
+
+    return {
+        "status": "success",
+        "message": f"Your username has been successfully updated to '{new_clean}'!",
+        "username": user.username,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name or user.username,
+            "role": user.role,
+            "department": user.department,
+            "session_token": user.session_token
+        }
+    }
 
 @app.post("/api/users/change-password")
 def user_change_password(req: schemas.ChangePasswordRequest, db: Session = Depends(get_db)):
@@ -4225,6 +4903,15 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     if req.reorder_buffer_percent is None or req.reorder_buffer_percent < 0 or req.reorder_buffer_percent > 100:
         raise HTTPException(status_code=400, detail="Reorder buffer safety margin must be between 0% and 100%.")
 
+    # --- PREVIOUS SEMESTER IMMUTABILITY GUARD ---
+    current_active_period = get_active_period(db)
+    if current_active_period and req.active_period != current_active_period:
+        if parse_period_chronological_rank(req.active_period) < parse_period_chronological_rank(current_active_period):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Previous semester '{req.active_period}' is already completed and archived. You can only save configurations for the current active semester or the next upcoming semester."
+            )
+
     settings = db.query(models.SystemSettings).first()
     if not settings:
         settings = models.SystemSettings()
@@ -4257,7 +4944,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     settings.sheets_per_booklet = req.sheets_per_booklet
     settings.booklet_price = new_price
     settings.active_period = req.active_period
-    settings.department_ream_budget = float(req.department_ream_budget or 0.0)
+    if req.department_ream_budget is not None:
+        settings.department_ream_budget = float(req.department_ream_budget)
     settings.budget_is_manual = bool(req.budget_is_manual)
     settings.reorder_buffer_percent = float(req.reorder_buffer_percent if req.reorder_buffer_percent is not None else 15.0)
     settings.staples_box_price = float(req.staples_box_price if req.staples_box_price is not None else 50.0)
@@ -4277,7 +4965,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     period_cfg.sheets_per_booklet = req.sheets_per_booklet
     period_cfg.yield_per_ream = 500 // req.sheets_per_booklet if req.sheets_per_booklet > 0 else 83
     period_cfg.booklet_price = new_price
-    period_cfg.department_ream_budget = float(req.department_ream_budget or 0.0)
+    if req.department_ream_budget is not None:
+        period_cfg.department_ream_budget = float(req.department_ream_budget)
     period_cfg.budget_is_manual = bool(req.budget_is_manual)
     period_cfg.reorder_buffer_percent = float(req.reorder_buffer_percent if req.reorder_buffer_percent is not None else 15.0)
     period_cfg.staples_box_price = settings.staples_box_price
@@ -4333,9 +5022,12 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
 def list_period_configurations(db: Session = Depends(get_db)):
     """Returns all archived period configurations ordered by last updated date for audit history."""
     configs = db.query(models.PeriodConfiguration).order_by(models.PeriodConfiguration.updated_at.desc()).all()
+    active_period = get_active_period(db)
     return [{
         "id": c.id,
         "academic_period": c.academic_period,
+        "exam_period": c.academic_period,
+        "is_active": bool(active_period and c.academic_period == active_period),
         "semester_prefix": c.semester_prefix,
         "ream_price": c.ream_price,
         "sheets_per_booklet": c.sheets_per_booklet,
@@ -4351,12 +5043,41 @@ def list_period_configurations(db: Session = Depends(get_db)):
         "updated_at": c.updated_at.strftime("%Y-%m-%d %H:%M:%S") if c.updated_at else ""
     } for c in configs]
 
+def parse_period_chronological_rank(period_str: Optional[str]) -> int:
+    """Computes a deterministic integer score for chronological comparison of examination periods."""
+    if not period_str or period_str == "UNSET" or "UNSET" in period_str:
+        return 0
+    ay_match = re.search(r'AY\s+(\d{4})', period_str)
+    start_year = int(ay_match.group(1)) if ay_match else 2000
+
+    term_rank = 1
+    p_lower = period_str.lower()
+    if "1st sem" in p_lower and ("midterm" in p_lower or "midterms" in p_lower):
+        term_rank = 1
+    elif "1st sem" in p_lower and ("final" in p_lower or "finals" in p_lower):
+        term_rank = 2
+    elif "2nd sem" in p_lower and ("midterm" in p_lower or "midterms" in p_lower):
+        term_rank = 3
+    elif "2nd sem" in p_lower and ("final" in p_lower or "finals" in p_lower):
+        term_rank = 4
+    elif "midyear" in p_lower:
+        term_rank = 5
+
+    return (start_year * 10) + term_rank
+
+
 @app.get("/api/period-configuration")
 def get_period_configuration(period: str, db: Session = Depends(get_db)):
     """Returns saved parameters for a specific period, or smart defaults if new, plus preceding period financial carryover."""
     cfg = db.query(models.PeriodConfiguration).filter(
         models.PeriodConfiguration.academic_period == period
     ).first()
+
+    active_period = get_active_period(db)
+    is_active_period = bool(period == active_period)
+    is_previous_period = False
+    if period and active_period:
+        is_previous_period = parse_period_chronological_rank(period) < parse_period_chronological_rank(active_period)
 
     total_demand = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
     prev_summary = get_previous_period_financial_summary(period, db)
@@ -4398,6 +5119,8 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
         return {
             "found": True,
             "academic_period": cfg.academic_period,
+            "is_active_period": is_active_period,
+            "is_previous_period": is_previous_period,
             "semester_prefix": cfg.semester_prefix,
             "ream_price": cfg.ream_price,
             "sheets_per_booklet": cfg.sheets_per_booklet,
@@ -4422,6 +5145,8 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
         # Unconfigured period: return found: False with None for fields to require manual input
         return {
             "found": False,
+            "is_active_period": is_active_period,
+            "is_previous_period": is_previous_period,
             "ream_price": None,
             "sheets_per_booklet": None,
             "yield_per_ream": None,
@@ -4450,6 +5175,7 @@ class PaymentRequest(BaseModel):
     amount: float
     recorded_by: Optional[str] = "System Clerk"
     notes: Optional[str] = None
+    period: Optional[str] = None
 
 
 # --- ACADEMIC PROGRAMS CONFIGURATION (Dynamic Multi-Course Engine) ---
@@ -4647,11 +5373,14 @@ def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_boo
             dist_dt = fb.date_distributed if (fb and fb.date_distributed) else datetime.now()
         
         balance_after = round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2)
+        active_period = get_active_period(db)
+        fb_period = fb.exam_period if (fb and fb.exam_period) else active_period
         backfill_record = models.PaymentRecord(
             enrollment_id=enr.id,
             amount=unlogged_diff,
             balance_after=balance_after,
             payment_date=dist_dt,
+            payment_period=fb_period,
             recorded_by="System Clerk",
             notes="Initial / Reconciled Payment"
         )
@@ -4661,98 +5390,156 @@ def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_boo
 
 
 @app.get("/api/payment-tracking")
-def get_payment_tracking(department: str = "ALL", db: Session = Depends(get_db)):
+def get_payment_tracking(department: str = "ALL", period: Optional[str] = None, db: Session = Depends(get_db)):
     try:
         # Get global settings to determine booklet price
         settings = db.query(models.SystemSettings).first()
         current_price = settings.booklet_price if settings else 2.50
+        active_period = get_active_period(db)
+        clerk_map = get_user_display_name_map(db)
 
         # Get all enrollments that have at least some booklets distributed (or amount_due > 0)
         query = db.query(models.Enrollment).filter(models.Enrollment.amount_due > 0)
         if department.upper() not in ["ALL", "ADMIN"]:
             query = query.filter(models.Enrollment.department == department)
-        query = query.options(joinedload(models.Enrollment.payment_records))
+        query = query.options(joinedload(models.Enrollment.payment_records)).order_by(models.Enrollment.id.desc())
         enrollments = query.all()
 
         if not enrollments:
-            return {"status": "success", "data": []}
+            return {"status": "success", "data": [], "active_period": active_period}
 
         enr_ids = [enr.id for enr in enrollments]
 
-        # Bulk count query for distributed and loose_stock booklets
-        counts_rows = db.query(
-            models.Booklet.enrollment_id,
-            models.Booklet.status,
-            func.count(models.Booklet.id)
-        ).filter(
+        # Query all booklets associated with these enrollments
+        all_booklets = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id.in_(enr_ids),
-            models.Booklet.status.in_(["distributed", "loose_stock"])
-        ).group_by(models.Booklet.enrollment_id, models.Booklet.status).all()
+            models.Booklet.status.in_(["distributed", "loose_stock", "voided"])
+        ).order_by(models.Booklet.id).all()
 
-        booklet_counts = {}
-        for enr_id, status, cnt in counts_rows:
-            booklet_counts[(enr_id, status)] = cnt
+        # Group booklets by (enrollment_id, exam_period)
+        enr_periods_map = defaultdict(set)
+        enr_bks_map = defaultdict(lambda: defaultdict(list))
+        for b in all_booklets:
+            b_period = b.exam_period.strip() if (b.exam_period and b.exam_period.strip()) else (active_period if (active_period and active_period != "UNSET") else "Legacy (No Period)")
+            enr_periods_map[b.enrollment_id].add(b_period)
+            enr_bks_map[b.enrollment_id][b_period].append(b)
 
-        # Bulk earliest distribution date query
-        earliest_rows = db.query(
-            models.Booklet.enrollment_id,
-            func.min(models.Booklet.date_distributed)
-        ).filter(
-            models.Booklet.enrollment_id.in_(enr_ids),
-            models.Booklet.status == "distributed"
-        ).group_by(models.Booklet.enrollment_id).all()
-
-        earliest_dates = {enr_id: dt for enr_id, dt in earliest_rows}
+        # Also capture periods present in payment_records
+        for enr in enrollments:
+            for pr in (enr.payment_records or []):
+                if pr.payment_period and pr.payment_period.strip():
+                    enr_periods_map[enr.id].add(pr.payment_period.strip())
+            if not enr_periods_map[enr.id]:
+                enr_periods_map[enr.id].add(active_period if (active_period and active_period != "UNSET") else "Legacy (No Period)")
 
         data = []
         for enr in enrollments:
-            distributed_count = booklet_counts.get((enr.id, "distributed"), 0)
-            loose_returned = booklet_counts.get((enr.id, "loose_stock"), 0)
+            sorted_periods = sorted(list(enr_periods_map[enr.id]))
+            earliest_period = sorted_periods[0] if sorted_periods else active_period
 
-            is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
-            effective_price = round(enr.amount_due / distributed_count, 2) if (is_fully_paid and distributed_count > 0) else current_price
+            for p_name in sorted_periods:
+                resolved_period = p_name if (p_name and p_name != "Legacy (No Period)") else (active_period if (active_period and active_period != "UNSET") else "Legacy (No Period)")
+                p_booklets = enr_bks_map[enr.id][p_name]
+                dist_bks = [b for b in p_booklets if b.status == "distributed"]
+                loose_bks = [b for b in p_booklets if b.status == "loose_stock"]
+                distributed_count = len(dist_bks)
+                loose_returned = len(loose_bks)
 
-            dist_date = earliest_dates.get(enr.id)
-            dist_date_str = dist_date.strftime("%Y-%m-%d") if dist_date else ""
-            dist_date_display = dist_date.strftime("%d-%b-%Y") if dist_date else "N/A"
+                # Determine effective price for this period
+                if dist_bks and dist_bks[0].unit_price is not None:
+                    effective_price = float(dist_bks[0].unit_price)
+                elif p_booklets and any(b.unit_price is not None for b in p_booklets):
+                    effective_price = float([b.unit_price for b in p_booklets if b.unit_price is not None][0])
+                else:
+                    effective_price = float(current_price)
 
-            # Check if reconciliation needed (in-memory sum check first)
-            logged_sum = sum(round(pr.amount, 2) for pr in (enr.payment_records or []))
-            if round((enr.amount_paid or 0.0) - logged_sum, 2) > 0:
-                reconcile_enrollment_payments(enr, db, earliest_date=dist_date)
+                # Compute period amount due strictly for this transaction receipt
+                receipt_amount_due = round(distributed_count * effective_price, 2)
+                if receipt_amount_due == 0 and len(sorted_periods) == 1 and enr.amount_due > 0:
+                    receipt_amount_due = float(enr.amount_due)
 
-            # Serialize payment installments audit trail
-            payments_list = []
-            for pr in (enr.payment_records or []):
-                payments_list.append({
-                    "id": pr.id,
-                    "amount": round(pr.amount, 2),
-                    "balance_after": round(pr.balance_after, 2),
-                    "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
-                    "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
-                    "recorded_by": pr.recorded_by or "System Clerk",
-                    "notes": pr.notes or ""
-                })
+                # Extract and format payments specifically for this period receipt
+                period_prs = [
+                    pr for pr in (enr.payment_records or [])
+                    if (pr.payment_period == p_name or pr.payment_period == resolved_period or (not pr.payment_period and p_name == "Legacy (No Period)"))
+                ]
+                period_prs.sort(key=lambda x: x.payment_date or datetime.min)
 
-            data.append({
-                "id": enr.id,
-                "teacher_name": enr.teacher_name,
-                "section": enr.section,
-                "subject": enr.subject,
-                "amount_due": enr.amount_due,
-                "amount_paid": enr.amount_paid,
-                "balance": round(max(0.0, enr.amount_due - enr.amount_paid), 2),
-                "payment_status": enr.payment_status,
-                "department": enr.department,
-                "student_headcount": enr.student_headcount,
-                "distributed_count": distributed_count,
-                "loose_returned": loose_returned,
-                "booklet_price": effective_price,
-                "distribution_date": dist_date_str,
-                "date_display": dist_date_display,
-                "payments": payments_list
-            })
-        return {"status": "success", "data": data}
+                payments_list = []
+                latest_payment_iso = ""
+                receipt_amount_paid = 0.0
+
+                for pr in period_prs:
+                    p_amt = round(pr.amount, 2)
+                    receipt_amount_paid += p_amt
+                    p_iso = pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else ""
+                    if p_iso and p_iso > latest_payment_iso:
+                        latest_payment_iso = p_iso
+                    payments_list.append({
+                        "id": pr.id,
+                        "amount": p_amt,
+                        "balance_after": round(pr.balance_after, 2),
+                        "payment_date": p_iso,
+                        "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
+                        "payment_period": pr.payment_period or resolved_period,
+                        "recorded_by": resolve_display_clerk(pr.recorded_by, clerk_map),
+                        "notes": pr.notes or ""
+                    })
+
+                receipt_amount_paid = round(receipt_amount_paid, 2)
+                receipt_balance = round(max(0.0, receipt_amount_due - receipt_amount_paid), 2)
+
+                # Calculate status specifically for this receipt
+                if receipt_balance <= 0.001 and receipt_amount_due > 0:
+                    receipt_status = "Fully Paid"
+                elif receipt_amount_paid > 0:
+                    receipt_status = "Partially Paid"
+                else:
+                    receipt_status = "Unpaid"
+
+                # Distribution timestamps
+                dist_dts = [b.date_distributed for b in p_booklets if b.date_distributed]
+                dist_dt = max(dist_dts) if dist_dts else None
+                dist_timestamp_iso = dist_dt.strftime("%Y-%m-%d %H:%M:%S") if dist_dt else ""
+                dist_date_str = dist_dt.strftime("%Y-%m-%d") if dist_dt else ""
+                dist_date_display = dist_dt.strftime("%d-%b-%Y %I:%M %p") if dist_dt else "N/A"
+
+                item = {
+                    "id": enr.id,
+                    "receipt_key": f"{enr.id}_{resolved_period}",
+                    "teacher_name": enr.teacher_name,
+                    "section": enr.section,
+                    "subject": enr.subject,
+                    "amount_due": receipt_amount_due,
+                    "amount_paid": receipt_amount_paid,
+                    "balance": receipt_balance,
+                    "payment_status": receipt_status,
+                    "department": enr.department,
+                    "exam_period": resolved_period,
+                    "student_headcount": enr.student_headcount,
+                    "distributed_count": distributed_count,
+                    "loose_returned": loose_returned,
+                    "booklet_price": effective_price,
+                    "distribution_timestamp": dist_timestamp_iso,
+                    "distribution_date": dist_date_str,
+                    "date_display": dist_date_display,
+                    "latest_payment_date": latest_payment_iso,
+                    "payments": payments_list
+                }
+
+                if period and period.upper() != "ALL":
+                    norm_query = period.strip().lower()
+                    in_period = (norm_query == p_name.strip().lower()) or any(
+                        p.get("payment_period", "").strip().lower() == norm_query for p in payments_list
+                    )
+                    if not in_period:
+                        continue
+
+                data.append(item)
+
+        # Order response with newest distribution transaction at the top
+        data.sort(key=lambda x: (x.get("distribution_timestamp") or "", x["id"]), reverse=True)
+        return {"status": "success", "data": data, "active_period": active_period}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -4766,32 +5553,74 @@ def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depen
         enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == enrollment_id).first()
         if not enrollment:
             return {"status": "error", "message": "Enrollment/Transaction not found."}
-            
-        remaining_balance = round(max(0.0, enrollment.amount_due - enrollment.amount_paid), 2)
-        if round(req.amount, 2) > remaining_balance:
+
+        active_period = get_active_period(db)
+        target_period = req.period.strip() if (req.period and req.period.strip()) else active_period
+
+        # Compute period specific amount due and amount paid
+        if target_period == "Legacy (No Period)":
+            period_dist_bks = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enrollment.id,
+                or_(models.Booklet.exam_period == None, models.Booklet.exam_period == "", models.Booklet.exam_period == "Legacy (No Period)"),
+                models.Booklet.status == "distributed"
+            ).all()
+        else:
+            period_dist_bks = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enrollment.id,
+                models.Booklet.exam_period == target_period,
+                models.Booklet.status == "distributed"
+            ).all()
+
+        if period_dist_bks:
+            unit_price = float(period_dist_bks[0].unit_price or 2.50)
+            period_due = round(len(period_dist_bks) * unit_price, 2)
+        else:
+            period_due = float(enrollment.amount_due)
+
+        if target_period == "Legacy (No Period)":
+            period_paid_scalar = db.query(
+                func.coalesce(func.sum(models.PaymentRecord.amount), 0.0)
+            ).filter(
+                models.PaymentRecord.enrollment_id == enrollment.id,
+                or_(models.PaymentRecord.payment_period == None, models.PaymentRecord.payment_period == "", models.PaymentRecord.payment_period == "Legacy (No Period)")
+            ).scalar()
+        else:
+            period_paid_scalar = db.query(
+                func.coalesce(func.sum(models.PaymentRecord.amount), 0.0)
+            ).filter(
+                models.PaymentRecord.enrollment_id == enrollment.id,
+                models.PaymentRecord.payment_period == target_period
+            ).scalar()
+        period_paid = round(float(period_paid_scalar or 0.0), 2)
+        period_remaining = round(max(0.0, period_due - period_paid), 2)
+
+        if round(req.amount, 2) > period_remaining:
             return {
                 "status": "error",
-                "message": f"Payment amount (₱{req.amount:,.2f}) exceeds the outstanding balance (₱{remaining_balance:,.2f}). Overpayment is not allowed."
+                "message": f"Payment amount (₱{req.amount:,.2f}) exceeds the outstanding balance (₱{period_remaining:,.2f}) for {target_period}. Overpayment is not allowed."
             }
-            
-        new_amount_paid = enrollment.amount_paid + req.amount
-        new_balance = round(max(0.0, enrollment.amount_due - new_amount_paid), 2)
+
+        new_period_paid = round(period_paid + req.amount, 2)
+        new_period_balance = round(max(0.0, period_due - new_period_paid), 2)
+
+        # Update enrollment lifetime totals
+        new_amount_paid = round(min(enrollment.amount_due, (enrollment.amount_paid or 0.0) + req.amount), 2)
         enrollment.amount_paid = new_amount_paid
-        
-        # Recalculate status
         if enrollment.amount_paid >= enrollment.amount_due:
             enrollment.payment_status = "Fully Paid"
         elif enrollment.amount_paid > 0:
             enrollment.payment_status = "Partially Paid"
         else:
             enrollment.payment_status = "Unpaid"
-            
+
         # Create and persist audit record
         payment_record = models.PaymentRecord(
             enrollment_id=enrollment.id,
             amount=round(req.amount, 2),
-            balance_after=new_balance,
+            balance_after=new_period_balance,
             payment_date=datetime.now(),
+            payment_period=target_period,
+            collection_period=active_period,
             recorded_by=req.recorded_by or "System Clerk",
             notes=req.notes or ""
         )
@@ -4799,20 +5628,26 @@ def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depen
         db.commit()
         db.refresh(payment_record)
 
+        receipt_status = "Fully Paid" if new_period_balance <= 0.001 else "Partially Paid"
+
         notify_lan_mutation("PAYMENT_RECORDED", {
             "enrollment_id": enrollment_id,
             "amount": req.amount,
-            "balance_after": new_balance,
-            "status": enrollment.payment_status,
+            "balance_after": new_period_balance,
+            "status": receipt_status,
             "recorded_by": payment_record.recorded_by,
+            "payment_period": target_period,
             "payment_date": payment_record.payment_date.strftime("%Y-%m-%d %H:%M:%S")
         }, db=db)
+
         return {
             "status": "success", 
             "message": "Payment recorded successfully.",
             "payment_id": payment_record.id,
-            "balance_after": new_balance,
-            "payment_status": enrollment.payment_status
+            "balance_after": new_period_balance,
+            "payment_status": receipt_status,
+            "period": target_period,
+            "receipt_key": f"{enrollment.id}_{target_period}"
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -4828,6 +5663,7 @@ def get_enrollment_payment_history(enrollment_id: int, db: Session = Depends(get
             return {"status": "error", "message": "Enrollment not found."}
         
         reconcile_enrollment_payments(enrollment, db)
+        clerk_map = get_user_display_name_map(db)
         
         payments_list = []
         for pr in enrollment.payment_records:
@@ -4837,7 +5673,7 @@ def get_enrollment_payment_history(enrollment_id: int, db: Session = Depends(get
                 "balance_after": round(pr.balance_after, 2),
                 "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
                 "date_display": pr.payment_date.strftime("%d-%b-%Y %I:%M %p") if pr.payment_date else "N/A",
-                "recorded_by": pr.recorded_by or "System Clerk",
+                "recorded_by": resolve_display_clerk(pr.recorded_by, clerk_map),
                 "notes": pr.notes or ""
             })
         return {

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Executive Dashboard - BOOKLETLOG</title>
+    <title>Executive Dashboard - Bookledger</title>
     <!-- Import Chart.js -->
     <script src="/static/chart.js"></script>
     <script src="/static/lan_sync.js"></script>
@@ -35,8 +35,8 @@
         .progress-labels { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.9rem; color: #7f8c8d; font-weight: bold; }
 
         /* Chart Containers */
-        .charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }
-        .chart-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .charts-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; margin-bottom: 30px; width: 100%; max-width: 100%; box-sizing: border-box; }
+        .chart-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); display: flex; flex-direction: column; min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
         .chart-container h3 { margin-bottom: 15px; color: #2c3e50; text-align: center; }
 
         .btn-report { background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; font-size: 1rem; }
@@ -163,7 +163,7 @@
     <div class="modal-card" style="border-top: 6px solid #e74c3c; max-width: 500px;">
         <h2 style="color: #e74c3c; margin-bottom: 10px;">⚠️ System Not Initialized</h2>
         <p style="color: #7f8c8d; font-size: 1rem; margin-bottom: 25px; line-height: 1.5;">
-            Welcome to BOOKLETLOG. Before the system can accept any transactions, you must set the current active exam period. 
+            Welcome to Bookledger. Before the system can accept any transactions, you must set the current active exam period. 
             <strong>All staff operations are locked until this is completed.</strong>
         </p>
         
@@ -198,7 +198,7 @@
 
         <div class="header-bar">
             <div>
-                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem; font-weight: 700;">Sales &amp; Analytics Dashboard</h2>
+                <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem; font-weight: 700;">Dashboard</h2>
                 <p style="color: #7f8c8d; margin: 4px 0 0 0; font-size: 0.9rem;">Overview of booklet inventory, departmental distributions, and revenues.</p>
             </div>
             <div class="header-actions no-print">
@@ -377,7 +377,7 @@
             <div class="chart-container" style="margin-bottom: 0;">
                 <h3 id="yearLevelChartTitle">Revenue by Year Level (<span id="yearLevelCoursesLabel">All Courses</span>)</h3>
                 <!-- STRICT WRAPPER: Prevents infinite resizing -->
-                <div style="position: relative; height: 300px; width: 100%; margin-top: 10px;">
+                <div style="position: relative; height: 300px; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; margin-top: 10px;">
                     <canvas id="yearLevelChart"></canvas>
                 </div>
             </div>
@@ -387,7 +387,7 @@
                 <h3>Profit Allocation Summary</h3>
                 
                 <!-- STRICT WRAPPER: Centers the Doughnut perfectly and prevents glitching -->
-                <div style="position: relative; height: 180px; width: 100%; display: flex; justify-content: center; align-items: center; margin-top: 10px;">
+                <div style="position: relative; height: 180px; width: 100%; max-width: 100%; min-width: 0; overflow: hidden; display: flex; justify-content: center; align-items: center; margin-top: 10px;">
                     <canvas id="allocationChart"></canvas>
                 </div>
 
@@ -402,6 +402,7 @@
                         <strong style="color: #7f8c8d;" id="alloc-uni">₱0.00</strong>
                     </div>
                     <div id="alloc-dept-budgets-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                </div>
             </div>
         </div>
         
@@ -551,7 +552,7 @@
     }
 
     // Global Cache
-    let currentDashboardPeriod = "";
+    let currentDashboardPeriod = {{ (active_period or '') | tojson }};
     let yearLevelChartInstance = null;
     let allocationChartInstance = null;
     let computationsPayload = null; 
@@ -1021,16 +1022,26 @@
             const cachedStats = sessionStorage.getItem('bookletlog_dashboard_stats_cache');
             if (cachedStats) {
                 const parsedStats = JSON.parse(cachedStats);
-                applyDashboardData(parsedStats);
+                // Strict check: only hydrate if the cached stats active_period matches the authoritative active period
+                if (currentDashboardPeriod && parsedStats.active_period && parsedStats.active_period === currentDashboardPeriod) {
+                    applyDashboardData(parsedStats);
+                } else {
+                    sessionStorage.removeItem('bookletlog_dashboard_stats_cache');
+                    sessionStorage.removeItem('bookletlog_dashboard_dss_cache');
+                }
             }
             const cachedDss = sessionStorage.getItem('bookletlog_dashboard_dss_cache');
             if (cachedDss) {
                 const parsedDss = JSON.parse(cachedDss);
-                if (typeof renderExpertRecommendation === 'function') {
-                    renderExpertRecommendation(parsedDss.recommendation, parsedDss.advice, parsedDss.color);
-                }
-                if (parsedDss.course_production && parsedDss.course_production.courses && typeof updateCourseBreakdownUI === 'function') {
-                    updateCourseBreakdownUI(parsedDss.course_production);
+                if (currentDashboardPeriod && parsedDss.active_period && parsedDss.active_period !== currentDashboardPeriod) {
+                    sessionStorage.removeItem('bookletlog_dashboard_dss_cache');
+                } else {
+                    if (typeof renderExpertRecommendation === 'function') {
+                        renderExpertRecommendation(parsedDss.recommendation, parsedDss.advice, parsedDss.color);
+                    }
+                    if (parsedDss.course_production && parsedDss.course_production.courses && typeof updateCourseBreakdownUI === 'function') {
+                        updateCourseBreakdownUI(parsedDss.course_production);
+                    }
                 }
             }
         } catch(e) {
@@ -1053,7 +1064,12 @@
                             if (lockout) lockout.style.display = 'flex';
                         }
                     } else if (data.active_period) {
-                        currentDashboardPeriod = data.active_period;
+                        if (currentDashboardPeriod && currentDashboardPeriod !== data.active_period) {
+                            currentDashboardPeriod = data.active_period;
+                            fetchDashboardData();
+                        } else {
+                            currentDashboardPeriod = data.active_period;
+                        }
                     }
                 }
             })
@@ -1074,6 +1090,8 @@
                     applyDashboardData(data, periodQuery);
                 } else {
                     console.error("Dashboard API Error:", data.message);
+                    sessionStorage.removeItem('bookletlog_dashboard_stats_cache');
+                    sessionStorage.removeItem('bookletlog_dashboard_dss_cache');
                 }
             })
             .catch(err => console.error("Dashboard failed to load:", err));
@@ -1083,8 +1101,8 @@
         // 1. Instant 0ms cache hydration for all top cards, charts, and DSS
         initDashboardFromCache();
 
-        // 2. Parallel background fetch for fresh data
-        fetchDashboardData(currentDashboardPeriod || "");
+        // 2. Parallel background fetch for fresh data (pulls current active semester)
+        fetchDashboardData();
         checkSystemInitialization();
         if (typeof fetchExpertSystemData === 'function') {
             fetchExpertSystemData();
@@ -1093,7 +1111,7 @@
         // 3. Background WebSocket sync
         if (window.lanSync) {
             window.lanSync.onUpdate(() => {
-                fetchDashboardData(currentDashboardPeriod || "");
+                fetchDashboardData();
                 if (typeof fetchExpertSystemData === 'function') {
                     fetchExpertSystemData();
                 }
@@ -1424,9 +1442,11 @@
             body: JSON.stringify({ username: username })
         }).then(() => {
             localStorage.clear();
+            sessionStorage.clear();
             window.location.href = '/login';
         }).catch(() => {
             localStorage.clear();
+            sessionStorage.clear();
             window.location.href = '/login';
         });
     }
@@ -1614,10 +1634,10 @@
                         ${(d.prev_excess_sheets && d.prev_excess_sheets > 0) ? `
                         <div style="margin-top: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem;">
                             <span style="color: #1e40af; font-weight: 600;">📥 Prior Excess Credited:</span>
-                            <span style="color: #2563eb; font-weight: 700;">−${(d.prev_excess_sheets || 0).toLocaleString()} Sheets <span style="font-weight: normal; color: #64748b;">(Gross: ${(d.gross_sheets_needed || 0).toLocaleString()} → Net: ${(d.net_sheets_needed || sheetsNeeded).toLocaleString()})</span></span>
+                            <span style="color: #2563eb; font-weight: 700;">${(d.prev_excess_sheets || 0).toLocaleString()} Sheets <span style="font-weight: normal; color: #64748b;">(Gross: ${(d.gross_sheets_needed || 0).toLocaleString()} → Net: ${(d.net_sheets_needed || sheetsNeeded).toLocaleString()})</span></span>
                         </div>
                         ` : ''}
-                        ${(d.target_production > 0 && courseExcessSheets > 0) ? `
+                        ${(courseExcessSheets > 0) ? `
                         <div style="margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
                             <span style="color: #166534; font-weight: 600;">🌿 Residual Excess Reserve:</span>
                             <span style="color: #15803d; font-weight: 700;">+${courseExcessSheets.toLocaleString()} Sheets (~${courseExcessBooklets.toLocaleString()} extra booklets)</span>

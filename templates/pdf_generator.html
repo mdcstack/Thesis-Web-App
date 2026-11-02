@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generator - Proposed System</title>
+    <title>PDF Generator - Bookledger</title>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,7 +18,7 @@
             100% { left: 100%; }
         }
         
-        .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+        .main-content { flex: 1; min-width: 0; padding: 30px; overflow-y: auto; }
         .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
         .card-title { margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
         
@@ -62,8 +62,8 @@
         #loadingMsg { margin-top: 18px; color: #e67e22; font-weight: bold; display: none; text-align: center; }
 
 
-        /* Responsive Mobile Layout Fixes */
-        @media (max-width: 960px) {
+        /* Responsive Desktop Card Grid Collapse (Preserves Sidebar on the Left) */
+        @media (max-width: 1180px) {
             .generator-workspace-grid {
                 grid-template-columns: 1fr;
                 gap: 20px;
@@ -76,11 +76,14 @@
             .input-group input { width: 85px; font-size: 1.1rem; }
             .yield-display { min-width: 100px; }
             .yield-display .number { font-size: 1.7rem; }
-            body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
-.main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
         }
 
-        @media (max-width: 900px) { .mobile-hide { display: none !important; } }
+        /* Mobile Off-Canvas Drawer Alignment (Strictly Synchronized with sidebar.html) */
+        @media (max-width: 900px) {
+            .mobile-hide { display: none !important; }
+            body { flex-direction: column; overflow: hidden; height: 100vh; height: 100dvh; }
+            .main-content { flex: 1; overflow-y: auto; padding: 15px 15px calc(80px + env(safe-area-inset-bottom, 0px)) 15px !important; -webkit-overflow-scrolling: touch; }
+        }
     
         /* App Custom Dialog Modal */
         @keyframes modalPopIn {
@@ -235,6 +238,12 @@
                             <span style="color: #64748b; font-size: 0.78rem; display: block;">Recommended Paper:</span>
                             <strong id="cardRecommendedReams" style="font-size: 1.05rem; color: #2563eb;">- Ream(s)</strong>
                         </div>
+                    </div>
+
+                    <!-- Vault Carryover Notice -->
+                    <div id="cardVaultCarryoverNotice" style="display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 7px 12px; margin-bottom: 12px; font-size: 0.82rem; color: #166534; align-items: center; justify-content: space-between; gap: 8px;">
+                        <span>📦 <strong>Vault Carryover Credited:</strong> <span id="cardVaultCarryoverText">410 sheets (~68 booklets)</span></span>
+                        <span style="font-size: 0.75rem; font-weight: 700; background: #dcfce7; color: #15803d; padding: 2px 7px; border-radius: 8px; border: 1px solid #86efac; flex-shrink: 0;">Offset Ream Quota</span>
                     </div>
 
                     <!-- Auto-Fill Recommendation Button -->
@@ -686,48 +695,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         });
     }
 
-    // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
-    function fetchDSSAlert() {
-        fetch('/api/dss-alert')
-            .then(response => response.json())
-            .then(data => {
-                const badge = document.getElementById('notifBadge');
-                const panel = document.getElementById('notifPanel');
-                const bell = document.getElementById('notifBell');
-
-                if (data.alert) {
-                    badge.style.display = 'inline-block';
-                    bell.style.color = 'white'; 
-                    panel.style.borderLeftColor = '#e74c3c';
-                    if (activeUser && activeUser.role === 'Admin') {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" onclick="quickFillReamBatch(${data.reams_needed}); event.preventDefault();" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                    } else {
-                        panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                    }
-                    
-                    if (activeUser && activeUser.role === 'Admin' && !sessionStorage.getItem('dss_acknowledged')) {
-                        showDSSModal(data);
-                    }
-                } else {
-                    badge.style.display = 'none';
-                    if (data.has_enrollments === false) {
-                        panel.style.borderLeftColor = '#64748b';
-                        if (activeUser && activeUser.role === 'Admin') {
-                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                        } else {
-                            panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                        }
-                    } else {
-                        panel.style.borderLeftColor = '#27ae60'; 
-                        panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                    }
-                }
-            })
-            .catch(e => console.error("DSS alert fetch error:", e));
-    }
-    fetchDSSAlert();
-
-    // Helper to auto-populate and focus batch ream generator if clicked from notif panel
+// Helper to auto-populate and focus batch ream generator if clicked from notif panel
     function quickFillReamBatch(reams) {
         const reamInput = document.getElementById('reamCount');
         if (reamInput) {
@@ -741,25 +709,6 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         const panel = document.getElementById('notifPanel');
         if (panel) {
             panel.style.display = 'none';
-        }
-    }
-
-    // Toggle the dropdown panel when clicking the bell
-    function toggleNotifPanel() {
-        const panel = document.getElementById('notifPanel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-
-    // Only the Admin will ever trigger this function
-    function showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg) {
-        if (typeof window.showDSSModal === 'function') {
-            window.showDSSModal(dataOrMessage, reamsArg, deficitBookletsArg, deficitSheetsArg);
-        }
-    }
-
-    function dismissDSS() {
-        if (typeof window.dismissDSS === 'function') {
-            window.dismissDSS();
         }
     }
 
@@ -1435,6 +1384,20 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const recReamsEl = document.getElementById('cardRecommendedReams');
             if (recReamsEl) recReamsEl.innerText = `${d.reams_needed || 0} Ream(s)`;
 
+            const carryoverNotice = document.getElementById('cardVaultCarryoverNotice');
+            const carryoverText = document.getElementById('cardVaultCarryoverText');
+            const prevExcess = d.prev_excess_sheets || 0;
+            if (carryoverNotice && carryoverText) {
+                if (prevExcess > 0 && !d.is_satisfied && (d.target_production || 0) > 0) {
+                    const sheetsPerB = currentSheetsPerBooklet || 6;
+                    const equivBooklets = Math.floor(prevExcess / sheetsPerB);
+                    carryoverText.innerText = `${prevExcess.toLocaleString()} sheets (~${equivBooklets} booklets available in vault)`;
+                    carryoverNotice.style.display = 'flex';
+                } else {
+                    carryoverNotice.style.display = 'none';
+                }
+            }
+
             const autoBtn = document.getElementById('autoFillBtn');
             const autoBtnText = document.getElementById('autoFillBtnText');
             const registerBtn = document.getElementById('registerBtn');
@@ -1547,9 +1510,11 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const target = d.target_production || 0;
             const reamsNeeded = d.reams_needed || 0;
             const reamsRequested = parseInt(document.getElementById('reamCount').value) || 0;
-            const yieldPerReam = currentYieldPerReam || 83;
-            const reamCapacity = reamsRequested * yieldPerReam;
-            const cappedYield = (target > 0) ? Math.min(reamCapacity, target) : reamCapacity;
+            const prevExcess = d.prev_excess_sheets || 0;
+            const sheetsPerB = currentSheetsPerBooklet || 6;
+            const totalSheets = (reamsRequested * 500) + prevExcess;
+            const conversionCapacity = Math.floor(totalSheets / sheetsPerB);
+            const cappedYield = (target > 0) ? Math.min(conversionCapacity, target) : conversionCapacity;
             const bufferPct = courseProductionData.buffer_percent || 0;
 
             if (reamsRequested <= 0) {
@@ -1570,12 +1535,13 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 return;
             }
 
-            if (reamsRequested >= reamsNeeded) {
+            if (reamsRequested >= reamsNeeded || conversionCapacity >= target) {
                 advBox.style.display = 'block';
                 advBox.style.background = '#f0fdf4';
                 advBox.style.border = '1px solid #86efac';
                 advBox.style.color = '#15803d';
-                advBox.innerHTML = `✅ <strong>Optimal Quota Production:</strong> Will produce exactly <strong>${cappedYield.toLocaleString()} booklets</strong> (capped at student requirement${bufferPct > 0 ? ` including ${bufferPct}% safety buffer` : ''}). Zero surplus unassigned barcodes or wasted sheets.`;
+                const carryoverNote = prevExcess > 0 ? ` (utilizing ${reamsRequested} new ream(s) and ${prevExcess} vault carryover sheets)` : '';
+                advBox.innerHTML = `✅ <strong>Optimal Quota Production:</strong> Will produce exactly <strong>${cappedYield.toLocaleString()} booklets</strong> (100% fulfilling student requirement${bufferPct > 0 ? ` including ${bufferPct}% safety buffer` : ''}${carryoverNote}). Zero surplus unassigned barcodes or wasted sheets.`;
             } else if (reamsRequested < reamsNeeded) {
                 advBox.style.display = 'block';
                 advBox.style.background = '#f0f9ff';
@@ -1595,15 +1561,21 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const selectedDept = deptSelect ? deptSelect.value : 'CS';
             const d = (courseProductionData && courseProductionData.courses) ? courseProductionData.courses[selectedDept] : null;
             const target = d ? (d.target_production || 0) : 0;
-            const reamCapacity = reams * currentYieldPerReam;
-            const cappedYield = (target > 0) ? Math.min(reamCapacity, target) : reamCapacity;
+            const prevExcess = d ? (d.prev_excess_sheets || 0) : 0;
+            const sheetsPerB = currentSheetsPerBooklet || 6;
+
+            // Carryover-aware conversion capacity combining new reams and vault carryover sheets
+            const totalSheets = (reams * 500) + prevExcess;
+            const conversionCapacity = Math.floor(totalSheets / sheetsPerB);
+            const cappedYield = (target > 0) ? Math.min(conversionCapacity, target) : conversionCapacity;
 
             const yieldEl = document.getElementById('yieldDisplay');
             if (yieldEl) {
                 if (d && (d.is_satisfied || target <= 0)) {
                     yieldEl.innerHTML = `0 <span style="font-size: 0.78rem; font-weight: 700; color: #047857; background: #d1fae5; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 12px; display: inline-block; vertical-align: middle; margin-left: 6px; text-transform: uppercase; letter-spacing: 0.3px;">Demand Met</span>`;
-                } else if (target > 0 && reamCapacity > target) {
-                    yieldEl.innerHTML = `${cappedYield.toLocaleString()} <span style="font-size: 0.72rem; font-weight: 600; color: #15803d; background: #dcfce7; border: 1px solid #86efac; padding: 2px 6px; border-radius: 10px; display: inline-block; vertical-align: middle; margin-left: 4px;">Exact Target Capped</span>`;
+                } else if (target > 0 && conversionCapacity >= target) {
+                    const extraBadge = prevExcess > 0 ? `Target Met (${prevExcess} Vault Sheets Credited)` : `Exact Target Capped`;
+                    yieldEl.innerHTML = `${cappedYield.toLocaleString()} <span style="font-size: 0.72rem; font-weight: 600; color: #15803d; background: #dcfce7; border: 1px solid #86efac; padding: 2px 6px; border-radius: 10px; display: inline-block; vertical-align: middle; margin-left: 4px;">${extraBadge}</span>`;
                 } else {
                     yieldEl.innerText = cappedYield.toLocaleString();
                 }
@@ -1706,8 +1678,9 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             if (courseTemplateEl) courseTemplateEl.innerText = `${batch.deptLabel} • ${batch.templateName}`;
 
             const yieldEl = document.getElementById('confirmModalYield');
-            const isCapped = batch.targetNeeded > 0 && batch.reamCapacity > batch.targetNeeded;
-            if (yieldEl) yieldEl.innerText = `${batch.reamsRequested} Ream(s) → ${batch.totalYield} Booklets${isCapped ? ' (Exact Target Capped)' : ''} (${currentSheetsPerBooklet} sheets/booklet)`;
+            const isCapped = batch.targetNeeded > 0 && batch.conversionCapacity >= batch.targetNeeded;
+            const carryoverText = batch.prevExcess > 0 ? ` (+ ${batch.prevExcess} Vault Sheets)` : '';
+            if (yieldEl) yieldEl.innerText = `${batch.reamsRequested} Ream(s)${carryoverText} → ${batch.totalYield} Booklets${isCapped ? ' (Exact Target Capped)' : ''} (${currentSheetsPerBooklet} sheets/booklet)`;
 
             const stockEl = document.getElementById('confirmModalStockImpact');
             const badge = document.getElementById('confirmModalStatusBadge');
@@ -1854,8 +1827,11 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
             const reamsRequested = parseInt(document.getElementById('reamCount').value) || 1;
             const targetNeeded = currentDeptDemand ? (currentDeptDemand.target_production || 0) : 0;
-            const reamCapacity = reamsRequested * currentYieldPerReam;
-            const totalYield = (targetNeeded > 0) ? Math.min(reamCapacity, targetNeeded) : reamCapacity;
+            const prevExcess = currentDeptDemand ? (currentDeptDemand.prev_excess_sheets || 0) : 0;
+            const sheetsPerB = currentSheetsPerBooklet || 6;
+            const totalSheets = (reamsRequested * 500) + prevExcess;
+            const conversionCapacity = Math.floor(totalSheets / sheetsPerB);
+            const totalYield = (targetNeeded > 0) ? Math.min(conversionCapacity, targetNeeded) : conversionCapacity;
 
             // Intercept with Confirm Action Modal
             showConfirmModal({
@@ -1863,7 +1839,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 currentSlot,
                 reamsRequested,
                 totalYield,
-                reamCapacity,
+                conversionCapacity,
+                prevExcess,
                 targetNeeded,
                 deptLabel,
                 templateName
@@ -1948,17 +1925,15 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     loadingCard.style.display = 'none';
                     successCard.style.display = 'block';
 
-                    // Attempt direct open in new tab
-                    try {
-                        window.open(data.pdf_download_link, '_blank');
-                    } catch (e) {}
-
                     msg.innerHTML = `✅ Successfully generated Batch: ${data.master_batch_id} for ${selectedDept} (${templateName})`;
                     msg.style.color = "green";
 
                     // Silently refresh DSS alerts and Course Production Metrics
-                    fetchDSSAlert();
-                    fetchGeneratorSettings();
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                    await fetchGeneratorSettings();
+                    await fetchTemplateStatuses(false);
                 } else {
                     isStampingInProgress = false;
                     modal.style.display = 'none';
@@ -1995,7 +1970,9 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 // Do not disrupt active generation stamping
                 if (isStampingInProgress) return;
                 fetchGeneratorSettings();
-                fetchDSSAlert();
+                if (typeof window.refreshSidebarDSSAlert === 'function') {
+                    window.refreshSidebarDSSAlert();
+                }
                 fetchTemplateStatuses(false);
             });
         }

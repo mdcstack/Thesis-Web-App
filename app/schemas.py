@@ -52,6 +52,7 @@ class SaveQRRequest(BaseModel):
 
 class CreateUserRequest(BaseModel):
     username: str
+    full_name: Optional[str] = None
     password: str
     role: str
     department: str = "CS"
@@ -89,6 +90,7 @@ class BookletTemplateUpdate(BaseModel):
     is_official: Optional[bool] = False
 
 class UpdateUserRequest(BaseModel):
+    full_name: Optional[str] = None
     role: str
     department: str
     updated_by: Optional[str] = "Administrator" 
@@ -100,6 +102,11 @@ class ChangePasswordRequest(BaseModel):
     username: str
     current_password: str
     new_password: str
+
+class ChangeUsernameRequest(BaseModel):
+    username: str
+    new_username: str
+    password: str
 
 class AcademicProgramBase(BaseModel):
     code: str
