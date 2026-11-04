@@ -682,9 +682,16 @@
 
                         const priorVal = (fin.prior_ar_by_dept && fin.prior_ar_by_dept[p.code]) || 0;
                         const currVal = (fin.current_billed_by_dept && fin.current_billed_by_dept[p.code]) || 0;
-                        let billedSub = `Billed: ₱${currVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Paid: ₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                        if (priorVal > 0) {
+                        const priorCollected = (fin.prior_debt_collected_by_dept && fin.prior_debt_collected_by_dept[p.code]) || 0;
+                        const currPaid = (fin.current_exam_collected_by_dept && fin.current_exam_collected_by_dept[p.code]) || 0;
+
+                        let billedSub = '';
+                        if (priorCollected > 0) {
+                            billedSub = `Billed: ₱${currVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Paid: ₱${currPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (₱${priorCollected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} prior debt cleared)`;
+                        } else if (priorVal > 0) {
                             billedSub = `Billed: ₱${currVal.toFixed(2)} | Prior Debt: ₱${priorVal.toFixed(2)} | Paid: ₱${paidVal.toFixed(2)}`;
+                        } else {
+                            billedSub = `Billed: ₱${currVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Paid: ₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                         }
 
                         let noteHtml = `No ${escapeHtml(p.code)} transactions recorded for this period`;
@@ -718,13 +725,19 @@
             document.getElementById('bsAR').innerText = `₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             if (document.getElementById('bsAR_Sub')) {
                 const totalPrior = Object.values(fin.prior_ar_by_dept || {}).reduce((a, b) => a + b, 0);
-                document.getElementById('bsAR_Sub').innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${totalPrior > 0 ? ` | Prior Debt: ₱${totalPrior.toFixed(2)}` : ''} | Total Paid: ₱${totalPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                const priorDebtCleared = fin.prior_debt_collected || 0;
+                const currentPaid = fin.current_exam_collected || 0;
+                if (priorDebtCleared > 0) {
+                    document.getElementById('bsAR_Sub').innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} | Paid: ₱${currentPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (₱${priorDebtCleared.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} prior debt cleared)`;
+                } else {
+                    document.getElementById('bsAR_Sub').innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${totalPrior > 0 ? ` | Prior Debt: ₱${totalPrior.toFixed(2)}` : ''} | Total Paid: ₱${totalPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                }
             }
             if (document.getElementById('bsAR_Note')) {
                 if (ar === 0 && totalBilled > 0) {
                     document.getElementById('bsAR_Note').innerHTML = `<span style="color: #166534; font-weight: 600;">✅ 100% Settled</span> (All faculty debts cleared; total ₱${totalBilled.toFixed(2)} collected)`;
                 } else if (ar > 0) {
-                    document.getElementById('bsAR_Note').innerHTML = `<span style="color: #b91c1c; font-weight: 600;">⚠️ ₱${ar.toFixed(2)} Total Pending</span>${(Object.values(fin.prior_ar_by_dept || {}).reduce((a, b) => a + b, 0) > 0) ? ` (incl. ₱${Object.values(fin.prior_ar_by_dept || {}).reduce((a, b) => a + b, 0).toFixed(2)} carried over from prior periods)` : ''}`;
+                    document.getElementById('bsAR_Note').innerHTML = `<span style="color: #b91c1c; font-weight: 600;">⚠️ ₱${ar.toFixed(2)} Total Pending</span> (Outstanding faculty balances)`;
                 } else {
                     document.getElementById('bsAR_Note').innerText = "Combined pending collections owed by faculty/instructors";
                 }
@@ -784,7 +797,7 @@
                 let rightCol = `${distBooklets.toLocaleString()} pcs × ${sheetsPerBooklet} sheets/pc`;
 
                 if (convertedSheets > 0 || convertedReams > 0) {
-                    courseWholeReams = convertedReams > 0 ? convertedReams : (cMetric && cMetric.reams_needed !== undefined ? cMetric.reams_needed : (netSheets > 0 ? Math.ceil(netSheets / 500) : 0));
+                    courseWholeReams = (actualItem && actualItem.reams_needed !== undefined) ? actualItem.reams_needed : (netSheets > 0 ? Math.ceil(netSheets / 500) : 0);
                     const rPart = Math.floor(netSheets / 500);
                     const sPart = netSheets % 500;
                     subLabel = `${courseWholeReams} ${courseWholeReams === 1 ? 'ream' : 'reams'} in production`;
@@ -859,7 +872,8 @@
             computedProdCost = finalPaperCost + computedStaplesCost;
             computedNetIncome = subtotal - uniShare - computedProdCost;
             document.getElementById('kpiProductionCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('kpiNetIncome').innerText = `₱${computedNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            const displayNetIncome = computedNetIncome < 0 ? 0 : computedNetIncome;
+            document.getElementById('kpiNetIncome').innerText = `₱${displayNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
             document.getElementById('bsProdCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             if (computedProdCost > 0 && kpiRoiEl) {
                 kpiRoiEl.innerText = `${((computedNetIncome / computedProdCost) * 100).toFixed(1)}%`;
@@ -869,21 +883,38 @@
             }
 
             // Dynamic KPI Alert 1: Net Operating Income
-            // Red when payment across all courses is not settled yet (ar > 0); Green once 100% settled (ar === 0)
+            // Red when net income is negative (< 0)
+            // Yellow when net income is positive (>= 0) but not all payments are settled (ar > 0)
+            // Green when all payments are settled (ar === 0)
             const isAllSettled = (ar === 0);
             const kpiNetIncomeEl = document.getElementById('kpiNetIncome');
             const cardNetIncomeEl = document.getElementById('cardNetIncome');
             const kpiNetIncomeSub = document.getElementById('kpiNetIncomeSub');
+
+            let netIncomeColor = '#27ae60';
+            let netIncomeSubText = '100% Settled & Realized Surplus';
+
+            if (computedNetIncome < 0) {
+                netIncomeColor = '#e74c3c';
+                netIncomeSubText = `Operating deficit (₱${Math.abs(computedNetIncome).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}) • Unsettled: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending`;
+            } else if (!isAllSettled) {
+                netIncomeColor = '#f59e0b';
+                netIncomeSubText = `Unsettled: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending collections`;
+            } else {
+                netIncomeColor = '#27ae60';
+                netIncomeSubText = totalBilled > 0
+                    ? `100% Settled & Realized Surplus (₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`
+                    : 'Net operating surplus retained';
+            }
+
             if (kpiNetIncomeEl) {
-                kpiNetIncomeEl.style.color = isAllSettled ? '#27ae60' : '#e74c3c';
+                kpiNetIncomeEl.style.color = netIncomeColor;
             }
             if (cardNetIncomeEl) {
-                cardNetIncomeEl.style.borderLeftColor = isAllSettled ? '#27ae60' : '#e74c3c';
+                cardNetIncomeEl.style.borderLeftColor = netIncomeColor;
             }
             if (kpiNetIncomeSub) {
-                kpiNetIncomeSub.innerText = isAllSettled
-                    ? (totalBilled > 0 ? `100% Settled & Realized Surplus (₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})` : 'Net operating surplus retained')
-                    : `Unsettled: ₱${ar.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} pending collections`;
+                kpiNetIncomeSub.innerText = netIncomeSubText;
             }
 
             // Dynamic KPI Alert 2: Direct Material Cost
@@ -907,18 +938,31 @@
                     : (totalPendingStock > 0 ? `Production in progress (${totalPendingStock.toLocaleString()} booklets pending activation)` : `Production in progress (${totalTargetDeficit.toLocaleString()} booklets needed)`);
             }
 
-            // Updated Staples Display
+            // Updated Staples Display with Prior Excess Carryover Credit
+            const prevExcessStaples = fin.prev_excess_staples || 0;
+            const netStaplesNeeded = fin.net_staples_needed !== undefined ? fin.net_staples_needed : Math.max(0, staplesUsed - prevExcessStaples);
+            const residualStaples = fin.residual_excess_staples !== undefined ? fin.residual_excess_staples : Math.max(0, (wholeBoxesToBuy * staplesPerBox + prevExcessStaples) - staplesUsed);
             const boxWord = wholeBoxesToBuy === 1 ? 'Box' : 'Boxes';
             const staplesFullStrips = (staplesPerBox > 0) ? Math.floor(staplesUsed / staplesPerBox) : 0;
             const staplesRemainder = (staplesPerBox > 0) ? (staplesUsed % staplesPerBox) : staplesUsed;
+
             if (document.getElementById('prodStaplesCount')) {
-                document.getElementById('prodStaplesCount').innerText = `${wholeBoxesToBuy} Whole ${boxWord} (${staplesFullStrips} box(es) & ${staplesRemainder.toLocaleString()} staples used)`;
+                if (prevExcessStaples > 0) {
+                    if (wholeBoxesToBuy === 0) {
+                        document.getElementById('prodStaplesCount').innerText = `0 Whole Boxes (${staplesUsed.toLocaleString()} staples consumed from ${prevExcessStaples.toLocaleString()} prior stock on hand)`;
+                    } else {
+                        document.getElementById('prodStaplesCount').innerText = `${wholeBoxesToBuy} Whole ${boxWord} (${netStaplesNeeded.toLocaleString()} net deficit after crediting ${prevExcessStaples.toLocaleString()} prior stock)`;
+                    }
+                } else {
+                    document.getElementById('prodStaplesCount').innerText = `${wholeBoxesToBuy} Whole ${boxWord} (${staplesFullStrips} box(es) & ${staplesRemainder.toLocaleString()} staples used)`;
+                }
             }
             if (document.getElementById('prodStaplesTotal')) {
                 document.getElementById('prodStaplesTotal').innerText = `₱${computedStaplesCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
             if (document.getElementById('prodStaplesPrice')) {
-                document.getElementById('prodStaplesPrice').innerText = `₱${staplesBoxPrice.toFixed(2)} / box (${staplesPerBox.toLocaleString()} pcs for ${staplesPerBooklet} staples/booklet)`;
+                const reserveText = (prevExcessStaples > 0 || residualStaples > 0) ? ` • ${residualStaples.toLocaleString()} reserve left` : '';
+                document.getElementById('prodStaplesPrice').innerText = `₱${staplesBoxPrice.toFixed(2)} / box (${staplesPerBox.toLocaleString()} pcs for ${staplesPerBooklet} staples/booklet)${reserveText}`;
             }
             if (document.getElementById('prodDirectMaterialsTotal')) {
                 document.getElementById('prodDirectMaterialsTotal').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -985,7 +1029,8 @@
                 isTotalDedEl.innerText = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
 
-            document.getElementById('isNetIncome').innerText = `₱${computedNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const displayIsNet = computedNetIncome < 0 ? 0 : computedNetIncome;
+            document.getElementById('isNetIncome').innerText = `₱${displayIsNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
 
         function printFinancialStatement() {

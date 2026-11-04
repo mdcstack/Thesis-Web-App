@@ -155,7 +155,7 @@
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGrossRevenue">₱0.00</h2>
                     <div style="color: #64748b; font-size: 0.85rem; margin-top: 4px; line-height: 1.4;" id="kpiGrossSub">Realized Cash Collections</div>
                 </div>
-                <div class="card" style="border-left-color: #27ae60;">
+                <div class="card" id="cardNetProfit" style="border-left-color: #27ae60;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Net Operating Surplus (DCS)</span>
                     <h2 style="color: #27ae60; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiNetProfit">₱0.00</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;">Retained departmental share after institutional transfers</p>
@@ -518,9 +518,22 @@
                 }
             }
             const kpiNetEl = document.getElementById('kpiNetProfit');
+            const cardNetEl = document.getElementById('cardNetProfit');
             if (kpiNetEl) {
-                kpiNetEl.innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                kpiNetEl.style.color = (totalPending > 0 || dcsNetProfit < 0) ? '#e74c3c' : '#27ae60';
+                const displayKpiNet = dcsNetProfit < 0 ? 0 : dcsNetProfit;
+                kpiNetEl.innerText = `₱${displayKpiNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                let profitColor = '#27ae60';
+                if (dcsNetProfit < 0) {
+                    profitColor = '#e74c3c';
+                } else if (totalPending > 0) {
+                    profitColor = '#f59e0b';
+                } else {
+                    profitColor = '#27ae60';
+                }
+                kpiNetEl.style.color = profitColor;
+                if (cardNetEl) {
+                    cardNetEl.style.borderLeftColor = profitColor;
+                }
             }
             document.getElementById('kpiPaperUsage').innerText = `${totalReams} Ream(s) and ${totalLoose} paper sheets`;
             
@@ -550,7 +563,8 @@
                 document.getElementById('wfTotalDeductions').innerText = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
             if (document.getElementById('wfNetProfit')) {
-                document.getElementById('wfNetProfit').innerText = `₱${dcsNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                const displayWfNetProfit = dcsNetProfit < 0 ? 0 : dcsNetProfit;
+                document.getElementById('wfNetProfit').innerText = `₱${displayWfNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
 
             // Render dynamic program deductions in the waterfall ledger (3 columns)
@@ -620,6 +634,7 @@
                         if (rows && rows.length > 0) {
                             const yCollected = (dSumm[`${y}_collected`] !== undefined) ? dSumm[`${y}_collected`] : (dSumm[y.toString()] || 0);
                             const yBilled = (dSumm[`${y}_billed`] !== undefined) ? dSumm[`${y}_billed`] : yCollected;
+                            const yPrior = (dSumm[`${y}_prior`] !== undefined) ? dSumm[`${y}_prior`] : 0;
                             const yPending = (dSumm[`${y}_pending`] !== undefined) ? dSumm[`${y}_pending`] : Math.max(0, yBilled - yCollected);
 
                             rostersHtml += `
@@ -628,7 +643,7 @@
                                      <h4 style="color: #334155; margin: 0; font-size: 1.05rem;">🎓 ${ordinals[y]} Year Sections</h4>
                                      <div style="text-align: right;">
                                          <span style="font-size: 0.9rem; font-weight: bold; color: #0284c7;">Year Level Realized Revenue: ₱${yCollected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                                         ${yPending > 0 ? `<span style="font-size: 0.78rem; color: #64748b; margin-left: 8px;">(Billed: ₱${yBilled.toFixed(2)} • Pending: ₱${yPending.toFixed(2)})</span>` : ''}
+                                         ${yPending > 0 ? `<span style="font-size: 0.78rem; color: #64748b; margin-left: 8px;">(Billed: ₱${yBilled.toFixed(2)}${yPrior > 0 ? ` | Prior Debt: ₱${yPrior.toFixed(2)}` : ''} • Pending: ₱${yPending.toFixed(2)})</span>` : ''}
                                      </div>
                                 </div>
                                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
@@ -668,12 +683,28 @@
                                 // Line 2: Pending Status Badge
                                 let pendingBadgeHtml = '';
                                 if (priorDebt > 0) {
-                                    // When prior debt exists in the active semester, Line 2 is the current transaction pending
-                                    if (currentPending === 0) {
-                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
+                                    if (totalPending === 0) {
+                                        // Both prior debt and current semester issuance are fully settled
+                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
+                                    } else if (currBilled > 0) {
+                                        // Active booklet issuance occurred in the current semester
+                                        if (paidVal >= currBilled) {
+                                            // Current period's issuance is satisfied, but prior debt remains
+                                            pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
+                                        } else {
+                                            const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
+                                            pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
+                                        }
                                     } else {
-                                        const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
-                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
+                                        // currBilled === 0: No booklet issuance this period; only prior debt exists
+                                        if (paidVal > 0) {
+                                            // A payment was made toward prior debt this period
+                                            const badgeColor = '#d97706';
+                                            pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${totalPending.toFixed(2)} Pending</span>`;
+                                        } else {
+                                            // No transactions occurred this period; omit redundant pending badge to keep row clean
+                                            pendingBadgeHtml = '';
+                                        }
                                     }
                                 } else {
                                     // When no prior debt (including all historical/archived views)
@@ -693,10 +724,14 @@
                                     priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${priorDebt.toFixed(2)} prior debt</div>`;
                                 }
 
-                                // Line 4 (or Line 3 if no prior debt): Billed Amount
+                                // Line 4 (or Line 3 if no prior debt): Billed / Due Amount
                                 let billedLineHtml = '';
                                 if (dueVal > 0) {
-                                    billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
+                                    if (priorDebt > 0) {
+                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total Due: ₱${dueVal.toFixed(2)})</div>`;
+                                    } else {
+                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
+                                    }
                                 }
 
                                 const bookletUnitsDisplay = (r.headcount > 0)
@@ -716,7 +751,7 @@
                                     <td style="text-align: center; color: #2c3e50; font-weight: 600;">${materialUsageDisplay}</td>
                                     <td style="text-align: right; font-weight: 600;">
                                         ${paidLineHtml}
-                                        <div style="margin-top: 2px;">${pendingBadgeHtml}</div>
+                                        ${pendingBadgeHtml ? `<div style="margin-top: 2px;">${pendingBadgeHtml}</div>` : ''}
                                         ${priorDebtLineHtml}
                                         ${billedLineHtml}
                                     </td>

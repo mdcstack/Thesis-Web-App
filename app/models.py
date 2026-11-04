@@ -20,6 +20,11 @@ class Enrollment(Base):
     
     # Phase 4: Department Isolation
     department = Column(String(50), default="CS")
+
+    # Semester Lifecycle & Historical Archiving
+    is_archived = Column(Boolean, default=False, index=True)
+    archived_period = Column(String(100), nullable=True, index=True)
+    archived_at = Column(DateTime, nullable=True)
     
     # Relationship to track which booklets were given to this class
     distributed_booklets = relationship("Booklet", back_populates="enrollment")
@@ -30,6 +35,14 @@ class Enrollment(Base):
         back_populates="enrollment", 
         order_by="PaymentRecord.payment_date.asc()", 
         cascade="all, delete-orphan"
+    )
+
+    # Dedicated per-semester billing accounts
+    period_billings = relationship(
+        "EnrollmentPeriodBilling",
+        back_populates="enrollment",
+        cascade="all, delete-orphan",
+        order_by="EnrollmentPeriodBilling.id.asc()"
     )
 
 class MasterBatch(Base):
@@ -190,5 +203,25 @@ class PaymentRecord(Base):
     collection_period = Column(String(100), nullable=True, index=True) # Cash basis period when payment was collected
     recorded_by = Column(String(100), default="System Clerk")
     notes = Column(String(255), nullable=True)
+    billing_id = Column(Integer, ForeignKey("enrollment_period_billings.id"), nullable=True, index=True)
 
     enrollment = relationship("Enrollment", back_populates="payment_records")
+
+class EnrollmentPeriodBilling(Base):
+    __tablename__ = "enrollment_period_billings"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    enrollment_id = Column(Integer, ForeignKey("enrollments.id"), index=True, nullable=False)
+    exam_period = Column(String(100), nullable=False, index=True)
+    student_headcount = Column(Integer, nullable=True, default=0)
+    distributed_count = Column(Integer, default=0)
+    loose_returned = Column(Integer, default=0)
+    unit_price = Column(Float, default=2.50)
+    amount_due = Column(Float, default=0.0)
+    amount_paid = Column(Float, default=0.0)
+    balance = Column(Float, default=0.0)
+    payment_status = Column(String(50), default="Unpaid")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    enrollment = relationship("Enrollment", back_populates="period_billings")

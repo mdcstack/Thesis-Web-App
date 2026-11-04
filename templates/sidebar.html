@@ -293,6 +293,23 @@
 
     // --- UNIVERSAL DSS NOTIFICATION CONTROLLER & INSTANT CACHE HYDRATION ---
     const DSS_ALERT_CACHE_KEY = 'bookletlog_dss_alert_cache';
+    window.pendingDSSAlertData = null;
+
+    window.checkAndShowPendingDSS = function() {
+        if (!window.pendingDSSAlertData) return;
+        const blocker = document.getElementById('provisioningBlockerModal');
+        const bulkModal = document.getElementById('bulkImportModal');
+        const isBusy = window.isProvisioningLocked || 
+                       (blocker && blocker.style.display === 'flex') || 
+                       (bulkModal && bulkModal.style.display === 'flex');
+        if (isBusy) return;
+        if (!sessionStorage.getItem('dss_acknowledged')) {
+            if (typeof window.showDSSModal === 'function') {
+                window.showDSSModal(window.pendingDSSAlertData);
+            }
+        }
+        window.pendingDSSAlertData = null;
+    };
 
     function applyDSSAlertToUI(data) {
         if (!data) return;
@@ -313,7 +330,15 @@
             if (isAdmin) {
                 panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
                 if (!sessionStorage.getItem('dss_acknowledged')) {
-                    if (typeof window.showDSSModal === 'function') {
+                    // Check if an onboarding, provisioning, or blocking operation is currently in progress
+                    const blocker = document.getElementById('provisioningBlockerModal');
+                    const bulkModal = document.getElementById('bulkImportModal');
+                    const isBusy = window.isProvisioningLocked || 
+                                   (blocker && blocker.style.display === 'flex') || 
+                                   (bulkModal && bulkModal.style.display === 'flex');
+                    if (isBusy) {
+                        window.pendingDSSAlertData = data;
+                    } else if (typeof window.showDSSModal === 'function') {
                         window.showDSSModal(data);
                     }
                 }

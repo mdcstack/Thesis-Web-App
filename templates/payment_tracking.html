@@ -806,48 +806,24 @@ function renderTable() {
         if (periodVal !== 'All') {
             const normPeriodVal = (periodVal || '').trim().toLowerCase();
             const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
-            const hasPaymentInPeriod = (enr.payments || []).some(p => {
-                const pColl = (p.collection_period || p.payment_period || '').trim().toLowerCase();
-                const pPay = (p.payment_period || '').trim().toLowerCase();
-                return pColl === normPeriodVal || pPay === normPeriodVal;
-            });
-            periodMatch = (normEnrPeriod === normPeriodVal) || hasPaymentInPeriod || isRecentlyProcessed;
+            periodMatch = (normEnrPeriod === normPeriodVal);
         }
 
         return searchMatch && statusMatch && teacherMatch && deptMatch && sectionMatch && periodMatch;
     });
     
-    // Dynamic KPI Totals strictly calculated on filteredData & period attribution
+    // Dynamic KPI Totals strictly calculated on filteredData for exact math harmony
     let tExpected = 0, tCollected = 0, tOutstanding = 0;
     const deptTotals = {};
 
-    if (periodVal === 'All') {
-        filteredData.forEach(enr => {
-            tExpected += (enr.amount_due || 0);
-            tCollected += (enr.amount_paid || 0);
-            tOutstanding += (enr.balance || 0);
-            const dept = enr.department || 'Other';
-            deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
-        });
-    } else {
-        const normPeriodVal = (periodVal || '').trim().toLowerCase();
-        filteredData.forEach(enr => {
-            const normEnrPeriod = (enr.exam_period || '').trim().toLowerCase();
-            if (normEnrPeriod === normPeriodVal) {
-                tExpected += (enr.amount_due || 0);
-                const dept = enr.department || 'Other';
-                deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
-            }
-            // Realized cash collections received during this period
-            (enr.payments || []).forEach(p => {
-                const pColl = (p.collection_period || p.payment_period || '').trim().toLowerCase();
-                if (pColl === normPeriodVal) {
-                    tCollected += (p.amount || 0);
-                }
-            });
-        });
-        tOutstanding = Object.values(deptTotals).reduce((a, b) => a + b, 0);
-    }
+    filteredData.forEach(enr => {
+        tExpected += (enr.amount_due || 0);
+        tCollected += (enr.amount_paid || 0);
+        tOutstanding += (enr.balance || 0);
+        const dept = enr.department || 'Other';
+        deptTotals[dept] = (deptTotals[dept] || 0) + (enr.balance || 0);
+    });
+    tOutstanding = Object.values(deptTotals).reduce((a, b) => a + b, 0);
 
     const isFiltered = Boolean(searchVal || statusVal !== 'All' || teacherVal !== 'All' || deptVal !== 'All' || sectionVal !== 'All' || periodVal !== 'All');
     const scopeEl = document.getElementById('filterScopeNotice');

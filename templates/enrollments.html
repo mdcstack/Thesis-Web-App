@@ -243,6 +243,51 @@
         .badge-it { background: #fef3c7; color: #b45309; }
         .badge-err { background: #fee2e2; color: #b91c1c; font-size: 0.75rem; font-weight: bold; }
 
+        /* Archived Rosters Viewer Modal Styles */
+        .archived-modal-card {
+            background: #ffffff;
+            padding: 24px 28px;
+            border-radius: 12px;
+            max-width: 950px;
+            width: 95%;
+            max-height: 88vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+            border-top: 5px solid #0284c7;
+            animation: modalPopIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            box-sizing: border-box;
+        }
+        .archived-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.86rem;
+            background: #ffffff;
+        }
+        .archived-table th {
+            background: #f8fafc;
+            color: #334155;
+            padding: 10px 14px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            border-bottom: 2px solid #cbd5e1;
+            font-weight: 700;
+            font-size: 0.8rem;
+            letter-spacing: 0.2px;
+        }
+        .archived-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+            vertical-align: middle;
+        }
+        .archived-table tbody tr:hover {
+            background: #f8fafc;
+        }
+
 
         /* Provisioning Blocker Modal Animations */
         @keyframes blockerSpin {
@@ -312,10 +357,17 @@
 
     <div class="main-content" id="mainView">
         
-        <div class="header-action" style="flex-wrap: wrap; gap: 10px;">
-            <h1 style="color: #2c3e50; font-size: 1.5rem;">Semester Masterfile</h1>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn-primary admin-only" style="background-color: #27ae60;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
+        <div class="header-action" style="flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div>
+                <h1 style="color: #2c3e50; font-size: 1.5rem; margin: 0 0 6px 0;">Semester Masterfile</h1>
+                <div id="archiveStatusBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">
+                    <span class="status-dot" style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #94a3b8;"></span> Checking archive readiness...
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="btn-primary" id="viewArchivedBtn" style="background-color: #0284c7; padding: 9px 15px; font-size: 0.88rem;" onclick="openArchivedRostersModal()" title="View past rosters by semester">📁 View Archived Rosters</button>
+                <button type="button" class="btn-primary admin-only" id="archiveRosterBtn" style="background-color: #94a3b8; padding: 9px 15px; font-size: 0.88rem; cursor: not-allowed;" onclick="promptArchiveEnrollments()" disabled title="Archive button will unlock when 100% of current booklet demand is fulfilled">📦 Archive Current Roster</button>
+                <button type="button" class="btn-primary admin-only" style="background-color: #27ae60; padding: 9px 15px; font-size: 0.88rem;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
             </div>
         </div>
 
@@ -423,8 +475,16 @@
                 </div>
             </div>
             {% else %}
-            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #7f8c8d; background: white; border-radius: 8px;">
-                No class records have been added for this semester yet.
+            <div style="grid-column: 1 / -1; text-align: center; padding: 48px 24px; color: #64748b; background: white; border-radius: 12px; border: 1.5px dashed #cbd5e1; margin-top: 10px;">
+                <div style="font-size: 2.4rem; margin-bottom: 10px;">📋</div>
+                <h3 style="margin: 0 0 6px 0; color: #1e293b; font-size: 1.2rem;">No Active Classes in Masterfile</h3>
+                <p style="margin: 0 0 18px 0; font-size: 0.9rem; color: #64748b; max-width: 520px; margin-inline: auto; line-height: 1.5;">
+                    Class enrollments for the current semester have not been imported yet, or previous classes have been safely archived. You can now import a new set of classes for the upcoming semester.
+                </p>
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button type="button" class="btn-primary admin-only" style="background-color: #27ae60; padding: 9px 20px; font-size: 0.9rem;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
+                    <button type="button" class="btn-primary" style="background-color: #0284c7; padding: 9px 20px; font-size: 0.9rem;" onclick="openArchivedRostersModal()">📁 View Past Archived Rosters</button>
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -565,6 +625,74 @@
         </div>
     </div>
 
+    <!-- ARCHIVED ROSTERS VIEWER MODAL -->
+    <div class="modal-overlay" id="archivedRostersModal" style="display: none; z-index: 10002;">
+        <div class="archived-modal-card">
+            <!-- MODAL HEADER -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #ecf0f1; padding-bottom: 14px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 10px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; border: 1px solid #bae6fd;">
+                        📁
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; color: #1e293b; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.2px;">Archived Academic Rosters</h3>
+                        <p style="margin: 3px 0 0 0; color: #64748b; font-size: 0.82rem; line-height: 1.4;">Historical snapshots of faculty class enrollments, sections, and student headcounts by semester</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeArchivedRostersModal()" style="background: none; border: none; font-size: 1.8rem; color: #94a3b8; cursor: pointer; line-height: 1; padding: 2px 8px; border-radius: 6px; transition: color 0.15s, background 0.15s;" onmouseover="this.style.color='#ef4444'; this.style.background='#fee2e2';" onmouseout="this.style.color='#94a3b8'; this.style.background='none';" title="Close">&times;</button>
+            </div>
+
+            <!-- FILTERS & SELECTOR -->
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <div style="flex: 1; min-width: 250px;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px;">Academic Period Snapshot</label>
+                    <select id="archivedPeriodSelect" onchange="onArchivedPeriodChange()" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem; background: white; font-weight: 600; color: #1e293b; cursor: pointer;">
+                        <option value="">Loading archived periods...</option>
+                    </select>
+                </div>
+                <div style="flex: 1; min-width: 220px;">
+                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px;">Search Classes / Faculty</label>
+                    <input type="text" id="archivedSearchInput" placeholder="Filter instructor, section, or subject..." oninput="filterArchivedTable()" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem; background: white; box-sizing: border-box;">
+                </div>
+                <div style="align-self: flex-end; padding-bottom: 2px;">
+                    <div id="archivedMetaBadge" style="padding: 8px 14px; border-radius: 6px; background: #e0e7ff; color: #3730a3; font-size: 0.82rem; font-weight: 700; border: 1px solid #c7d2fe; white-space: nowrap;">
+                        0 classes
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLE CONTAINER -->
+            <div style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; max-height: 52vh; background: #ffffff;">
+                <table class="archived-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 26%;">Instructor</th>
+                            <th style="width: 15%; text-align: center;">Section & Dept</th>
+                            <th style="width: 33%;">Subject Description</th>
+                            <th style="width: 12%; text-align: center;">Headcount</th>
+                            <th style="width: 14%; text-align: center;">Archived At</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archivedTableBody">
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 35px 20px; color: #94a3b8; font-size: 0.9rem;">
+                                Select an archived semester above to inspect records.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MODAL ACTIONS -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-top: 12px; border-top: 1px solid #ecf0f1;">
+                <div style="font-size: 0.78rem; color: #64748b; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.95rem;">🔒</span> Read-only historical snapshot. Original booklet issuances, returns, and payment records remain intact.
+                </div>
+                <button type="button" class="btn-cancel-modal" onclick="closeArchivedRostersModal()" style="padding: 8px 18px; font-size: 0.88rem;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- OPERATION LOCK OVERLAY: Prevents accidental navigation, clicking, or refresh during credential initialization -->
     <div id="provisioningBlockerModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.82); backdrop-filter: blur(5px); z-index: 999999; justify-content: center; align-items: center; user-select: none; -webkit-user-select: none;">
         <div style="background: white; border-radius: 14px; width: 92%; max-width: 480px; padding: 32px 28px; text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.4); border-top: 6px solid #3b82f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; animation: blockerPopIn 0.25s ease-out;">
@@ -604,9 +732,10 @@
 
         // --- OPERATION BARRIER & BEFOREUNLOAD GUARDIAN ---
         let isProvisioningLocked = false;
+        window.isProvisioningLocked = false;
 
         function preventUnloadHandler(e) {
-            if (isProvisioningLocked) {
+            if (isProvisioningLocked || window.isProvisioningLocked) {
                 e.preventDefault();
                 e.returnValue = "Faculty credential initialization and class enrollment is in progress. Leaving now may cause incomplete setup.";
                 return e.returnValue;
@@ -616,6 +745,7 @@
 
         function showProvisioningBlocker(title, subtitle, detail) {
             isProvisioningLocked = true;
+            window.isProvisioningLocked = true;
             const modal = document.getElementById("provisioningBlockerModal");
             if (!modal) return;
 
@@ -707,21 +837,29 @@
                 step3.style.color = "#16a34a";
             }
 
-            isProvisioningLocked = false;
-
+            // Keep lock active during the success card display so background WebSocket events or DSS popups don't interrupt
             setTimeout(() => {
+                isProvisioningLocked = false;
+                window.isProvisioningLocked = false;
+                const modal = document.getElementById("provisioningBlockerModal");
+                if (modal) modal.style.display = "none";
+
                 if (typeof onComplete === "function") {
                     onComplete();
                 } else {
                     window.location.reload();
                 }
-            }, 800);
+            }, 1800);
         }
 
         function hideProvisioningBlocker() {
             isProvisioningLocked = false;
+            window.isProvisioningLocked = false;
             const modal = document.getElementById("provisioningBlockerModal");
             if (modal) modal.style.display = "none";
+            if (typeof window.checkAndShowPendingDSS === "function") {
+                window.checkAndShowPendingDSS();
+            }
         }
 
         // --- AUTHENTICATION GUARD & RBAC ---
@@ -769,10 +907,15 @@
                 if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET") {
                     const editModal = document.getElementById('editModal');
                     const bulkModal = document.getElementById('bulkImportModal');
-                    if ((editModal && editModal.style.display === 'flex') || (bulkModal && bulkModal.style.display === 'flex')) {
-                        return;
+                    const blockerModal = document.getElementById('provisioningBlockerModal');
+                    if (window.isProvisioningLocked || (blockerModal && blockerModal.style.display === 'flex') || (editModal && editModal.style.display === 'flex') || (bulkModal && bulkModal.style.display === 'flex')) {
+                        return; // Do not reload or interrupt while batch onboarding / credential initialization is active
                     }
                     window.location.reload();
+                } else if (payload.event === "DISTRIBUTION_RECORDED" || payload.event === "RETURN_PROCESSED" || payload.event === "PERIOD_CHANGED") {
+                    if (typeof checkArchiveStatus === 'function') {
+                        checkArchiveStatus();
+                    }
                 }
             });
         }
@@ -1125,6 +1268,9 @@
             if (pasteArea) {
                 pasteArea.addEventListener('input', handlePasteInput);
             }
+
+            // Check if current roster can be archived
+            checkArchiveStatus();
         });
 
         // --- QUICK ADD HELPER ---
@@ -1783,6 +1929,257 @@
                 openBulkImportModal();
             });
         }
+
+    // --- SEMESTER ENROLLMENT ARCHIVING SYSTEM ---
+    let currentArchiveStatus = null;
+    let archivedPeriodsCache = [];
+
+    async function checkArchiveStatus() {
+        const archiveBtn = document.getElementById('archiveRosterBtn');
+        const badge = document.getElementById('archiveStatusBadge');
+        if (!archiveBtn || !badge) return;
+
+        try {
+            const res = await fetch('/api/enrollment-archive-status');
+            const data = await res.json();
+            currentArchiveStatus = data;
+
+            if (data.active_count === 0) {
+                badge.style.display = 'inline-flex';
+                badge.style.background = '#f1f5f9';
+                badge.style.color = '#64748b';
+                badge.style.border = '1px solid #cbd5e1';
+                badge.innerHTML = '📭 Active Roster Empty';
+                archiveBtn.disabled = true;
+                archiveBtn.style.opacity = '0.5';
+                archiveBtn.style.cursor = 'not-allowed';
+                archiveBtn.title = 'No active class enrollments to archive.';
+            } else if (data.can_archive) {
+                badge.style.display = 'inline-flex';
+                badge.style.background = '#ecfdf5';
+                badge.style.color = '#065f46';
+                badge.style.border = '1px solid #a7f3d0';
+                badge.innerHTML = `✅ 100% Demand Fulfilled (${data.distributed_count} bks)`;
+                archiveBtn.disabled = false;
+                archiveBtn.style.opacity = '1';
+                archiveBtn.style.cursor = 'pointer';
+                archiveBtn.title = 'All active booklet demand has been fulfilled! Click to archive this semester roster.';
+            } else {
+                badge.style.display = 'inline-flex';
+                badge.style.background = '#fef3c7';
+                badge.style.color = '#92400e';
+                badge.style.border = '1px solid #fde68a';
+                if (data.distributed_count === 0) {
+                    badge.innerHTML = '⏳ Distribution Not Started';
+                    archiveBtn.title = 'Distribution has not started yet. Cannot archive until all required booklets are distributed.';
+                } else {
+                    badge.innerHTML = `⚠️ Pending: ${data.unfulfilled_pcs} bks (${data.unfulfilled_sections_count} sec)`;
+                    archiveBtn.title = `Distribution incomplete: ${data.unfulfilled_pcs} booklets still pending across ${data.unfulfilled_sections_count} sections.`;
+                }
+                archiveBtn.disabled = true;
+                archiveBtn.style.opacity = '0.5';
+                archiveBtn.style.cursor = 'not-allowed';
+            }
+        } catch (err) {
+            console.error("Error checking enrollment archive status:", err);
+        }
+    }
+
+    async function promptArchiveEnrollments() {
+        if (!currentArchiveStatus || !currentArchiveStatus.can_archive) {
+            showAppAlert(
+                "Cannot Archive Active Roster",
+                currentArchiveStatus ? currentArchiveStatus.reason : "Booklet distribution for the current academic period is not yet 100% completed.",
+                "warning"
+            );
+            return;
+        }
+
+        const confirmed = await showAppConfirm(
+            "Archive Current Academic Roster?",
+            `Are you sure you want to archive all ${currentArchiveStatus.active_count} active class enrollments for "${currentArchiveStatus.active_period}"?\n\n` +
+            `• All ${currentArchiveStatus.distributed_count} booklets have been fully distributed to instructors.\n` +
+            `• Active roster view will reset to clean-slate so you can import new classes for the next semester.\n` +
+            `• Historical records, past distributed booklets, and billing balances remain safely intact and viewable anytime in 'View Archived Rosters'.\n\n` +
+            `Proceed with semester archiving?`,
+            {
+                type: 'warning',
+                confirmText: '📦 Yes, Archive Roster',
+                cancelText: 'Cancel',
+                confirmBg: '#8e44ad'
+            }
+        );
+
+        if (!confirmed) return;
+
+        try {
+            const currentUser = JSON.parse(localStorage.getItem('bookletlog_user') || '{}');
+            const res = await fetch('/api/archive-enrollments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: currentUser.username || 'admin' })
+            });
+            const result = await res.json();
+
+            if (res.ok && result.status === 'success') {
+                await showAppAlert(
+                    "Roster Successfully Archived! 🎉",
+                    `Successfully archived ${result.archived_count} class enrollments for "${result.academic_period}".\n\n` +
+                    `The active masterfile is now clean and ready for importing the next semester's classes.`,
+                    "success"
+                );
+                window.location.reload();
+            } else {
+                showAppAlert("Archiving Failed", result.detail || result.message || "Failed to archive enrollments.", "warning");
+            }
+        } catch (err) {
+            console.error("Error archiving enrollments:", err);
+            showAppAlert("Network Error", "Could not reach the server to complete archiving.", "warning");
+        }
+    }
+
+    async function openArchivedRostersModal() {
+        const modal = document.getElementById('archivedRostersModal');
+        if (modal) modal.style.display = 'flex';
+        await loadArchivedPeriods();
+    }
+
+    function closeArchivedRostersModal() {
+        const modal = document.getElementById('archivedRostersModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    async function loadArchivedPeriods() {
+        const select = document.getElementById('archivedPeriodSelect');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">Loading archived periods...</option>';
+        try {
+            const res = await fetch('/api/archived-enrollments');
+            const data = await res.json();
+            archivedPeriodsCache = data.periods || [];
+
+            if (archivedPeriodsCache.length === 0) {
+                select.innerHTML = '<option value="">No archived rosters found</option>';
+                const tbody = document.getElementById('archivedTableBody');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" style="text-align: center; padding: 45px 20px; color: #64748b;">
+                                <div style="font-size: 2.2rem; margin-bottom: 8px;">📁</div>
+                                <strong style="display: block; font-size: 1rem; color: #1e293b; margin-bottom: 4px;">No Historical Rosters Archived Yet</strong>
+                                <span style="font-size: 0.82rem; color: #94a3b8;">When 100% of booklet demand is distributed, click "Archive Current Roster" to snapshot this semester.</span>
+                            </td>
+                        </tr>
+                    `;
+                }
+                const badge = document.getElementById('archivedMetaBadge');
+                if (badge) badge.textContent = '0 classes';
+                return;
+            }
+
+            select.innerHTML = archivedPeriodsCache.map(p => 
+                `<option value="${p.academic_period}">${p.academic_period} (${p.classes_count} classes • ${p.total_students} students)</option>`
+            ).join('');
+
+            onArchivedPeriodChange();
+        } catch (err) {
+            console.error("Error loading archived periods:", err);
+            select.innerHTML = '<option value="">Error loading archives</option>';
+        }
+    }
+
+    function onArchivedPeriodChange() {
+        const select = document.getElementById('archivedPeriodSelect');
+        const selectedVal = select ? select.value : '';
+        const periodData = archivedPeriodsCache.find(p => p.academic_period === selectedVal);
+
+        if (!periodData) {
+            renderArchivedTable([]);
+            return;
+        }
+
+        renderArchivedTable(periodData.classes);
+    }
+
+    function renderArchivedTable(classes) {
+        const tbody = document.getElementById('archivedTableBody');
+        const metaBadge = document.getElementById('archivedMetaBadge');
+        if (!tbody) return;
+
+        const searchInput = document.getElementById('archivedSearchInput');
+        const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+        const filtered = (classes || []).filter(c => {
+            if (!query) return true;
+            const teacher = (c.teacher || c.teacher_name || '').toLowerCase();
+            const section = (c.section || '').toLowerCase();
+            const subject = (c.subject || '').toLowerCase();
+            return teacher.includes(query) || section.includes(query) || subject.includes(query);
+        });
+
+        if (metaBadge) {
+            const totalStudents = filtered.reduce((sum, c) => sum + (c.headcount ?? c.student_headcount ?? 0), 0);
+            metaBadge.textContent = `${filtered.length} classes • ${totalStudents} students`;
+        }
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 40px 20px; color: #94a3b8;">
+                        <div style="font-size: 1.8rem; margin-bottom: 6px;">🔍</div>
+                        <strong style="color: #475569; font-size: 0.95rem; display: block; margin-bottom: 3px;">No matching archived classes found</strong>
+                        <span style="font-size: 0.8rem; color: #94a3b8;">Try searching for a different instructor, section, or subject.</span>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(c => {
+            const teacher = c.teacher || c.teacher_name || '—';
+            const section = c.section || '—';
+            const subject = c.subject || '—';
+            const headcount = c.headcount ?? c.student_headcount ?? 0;
+            const dept = (c.department || (section.toUpperCase().includes('IT') ? 'IT' : 'CS')).toUpperCase();
+            const deptBadgeClass = dept === 'IT' ? 'badge-it' : 'badge-cs';
+            const archivedAt = c.archived_at || '—';
+
+            return `
+                <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.15s ease;">
+                    <td style="padding: 11px 14px; font-weight: 700; color: #1e293b;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.05rem;">👤</span>
+                            <span>${teacher}</span>
+                        </div>
+                    </td>
+                    <td style="padding: 11px 14px; text-align: center;">
+                        <span class="badge-dept ${deptBadgeClass}" style="padding: 4px 10px; font-size: 0.8rem; letter-spacing: 0.3px;">
+                            ${section}
+                        </span>
+                    </td>
+                    <td style="padding: 11px 14px; color: #475569; font-size: 0.88rem; font-weight: 500;">
+                        ${subject}
+                    </td>
+                    <td style="padding: 11px 14px; text-align: center;">
+                        <span style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 3px 10px; border-radius: 12px; font-weight: 700; font-size: 0.82rem; display: inline-block;">
+                            ${headcount} Pax
+                        </span>
+                    </td>
+                    <td style="padding: 11px 14px; text-align: center; font-size: 0.8rem; color: #64748b; font-weight: 500;">
+                        ${archivedAt}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterArchivedTable() {
+        const select = document.getElementById('archivedPeriodSelect');
+        const selectedVal = select ? select.value : '';
+        const periodData = archivedPeriodsCache.find(p => p.academic_period === selectedVal);
+        renderArchivedTable(periodData ? periodData.classes : []);
+    }
 
     // --- REAL-TIME SESSION POLLING ---
     // This constantly checks if another device has logged in and instantly kicks this device out.

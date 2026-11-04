@@ -1586,8 +1586,8 @@
                 const sheetsNeeded = d.sheets_needed !== undefined ? d.sheets_needed : ((d.target_production || 0) * sheetsPerB);
                 const courseRoundedReams = (d.reams_needed !== undefined) ? d.reams_needed : (sheetsNeeded > 0 ? Math.ceil(sheetsNeeded / 500) : 0);
                 const courseProcuredSheets = courseRoundedReams * 500;
-                const courseExcessSheets = d.excess_sheets !== undefined ? d.excess_sheets : Math.max(0, courseProcuredSheets - sheetsNeeded);
-                const courseExcessBooklets = d.excess_booklets_yield !== undefined ? d.excess_booklets_yield : (sheetsPerB > 0 ? Math.floor(courseExcessSheets / sheetsPerB) : 0);
+                const courseExcessSheets = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : 0;
+                const courseExcessBooklets = (d.excess_booklets_yield !== undefined && d.excess_booklets_yield !== null) ? d.excess_booklets_yield : (sheetsPerB > 0 ? Math.floor(courseExcessSheets / sheetsPerB) : 0);
                 const paperText = d.paper_required_text || (d.target_production === 0 ? '0 Sheets (Demand Met)' : `${Math.floor(sheetsNeeded / 500)} Ream(s) & ${sheetsNeeded % 500} Sheet(s)`);
                 const mainReamsDisplay = (d.target_production === 0) ? '0 Whole Reams' : `${courseRoundedReams} Whole Reams`;
                 const totalSheetsSubtext = (d.target_production > 0) ? `(${paperText} • ${sheetsNeeded.toLocaleString()} sheets)` : '(Demand Met)';
@@ -1610,6 +1610,9 @@
                             <div style="min-width: 0;">
                                 <span style="color: #64748b; font-size: 0.8rem; display: block;">Distributed / In Stock</span>
                                 <span style="font-weight: 600;"><span style="color: #0284c7;">${(d.distributed || 0).toLocaleString()}</span> / <span style="color: #059669;">${(d.available_stock || 0).toLocaleString()} pcs</span></span>
+                                ${(d.prior_available_booklets && d.prior_available_booklets > 0) ? `
+                                <div style="font-size: 0.73rem; color: #059669; font-weight: 600; margin-top: 2px;">📥 Includes ${d.prior_available_booklets.toLocaleString()} ready booklets carried over from prior buffer</div>
+                                ` : ''}
                             </div>
                             <div style="min-width: 0;">
                                 <span style="color: #64748b; font-size: 0.8rem; display: block;">Deficit (Unmet Demand)</span>
@@ -1624,6 +1627,9 @@
                             <div>
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Production Target:</span>
                                 <strong style="font-size: 1.15rem; color: #1e3a8a;">${(d.target_production || 0).toLocaleString()} Booklets</strong>
+                                ${(d.prior_available_booklets && d.prior_available_booklets > 0) ? `
+                                <small style="display: block; color: #059669; font-size: 0.72rem; font-weight: 600;">(−${d.prior_available_booklets.toLocaleString()} ready from vault)</small>
+                                ` : ''}
                             </div>
                             <div style="text-align: right;">
                                 <span style="color: #475569; font-size: 0.8rem; display: block;">Paper Required:</span>

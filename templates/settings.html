@@ -728,7 +728,7 @@
 
                                     <span style="color: #64748b; font-size: 0.73rem; text-transform: uppercase; font-weight: 600; display: block;">Prior DCS Net Profit:</span>
 
-                                    <strong id="carryover_profit_wrapper" style="color: #0284c7; font-size: 0.95rem;"><span id="carryover_profit_sign">+</span> ₱<span id="carryover_net_profit">0.00</span></strong>
+                                    <strong id="carryover_profit_wrapper" style="color: #0284c7; font-size: 0.95rem;"><span id="carryover_profit_sign"></span>₱<span id="carryover_net_profit">0.00</span></strong>
 
                                 </div>
 
@@ -842,14 +842,14 @@
 
                                     <div id="rec_metric_staples" style="font-weight: 700; color: #d97706; font-size: 0.95rem; margin-top: 2px;">0 boxes</div>
 
+                                    <div id="rec_metric_staples_breakdown" style="font-size: 0.75rem; color: #475569; margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">-</div>
+
                                 </div>
 
                                 <div>
-
-                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Yield per Ream</div>
-
-                                    <div id="rec_metric_yield" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; margin-top: 2px;">83 booklets</div>
-
+                                    <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Booklets to Create</div>
+                                    <div id="rec_metric_production_total" style="font-weight: 700; color: #0284c7; font-size: 0.95rem; margin-top: 2px;">0 booklets</div>
+                                    <div id="rec_metric_production_breakdown" style="font-size: 0.75rem; color: #475569; margin-top: 6px; display: flex; flex-direction: column; gap: 6px;">-</div>
                                 </div>
 
                             </div>
@@ -2275,9 +2275,11 @@
 
 
 
-            // Preserve locked readOnly state on department_ream_budget if in locked rollover mode
+            // Preserve locked readOnly state on department_ream_budget if in locked rollover mode or viewing an archived period
 
-            if (currentPreviousSummary && currentPreviousSummary.has_previous_period) {
+            const isPrevPeriod = Boolean(window.currentPeriodState && window.currentPeriodState.isPrevious);
+
+            if (isPrevPeriod || (currentPreviousSummary && currentPreviousSummary.has_previous_period)) {
 
                 const bEl = document.getElementById('department_ream_budget');
 
@@ -2287,7 +2289,23 @@
 
                     bEl.style.cursor = 'not-allowed';
 
+                    if (isPrevPeriod) {
+
+                        bEl.style.backgroundColor = '#f8fafc';
+
+                        bEl.style.borderColor = '#cbd5e1';
+
+                        bEl.style.color = '#334155';
+
+                        bEl.style.fontWeight = '700';
+
+                    }
+
                 }
+
+                const lockIcon = document.getElementById('budget_lock_icon');
+
+                if (lockIcon) lockIcon.style.display = 'block';
 
             }
 
@@ -2774,107 +2792,97 @@
 
 
             let totalBookletsDemand = 0;
+            let totalRawBookletsDemand = 0;
+            let totalVaultBooklets = 0;
+            let totalBookletsToCreate = 0;
 
             let totalRoundedReams = 0;
 
             let courseBreakdownParts = [];
-
-
+            let courseProductionParts = [];
+            const hasPrevPeriod = Boolean(currentPreviousSummary && currentPreviousSummary.has_previous_period);
 
             if (courseDemandList && courseDemandList.length > 0) {
-
                 courseDemandList.forEach(c => {
+                    const availBooklets = hasPrevPeriod
+                        ? (currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].available_booklets !== undefined
+                            ? (currentPreviousCourseExcess[c.code].available_booklets || 0)
+                            : (c.prior_available_booklets || 0))
+                        : 0;
 
-                    const cTarget = bufferPct > 0 ? Math.ceil(c.headcount * (1 + (bufferPct / 100))) : c.headcount;
-
+                    const rawTarget = bufferPct > 0 ? Math.ceil(c.headcount * (1 + (bufferPct / 100))) : c.headcount;
+                    // Net booklet target after crediting pre-printed ready booklets in vault (Tier 1 Finished Goods)
+                    const cTarget = Math.max(0, rawTarget - availBooklets);
                     const cGrossSheets = cTarget * sheets;
 
-                    
+                    const prevExcess = hasPrevPeriod
+                        ? ((currentPreviousCourseExcess && currentPreviousCourseExcess[c.code]) 
+                            ? (currentPreviousCourseExcess[c.code].excess_sheets || 0) 
+                            : (c.prev_excess_sheets || 0))
+                        : 0;
 
-                    const prevExcess = (currentPreviousCourseExcess && currentPreviousCourseExcess[c.code]) 
-
-                        ? (currentPreviousCourseExcess[c.code].excess_sheets || 0) 
-
-                        : (c.prev_excess_sheets || 0);
-
-                    
-
+                    // Net paper sheets after crediting raw paper stock on hand (Tier 2 Raw Materials)
                     const cNetSheets = Math.max(0, cGrossSheets - prevExcess);
-
                     const cReams = cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0;
 
-                    
-
+                    totalRawBookletsDemand += rawTarget;
+                    totalVaultBooklets += availBooklets;
                     totalBookletsDemand += cTarget;
-
                     totalRoundedReams += cReams;
+                    totalBookletsToCreate += cTarget;
 
-                    
-
-                    const leftoverDisplay = prevExcess > 0 ? `− ${prevExcess.toLocaleString()} sh` : `0 sh`;
-
-                    const rmPart = Math.floor(cNetSheets / 500);
-
-                    const shPart = cNetSheets % 500;
-
-                    const toPurchaseDisplay = `${rmPart}rm(s) ${shPart}sh`;
-
-                    const reamLabel = `${cReams} Ream${cReams !== 1 ? 's' : ''}`;
-
-
-
-                    courseBreakdownParts.push(`
-
-                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
-
-                            <!-- Course Header -->
-
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
-
-                                <span style="color: #1e293b;">${c.code}:</span>
-
-                                <span style="color: ${cReams > 0 ? '#2563eb' : '#64748b'};">${reamLabel}</span>
-
-                            </div>
-
-                            <!-- 2-Column Aligned Ledger Rows -->
-
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
-
-                                <span>Gross Req</span>
-
-                                <span style="font-weight: 600; color: #1e293b; text-align: right;">${cGrossSheets.toLocaleString()} sh</span>
-
-                            </div>
-
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
-
-                                <span>Stock on Hand</span>
-
-                                <span style="font-weight: 600; color: ${prevExcess > 0 ? '#15803d' : '#64748b'}; text-align: right;">${leftoverDisplay}</span>
-
-                            </div>
-
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 3px; margin-top: 2px; color: #475569;">
-
-                                <span style="font-weight: 600;">Stock Deficit</span>
-
-                                <span style="font-weight: 700; color: ${cNetSheets > 0 ? '#2563eb' : '#15803d'}; text-align: right;">${toPurchaseDisplay}</span>
-
-                            </div>
-
+                    courseProductionParts.push(`
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                            <span style="font-weight: 600; color: #1e293b;">${c.code}:</span>
+                            <span style="font-weight: 700; color: ${cTarget > 0 ? '#0284c7' : '#15803d'}; text-align: right;">${cTarget.toLocaleString()} bks</span>
                         </div>
-
                     `);
 
+                    const leftoverDisplay = prevExcess > 0 ? `− ${prevExcess.toLocaleString()} sh` : `0 sh`;
+                    const rmPart = Math.floor(cNetSheets / 500);
+                    const shPart = cNetSheets % 500;
+                    const toPurchaseDisplay = `${rmPart}rm(s) ${shPart}sh`;
+                    const reamLabel = `${cReams} Ream${cReams !== 1 ? 's' : ''}`;
+
+                    courseBreakdownParts.push(`
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
+                            <!-- Course Header -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
+                                <span style="color: #1e293b;">${c.code}:</span>
+                                <span style="color: ${cReams > 0 ? '#2563eb' : '#15803d'};">${reamLabel}</span>
+                            </div>
+                            <!-- 2-Column Aligned Ledger Rows -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                                <span>Booklet Demand</span>
+                                <span style="font-weight: 600; color: #1e293b; text-align: right;">${rawTarget.toLocaleString()} bks</span>
+                            </div>
+                            ${availBooklets > 0 ? `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                                <span>Booklets in Stock</span>
+                                <span style="font-weight: 600; color: #15803d; text-align: right;">− ${availBooklets.toLocaleString()} bks</span>
+                            </div>
+                            ` : ''}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                                <span>Gross Req</span>
+                                <span style="font-weight: 600; color: #1e293b; text-align: right;">${cGrossSheets.toLocaleString()} sh</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                                <span>Stock on Hand</span>
+                                <span style="font-weight: 600; color: ${prevExcess > 0 ? '#15803d' : '#64748b'}; text-align: right;">${leftoverDisplay}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 3px; margin-top: 2px; color: #475569;">
+                                <span style="font-weight: 600;">Stock Deficit</span>
+                                <span style="font-weight: 700; color: ${cNetSheets > 0 ? '#2563eb' : '#15803d'}; text-align: right;">${toPurchaseDisplay}</span>
+                            </div>
+                        </div>
+                    `);
                 });
 
             } else {
-
-                totalBookletsDemand = bufferPct > 0 ? Math.ceil(currentTotalDemand * (1 + (bufferPct / 100))) : currentTotalDemand;
-
+                totalRawBookletsDemand = bufferPct > 0 ? Math.ceil(currentTotalDemand * (1 + (bufferPct / 100))) : currentTotalDemand;
+                totalBookletsDemand = totalRawBookletsDemand;
+                totalBookletsToCreate = totalBookletsDemand;
                 totalRoundedReams = yieldPerReam > 0 ? Math.ceil(totalBookletsDemand / yieldPerReam) : 0;
-
             }
 
 
@@ -2889,13 +2897,23 @@
 
 
 
-                const totalStaplesNeeded = totalBookletsDemand * staplesPerBooklet;
+                const prevExcessStaples = (currentPreviousSummary && currentPreviousSummary.prev_excess_staples) || 0;
+                const hasActualBatches = Boolean(window.currentPeriodActuals && window.currentPeriodActuals.total_generated > 0);
+
+                let totalStaplesNeeded = totalBookletsDemand * staplesPerBooklet;
+                if (hasActualBatches) {
+                    totalStaplesNeeded = window.currentPeriodActuals.total_generated * staplesPerBooklet;
+                }
+
+                const netStaplesNeeded = Math.max(0, totalStaplesNeeded - prevExcessStaples);
 
                 const boxCapacity = staplesPerBox;
 
-                const stapleBoxesNeeded = Math.ceil(totalStaplesNeeded / boxCapacity);
+                const stapleBoxesNeeded = (boxCapacity > 0 && netStaplesNeeded > 0) ? Math.ceil(netStaplesNeeded / boxCapacity) : 0;
 
                 const staplesBudget = stapleBoxesNeeded * stapleBoxPrice;
+
+                const residualStaples = (stapleBoxesNeeded * boxCapacity + prevExcessStaples) - totalStaplesNeeded;
 
 
 
@@ -2932,27 +2950,23 @@
                 
 
                 const metricStudents = document.getElementById('rec_metric_students');
-
-                const metricYield = document.getElementById('rec_metric_yield');
-
                 const metricReams = document.getElementById('rec_metric_reams');
-
                 const metricReamsBreakdown = document.getElementById('rec_metric_reams_breakdown');
-
                 const metricStaples = document.getElementById('rec_metric_staples');
+                const metricStaplesBreakdown = document.getElementById('rec_metric_staples_breakdown');
+                const metricProdTotal = document.getElementById('rec_metric_production_total');
+                const metricProdBreakdown = document.getElementById('rec_metric_production_breakdown');
 
 
 
                 if (metricStudents) {
-
                     const bufferLabel = bufferPct > 0 
-
                         ? `<span style="font-size: 0.73rem; color: #64748b; font-weight: normal; display: block;">Incl. +${bufferPct}% safety buffer</span>`
-
                         : `<span style="font-size: 0.73rem; color: #64748b; font-weight: normal; display: block;">Exact demand (0% buffer)</span>`;
-
-                    metricStudents.innerHTML = `<strong>${totalBookletsDemand.toLocaleString()}</strong> booklets${bufferLabel}`;
-
+                    const vaultCreditNote = totalVaultBooklets > 0
+                        ? `<span style="font-size: 0.70rem; color: #15803d; font-weight: 600; display: block;">${totalBookletsDemand.toLocaleString()} net to print (${totalVaultBooklets.toLocaleString()} ready in vault)</span>`
+                        : '';
+                    metricStudents.innerHTML = `<strong>${totalRawBookletsDemand.toLocaleString()}</strong> booklets${bufferLabel}${vaultCreditNote}`;
                 }
 
 
@@ -2973,9 +2987,106 @@
 
                 if (metricReamsBreakdown) metricReamsBreakdown.innerHTML = courseBreakdownParts.length > 0 ? courseBreakdownParts.join('') : '-';
 
-                if (metricStaples) metricStaples.innerText = `${stapleBoxesNeeded} box${stapleBoxesNeeded !== 1 ? 'es' : ''} (₱${staplesBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                if (metricStaples) {
 
-                if (metricYield) metricYield.innerText = `${yieldPerReam} booklets / ream`;
+                    metricStaples.innerHTML = `<strong>${stapleBoxesNeeded}</strong> box${stapleBoxesNeeded !== 1 ? 'es' : ''} (₱${staplesBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+
+                }
+
+                if (metricStaplesBreakdown) {
+
+                    const staplesBxsPart = boxCapacity > 0 ? Math.floor(netStaplesNeeded / boxCapacity) : 0;
+
+                    const staplesStplsPart = boxCapacity > 0 ? (netStaplesNeeded % boxCapacity) : netStaplesNeeded;
+
+                    const toPurchaseStaplesDisplay = `${staplesBxsPart} bxs ${staplesStplsPart} stpls`;
+
+                    const stapleBoxLabel = `${stapleBoxesNeeded} Box${stapleBoxesNeeded !== 1 ? 'es' : ''}`;
+
+                    const inStockDisplay = prevExcessStaples > 0 ? `− ${prevExcessStaples.toLocaleString()} stpls` : `0 stpls`;
+
+
+
+                    metricStaplesBreakdown.innerHTML = `
+
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
+
+                            <!-- Staples Header -->
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
+
+                                <span style="color: #1e293b;">Binding:</span>
+
+                                <span style="color: ${stapleBoxesNeeded > 0 ? '#d97706' : '#15803d'};">${stapleBoxLabel}</span>
+
+                            </div>
+
+                            <!-- 2-Column Aligned Ledger Rows -->
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+
+                                <span>Demand</span>
+
+                                <span style="font-weight: 600; color: #1e293b; text-align: right;">${totalStaplesNeeded.toLocaleString()} stpls</span>
+
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+
+                                <span>In Stock</span>
+
+                                <span style="font-weight: 600; color: ${prevExcessStaples > 0 ? '#15803d' : '#64748b'}; text-align: right;">${inStockDisplay}</span>
+
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 3px; margin-top: 2px; color: #475569;">
+
+                                <span style="font-weight: 600;">Stock Deficit</span>
+
+                                <span style="font-weight: 700; color: ${netStaplesNeeded > 0 ? '#d97706' : '#15803d'}; text-align: right;">${toPurchaseStaplesDisplay}</span>
+
+                            </div>
+
+                            ${residualStaples > 0 ? `
+
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px; color: #15803d; font-size: 0.70rem;">
+
+                                <span>Reserve Left</span>
+
+                                <span style="font-weight: 600; text-align: right;">+${residualStaples.toLocaleString()} stpls</span>
+
+                            </div>
+
+                            ` : ''}
+
+                        </div>
+
+                    `;
+
+                }
+
+                if (metricProdTotal) {
+                    metricProdTotal.innerHTML = `<strong>${totalBookletsToCreate.toLocaleString()}</strong> booklets`;
+                }
+
+                if (metricProdBreakdown) {
+                    metricProdBreakdown.innerHTML = `
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
+                            <!-- Header / Label -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
+                                <span style="color: #1e293b;">Production:</span>
+                                <span style="color: ${totalBookletsToCreate > 0 ? '#0284c7' : '#15803d'};">${totalBookletsToCreate > 0 ? totalBookletsToCreate.toLocaleString() + ' bks' : 'Met'}</span>
+                            </div>
+                            <!-- Course Rows -->
+                            ${courseProductionParts.length > 0 ? courseProductionParts.join('') : '<div style="color: #94a3b8;">-</div>'}
+                            <!-- Total Row -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 3px; margin-top: 2px; font-weight: 700;">
+                                <span style="color: #475569;">Total:</span>
+                                <span style="color: #0f172a; text-align: right;">${totalBookletsToCreate.toLocaleString()} bks</span>
+                            </div>
+                        </div>
+                    `;
+                }
 
 
 
@@ -3019,6 +3130,8 @@
 
                     // Update top up button in carryover advisory card
 
+                    const isPrevPeriod = Boolean(window.currentPeriodState && window.currentPeriodState.isPrevious);
+
                     if (carryTopUpBtn) {
 
                         if (carryTopUpAmountEl) {
@@ -3027,15 +3140,17 @@
 
                         }
 
-                        carryTopUpBtn.style.display = 'inline-block';
+                        carryTopUpBtn.style.display = isPrevPeriod ? 'none' : 'inline-block';
 
-                        carryTopUpBtn.disabled = !isUnlocked;
+                        carryTopUpBtn.disabled = !isUnlocked || isPrevPeriod;
 
                     }
 
                     if (carryAddBtn) {
 
-                        carryAddBtn.disabled = !isUnlocked;
+                        carryAddBtn.style.display = isPrevPeriod ? 'none' : 'inline-block';
+
+                        carryAddBtn.disabled = !isUnlocked || isPrevPeriod;
 
                     }
 
@@ -3071,15 +3186,27 @@
 
                     if (applyBtn) {
 
-                        applyBtn.style.display = 'inline-block';
+                        const isPrevPeriod = Boolean(window.currentPeriodState && window.currentPeriodState.isPrevious);
 
-                        applyBtn.disabled = !isUnlocked;
+                        if (isPrevPeriod) {
 
-                        applyBtn.style.background = '#059669';
+                            applyBtn.style.display = 'none';
 
-                        applyBtn.style.boxShadow = '0 2px 4px rgba(5,150,105,0.25)';
+                            applyBtn.disabled = true;
 
-                        applyBtn.innerText = `✨ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                        } else {
+
+                            applyBtn.style.display = 'inline-block';
+
+                            applyBtn.disabled = !isUnlocked;
+
+                            applyBtn.style.background = '#059669';
+
+                            applyBtn.style.boxShadow = '0 2px 4px rgba(5,150,105,0.25)';
+
+                            applyBtn.innerText = `✨ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+
+                        }
 
                     }
 
@@ -3354,35 +3481,25 @@
                 
 
                 // Realized Net Profit / Deficit formatting
-
                 if (elProfit) {
-
                     const profitVal = currentPreviousProfit;
-
                     const profitAbs = Math.abs(profitVal).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
                     const wrapper = document.getElementById('carryover_profit_wrapper');
-
                     const signEl = document.getElementById('carryover_profit_sign');
 
                     if (profitVal < 0) {
-
-                        if (signEl) signEl.innerText = '−';
-
-                        elProfit.innerText = profitAbs;
-
-                        if (wrapper) wrapper.style.color = '#dc2626';
-
-                    } else {
-
-                        if (signEl) signEl.innerText = '+';
-
-                        elProfit.innerText = profitAbs;
-
+                        if (signEl) signEl.innerText = '';
+                        elProfit.innerText = '0.00';
                         if (wrapper) wrapper.style.color = '#0284c7';
-
+                    } else if (profitVal === 0) {
+                        if (signEl) signEl.innerText = '';
+                        elProfit.innerText = '0.00';
+                        if (wrapper) wrapper.style.color = '#0284c7';
+                    } else {
+                        if (signEl) signEl.innerText = '+ ';
+                        elProfit.innerText = profitAbs;
+                        if (wrapper) wrapper.style.color = '#0284c7';
                     }
-
                 }
 
 
@@ -3415,7 +3532,7 @@
 
 
 
-                // Course excess sheets notice
+                // Course excess sheets and ready buffer booklets notice
 
                 const noticeEl = document.getElementById('carryover_course_sheets_notice');
 
@@ -3425,17 +3542,31 @@
 
                 let totalExcessSheets = 0;
 
+                let totalAvailBooklets = 0;
+
+
+
                 if (prevSum.course_excess_sheets) {
 
                     for (const [code, info] of Object.entries(prevSum.course_excess_sheets)) {
 
                         const excess = info.excess_sheets || 0;
 
+                        const bks = info.available_booklets || 0;
+
                         totalExcessSheets += excess;
 
-                        if (excess > 0) {
+                        totalAvailBooklets += bks;
 
-                            courseExcessParts.push(`${code}: ${excess.toLocaleString()} leftover sheets`);
+                        const parts = [];
+
+                        if (bks > 0) parts.push(`${bks.toLocaleString()} ready booklets`);
+
+                        if (excess > 0) parts.push(`${excess.toLocaleString()} leftover sheets`);
+
+                        if (parts.length > 0) {
+
+                            courseExcessParts.push(`${code}: ${parts.join(' + ')}`);
 
                         }
 
@@ -3443,11 +3574,25 @@
 
                 }
 
+
+
                 if (noticeEl && textEl) {
 
-                    if (courseExcessParts.length > 0) {
+                    const excessStaples = prevSum.prev_excess_staples || 0;
 
-                        textEl.innerText = `${courseExcessParts.join(' • ')} (Total: ${totalExcessSheets.toLocaleString()} sheets credited)`;
+                    if (courseExcessParts.length > 0 || excessStaples > 0) {
+
+                        const summaryParts = [];
+
+                        if (totalAvailBooklets > 0) summaryParts.push(`${totalAvailBooklets.toLocaleString()} ready booklets in vault`);
+
+                        if (totalExcessSheets > 0) summaryParts.push(`${totalExcessSheets.toLocaleString()} unprinted sheets credited`);
+
+                        if (excessStaples > 0) summaryParts.push(`${excessStaples.toLocaleString()} leftover staples credited`);
+
+                        const textPrefix = courseExcessParts.length > 0 ? courseExcessParts.join(' • ') + ' • ' : '';
+
+                        textEl.innerText = `${textPrefix}(${summaryParts.join(', ')})`;
 
                         noticeEl.style.display = 'block';
 
@@ -4233,6 +4378,13 @@
 
                 courseDemandList = data.course_demands || [];
 
+                window.currentPeriodActuals = {
+                    total_generated: data.actual_generated || 0,
+                    actual_staples_consumed: data.actual_staples_consumed || 0,
+                    actual_residual_staples: data.actual_residual_staples || 0,
+                    generated_by_dept: data.actual_generated_by_dept || {}
+                };
+
                 const prevSummary = data.previous_period_summary || data.previous_summary;
 
                 renderPreviousPeriodSummary(prevSummary);
@@ -4253,7 +4405,7 @@
 
                 if (budgetGroup) {
 
-                    budgetGroup.style.display = isPrevious ? 'none' : 'block';
+                    budgetGroup.style.display = 'block';
 
                 }
 
@@ -4283,15 +4435,85 @@
 
                     
 
-                    // Prioritize locked rollover in subsequent periods; otherwise use stored budget
+                    if (isPrevious) {
 
-                    if (prevSummary && prevSummary.has_previous_period && prevSummary.total_carryover_available > 0) {
+                        const budgetInput = document.getElementById('department_ream_budget');
 
-                        document.getElementById('department_ream_budget').value = prevSummary.total_carryover_available.toFixed(2);
+                        if (budgetInput) {
+
+                            budgetInput.value = (data.department_ream_budget !== null && data.department_ream_budget !== undefined)
+
+                                ? Number(data.department_ream_budget).toFixed(2)
+
+                                : '0.00';
+
+                            budgetInput.readOnly = true;
+
+                            budgetInput.style.backgroundColor = '#f8fafc';
+
+                            budgetInput.style.borderColor = '#cbd5e1';
+
+                            budgetInput.style.color = '#334155';
+
+                            budgetInput.style.fontWeight = '700';
+
+                            budgetInput.style.cursor = 'not-allowed';
+
+                        }
+
+                        const lockIcon = document.getElementById('budget_lock_icon');
+
+                        if (lockIcon) lockIcon.style.display = 'block';
+
+
+
+                        const lockBadge = document.getElementById('budget_lock_badge');
+
+                        if (lockBadge) {
+
+                            lockBadge.style.display = 'block';
+
+                            lockBadge.style.background = '#f8fafc';
+
+                            lockBadge.style.border = '1px solid #e2e8f0';
+
+                            lockBadge.style.color = '#475569';
+
+                            lockBadge.innerHTML = `🔒 <strong>Archived Examination Material Budget:</strong> This historical semester had an allocated material budget of <strong>₱${Number(data.department_ream_budget || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong>. Parameters are immutable.`;
+
+                        }
+
+
+
+                        const recBtn = document.getElementById('btn_apply_recommended');
+
+                        const carryTopUpBtn = document.getElementById('btn_carryover_topup');
+
+                        const carryAddBtn = document.getElementById('btn_add_carryover_to_rec');
+
+                        if (recBtn) recBtn.style.display = 'none';
+
+                        if (carryTopUpBtn) carryTopUpBtn.style.display = 'none';
+
+                        if (carryAddBtn) carryAddBtn.style.display = 'none';
 
                     } else {
 
-                        document.getElementById('department_ream_budget').value = (data.department_ream_budget !== null && data.department_ream_budget > 0) ? data.department_ream_budget : '';
+                        // Live active or subsequent period
+
+                        if (data.department_ream_budget !== null && data.department_ream_budget !== undefined && data.department_ream_budget > 0) {
+
+                            document.getElementById('department_ream_budget').value = Number(data.department_ream_budget).toFixed(2);
+
+                        } else if (prevSummary && prevSummary.has_previous_period && prevSummary.total_carryover_available > 0) {
+
+                            document.getElementById('department_ream_budget').value = prevSummary.total_carryover_available.toFixed(2);
+
+                        } else {
+
+                            document.getElementById('department_ream_budget').value = '';
+
+                        }
 
                     }
 
@@ -4920,6 +5142,13 @@
             currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
 
             courseDemandList = data.course_demands || [];
+
+            window.currentPeriodActuals = {
+                total_generated: data.actual_generated || 0,
+                actual_staples_consumed: data.actual_staples_consumed || 0,
+                actual_residual_staples: data.actual_residual_staples || 0,
+                generated_by_dept: data.actual_generated_by_dept || {}
+            };
 
 
 
@@ -5572,6 +5801,13 @@
                             currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
 
                             courseDemandList = data.course_demands || [];
+
+                            window.currentPeriodActuals = {
+                                total_generated: data.actual_generated || 0,
+                                actual_staples_consumed: data.actual_staples_consumed || 0,
+                                actual_residual_staples: data.actual_residual_staples || 0,
+                                generated_by_dept: data.actual_generated_by_dept || {}
+                            };
 
                             updateRecommendationBox();
 

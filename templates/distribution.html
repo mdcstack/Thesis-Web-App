@@ -1452,28 +1452,32 @@
 
 
     function getUserPackKey() {
-
         return activeUser ? `bookletlog_active_pack_${activeUser.username}` : 'bookletlog_active_pack';
-
     }
 
-
+    // Helper: Asynchronously release physical pack claim in database
+    function releasePackAsync(qrCode) {
+        if (!qrCode || !activeUser || !activeUser.username) return;
+        fetch('/api/release-pack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: activeUser.username, qr_code: qrCode })
+        }).catch(err => console.error("Error releasing pack claim:", err));
+    }
 
     // App/Tab Closure: Automatically release physical pack reservation
-
     window.addEventListener('beforeunload', () => {
-
-        if (primaryPackQR && activeUser) {
-
-            const payload = JSON.stringify({ username: activeUser.username, qr_code: primaryPackQR });
-
-            navigator.sendBeacon('/api/release-pack-beacon', new Blob([payload], { type: 'application/json' }));
-
+        if (activeUser && activeUser.username) {
+            if (primaryPackQR) {
+                const payload = JSON.stringify({ username: activeUser.username, qr_code: primaryPackQR });
+                navigator.sendBeacon('/api/release-pack-beacon', new Blob([payload], { type: 'application/json' }));
+            }
+            if (bridgingPackQR) {
+                const payload = JSON.stringify({ username: activeUser.username, qr_code: bridgingPackQR });
+                navigator.sendBeacon('/api/release-pack-beacon', new Blob([payload], { type: 'application/json' }));
+            }
         }
-
     });
-
-
 
     async function logout() {
         const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
@@ -1484,32 +1488,25 @@
         });
         if (!confirmed) return;
 
-
-
         const currentPack = primaryPackQR;
-
         // Behavior 2: Reset active pack on logout so next person on terminal starts fresh
-
         localStorage.removeItem(getUserPackKey());
-
         localStorage.removeItem('bookletlog_active_pack');
-
         
-
         // Release pack reservation on backend
-
         if (currentPack && activeUser) {
-
             fetch('/api/release-pack', {
-
                 method: 'POST',
-
                 headers: { 'Content-Type': 'application/json' },
-
                 body: JSON.stringify({ username: activeUser.username, qr_code: currentPack })
-
             }).catch(() => {});
-
+        }
+        if (bridgingPackQR && activeUser) {
+            fetch('/api/release-pack', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: activeUser.username, qr_code: bridgingPackQR })
+            }).catch(() => {});
         }
 
 
@@ -2228,33 +2225,41 @@ ${message}`));
 
 
 
-                // 5. Academic period changed or price settings updated
+                // 5. Pack claimed / taken over by another clerk
+                if (event === "PACK_CLAIMED") {
+                    const claimedPack = payload.details ? payload.details.qr_code : null;
+                    const newOwner = payload.details ? payload.details.claimed_by : 'another user';
+                    if (primaryPackQR && claimedPack === primaryPackQR && newOwner !== (activeUser ? activeUser.username : '')) {
+                        // Box was taken over by another clerk
+                        localStorage.removeItem(getUserPackKey());
+                        localStorage.removeItem('bookletlog_active_pack');
+                        primaryPackQR = null;
+                        primaryPackStock = 0;
+                        activePackDept = null;
+                        document.getElementById('active-supply-view').style.display = "none";
+                        document.getElementById('no-supply-view').style.display = "block";
+                        document.getElementById('transaction-form').style.opacity = "0.5";
+                        document.getElementById('transaction-form').style.pointerEvents = "none";
+                        resetDistributionForm();
+                        showAppAlert("Box Transferred", `Master Pack '${claimedPack}' has been taken over by '${newOwner}'. Your active counter box has been reset.`, "warning");
+                    }
+                    return;
+                }
 
+                // 6. Academic period changed or price settings updated
                 if (event === "PERIOD_CHANGED" || event === "SETTINGS_UPDATED") {
-
                     fetchActivePeriod();
-
                     fetchPendingDistributions(true);
-
                     return;
-
                 }
 
-
-
-                // 6. System Reset to Day 0
-
+                // 7. System Reset to Day 0
                 if (event === "SYSTEM_RESET") {
-
                     window.location.reload();
-
                     return;
-
                 }
 
-
-
-                // 7. Generic fallback / polling update (VERSION_DESYNC_DETECTED or unclassified)
+                // 8. Generic fallback / polling update (VERSION_DESYNC_DETECTED or unclassified)
 
                 fetchPendingDistributions(true);
 
@@ -2792,13 +2797,14 @@ ${message}`));
 
 
     function handleSubjectChange() {
-
         const select = document.getElementById('subjectSelect');
-
+        if (bridgingPackQR) {
+            releasePackAsync(bridgingPackQR);
+            bridgingPackQR = null;
+            bridgingPackStock = 0;
+        }
         allocatedBooklets = [];
-
         renderBookletTray();
-
         updateManualProgress();
 
         if (select.value) {
@@ -3191,16 +3197,15 @@ ${message}`));
 
         }
 
-        bridgingPackQR = null; 
-
-        bridgingPackStock = 0;
+        if (bridgingPackQR) {
+            releasePackAsync(bridgingPackQR);
+            bridgingPackQR = null; 
+            bridgingPackStock = 0;
+        }
 
         allocatedBooklets = [];
-
         renderBookletTray();
-
         updateManualProgress();
-
     }
 
     function resetDistributionForm() {
@@ -3226,20 +3231,16 @@ ${message}`));
         updateLooseStockUI();
     }
 
-
-
     function handleBridgingShortageState() {
-
-        bridgingPackQR = null; 
-
-        bridgingPackStock = 0;
+        if (bridgingPackQR) {
+            releasePackAsync(bridgingPackQR);
+            bridgingPackQR = null; 
+            bridgingPackStock = 0;
+        }
 
         allocatedBooklets = [];
-
         renderBookletTray();
-
         updateManualProgress();
-
         document.querySelector('.live-receipt-content').classList.remove('active');
 
 
@@ -4990,137 +4991,93 @@ ${message}`));
             });
 
             return;
-
         }
 
+        processScannedPackCode(decodedText, intent, false);
+    }
 
+    function processScannedPackCode(decodedText, intent, takeover = false) {
+        const usernameParam = encodeURIComponent(activeUser ? (activeUser.username || '') : '');
+        let url = `/api/pack-status/${encodeURIComponent(decodedText)}?username=${usernameParam}`;
+        if (takeover) {
+            url += `&takeover=true`;
+        }
 
-        const usernameParam = encodeURIComponent(activeUser.username || '');
-
-        fetch(`/api/pack-status/${decodedText}?username=${usernameParam}`).then(res => res.json()).then(data => {
-
+        fetch(url).then(res => res.json()).then(data => {
             if (data.status === "success") {
-
                 if (intent === 'primary') {
-
                     setPrimarySupply(data.qr_code, data.available, data.department, data.template_name, data.template_slot);
-
                 } else if (intent === 'bridge') {
-
                     if (primaryPackQR && data.qr_code === primaryPackQR) {
-
                         PosAudio.warning();
-
                         triggerViewfinderFlash('amber');
-
                         showAppAlert(
-
                             "Duplicate Pack Scanned",
-
                             "This Master Pack is already currently in use as your active primary supply box.\n\nPlease scan a different Master Pack from your inventory to bridge this transaction.",
-
                             "warning"
-
                         ).then(() => {
-
                             handleBridgingShortageState();
-
                         });
-
                         return;
-
                     }
-
                     if (data.available <= 0) {
-
                         PosAudio.warning();
-
                         triggerViewfinderFlash('amber');
-
                         showAppAlert(
-
                             "Depleted Master Pack",
-
                             "The scanned bridging pack has 0 available booklets remaining.\n\nPlease scan a new or partially filled Master Pack with available stock.",
-
                             "warning"
-
                         ).then(() => {
-
                             handleBridgingShortageState();
-
                         });
-
                         return;
-
                     }
-
                     // Guard 3: Strict Bridging Department Guard
-
                     if (activePackDept && data.department && data.department !== activePackDept) {
-
                         const activeLabel = getProgramLabel(activePackDept);
-
                         const scannedLabel = getProgramLabel(data.department);
-
                         showAppAlert(
-
                             "Bridging Department Mismatch",
-
                             `The active box is for ${activeLabel}, but you scanned a ${scannedLabel} pack.\n\nAll booklets in a single distribution must use the same department template design.`,
-
                             "warning"
-
                         ).then(() => {
-
                             handleBridgingShortageState();
-
                         });
-
                         return;
-
                     }
-
                     bridgingPackQR = data.qr_code;
-
                     bridgingPackStock = data.available;
-
                     triggerLivePreview(); 
-
                 }
-
             } else {
-
                 if (data.code === 'PACK_LOCKED') {
-
-                    showAppAlert("Pack In Use", `This Master Pack is currently opened and held by '${data.claimed_by}'.\n\nTo maintain an organized workflow, two accounts cannot distribute from the same box. Please scan a different pack.`, "warning").then(() => {
-
-                        if (intent === 'bridge') handleBridgingShortageState();
-
+                    showAppConfirm(
+                        "Pack In Use",
+                        `This Master Pack is currently opened and held by '${data.claimed_by}'.\n\nIf '${data.claimed_by}' has finished with this box or is no longer using it, would you like to take over this box for your counter?`,
+                        {
+                            type: 'warning',
+                            confirmText: "Take Over Box",
+                            cancelText: "Scan Different Box",
+                            confirmClass: "btn btn-primary"
+                        }
+                    ).then(takeoverConfirmed => {
+                        if (takeoverConfirmed) {
+                            processScannedPackCode(decodedText, intent, true);
+                        } else {
+                            if (intent === 'bridge') handleBridgingShortageState();
+                        }
                     });
-
                 } else {
-
                     showAppAlert("Master Pack Notice", data.message || "Failed to scan Master Pack.", "warning").then(() => {
-
                         if (intent === 'bridge') handleBridgingShortageState();
-
                     });
-
                 }
-
             }
-
         }).catch(err => {
-
             console.error("Error reading scanned pack:", err);
-
             showToast("Network error scanning pack. Please try again.", "error", "Network Error");
-
             if (intent === 'bridge') handleBridgingShortageState();
-
         });
-
     }
 
 
@@ -5159,6 +5116,9 @@ ${message}`));
     }
 
     function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false) {
+        if (primaryPackQR && primaryPackQR !== qr) {
+            releasePackAsync(primaryPackQR);
+        }
         primaryPackQR = qr; 
         primaryPackStock = stock;
         activePackDept = (dept || '').trim().toUpperCase() || 'CS';
@@ -5227,35 +5187,18 @@ ${message}`));
 
 
         const packToRelease = primaryPackQR;
-
         if (packToRelease) {
-
-            fetch('/api/release-pack', {
-
-                method: 'POST',
-
-                headers: { 'Content-Type': 'application/json' },
-
-                body: JSON.stringify({
-
-                    username: activeUser.username,
-
-                    qr_code: packToRelease
-
-                })
-
-            }).catch(err => console.error("Error releasing pack claim:", err));
-
+            releasePackAsync(packToRelease);
+        }
+        if (bridgingPackQR) {
+            releasePackAsync(bridgingPackQR);
+            bridgingPackQR = null;
+            bridgingPackStock = 0;
         }
 
-        
-
         localStorage.removeItem(getUserPackKey());
-
         localStorage.removeItem('bookletlog_active_pack');
-
         primaryPackQR = null; 
-
         primaryPackStock = 0;
 
         activePackDept = null;
@@ -5464,23 +5407,20 @@ ${message}`));
 
 
                 // Deduct inventory stats in the background (Prompt Removed)
-
                 const txDemand = currentDemand;
-
                 if (bridgingPackQR) {
-
-                    setPrimarySupply(bridgingPackQR, bridgingPackStock - (txDemand - primaryPackStock), activePackDept, activePackTemplateName, activePackTemplateSlot, false);
-
+                    const oldDepletedPack = primaryPackQR;
+                    const nextPrimary = bridgingPackQR;
+                    const nextStock = bridgingPackStock - (txDemand - primaryPackStock);
                     bridgingPackQR = null;
-
                     bridgingPackStock = 0;
-
+                    setPrimarySupply(nextPrimary, nextStock, activePackDept, activePackTemplateName, activePackTemplateSlot, false);
+                    if (oldDepletedPack && oldDepletedPack !== nextPrimary) {
+                        releasePackAsync(oldDepletedPack);
+                    }
                 } else {
-
                     primaryPackStock -= txDemand;
-
                     document.getElementById('pack-stock-display').innerText = primaryPackStock;
-
                 }
 
 

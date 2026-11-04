@@ -375,7 +375,10 @@
                     <img id="qrImage" src="" alt="Pack QR Code">
                     <p id="labelTemplateName" style="font-size: 0.82rem; color: #64748b; font-style: italic; margin-top: 4px; margin-bottom: 6px;"></p>
                     <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
-                    <button class="btn-print desktop-only" onclick="window.print()">🖨️ Print Pack Label</button>
+                    <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
+                        <button class="btn-print desktop-only" onclick="window.print()">🖨️ Print Pack Label</button>
+                        <button class="desktop-only" id="manualDownloadBtn" style="display: none; background: #475569; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#475569'" onclick="manualDownloadLabel()">💾 Download PNG</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1249,7 +1252,7 @@
                     labelContainer.style.display = 'block';
                     
                     // --- ENHANCED: HTML5 CANVAS STICKER GENERATOR WITH COURSE BADGE ---
-                    generateAndDownloadSticker(
+                    generateAndSaveSticker(
                         data.pack_id, 
                         data.total_booklets, 
                         data.qr_code_base64, 
@@ -1279,8 +1282,22 @@
             }
         }
 
-        // Function to draw a proper physical box label with course badge and trigger the download
-        function generateAndDownloadSticker(packId, bookletCount, base64QR, startCtrl, endCtrl, startSrn, endSrn, dept, deptLabel, tplName) {
+        let currentGeneratedLabelUrl = null;
+        let currentGeneratedPackId = null;
+
+        function manualDownloadLabel() {
+            if (!currentGeneratedLabelUrl || !currentGeneratedPackId) return;
+            const downloadLink = document.createElement("a");
+            downloadLink.href = currentGeneratedLabelUrl;
+            downloadLink.download = `${currentGeneratedPackId}_LABEL.png`; 
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            showToast(`Downloaded ${currentGeneratedPackId}_LABEL.png`, "info", "Download Complete");
+        }
+
+        // Function to draw a proper physical box label with course badge and save to static/qrcodes/
+        function generateAndSaveSticker(packId, bookletCount, base64QR, startCtrl, endCtrl, startSrn, endSrn, dept, deptLabel, tplName) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
@@ -1358,12 +1375,10 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ pack_id: packId, base64_image: finalImageURL })
                 }).then(() => {
-                    const downloadLink = document.createElement("a");
-                    downloadLink.href = finalImageURL;
-                    downloadLink.download = `${packId}_LABEL.png`; 
-                    document.body.appendChild(downloadLink);
-                    downloadLink.click();
-                    document.body.removeChild(downloadLink);
+                    currentGeneratedLabelUrl = finalImageURL;
+                    currentGeneratedPackId = packId;
+                    const dlBtn = document.getElementById('manualDownloadBtn');
+                    if (dlBtn) dlBtn.style.display = 'inline-block';
                 });
             };
             qrImg.src = base64QR;

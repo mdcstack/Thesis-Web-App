@@ -82,6 +82,76 @@ def detect_lan_ip():
     sorted_ips = sorted(raw_ips, key=ip_priority)
     return sorted_ips[0]
 
+def setup_windows_job_object():
+    """Configures a Windows Job Object with KILL_ON_JOB_CLOSE so all child workers die when the server is stopped."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        JobObjectExtendedLimitInformation = 9
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+
+        class IO_COUNTERS(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_uint64),
+                ("WriteOperationCount", ctypes.c_uint64),
+                ("OtherOperationCount", ctypes.c_uint64),
+                ("ReadTransferCount", ctypes.c_uint64),
+                ("WriteTransferCount", ctypes.c_uint64),
+                ("OtherTransferCount", ctypes.c_uint64),
+            ]
+
+        class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_int64),
+                ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class JOBOBJECT_EXTENDED_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", JOBOBJECT_BASIC_LIMIT_INFORMATION),
+                ("IoInfo", IO_COUNTERS),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryLimit", ctypes.c_size_t),
+                ("PeakJobMemoryLimit", ctypes.c_size_t),
+            ]
+
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+
+        info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        res = kernel32.SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            ctypes.byref(info),
+            ctypes.sizeof(info)
+        )
+        return job if res else None
+    except Exception:
+        return None
+
+def assign_process_to_job(job, process_handle):
+    if not job or sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.AssignProcessToJobObject(job, int(process_handle))
+    except Exception:
+        pass
+
 def main():
     # Pre-flight check: ensure websockets library is installed for offline real-time sync
     try:
@@ -111,6 +181,9 @@ def main():
     print(f"  • Mobile Public Receipts (HTTP): http://{lan_ip}:8080")
     print("=" * 70)
 
+    # Initialize kernel job object to guarantee zero orphaned workers upon termination
+    job_handle = setup_windows_job_object()
+
     python_exe = sys.executable
 
     # Launch HTTP server (Port 8080)
@@ -120,6 +193,8 @@ def main():
         "--port", "8080",
         "--reload"
     ])
+    if job_handle and getattr(http_proc, "_handle", None):
+        assign_process_to_job(job_handle, http_proc._handle)
 
     # Launch HTTPS server (Port 8000)
     https_proc = subprocess.Popen([
@@ -130,6 +205,16 @@ def main():
         "--ssl-certfile", "server.crt",
         "--reload"
     ])
+    if job_handle and getattr(https_proc, "_handle", None):
+        assign_process_to_job(job_handle, https_proc._handle)
+
+    # Save PIDs to server.pid for reliable tracking
+    pid_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.pid")
+    try:
+        with open(pid_file_path, "w", encoding="utf-8") as pf:
+            pf.write(f"{os.getpid()}\n{http_proc.pid}\n{https_proc.pid}\n")
+    except Exception:
+        pass
 
     def shutdown():
         print("\nShutting down BOOKLETLOG servers...")
@@ -142,6 +227,11 @@ def main():
                     proc.kill()
                 except Exception:
                     pass
+        if os.path.exists(pid_file_path):
+            try:
+                os.remove(pid_file_path)
+            except Exception:
+                pass
 
     try:
         http_proc.wait()
