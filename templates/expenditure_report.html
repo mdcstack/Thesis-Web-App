@@ -581,7 +581,7 @@
 
             // Actual staples consumed by distributed booklets
             const distributedStaples = fin.distributed_staples_consumed !== undefined ? fin.distributed_staples_consumed : (distributedBooklets * staplesPerBooklet);
-            const staplesUsed = Math.max(productionStaples, distributedStaples);
+            const staplesUsed = fin.gross_staples_consumed !== undefined ? fin.gross_staples_consumed : Math.max(productionStaples, distributedStaples);
             const staplesNeeded = staplesUsed;
             
             const wholeBoxesToBuy = fin.whole_boxes_to_buy !== undefined ? fin.whole_boxes_to_buy : (staplesPerBox > 0 ? Math.ceil(staplesNeeded / staplesPerBox) : 0);

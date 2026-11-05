@@ -256,7 +256,7 @@
             </div>
 
             <!-- FILTERS: Search -> Instructor -> Department -> Section -> Refresh -->
-            <div class="filter-container no-print">
+            <div class="filter-container no-print" id="directoryFilterContainer">
                 <input type="text" id="searchInput" placeholder="🔍 Search instructor, section, subject..." oninput="applyFilters()" style="flex: 1.5;">
 
                 <select id="selectInstructor" onchange="onInstructorChange()">
@@ -373,14 +373,40 @@
                 </div>
 
                 <!-- Unified Chronological Payment Installment Ledger -->
-                <h3 style="margin-top: 30px; margin-bottom: 12px; font-size: 1.15rem; color: #1e293b;">
-                    💰 Partial Payments &amp; Settlement Audit Trail
-                </h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 30px; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                    <h3 style="margin: 0; font-size: 1.15rem; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+                        <span>💰 Partial Payments &amp; Settlement Audit Trail</span>
+                        <span id="paymentCountBadge" style="font-size: 0.8rem; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 12px; border: 1px solid #e2e8f0;">0 Records</span>
+                    </h3>
+                </div>
+
+                <!-- DEDICATED PAYMENT AUDIT TRAIL FILTER BAR -->
+                <div id="paymentFilterBar" class="no-print" style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; align-items: center;">
+                    <select id="paymentFilterPeriod" onchange="applyPaymentFilters()" style="flex: 1.2 1 180px; height: 40px; padding: 0 10px; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b;">
+                        <option value="">-- All Exam Semesters --</option>
+                    </select>
+
+                    <select id="paymentFilterDept" onchange="applyPaymentFilters()" style="flex: 1 1 130px; height: 40px; padding: 0 10px; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b;">
+                        <option value="">-- All Departments --</option>
+                    </select>
+                    
+                    <select id="paymentFilterSection" onchange="applyPaymentFilters()" style="flex: 1 1 130px; height: 40px; padding: 0 10px; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b;">
+                        <option value="">-- All Sections --</option>
+                    </select>
+
+                    <select id="paymentFilterSubject" onchange="applyPaymentFilters()" style="flex: 1.2 1 180px; height: 40px; padding: 0 10px; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b;">
+                        <option value="">-- All Subjects --</option>
+                    </select>
+
+                    <button type="button" class="btn-refresh-icon" onclick="clearPaymentFilters()" title="Reset payment filters" style="width: 40px; height: 40px; border-radius: 6px; background: #334155; color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">🔄</button>
+                </div>
+
                 <div class="table-responsive">
                     <table id="instructorPaymentsTable">
                         <thead>
                             <tr>
                                 <th>Payment Date &amp; Time</th>
+                                <th>Exam Semester</th>
                                 <th>Section / Subject Applied</th>
                                 <th style="text-align: right;">Amount Paid</th>
                                 <th style="text-align: right;">Balance After</th>
@@ -388,7 +414,7 @@
                             </tr>
                         </thead>
                         <tbody id="instructorPaymentsBody">
-                            <tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 15px;">No installment records</td></tr>
+                            <tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 15px;">No installment records</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -543,6 +569,7 @@
     let globalPrograms = [];
     let globalRawReceipts = [];
     let selectedTeacherName = null;
+    let currentInstructorPayments = [];
 
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || 'null');
     if (!activeUser || !activeUser.session_token) {
@@ -583,6 +610,8 @@
         }
 
         if (activeUser.role === 'Viewer') {
+            const dirFilter = document.getElementById('directoryFilterContainer');
+            if (dirFilter) dirFilter.style.display = 'none';
             const selectInst = document.getElementById('selectInstructor');
             if (selectInst) selectInst.style.display = 'none';
             const searchInput = document.getElementById('searchInput');
@@ -982,26 +1011,142 @@
             });
         }
 
-        // Render Unified Chronological Payment Ledger Table
-        const paymentsTbody = document.getElementById('instructorPaymentsBody');
-        paymentsTbody.innerHTML = '';
-        const payments = inst.payments || [];
+        // Sort instructor payments descending (newest on top)
+        currentInstructorPayments = (inst.payments || []).slice().sort((a, b) => {
+            const dateA = new Date(a.payment_date || 0).getTime();
+            const dateB = new Date(b.payment_date || 0).getTime();
+            if (dateB !== dateA) return dateB - dateA;
+            return (b.id || 0) - (a.id || 0);
+        });
 
-        if (payments.length === 0) {
-            paymentsTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #7f8c8d; padding: 20px; font-style: italic;">No installment payments recorded yet. Total balance remains outstanding.</td></tr>';
-        } else {
-            payments.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-family: monospace; font-size: 0.88rem;">${escapeHtml(p.date_display || p.payment_date)}</td>
-                    <td><strong>${escapeHtml(p.section)}</strong> - ${escapeHtml(p.subject)}</td>
-                    <td style="text-align: right; font-weight: bold; color: #16a34a;">₱${parseFloat(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                    <td style="text-align: right; font-weight: bold; color: ${parseFloat(p.balance_after) <= 0 ? '#16a34a' : '#dc2626'};">₱${parseFloat(p.balance_after).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                    <td>${escapeHtml(p.recorded_by || 'System Clerk')}</td>
-                `;
-                paymentsTbody.appendChild(tr);
+        populatePaymentFilters(currentInstructorPayments);
+        renderPaymentsTable();
+    }
+
+    function populatePaymentFilters(payments) {
+        const periodSelect = document.getElementById('paymentFilterPeriod');
+        const deptSelect = document.getElementById('paymentFilterDept');
+        const sectionSelect = document.getElementById('paymentFilterSection');
+        const subjectSelect = document.getElementById('paymentFilterSubject');
+
+        const curPeriod = periodSelect ? periodSelect.value : "";
+        const curDept = deptSelect ? deptSelect.value : "";
+        const curSec = sectionSelect ? sectionSelect.value : "";
+        const curSubj = subjectSelect ? subjectSelect.value : "";
+
+        const periods = new Set();
+        const depts = new Set();
+        const sections = new Set();
+        const subjects = new Set();
+
+        payments.forEach(p => {
+            if (p.exam_period) periods.add(p.exam_period);
+            if (p.department) depts.add(p.department);
+            if (p.section) sections.add(p.section);
+            if (p.subject) subjects.add(p.subject);
+        });
+
+        if (periodSelect) {
+            let html = '<option value="">-- All Exam Semesters --</option>';
+            Array.from(periods).sort().forEach(item => {
+                html += `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`;
             });
+            periodSelect.innerHTML = html;
+            if (curPeriod && periods.has(curPeriod)) periodSelect.value = curPeriod;
         }
+
+        if (deptSelect) {
+            let html = '<option value="">-- All Departments --</option>';
+            Array.from(depts).sort().forEach(item => {
+                html += `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`;
+            });
+            deptSelect.innerHTML = html;
+            if (curDept && depts.has(curDept)) deptSelect.value = curDept;
+        }
+
+        if (sectionSelect) {
+            let html = '<option value="">-- All Sections --</option>';
+            Array.from(sections).sort().forEach(item => {
+                html += `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`;
+            });
+            sectionSelect.innerHTML = html;
+            if (curSec && sections.has(curSec)) sectionSelect.value = curSec;
+        }
+
+        if (subjectSelect) {
+            let html = '<option value="">-- All Subjects --</option>';
+            Array.from(subjects).sort().forEach(item => {
+                html += `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`;
+            });
+            subjectSelect.innerHTML = html;
+            if (curSubj && subjects.has(curSubj)) subjectSelect.value = curSubj;
+        }
+    }
+
+    function applyPaymentFilters() {
+        renderPaymentsTable();
+    }
+
+    function clearPaymentFilters() {
+        if (document.getElementById('paymentFilterPeriod')) document.getElementById('paymentFilterPeriod').value = "";
+        if (document.getElementById('paymentFilterDept')) document.getElementById('paymentFilterDept').value = "";
+        if (document.getElementById('paymentFilterSection')) document.getElementById('paymentFilterSection').value = "";
+        if (document.getElementById('paymentFilterSubject')) document.getElementById('paymentFilterSubject').value = "";
+        renderPaymentsTable();
+    }
+
+    function renderPaymentsTable() {
+        const paymentsTbody = document.getElementById('instructorPaymentsBody');
+        if (!paymentsTbody) return;
+        paymentsTbody.innerHTML = '';
+
+        const periodVal = document.getElementById('paymentFilterPeriod') ? document.getElementById('paymentFilterPeriod').value : "";
+        const deptVal = document.getElementById('paymentFilterDept') ? document.getElementById('paymentFilterDept').value : "";
+        const secVal = document.getElementById('paymentFilterSection') ? document.getElementById('paymentFilterSection').value : "";
+        const subjVal = document.getElementById('paymentFilterSubject') ? document.getElementById('paymentFilterSubject').value : "";
+
+        let filtered = currentInstructorPayments;
+        if (periodVal) {
+            filtered = filtered.filter(p => (p.exam_period || '') === periodVal);
+        }
+        if (deptVal) {
+            filtered = filtered.filter(p => (p.department || '') === deptVal);
+        }
+        if (secVal) {
+            filtered = filtered.filter(p => (p.section || '') === secVal);
+        }
+        if (subjVal) {
+            filtered = filtered.filter(p => (p.subject || '') === subjVal);
+        }
+
+        const countBadge = document.getElementById('paymentCountBadge');
+        if (countBadge) {
+            countBadge.innerText = `${filtered.length} of ${currentInstructorPayments.length} Records`;
+        }
+
+        if (filtered.length === 0) {
+            const msg = currentInstructorPayments.length === 0
+                ? "No installment payments recorded yet. Total balance remains outstanding."
+                : "No payment records match the selected filters.";
+            paymentsTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px; font-style: italic;">${msg}</td></tr>`;
+            return;
+        }
+
+        filtered.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-family: monospace; font-size: 0.88rem; white-space: nowrap;">${escapeHtml(p.date_display || p.payment_date)}</td>
+                <td><span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.78rem;">${escapeHtml(p.exam_period || 'Active Semester')}</span></td>
+                <td>
+                    <strong>${escapeHtml(p.section)}</strong> - ${escapeHtml(p.subject)}
+                    ${p.department ? ` <span style="font-size: 0.75rem; color: #64748b;">(${escapeHtml(p.department)})</span>` : ''}
+                </td>
+                <td style="text-align: right; font-weight: bold; color: #16a34a; white-space: nowrap;">₱${parseFloat(p.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td style="text-align: right; font-weight: bold; color: ${parseFloat(p.balance_after) <= 0 ? '#16a34a' : '#dc2626'}; white-space: nowrap;">₱${parseFloat(p.balance_after).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>${escapeHtml(p.recorded_by || 'System Clerk')}</td>
+            `;
+            paymentsTbody.appendChild(tr);
+        });
     }
 
     // -------------------------------------------------------------

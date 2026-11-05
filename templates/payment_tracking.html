@@ -91,6 +91,14 @@
             background-color: #fff;
             color: #2c3e50;
             box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .payment-card .filter-container select:focus,
+        .payment-card .filter-container input[type="text"]:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
         }
         .payment-card .filter-container select,
         .payment-card .filter-container input[type="date"] {
@@ -300,30 +308,30 @@
 
             <!-- DYNAMIC FILTERS SECTION -->
             <div class="filter-container">
-                <input type="text" id="searchInput" placeholder="🔍 Search Instructor, Section, or Subject..." style="flex: 1.5; min-width: 280px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 2px solid #3498db; border-radius: 4px; background-color: #fff; outline: none; transition: 0.3s; flex-shrink: 0;">
+                <input type="text" id="searchInput" placeholder="🔍 Search Instructor, Section, or Subject..." style="flex: 1.5; min-width: 260px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; color: #2c3e50; outline: none; flex-shrink: 0;">
 
                 <!-- Exam Semester Period Filter -->
-                <select id="filterPeriod" onchange="onPeriodChange()" style="flex: 1.2; min-width: 200px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 2px solid #3498db; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0; font-weight: 600; color: #2c3e50;" title="Filter by Examination Semester Period">
+                <select id="filterPeriod" onchange="onPeriodChange()" style="flex: 1.2; min-width: 200px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;" title="Filter by Examination Semester Period">
                     <option value="All">-- All Exam Periods --</option>
                 </select>
 
                 <!-- Instructor Filter -->
-                <select id="filterTeacher" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                <select id="filterTeacher" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;">
                     <option value="All">-- All Instructors --</option>
                 </select>
 
                 <!-- Department / Program Filter -->
-                <select id="filterDept" onchange="onDeptChange()" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                <select id="filterDept" onchange="onDeptChange()" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;">
                     <option value="All">-- All Departments --</option>
                 </select>
 
                 <!-- Section Filter -->
-                <select id="filterSection" style="flex: 1; min-width: 160px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;">
+                <select id="filterSection" style="flex: 1; min-width: 160px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;">
                     <option value="All">-- All Sections --</option>
                 </select>
 
                 <!-- Status Filter -->
-                <select id="statusFilter" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; flex-shrink: 0;" title="Filter by Payment Status">
+                <select id="statusFilter" style="flex: 1; min-width: 180px; height: 44px; padding: 0 12px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;" title="Filter by Payment Status">
                     <option value="All">-- All Payment Statuses --</option>
                     <option value="Fully Paid">🟢 Fully Paid</option>
                     <option value="Partially Paid">🟠 Partially Paid</option>
@@ -731,29 +739,47 @@ function loadPaymentData(isBackground = false) {
 
 function populateDropdowns() {
     const teacherSelect = document.getElementById('filterTeacher');
+    const curTeacher = teacherSelect ? teacherSelect.value : 'All';
     const uniqueTeachers = [...new Set(globalPaymentData.map(item => item.teacher_name))].sort();
-    teacherSelect.innerHTML = '<option value="All">-- All Instructors --</option>';
-    uniqueTeachers.forEach(t => { teacherSelect.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; });
+    if (teacherSelect) {
+        teacherSelect.innerHTML = '<option value="All">-- All Instructors --</option>';
+        uniqueTeachers.forEach(t => { teacherSelect.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; });
+        if (curTeacher && (curTeacher === 'All' || uniqueTeachers.includes(curTeacher))) {
+            teacherSelect.value = curTeacher;
+        } else {
+            teacherSelect.value = 'All';
+        }
+    }
 
     allSections = [...new Set(globalPaymentData.map(item => item.section))].sort();
-    updateSectionDropdown("All");
+    const deptSelect = document.getElementById('filterDept');
+    const curDept = deptSelect ? deptSelect.value : 'All';
+    const sectionSelect = document.getElementById('filterSection');
+    const curSection = sectionSelect ? sectionSelect.value : 'All';
+    updateSectionDropdown(curDept, curSection);
 }
 
 function onDeptChange() {
     const dept = document.getElementById('filterDept').value;
-    updateSectionDropdown(dept);
-    document.getElementById('filterSection').value = "All";
+    updateSectionDropdown(dept, "All");
     renderTable();
 }
 
-function updateSectionDropdown(dept) {
+function updateSectionDropdown(dept, selectedSection = 'All') {
     const sectionSelect = document.getElementById('filterSection');
+    if (!sectionSelect) return;
+    const targetSection = selectedSection || sectionSelect.value || 'All';
     sectionSelect.innerHTML = '<option value="All">-- All Sections --</option>';
     let filteredSections = allSections;
     if (dept !== "All" && dept) {
         filteredSections = [...new Set(globalPaymentData.filter(r => (r.department || '').toUpperCase() === dept.toUpperCase()).map(r => r.section))].sort();
     }
     filteredSections.forEach(s => { sectionSelect.innerHTML += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`; });
+    if (targetSection && (targetSection === 'All' || filteredSections.includes(targetSection))) {
+        sectionSelect.value = targetSection;
+    } else {
+        sectionSelect.value = 'All';
+    }
 }
 
 function sortTable(column) {
@@ -829,7 +855,7 @@ function renderTable() {
     const scopeEl = document.getElementById('filterScopeNotice');
     if (scopeEl) {
         if (isFiltered) {
-            scopeEl.innerHTML = `🔍 <strong>Filtered View:</strong> Showing <strong>${filteredData.length}</strong> of <strong>${globalPaymentData.length}</strong> accounts <button onclick="clearFilters()" style="background:none; border:none; color:#3498db; text-decoration:underline; cursor:pointer; font-size:0.85rem; font-weight:bold; margin-left:6px;">(Reset Filters)</button>`;
+            scopeEl.innerHTML = `🔍 <strong>Filtered View:</strong> Showing <strong>${filteredData.length}</strong> of <strong>${globalPaymentData.length}</strong> accounts`;
         } else {
             scopeEl.innerHTML = `📋 Showing all <strong>${globalPaymentData.length}</strong> accounts`;
         }
@@ -1235,10 +1261,6 @@ function submitConfirmedPayment() {
         if (res.status === 'success') {
             recentlyProcessedReceiptKey = res.receipt_key || pendingPayment.receiptKey;
             recentlyProcessedId = pendingPayment.id;
-            const statusFilter = document.getElementById('statusFilter');
-            if (statusFilter && statusFilter.value !== 'All') {
-                statusFilter.value = 'All';
-            }
             closeConfirmModal();
             loadPaymentData();
         } else {

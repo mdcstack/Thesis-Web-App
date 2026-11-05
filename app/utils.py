@@ -322,7 +322,7 @@ def create_batch_cover_page(batch_id, department, academic_period, total_yield, 
     rows_left = [
         ("Academic Period:", academic_period or "Current Active Period"),
         ("Program / Course:", f"{prog_label} ({department})"),
-        ("Raw Paper Converted:", f"{ream_count} Whole Ream(s) (500 sheets/ream)"),
+        ("Raw Paper Converted:", "0 Reams (Converted from Residual Excess Reserve)" if ream_count == 0 else f"{ream_count} Whole Ream(s) (500 sheets/ream)"),
         ("Total Booklet Yield:", f"{total_yield} Booklets (Sequential Batch)"),
         ("Active Student Quota:", f"{target_needed} Booklets needed for period" if target_needed > 0 else "Full Batch Production"),
     ]

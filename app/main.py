@@ -941,7 +941,7 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     metrics = calculate_course_production_metrics(db, current_period)
     course_metric = metrics["courses"].get(department) if metrics and "courses" in metrics else None
 
-    if course_metric and (course_metric.get("is_satisfied") or course_metric.get("target_production", 0) <= 0 or course_metric.get("reams_needed", 0) <= 0):
+    if course_metric and (course_metric.get("is_satisfied") or course_metric.get("target_production", 0) <= 0):
         existing_stock = course_metric.get("total_existing_stock", 0)
         headcount = course_metric.get("headcount", 0)
         raise HTTPException(
@@ -953,11 +953,12 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
             )
         )
 
-    ream_count = request_data.ream_count
+    ream_count = max(0, request_data.ream_count or 0)
     sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
     
     # Carryover-aware conversion capacity combining newly procured reams and vault carryover sheets
     prev_excess = course_metric.get("prev_excess_sheets", 0) if course_metric else 0
+    residual_reserve = course_metric.get("excess_sheets", 0) if course_metric else 0
 
     existing_batches = db.query(models.MasterBatch).filter(
         models.MasterBatch.department == department,
@@ -967,12 +968,34 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     sheets_already_consumed = sum(b.total_yield * (b.sheets_per_booklet or sheets_per_b) for b in existing_batches)
     unused_carryover = max(0, (reams_already_used * 500 + prev_excess) - sheets_already_consumed)
 
-    total_sheets_available = (ream_count * 500) + unused_carryover
+    target_needed = course_metric.get("target_production", 0) if course_metric else 0
+    reams_needed_quota = course_metric.get("reams_needed", 0) if course_metric else 0
+    if ream_count > reams_needed_quota:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Cannot register {ream_count} ream(s) for {department}: The maximum paper required to fulfill "
+                f"the target quota ({target_needed} booklets) is {reams_needed_quota} ream(s)."
+            )
+        )
+
+    if ream_count == 0 and unused_carryover < sheets_per_b:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot generate batch with 0 reams: There are only {unused_carryover} residual reserve sheets available in the vault, but each booklet requires {sheets_per_b} sheets. Please input at least 1 ream."
+        )
+
+    total_sheets_available = unused_carryover if ream_count == 0 else ((ream_count * 500) + unused_carryover)
     conversion_capacity = total_sheets_available // sheets_per_b if sheets_per_b > 0 else (ream_count * 83)
     
     # Cap total_yield to the exact net target_needed (deficit + safety buffer) so excess unassigned barcodes are never produced
-    target_needed = course_metric.get("target_production", 0) if course_metric else 0
     total_yield = min(conversion_capacity, target_needed) if target_needed > 0 else conversion_capacity
+
+    if total_yield <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Production yield computed to 0 booklets for {department}. No batch could be created."
+        )
     
     # 1. Find the last generated reference number for THIS department (Per-course independent sequence)
     last_booklet = db.query(models.Booklet).join(models.MasterBatch).filter(
@@ -1073,8 +1096,9 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         ream_count=ream_count
     )
     
+    batch_msg = f"{ream_count} Reams successfully converted for {department} using {template_config.template_name or f'Template {template_slot}'}." if ream_count > 0 else f"{total_yield} Booklets successfully converted from residual excess reserve for {department} using {template_config.template_name or f'Template {template_slot}'}."
     return {
-        "message": f"{ream_count} Reams successfully converted for {department} using {template_config.template_name or f'Template {template_slot}'}.",
+        "message": batch_msg,
         "department": department,
         "template_slot": template_slot,
         "template_name": template_config.template_name or f"Template {template_slot}",
@@ -2682,13 +2706,18 @@ def get_public_instructor_profiles(request: Request, db: Session = Depends(get_d
                 "payment_status": class_payment_status
             })
 
+            dept_code = resolve_enrollment_department(enr, db) or enr.department or "CS"
             # Payment records for this enrollment
             for pr in (enr.payment_records or []):
+                period_name = pr.payment_period or pr.collection_period or getattr(enr, 'academic_period', '') or "Active Semester"
                 inst["payments"].append({
                     "id": pr.id,
                     "enrollment_id": enr.id,
                     "section": enr.section,
                     "subject": enr.subject,
+                    "department": dept_code,
+                    "exam_period": period_name,
+                    "collection_period": pr.collection_period or "",
                     "amount": round(pr.amount, 2),
                     "balance_after": round(pr.balance_after, 2),
                     "payment_date": pr.payment_date.strftime("%Y-%m-%d %H:%M:%S") if pr.payment_date else "",
@@ -2713,7 +2742,7 @@ def get_public_instructor_profiles(request: Request, db: Session = Depends(get_d
             else:
                 inst["overall_status"] = "No Transactions"
 
-            inst["payments"].sort(key=lambda x: x["payment_date"])
+            inst["payments"].sort(key=lambda x: (x["payment_date"] or "", x["id"]), reverse=True)
             instructors_list.append(inst)
 
         if auth_user.role.lower() == "viewer" and not instructors_list:
@@ -3837,10 +3866,18 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
         all_d_batches = db.query(models.MasterBatch).filter(models.MasterBatch.department == d_code).all()
         prev_as_of_batch_ids = [b.id for b in all_d_batches if b.registered_period and parse_period_chronological_rank(b.registered_period) <= prev_rank] if prev_rank > 0 else []
 
-        dept_available_booklets = db.query(models.Booklet).filter(
-            models.Booklet.master_batch_id.in_(prev_as_of_batch_ids),
-            models.Booklet.status.in_(["available", "loose_stock"])
-        ).count() if prev_as_of_batch_ids else 0
+        dept_available_booklets = 0
+        if prev_as_of_batch_ids:
+            as_of_bks = db.query(models.Booklet).filter(
+                models.Booklet.master_batch_id.in_(prev_as_of_batch_ids)
+            ).all()
+            for b in as_of_bks:
+                if b.status in ["available", "loose_stock"]:
+                    dept_available_booklets += 1
+                elif b.status == "distributed" and b.exam_period:
+                    # If distributed in a period chronologically strictly after prev_period, it was still ready in vault at the end of prev_period
+                    if parse_period_chronological_rank(b.exam_period) > prev_rank:
+                        dept_available_booklets += 1
 
         course_excess_map[d_code] = {
             "reams_procured": dept_reams,
@@ -3859,7 +3896,11 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
     prev_paper_cost = round(prev_reams_conv * prev_ream_p, 2)
 
     # Staples accounting with carryover credit (strictly aligned with expenditure report)
-    prev_st_needed = max(prev_issued_count * prev_st_per_b, prev_generated_b * prev_st_per_b)
+    # Only booklets generated in batches belonging to prev_period consume prev_period's staples.
+    # Distributed booklets from prior carried-over vault stock were already bound and accounted for in earlier periods.
+    prev_batch_ids = {b.id for b in prev_batches}
+    prev_issued_from_batches = sum(1 for b in prev_issued_booklets if b.master_batch_id in prev_batch_ids)
+    prev_st_needed = max(prev_issued_from_batches * prev_st_per_b, prev_generated_b * prev_st_per_b)
     net_st_needed = max(0, prev_st_needed - prev_incoming_staples)
     prev_whole_boxes = math.ceil(net_st_needed / prev_st_per_box) if net_st_needed > 0 and prev_st_per_box > 0 else 0
     prev_st_cost = round(prev_whole_boxes * prev_st_box_p, 2)
@@ -3990,10 +4031,18 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         # As-of period batches (Cumulative stock up to and including active period)
         as_of_batch_ids = [b.id for b in all_dept_batches if b.registered_period and parse_period_chronological_rank(b.registered_period) <= active_rank] if active_rank > 0 else current_batch_ids
 
-        prior_available_booklets = db.query(models.Booklet).filter(
-            models.Booklet.master_batch_id.in_(prior_batch_ids),
-            models.Booklet.status.in_(["available", "loose_stock"])
-        ).count() if prior_batch_ids else 0
+        prior_available_booklets = 0
+        if prior_batch_ids:
+            prior_bks = db.query(models.Booklet).filter(
+                models.Booklet.master_batch_id.in_(prior_batch_ids)
+            ).all()
+            for b in prior_bks:
+                if b.status in ["available", "loose_stock"]:
+                    prior_available_booklets += 1
+                elif b.status == "distributed" and b.exam_period:
+                    # If distributed in active_period or a later period, it was ready in vault at the start of active_period
+                    if parse_period_chronological_rank(b.exam_period) >= active_rank:
+                        prior_available_booklets += 1
 
         current_available_booklets = db.query(models.Booklet).filter(
             models.Booklet.master_batch_id.in_(current_batch_ids),
@@ -4027,6 +4076,17 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         # Excess paper sheets carried over from prior examination period
         prev_excess = prev_course_excess_map.get(dept, {}).get("excess_sheets", 0)
 
+        # Batches converted in active period for this department (tracking actual paper consumption)
+        dept_current_batches = [b for b in all_dept_batches if b.registered_period == active_period]
+        dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or sheets_per_b) for b in dept_current_batches)
+        # Commercial whole reams required for actual sheets converted so far (avoiding over-counting individual small top-up batches)
+        net_converted_sheets = max(0, dept_consumed_sheets - prev_excess)
+        dept_reams_used = math.ceil(net_converted_sheets / 500) if net_converted_sheets > 0 else 0
+        dept_procured_sheets = dept_reams_used * 500
+
+        # Live paper sheets physically remaining in vault reserve from opened reams and prior excess
+        live_residual_sheets = max(0, (dept_procured_sheets + prev_excess) - dept_consumed_sheets)
+
         # Baseline Planned Material Allocation across entire academic semester:
         # Grounded strictly in Headcount + Safety Buffer Demand and whole reams procured.
         # This represents raw blank paper sheets and is completely immune to booklet distributions or returns.
@@ -4034,16 +4094,21 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         course_planned_gross_sheets = course_planned_production * sheets_per_b
         course_planned_net_sheets = max(0, course_planned_gross_sheets - prev_excess)
         course_planned_reams = math.ceil(course_planned_net_sheets / 500) if course_planned_net_sheets > 0 else 0
-        course_excess_sheets = max(0, (course_planned_reams * 500 + prev_excess) - course_planned_gross_sheets)
-        course_excess_booklets = course_excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
 
         # Tier 2 (Raw Materials): Exact paper sheets needed for current unfulfilled replenishment target
         gross_sheets_needed = target_production * sheets_per_b
-        net_sheets_needed = max(0, gross_sheets_needed - prev_excess)
+        # Offset replenishment demand using actual live residual paper sheets currently in the vault
+        net_sheets_needed = max(0, gross_sheets_needed - live_residual_sheets)
 
         reams_whole = net_sheets_needed // 500
         sheets_remainder = net_sheets_needed % 500
         reams_needed = math.ceil(net_sheets_needed / 500) if net_sheets_needed > 0 else 0
+
+        # Dynamic Residual Excess Reserve:
+        # Strictly represents physical blank paper sheets currently sitting in the vault.
+        # Excess sheets are only deducted when the user actually generates batch PDF front pages.
+        course_excess_sheets = live_residual_sheets
+        course_excess_booklets = course_excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
 
         if target_production == 0:
             paper_required_text = "0 Sheets (Demand Met)"
@@ -4076,12 +4141,16 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
             "target_production": target_production,
             "gross_sheets_needed": gross_sheets_needed,
             "prev_excess_sheets": prev_excess,
+            "live_residual_sheets": live_residual_sheets,
+            "dept_reams_used": dept_reams_used,
+            "dept_consumed_sheets": dept_consumed_sheets,
             "net_sheets_needed": net_sheets_needed,
             "sheets_needed": net_sheets_needed,
             "reams_whole": reams_whole,
             "sheets_remainder": sheets_remainder,
             "paper_required_text": paper_required_text,
             "reams_needed": reams_needed,
+            "planned_production": course_planned_production,
             "planned_reams_needed": course_planned_reams,
             "planned_sheets_needed": course_planned_net_sheets,
             "excess_sheets": course_excess_sheets,
@@ -4099,6 +4168,7 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
     total_deficit = sum(c["deficit"] for c in data.values())
     total_buffer_booklets = sum(c["buffer_booklets"] for c in data.values())
     total_target_production = sum(c["target_production"] for c in data.values())
+    total_planned_production = sum(c["planned_production"] for c in data.values())
     total_gross_sheets_needed = sum(c["gross_sheets_needed"] for c in data.values())
     total_prev_excess_credited = sum(c["prev_excess_sheets"] for c in data.values())
     total_sheets_needed = sum(c["sheets_needed"] for c in data.values())
@@ -4124,6 +4194,7 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         "total_deficit": total_deficit,
         "total_buffer_booklets": total_buffer_booklets,
         "total_target_production": total_target_production,
+        "total_planned_production": total_planned_production,
         "total_gross_sheets_needed": total_gross_sheets_needed,
         "total_prev_excess_credited": total_prev_excess_credited,
         "total_sheets_needed": total_sheets_needed,
@@ -4252,7 +4323,10 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         defective_count = len(defective_booklets)
         
         # --- 1. LIVE INVENTORY CALCULATION ---
-        enrollments = db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).all()
+        if is_active_semester:
+            enrollments = db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).all()
+        else:
+            enrollments = db.query(models.Enrollment).all()
         total_headcount = sum([e.student_headcount for e in enrollments])
         remaining_demand = max(0, total_headcount - total_issued)
         
@@ -4290,71 +4364,95 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 
         all_db_payments = db.query(models.PaymentRecord).all()
 
-        # Enrollment row payments: strictly payments collected during active_period that pay for active_period transactions
+        # Enrollment row payments: segregated into current exam booklet payments vs. prior debt settlements
         enr_payments_map = {}
+        enr_current_payments_map = {}
+        enr_prior_payments_map = {}
         for pr in period_payments:
-            pr_target_period = pr.payment_period or pr.collection_period
-            if pr_target_period == active_period:
-                enr_payments_map[pr.enrollment_id] = round(enr_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
+            enr_payments_map[pr.enrollment_id] = round(enr_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
+            pr_exam_period = pr.payment_period or pr.collection_period
+            if pr_exam_period == active_period:
+                enr_current_payments_map[pr.enrollment_id] = round(enr_current_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
+            else:
+                enr_prior_payments_map[pr.enrollment_id] = round(enr_prior_payments_map.get(pr.enrollment_id, 0.0) + pr.amount, 2)
 
-        # Prior Unpaid Balance Carryover: ONLY computed and carried over when viewing the ACTIVE SEMESTER.
-        # Archived semesters are frozen historical snapshots representing strictly that semester's transactions.
+        # Prior Unpaid Balance Carryover: Evaluated chronologically as of active_period.
+        # Both active and archived historical snapshots retain the exact prior debt and total due carried into that semester.
         prior_billed_by_enr = defaultdict(float)
         prior_paid_by_enr = defaultdict(float)
         prior_unpaid_by_enr = {}
         prior_ar_by_dept = {code: 0.0 for code in prog_codes}
 
-        if is_active_semester:
-            target_rank = parse_period_chronological_rank(active_period)
+        target_rank = parse_period_chronological_rank(active_period)
 
-            all_distributed_booklets = db.query(models.Booklet).filter(
-                models.Booklet.exam_period.isnot(None),
-                models.Booklet.exam_period != "",
-                models.Booklet.status == "distributed"
-            ).all()
-            prior_booklets = [
-                b for b in all_distributed_booklets
-                if parse_period_chronological_rank(b.exam_period) < target_rank
-            ]
-            for b in prior_booklets:
-                price = float(b.unit_price) if b.unit_price is not None else float(booklet_price)
-                prior_billed_by_enr[b.enrollment_id] += price
+        all_distributed_booklets = db.query(models.Booklet).filter(
+            models.Booklet.exam_period.isnot(None),
+            models.Booklet.exam_period != "",
+            models.Booklet.status == "distributed"
+        ).all()
+        prior_booklets = [
+            b for b in all_distributed_booklets
+            if parse_period_chronological_rank(b.exam_period) < target_rank
+        ]
+        for b in prior_booklets:
+            price = float(b.unit_price) if b.unit_price is not None else float(booklet_price)
+            prior_billed_by_enr[b.enrollment_id] += price
 
-            prior_payments = [
-                pr for pr in all_db_payments
-                if parse_period_chronological_rank(pr.payment_period or pr.collection_period) < target_rank
-            ]
-            for pr in prior_payments:
-                prior_paid_by_enr[pr.enrollment_id] += float(pr.amount)
+        prior_payments = [
+            pr for pr in all_db_payments
+            if parse_period_chronological_rank(pr.collection_period or pr.payment_period) < target_rank
+        ]
+        for pr in prior_payments:
+            prior_paid_by_enr[pr.enrollment_id] += float(pr.amount)
 
-            for enr_id, p_billed in prior_billed_by_enr.items():
-                p_paid = prior_paid_by_enr.get(enr_id, 0.0)
-                unpaid_bal = max(0.0, round(p_billed - p_paid, 2))
-                if unpaid_bal > 0:
-                    prior_unpaid_by_enr[enr_id] = unpaid_bal
+        for enr_id, p_billed in prior_billed_by_enr.items():
+            p_paid = prior_paid_by_enr.get(enr_id, 0.0)
+            unpaid_bal = max(0.0, round(p_billed - p_paid, 2))
+            if unpaid_bal > 0:
+                prior_unpaid_by_enr[enr_id] = unpaid_bal
 
-            enr_lookup = {e.id: e for e in enrollments}
-            for enr_id, unpaid_bal in prior_unpaid_by_enr.items():
-                enr_obj = enr_lookup.get(enr_id)
-                if enr_obj:
-                    d = resolve_enrollment_department(enr_obj, db)
-                    prior_ar_by_dept[d] = round(prior_ar_by_dept.get(d, 0.0) + unpaid_bal, 2)
+        all_enrollments = db.query(models.Enrollment).all()
+        enr_lookup = {e.id: e for e in all_enrollments}
+        for enr_id, unpaid_bal in prior_unpaid_by_enr.items():
+            enr_obj = enr_lookup.get(enr_id)
+            if enr_obj:
+                d = resolve_enrollment_department(enr_obj, db)
+                prior_ar_by_dept[d] = round(prior_ar_by_dept.get(d, 0.0) + unpaid_bal, 2)
 
-        for enr in enrollments:
+        # Target enrollments for breakdown cards: current enrollments plus any enrollment carrying prior debt or active collections
+        target_enrollments = list(enrollments)
+        target_ids = {e.id for e in target_enrollments}
+        for e in all_enrollments:
+            if e.id not in target_ids and (e.id in enr_payments_map or e.id in prior_unpaid_by_enr):
+                target_enrollments.append(e)
+
+        for enr in target_enrollments:
             b_count = sum(1 for b in issued_booklets if b.enrollment_id == enr.id)
             period_paid = enr_payments_map.get(enr.id, 0.0)
+            current_period_paid = enr_current_payments_map.get(enr.id, 0.0)
+            prior_debt_paid = enr_prior_payments_map.get(enr.id, 0.0)
             prior_unpaid = prior_unpaid_by_enr.get(enr.id, 0.0)
 
             if b_count > 0 or period_paid > 0 or prior_unpaid > 0:
                 current_due = float(b_count * booklet_price) if b_count > 0 else 0.0
                 total_amount_due = round(current_due + prior_unpaid, 2)
                 amount_paid = float(period_paid)
-                pending_balance = max(0.0, round(total_amount_due - amount_paid, 2))
+                current_paid = float(current_period_paid)
+                prior_paid = float(prior_debt_paid)
 
-                if b_count == 0 and period_paid > 0 and prior_unpaid == 0:
-                    payment_status = "Prior Period Collection"
+                # Current transaction pending is strictly isolated to the current semester issuance
+                current_pending = max(0.0, round(current_due - current_paid, 2))
+                # Prior debt is strictly reduced by payments made toward prior debts
+                remaining_prior_debt = max(0.0, round(prior_unpaid - prior_paid, 2))
+                # Net pending balance across both current issuance and remaining prior debt
+                pending_balance = max(0.0, round(current_pending + remaining_prior_debt, 2))
+
+                if b_count == 0 and period_paid > 0 and remaining_prior_debt == 0:
+                    payment_status = "Prior Period Debt Settled"
                 elif pending_balance == 0 and total_amount_due > 0:
                     payment_status = "Paid in Full"
+                elif current_pending == 0 and current_due > 0 and remaining_prior_debt > 0:
+                    payment_status = "Current Paid in Full"
                 elif amount_paid > 0:
                     payment_status = "Partially Paid"
                 else:
@@ -4418,9 +4516,13 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                             "whole_reams_to_buy": math.ceil(sheets_used / 500) if sheets_used > 0 else 0,
                             "amount": amount_paid,
                             "amount_paid": amount_paid,
+                            "current_paid": current_paid,
+                            "prior_paid": prior_paid,
                             "amount_due": total_amount_due,
                             "current_billed": current_due,
                             "prior_unpaid": prior_unpaid,
+                            "remaining_prior_debt": remaining_prior_debt,
+                            "current_pending": current_pending,
                             "pending_balance": pending_balance,
                             "payment_status": payment_status
                         })
@@ -4464,7 +4566,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         current_exam_collected = 0.0
         prior_debt_collected = 0.0
         for pr in period_payments:
-            dept = resolve_enrollment_department(pr.enrollment, db)
+            enr_obj = pr.enrollment or enr_lookup.get(pr.enrollment_id)
+            dept = resolve_enrollment_department(enr_obj, db)
             collected_by_dept[dept] = round(collected_by_dept.get(dept, 0.0) + pr.amount, 2)
             pr_exam_period = pr.payment_period or pr.collection_period
             if pr_exam_period == active_period:
@@ -4554,7 +4657,11 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         effective_reams = sum_actual_course_reams if sum_actual_course_reams > 0 else (course_metrics.get("sum_course_planned_reams", 0) or 0)
         paper_cost = effective_reams * ream_price
         total_staples_consumed = total_generated * staples_per_booklet
-        distributed_staples_consumed = total_issued * staples_per_booklet
+        # Only booklets manufactured in batches belonging to the active period consume current staples.
+        # Distributed booklets from carried-over vault stock were already bound and accounted for in past periods.
+        period_batch_ids = {b.id for b in period_batches}
+        issued_from_period_batches = sum(1 for b in issued_booklets if b.master_batch_id in period_batch_ids)
+        distributed_staples_consumed = issued_from_period_batches * staples_per_booklet
         staples_needed = max(distributed_staples_consumed, total_staples_consumed)
         staples_boxes_consumed = round(distributed_staples_consumed / staples_per_box, 2) if staples_per_box > 0 else 0.0
 
@@ -4883,10 +4990,24 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
     available_stock = db.query(models.Booklet).filter(
         models.Booklet.status.in_(["available", "loose_stock"])
     ).count()
-    prior_buffer_stock = db.query(models.Booklet).join(models.MasterBatch).filter(
-        models.MasterBatch.registered_period != period_name,
-        models.Booklet.status.in_(["available", "loose_stock"])
-    ).count()
+    period_rank = parse_period_chronological_rank(period_name) if period_name else 0
+    all_prior_batches = db.query(models.MasterBatch).filter(
+        models.MasterBatch.registered_period.isnot(None),
+        models.MasterBatch.registered_period != ""
+    ).all()
+    prior_batch_ids_all = [b.id for b in all_prior_batches if parse_period_chronological_rank(b.registered_period) < period_rank] if period_rank > 0 else []
+
+    prior_buffer_stock = 0
+    if prior_batch_ids_all:
+        prior_bks_all = db.query(models.Booklet).filter(
+            models.Booklet.master_batch_id.in_(prior_batch_ids_all)
+        ).all()
+        for b in prior_bks_all:
+            if b.status in ["available", "loose_stock"]:
+                prior_buffer_stock += 1
+            elif b.status == "distributed" and b.exam_period:
+                if parse_period_chronological_rank(b.exam_period) >= period_rank:
+                    prior_buffer_stock += 1
     
     course_metrics = calculate_course_production_metrics(db, period_name)
     sheets_per_b = course_metrics.get("sheets_per_booklet", 5)
@@ -5736,20 +5857,30 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "reams_needed": c["reams_needed"],
             "available_stock": c.get("available_stock", 0),
             "prior_available_booklets": c.get("prior_available_booklets", 0),
-            "prev_excess_sheets": c.get("prev_excess_sheets", 0)
+            "prev_excess_sheets": c.get("prev_excess_sheets", 0),
+            "excess_sheets": c.get("excess_sheets", 0),
+            "excess_booklets_yield": c.get("excess_booklets_yield", 0)
         }
         for c in course_metrics.get("courses", {}).values()
     ]
     sum_course_planned_reams = course_metrics.get("sum_course_planned_reams", 0)
     sum_course_rounded_reams = course_metrics.get("sum_course_rounded_reams", 0)
-    total_booklet_demand = course_metrics.get("total_target_production", total_demand)
+    
+    # Actual production batches generated for the period (for physical staple alignment)
+    period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == period).all() if period else []
+    total_generated = sum([b.total_yield for b in period_batches])
+    dept_actual_generated = {}
+    for b in period_batches:
+        dept_actual_generated[b.department] = dept_actual_generated.get(b.department, 0) + b.total_yield
+
+    total_booklet_demand = total_generated if total_generated > 0 else (course_metrics.get("total_planned_production") or course_metrics.get("total_target_production") or total_demand)
     if total_booklet_demand == 0:
         total_booklet_demand = total_demand
     
     if cfg:
         yield_per_r = cfg.yield_per_ream or (500 // cfg.sheets_per_booklet)
         if total_demand > 0 and yield_per_r > 0 and cfg.ream_price:
-            effective_reams = sum_course_planned_reams if sum_course_planned_reams > 0 else (sum_course_rounded_reams if sum_course_rounded_reams > 0 else math.ceil(total_demand / yield_per_r))
+            effective_reams = sum_course_rounded_reams if sum_course_rounded_reams > 0 else (sum_course_planned_reams if sum_course_planned_reams > 0 else math.ceil(total_demand / yield_per_r))
             recommended_reams = effective_reams
             paper_budget = recommended_reams * float(cfg.ream_price)
 
@@ -5778,13 +5909,6 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             staples_boxes = 0
             staples_budget = 0.0
             residual_excess_staples = 0
-
-        # Actual production batches generated for the period (for physical staple alignment)
-        period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == period).all() if period else []
-        total_generated = sum([b.total_yield for b in period_batches])
-        dept_actual_generated = {}
-        for b in period_batches:
-            dept_actual_generated[b.department] = dept_actual_generated.get(b.department, 0) + b.total_yield
 
         actual_staples_consumed = total_generated * st_per_booklet if total_generated > 0 else 0
         actual_boxes = math.ceil(max(0, actual_staples_consumed - prev_excess_staples) / st_per_box) if st_per_box > 0 and actual_staples_consumed > 0 else 0

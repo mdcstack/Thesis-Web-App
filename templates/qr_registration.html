@@ -377,7 +377,8 @@
                     <p style="font-size: 0.8rem; color: #777;">Scan this label during distribution.</p>
                     <div style="display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap;">
                         <button class="btn-print desktop-only" onclick="window.print()">🖨️ Print Pack Label</button>
-                        <button class="desktop-only" id="manualDownloadBtn" style="display: none; background: #475569; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#475569'" onclick="manualDownloadLabel()">💾 Download PNG</button>
+                        <button class="desktop-only" id="manualDownloadBtn" style="display: none; background: #475569; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#475569'" onclick="manualDownloadLabel()" title="Download Printable Sticker with Box Details">🏷️ Download Sticker</button>
+                        <button class="desktop-only" id="manualDownloadPureQrBtn" style="display: none; background: #2563eb; color: white; border: none; padding: 8px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'" onclick="manualDownloadPureQr()" title="Download Crisp Master Pack QR Image">📱 Download QR Only</button>
                     </div>
                 </div>
             </div>
@@ -1283,6 +1284,7 @@
         }
 
         let currentGeneratedLabelUrl = null;
+        let currentGeneratedPureQrUrl = null;
         let currentGeneratedPackId = null;
 
         function manualDownloadLabel() {
@@ -1296,77 +1298,101 @@
             showToast(`Downloaded ${currentGeneratedPackId}_LABEL.png`, "info", "Download Complete");
         }
 
+        function manualDownloadPureQr() {
+            if (!currentGeneratedPureQrUrl || !currentGeneratedPackId) return;
+            const downloadLink = document.createElement("a");
+            downloadLink.href = currentGeneratedPureQrUrl;
+            downloadLink.download = `${currentGeneratedPackId}.png`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            showToast(`Downloaded ${currentGeneratedPackId}.png`, "info", "Download Complete");
+        }
+
         // Function to draw a proper physical box label with course badge and save to static/qrcodes/
         function generateAndSaveSticker(packId, bookletCount, base64QR, startCtrl, endCtrl, startSrn, endSrn, dept, deptLabel, tplName) {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set canvas size (400x550 pixels for a clean rectangular sticker)
-            canvas.width = 400;
-            canvas.height = 550;
-            
-            // Draw white background
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw border
-            ctx.strokeStyle = "#000000";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-            
-            ctx.textAlign = "center";
-            
-            // Draw Title
-            ctx.font = "bold 20px Arial";
-            ctx.fillStyle = "#000000";
-            ctx.fillText("BOOKLEDGER SUPPLY PACK", canvas.width / 2, 38);
-            
-            // Draw Department Banner / Badge
-            const department = dept || "CS";
-            const departmentText = (deptLabel || getRegCourseLabel(department)).toUpperCase();
-            ctx.font = "bold 13px Arial";
-            ctx.fillStyle = getRegCourseColor(department);
-            ctx.fillText(`[ ${departmentText} ]`, canvas.width / 2, 60);
+            currentGeneratedPureQrUrl = base64QR;
+            currentGeneratedPackId = packId;
 
-            // Draw Pack ID
-            ctx.font = "bold 17px monospace";
-            ctx.fillStyle = "#166534";
-            ctx.fillText(packId, canvas.width / 2, 86);
-            
-            // Draw Booklet Count
-            ctx.font = "bold 15px Arial";
-            ctx.fillStyle = "#1e293b";
-            ctx.fillText(`Contains ${bookletCount} Booklets`, canvas.width / 2, 112);
-
-            // Draw Control and SRN Ranges
-            ctx.font = "bold 12px monospace";
-            ctx.fillStyle = "#334155";
-            if (startCtrl && endCtrl) {
-                ctx.fillText(`Ctrl: ${startCtrl} to ${endCtrl}`, canvas.width / 2, 134);
-            }
-            if (startSrn && endSrn && startSrn !== 'N/A') {
-                ctx.fillStyle = "#2563eb";
-                ctx.fillText(`SRN: ${startSrn} to ${endSrn}`, canvas.width / 2, 152);
-            }
-            
-            // Load and draw the QR Code image asynchronously
+            // Load QR image first so we preserve exact 1:1 pixel modules
             const qrImg = new Image();
             qrImg.onload = function() {
-                const qrSize = 240;
-                const xPos = (canvas.width - qrSize) / 2;
-                const yPos = 170;
-                ctx.drawImage(qrImg, xPos, yPos, qrSize, qrSize);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Determine native QR size (standard Version 1 QR code is 290x290)
+                const nativeQrSize = qrImg.naturalWidth || qrImg.width || 290;
+                
+                // Canvas width: accommodate QR with quiet zones (at least nativeQrSize + 60, standard 400px)
+                canvas.width = Math.max(400, nativeQrSize + 60);
+                canvas.height = 550;
+                
+                // Disable smoothing to guarantee 100% crisp pixel rendering without anti-aliasing blur
+                ctx.imageSmoothingEnabled = false;
+                if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
+                if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
+                if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
+                
+                // Draw white background
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw border
+                ctx.strokeStyle = "#000000";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
+                
+                ctx.textAlign = "center";
+                
+                // Draw Title
+                ctx.font = "bold 20px Arial";
+                ctx.fillStyle = "#000000";
+                ctx.fillText("BOOKLEDGER SUPPLY PACK", canvas.width / 2, 38);
+                
+                // Draw Department Banner / Badge
+                const department = dept || "CS";
+                const departmentText = (deptLabel || getRegCourseLabel(department)).toUpperCase();
+                ctx.font = "bold 13px Arial";
+                ctx.fillStyle = getRegCourseColor(department);
+                ctx.fillText(`[ ${departmentText} ]`, canvas.width / 2, 60);
+
+                // Draw Pack ID
+                ctx.font = "bold 17px monospace";
+                ctx.fillStyle = "#166534";
+                ctx.fillText(packId, canvas.width / 2, 86);
+                
+                // Draw Booklet Count
+                ctx.font = "bold 15px Arial";
+                ctx.fillStyle = "#1e293b";
+                ctx.fillText(`Contains ${bookletCount} Booklets`, canvas.width / 2, 112);
+
+                // Draw Control and SRN Ranges
+                ctx.font = "bold 12px monospace";
+                ctx.fillStyle = "#334155";
+                if (startCtrl && endCtrl) {
+                    ctx.fillText(`Ctrl: ${startCtrl} to ${endCtrl}`, canvas.width / 2, 134);
+                }
+                if (startSrn && endSrn && startSrn !== 'N/A') {
+                    ctx.fillStyle = "#2563eb";
+                    ctx.fillText(`SRN: ${startSrn} to ${endSrn}`, canvas.width / 2, 152);
+                }
+                
+                // Draw QR Code at 1:1 integer pixel ratio centered horizontally
+                const qrDrawSize = nativeQrSize;
+                const xPos = Math.round((canvas.width - qrDrawSize) / 2);
+                const yPos = 165;
+                ctx.drawImage(qrImg, xPos, yPos, qrDrawSize, qrDrawSize);
                 
                 // Draw Footer Instructions & Template Name
                 if (tplName) {
                     ctx.font = "italic 11px Arial";
                     ctx.fillStyle = "#64748b";
-                    ctx.fillText(`Cover: ${tplName}`, canvas.width / 2, 435);
+                    ctx.fillText(`Cover: ${tplName}`, canvas.width / 2, yPos + qrDrawSize + 22);
                 }
 
                 ctx.font = "bold 13px Arial";
                 ctx.fillStyle = "#333333";
-                ctx.fillText("Scan this label during distribution.", canvas.width / 2, 460);
+                ctx.fillText("Scan this label during distribution.", canvas.width / 2, yPos + qrDrawSize + 46);
                 
                 const finalImageURL = canvas.toDataURL("image/png");
                 
@@ -1376,9 +1402,10 @@
                     body: JSON.stringify({ pack_id: packId, base64_image: finalImageURL })
                 }).then(() => {
                     currentGeneratedLabelUrl = finalImageURL;
-                    currentGeneratedPackId = packId;
                     const dlBtn = document.getElementById('manualDownloadBtn');
                     if (dlBtn) dlBtn.style.display = 'inline-block';
+                    const dlPureBtn = document.getElementById('manualDownloadPureQrBtn');
+                    if (dlPureBtn) dlPureBtn.style.display = 'inline-block';
                 });
             };
             qrImg.src = base64QR;

@@ -667,67 +667,53 @@
                                 const rowReamsDisplay = rowReams > 0 ? `${rowReams} Ream(s) + ${rowLoose} sheets` : `0 Reams + ${rowLoose} sheets`;
                                 const paidVal = (r.amount_paid !== undefined) ? r.amount_paid : (r.amount || 0);
 
-                                const isHistoricalView = (computationsPayload.is_active_semester === false) ||
-                                    Boolean(selectedPeriod && currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod);
-
                                 const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * bookletPrice);
-                                // Prior debt only exists in the active semester
-                                const priorDebt = (!isHistoricalView && r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
-                                const dueVal = isHistoricalView ? currBilled : ((r.amount_due !== undefined) ? r.amount_due : (currBilled + priorDebt));
-                                const currentPending = Math.max(0, currBilled - paidVal);
-                                const totalPending = Math.max(0, dueVal - paidVal);
+                                const initialPriorDebt = (r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
+                                const remainingPriorDebt = (r.remaining_prior_debt !== undefined) ? r.remaining_prior_debt : initialPriorDebt;
+                                const dueVal = (r.amount_due !== undefined) ? r.amount_due : (currBilled + initialPriorDebt);
+                                const currentPaid = (r.current_paid !== undefined) ? r.current_paid : 0;
+                                const priorPaid = (r.prior_paid !== undefined) ? r.prior_paid : 0;
+                                const currentPending = (r.current_pending !== undefined) ? r.current_pending : Math.max(0, currBilled - currentPaid);
+                                const totalPending = (r.pending_balance !== undefined) ? r.pending_balance : Math.max(0, dueVal - paidVal);
 
-                                // Line 1: Paid Transaction
+                                // Line 1: Paid Transaction (Actual Realized Cash Received)
                                 const paidLineHtml = `<div style="color: ${paidVal > 0 ? '#166534' : '#64748b'}; font-size: 0.95rem; font-weight: 700;">₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
 
-                                // Line 2: Pending Status Badge
+                                // Line 2: Pending Status Badge (strictly reflecting the current billed transaction)
                                 let pendingBadgeHtml = '';
-                                if (priorDebt > 0) {
-                                    if (totalPending === 0) {
-                                        // Both prior debt and current semester issuance are fully settled
-                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
-                                    } else if (currBilled > 0) {
-                                        // Active booklet issuance occurred in the current semester
-                                        if (paidVal >= currBilled) {
-                                            // Current period's issuance is satisfied, but prior debt remains
-                                            pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
-                                        } else {
-                                            const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
-                                            pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
-                                        }
+                                if (totalPending === 0 && dueVal > 0) {
+                                    // Both prior debt and current semester issuance are fully settled
+                                    pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
+                                } else if (currBilled > 0) {
+                                    // Active booklet issuance occurred in the current semester
+                                    if (currentPending === 0) {
+                                        // Current period's issuance is satisfied, but prior debt remains
+                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
                                     } else {
-                                        // currBilled === 0: No booklet issuance this period; only prior debt exists
-                                        if (paidVal > 0) {
-                                            // A payment was made toward prior debt this period
-                                            const badgeColor = '#d97706';
-                                            pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${totalPending.toFixed(2)} Pending</span>`;
-                                        } else {
-                                            // No transactions occurred this period; omit redundant pending badge to keep row clean
-                                            pendingBadgeHtml = '';
-                                        }
+                                        const badgeColor = currentPaid > 0 ? '#d97706' : '#dc2626';
+                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
                                     }
                                 } else {
-                                    // When no prior debt (including all historical/archived views)
-                                    if (totalPending === 0 && dueVal > 0) {
-                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
-                                    } else if (totalPending > 0) {
-                                        const badgeColor = paidVal > 0 ? '#d97706' : '#dc2626';
-                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${totalPending.toFixed(2)} Pending</span>`;
+                                    // currBilled === 0: No booklet issuance this period; only prior debt exists
+                                    if (remainingPriorDebt > 0) {
+                                        pendingBadgeHtml = `<span style="color: #d97706; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${remainingPriorDebt.toFixed(2)} Pending</span>`;
                                     } else {
                                         pendingBadgeHtml = `<span style="color: #64748b; font-size: 0.75rem; font-weight: 500;">No Balance Due</span>`;
                                     }
                                 }
 
-                                // Line 3: Prior Debt (strictly ONLY rendered if priorDebt > 0 and NOT in historical view)
+                                // Line 3: Prior Debt (reflecting remaining prior debt after prior payments)
                                 let priorDebtLineHtml = '';
-                                if (priorDebt > 0 && !isHistoricalView) {
-                                    priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${priorDebt.toFixed(2)} prior debt</div>`;
+                                if (remainingPriorDebt > 0) {
+                                    priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${remainingPriorDebt.toFixed(2)} prior debt</div>`;
                                 }
 
-                                // Line 4 (or Line 3 if no prior debt): Billed / Due Amount
+                                // Line 4 (or Line 3 if no prior debt): Billed / Due Amount / Total
                                 let billedLineHtml = '';
                                 if (dueVal > 0) {
-                                    if (priorDebt > 0) {
+                                    if (totalPending === 0) {
+                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total: ₱${dueVal.toFixed(2)})</div>`;
+                                    } else if (initialPriorDebt > 0) {
                                         billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total Due: ₱${dueVal.toFixed(2)})</div>`;
                                     } else {
                                         billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
