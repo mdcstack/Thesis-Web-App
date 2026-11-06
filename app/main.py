@@ -6017,6 +6017,7 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "target_production": c["target_production"],
             "sheets_needed": c["sheets_needed"],
             "reams_needed": c["reams_needed"],
+            "distributed": c.get("distributed", 0),
             "available_stock": c.get("available_stock", 0),
             "prior_available_booklets": c.get("prior_available_booklets", 0),
             "prev_excess_sheets": c.get("prev_excess_sheets", 0),

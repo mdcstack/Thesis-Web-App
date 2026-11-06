@@ -2805,32 +2805,23 @@
             if (courseDemandList && courseDemandList.length > 0) {
                 courseDemandList.forEach(c => {
                     const rawTarget = bufferPct > 0 ? Math.ceil(c.headcount * (1 + (bufferPct / 100))) : c.headcount;
+                    const cDistributed = c.distributed || 0;
+                    const unfulfilledDemand = Math.max(0, rawTarget - cDistributed);
 
-                    // Unified Decision Support Logic:
-                    // If backend production metrics exist (from /api/settings or /api/period-configuration), use the
-                    // authoritative target production which accounts for prior buffer carryover, active distributions, and vault stock.
-                    // If bufferPct was manually edited by admin, scale target_production dynamically.
-                    let cTarget;
-                    let availBooklets;
-                    if (c.target_production !== undefined) {
-                        const baseTarget = c.target_production;
-                        // Calculate default buffer for this course headcount
-                        const defaultBuffer = (c.headcount > 0 && bufferPct > 0) ? Math.ceil(c.headcount * (bufferPct / 100)) : 0;
-                        cTarget = baseTarget;
-                        availBooklets = Math.max(0, rawTarget - cTarget);
-                    } else {
-                        availBooklets = hasPrevPeriod
-                            ? (currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].available_booklets !== undefined
-                                ? (currentPreviousCourseExcess[c.code].available_booklets || 0)
-                                : (c.prior_available_booklets || 0))
-                            : 0;
-                        cTarget = Math.max(0, rawTarget - availBooklets);
-                    }
+                    // True physical ready booklets sitting in vault from prior periods
+                    const availBooklets = (c.prior_available_booklets !== undefined && c.prior_available_booklets !== null && c.prior_available_booklets > 0)
+                        ? c.prior_available_booklets
+                        : (hasPrevPeriod && currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].available_booklets !== undefined
+                            ? (currentPreviousCourseExcess[c.code].available_booklets || 0)
+                            : ((c.available_stock !== undefined && c.available_stock !== null) ? c.available_stock : 0));
+
+                    // Net booklets that must physically be produced
+                    const cTarget = Math.max(0, unfulfilledDemand - availBooklets);
 
                     const cGrossSheets = cTarget * sheets;
 
                     // Physical blank paper stock sitting in vault
-                    const prevExcess = (c.excess_sheets !== undefined)
+                    const prevExcess = (c.excess_sheets !== undefined && c.excess_sheets !== null)
                         ? (c.excess_sheets || 0)
                         : (hasPrevPeriod
                             ? ((currentPreviousCourseExcess && currentPreviousCourseExcess[c.code]) 
@@ -2838,14 +2829,9 @@
                                 : (c.prev_excess_sheets || 0))
                             : 0);
 
-                    // Net paper sheets required to fulfill production demand
-                    const cNetSheets = (c.sheets_needed !== undefined && sheets === 6 && bufferPct === 0.1)
-                        ? c.sheets_needed
-                        : Math.max(0, cGrossSheets - prevExcess);
-
-                    const cReams = (c.reams_needed !== undefined && cNetSheets === c.sheets_needed)
-                        ? c.reams_needed
-                        : (cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0);
+                    // Net paper sheets required after consuming vault leftover sheets
+                    const cNetSheets = Math.max(0, cGrossSheets - prevExcess);
+                    const cReams = cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0;
 
                     totalRawBookletsDemand += rawTarget;
                     totalVaultBooklets += availBooklets;
@@ -2878,6 +2864,12 @@
                                 <span>Booklet Demand</span>
                                 <span style="font-weight: 600; color: #1e293b; text-align: right;">${rawTarget.toLocaleString()} bks</span>
                             </div>
+                            ${cDistributed > 0 ? `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
+                                <span>Distributed</span>
+                                <span style="font-weight: 600; color: #0284c7; text-align: right;">− ${cDistributed.toLocaleString()} bks</span>
+                            </div>
+                            ` : ''}
                             ${availBooklets > 0 ? `
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
                                 <span>Fulfilled / In Stock</span>
