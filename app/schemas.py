@@ -25,9 +25,10 @@ class Enrollment(EnrollmentBase):
 
 class ReturnRequest(BaseModel):
     enrollment_id: int
-    control_numbers: list[str]
+    control_numbers: list[str] = []
     reason: str
     clerk_name: str = "System Clerk"
+    cancel_defect_count: int = 0
 
 class DistributionRequest(BaseModel):
     enrollment_id: int

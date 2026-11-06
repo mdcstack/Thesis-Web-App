@@ -2498,7 +2498,8 @@ ${message}`));
                                         opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
                                         let badge = "";
                                         if (sub.is_replacement) {
-                                            badge = sub.is_prepaid ? " 🔄 [Replacement - Pre-Paid]" : " 🔄 [Replacement]";
+                                            const rCount = sub.replacement_count ? ` (${sub.replacement_count})` : "";
+                                            badge = sub.is_prepaid ? ` 🔄 [Replacement${rCount} - Pre-Paid]` : ` 🔄 [Replacement${rCount}]`;
                                         }
                                         opt.text = sub.subject + badge;
                                         currentSubjectSelect.appendChild(opt);
@@ -2756,7 +2757,8 @@ ${message}`));
                 opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
                 let badge = "";
                 if (sub.is_replacement) {
-                    badge = sub.is_prepaid ? " 🔄 [Replacement - Pre-Paid]" : " 🔄 [Replacement]";
+                    const rCount = sub.replacement_count ? ` (${sub.replacement_count})` : "";
+                    badge = sub.is_prepaid ? ` 🔄 [Replacement${rCount} - Pre-Paid]` : ` 🔄 [Replacement${rCount}]`;
                 }
                 opt.text = sub.subject + badge;
 
@@ -3000,7 +3002,8 @@ ${message}`));
 
                 if (data.is_replacement) {
                     const isPre = data.is_prepaid || (data.replacement_credit && data.replacement_credit >= data.gross_amount && data.gross_amount > 0);
-                    btn.innerText = isPre ? "🔄 Distribute Replacement (Fully Paid)" : "🔄 Distribute Replacement";
+                    const countStr = data.replacement_count ? ` (${data.replacement_count} pcs)` : "";
+                    btn.innerText = isPre ? `🔄 Distribute Replacement${countStr} (Fully Paid)` : `🔄 Distribute Replacement${countStr}`;
                     btn.className = "btn btn-success";
                 } else {
                     btn.innerText = "Verify Booklets & Submit Transaction";

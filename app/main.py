@@ -1623,31 +1623,27 @@ def get_pending_distributions(db: Session = Depends(get_db)):
     data = []
     
     for e in enrollments:
-        # MAGIC: Only count booklets currently distributed during THIS specific period
+        # Count booklets currently distributed during THIS specific period
         fulfilled_count = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == e.id,
             models.Booklet.exam_period == active_period,
             models.Booklet.status == "distributed"
         ).count()
         
-        # Accounted booklets include distributed and usable returned booklets (loose stock)
-        # Voided/defective booklets are NOT in loose_stock, so they properly prompt for a replacement!
-        accounted_count = db.query(models.Booklet).filter(
-            models.Booklet.enrollment_id == e.id,
-            models.Booklet.exam_period == active_period,
-            models.Booklet.status.in_(["distributed", "loose_stock"])
-        ).count()
-        
-        remaining = max(0, e.student_headcount - accounted_count)
+        # Remaining demand is strictly the shortfall between current headcount and distributed booklets on hand
+        remaining = max(0, e.student_headcount - fulfilled_count)
         
         if remaining > 0:
-            # Check for voided defective booklets needing replacement
-            defective_count = db.query(models.Booklet).filter(
+            # Check for active voided defective booklets awaiting replacement (excluding canceled or already replaced)
+            active_defective_count = db.query(models.Booklet).filter(
                 models.Booklet.enrollment_id == e.id,
                 models.Booklet.exam_period == active_period,
                 models.Booklet.status == "voided",
-                models.Booklet.return_reason.like("Misprint / Defect%")
+                models.Booklet.return_reason == "Misprint / Defect"
             ).count()
+
+            # Active replacement demand cannot exceed actual remaining shortfall
+            replacement_count = min(remaining, active_defective_count)
 
             # Check grandfathered price
             prior_b = db.query(models.Booklet).filter(
@@ -1660,8 +1656,8 @@ def get_pending_distributions(db: Session = Depends(get_db)):
 
             enr_dept = resolve_enrollment_department(e, db=db)
 
-            is_replacement = bool(defective_count > 0)
-            is_prepaid = bool(defective_count > 0 and credit >= effective_price and credit > 0)
+            is_replacement = bool(replacement_count > 0)
+            is_prepaid = bool(replacement_count > 0 and credit >= effective_price and credit > 0)
 
             data.append({
                 "enrollment_id": e.id,
@@ -1673,7 +1669,7 @@ def get_pending_distributions(db: Session = Depends(get_db)):
                 "remaining": remaining,
                 "is_replacement": is_replacement,
                 "is_prepaid": is_prepaid,
-                "replacement_count": defective_count,
+                "replacement_count": replacement_count,
                 "replacement_credit": credit,
                 "unit_price": effective_price,
                 "department": enr_dept
@@ -2828,8 +2824,10 @@ def get_public_instructor_profiles(request: Request, db: Session = Depends(get_d
 
 @app.get("/api/distributed-booklets/{enrollment_id}")
 def get_distributed_booklets(enrollment_id: int, period: str = None, db: Session = Depends(get_db)):
-    """Fetches booklets for a specific class AND specific exam period."""
+    """Fetches booklets for a specific class AND specific exam period, along with section metadata."""
     try:
+        enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == enrollment_id).first()
+        
         # Start the query by finding the right class and distributed booklets
         query = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == enrollment_id,
@@ -2846,81 +2844,131 @@ def get_distributed_booklets(enrollment_id: int, period: str = None, db: Session
                 
         booklets = query.order_by(models.Booklet.id).all()
         
+        # Check active unreplaced defective booklets for this specific class and period
+        calc_period = period if (period and period != "Legacy (No Period)") else get_active_period(db)
+        unreplaced_defective_count = db.query(models.Booklet).filter(
+            models.Booklet.enrollment_id == enrollment_id,
+            models.Booklet.exam_period == calc_period,
+            models.Booklet.status == "voided",
+            models.Booklet.return_reason == "Misprint / Defect"
+        ).count()
+        
         # Safely extract reference numbers
         data = []
         for b in booklets:
             ref = getattr(b, 'control_num', getattr(b, 'reference_number', ''))
             data.append({"id": b.id, "ref": ref})
             
-        return {"status": "success", "data": data}
+        return {
+            "status": "success", 
+            "data": data,
+            "student_headcount": enrollment.student_headcount if enrollment else 0,
+            "distributed_count": len(booklets),
+            "unreplaced_defective_count": unreplaced_defective_count,
+            "replacement_credit": float(getattr(enrollment, 'replacement_credit', 0.0) or 0.0)
+        }
     except Exception as e:
-        return {"status": "error", "message": str(e), "data": []}
+        return {"status": "error", "message": str(e), "data": [], "unreplaced_defective_count": 0}
 
 @app.post("/api/process-return")
 def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
-    """Handles returns differently based on whether the booklet is usable or defective."""
+    """Handles returns differently based on whether the booklet is usable or defective, 
+    and reconciles dropped students against pending defective replacements."""
     try:
-        booklets = db.query(models.Booklet).filter(
-            models.Booklet.enrollment_id == req.enrollment_id,
-            models.Booklet.control_num.in_(req.control_numbers)
-        ).all()
-        
-        if not booklets:
-            return {"status": "error", "message": "No matching booklets found to return."}
-            
-        return_qty = len(booklets)
-        enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == req.enrollment_id).first()
         is_defective = req.reason == "Misprint / Defect"
         is_student_dropped = bool(req.reason and req.reason.strip().startswith("Student Dropped"))
+        cancel_defect_count = max(0, int(getattr(req, 'cancel_defect_count', 0) or 0)) if is_student_dropped else 0
+        
+        booklets = []
+        if req.control_numbers:
+            booklets = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == req.enrollment_id,
+                models.Booklet.control_num.in_(req.control_numbers)
+            ).all()
+        
+        if not booklets and cancel_defect_count == 0:
+            return {"status": "error", "message": "No matching booklets or canceled replacements selected."}
+            
+        enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == req.enrollment_id).first()
 
-        # Phase 3: Payment Tracking deduction on return
+        # Reconcile unreplaced defective booklets canceled by dropped students
+        canceled_voided_bks = []
+        if is_student_dropped and cancel_defect_count > 0:
+            canceled_voided_bks = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == req.enrollment_id,
+                models.Booklet.status == "voided",
+                models.Booklet.return_reason == "Misprint / Defect"
+            ).order_by(models.Booklet.id.asc()).limit(cancel_defect_count).all()
+            for cb in canceled_voided_bks:
+                cb.return_reason = "Misprint / Defect (Canceled by Dropped Student)"
+        actual_canceled_count = len(canceled_voided_bks)
+        total_dropped_qty = len(booklets) + actual_canceled_count
+
+        # Payment Tracking & Billing adjustment
         if enrollment:
             settings = db.query(models.SystemSettings).first()
             fallback_price = settings.booklet_price if settings else 2.50
-            unit_price = booklets[0].unit_price if getattr(booklets[0], 'unit_price', None) is not None else fallback_price
-            return_value = round(return_qty * unit_price, 2)
+            b_sample = booklets[0] if booklets else (canceled_voided_bks[0] if canceled_voided_bks else None)
+            unit_price = getattr(b_sample, 'unit_price', None) if b_sample and getattr(b_sample, 'unit_price', None) is not None else fallback_price
             
+            reconciled_credit = 0.0
+
             if is_defective:
                 # Instructor will receive replacements for defective booklets.
-                # Calculate new due for the remaining distributed booklets:
+                return_qty = len(booklets)
+                return_value = round(return_qty * unit_price, 2)
                 new_due = max(0.0, round(enrollment.amount_due - return_value, 2))
-                # How much was paid specifically towards these returned defective booklets?
                 paid_towards_returned = max(0.0, round(enrollment.amount_paid - new_due, 2))
                 
-                # Transfer paid amount towards replacement credit so replacements are pre-paid:
                 enrollment.replacement_credit = round(float(enrollment.replacement_credit or 0.0) + paid_towards_returned, 2)
                 enrollment.amount_paid = max(0.0, round(enrollment.amount_paid - paid_towards_returned, 2))
                 enrollment.amount_due = new_due
             else:
-                # For non-defective (dropped/excess): No replacement is needed
-                enrollment.amount_due = max(0.0, round(enrollment.amount_due - return_value, 2))
+                # Student dropped:
+                # 1. Physical booklets returned to loose stock reduce amount_due
+                phys_return_qty = len(booklets)
+                phys_return_value = round(phys_return_qty * unit_price, 2)
+                enrollment.amount_due = max(0.0, round(enrollment.amount_due - phys_return_value, 2))
+                
+                # 2. For canceled defective booklets, reabsorb prepaid replacement credit
+                if actual_canceled_count > 0:
+                    credit_portion = round(actual_canceled_count * unit_price, 2)
+                    reconciled_credit = min(float(enrollment.replacement_credit or 0.0), credit_portion)
+                    if reconciled_credit > 0:
+                        enrollment.replacement_credit = max(0.0, round(float(enrollment.replacement_credit or 0.0) - reconciled_credit, 2))
+                        if enrollment.amount_paid < enrollment.amount_due:
+                            apply_amt = min(reconciled_credit, round(enrollment.amount_due - enrollment.amount_paid, 2))
+                            enrollment.amount_paid = round(enrollment.amount_paid + apply_amt, 2)
+
                 if enrollment.amount_paid > enrollment.amount_due:
                     enrollment.amount_paid = enrollment.amount_due
 
             # Sync dedicated per-semester billing account
-            b_period = booklets[0].exam_period if booklets and booklets[0].exam_period else get_active_period(db)
+            b_period = (booklets[0].exam_period if booklets and booklets[0].exam_period 
+                        else (canceled_voided_bks[0].exam_period if canceled_voided_bks and canceled_voided_bks[0].exam_period 
+                              else get_active_period(db)))
             period_billing = db.query(models.EnrollmentPeriodBilling).filter_by(
                 enrollment_id=enrollment.id,
                 exam_period=b_period
             ).first()
             if period_billing:
                 if not is_defective:
-                    # Preserve original student headcount in this period's ledger before reducing master headcount
                     if not getattr(period_billing, 'student_headcount', None):
                         period_billing.student_headcount = enrollment.student_headcount
-                    period_billing.distributed_count = max(0, period_billing.distributed_count - return_qty)
-                    period_billing.loose_returned = (period_billing.loose_returned or 0) + return_qty
-                    period_billing.amount_due = max(0.0, round(period_billing.amount_due - return_value, 2))
+                    period_billing.distributed_count = max(0, period_billing.distributed_count - len(booklets))
+                    period_billing.loose_returned = (period_billing.loose_returned or 0) + len(booklets)
+                    period_billing.amount_due = max(0.0, round(period_billing.amount_due - phys_return_value, 2))
+                    if actual_canceled_count > 0 and reconciled_credit > 0 and period_billing.amount_paid < period_billing.amount_due:
+                        apply_amt = min(reconciled_credit, round(period_billing.amount_due - period_billing.amount_paid, 2))
+                        period_billing.amount_paid = round(period_billing.amount_paid + apply_amt, 2)
                     if period_billing.amount_paid > period_billing.amount_due:
                         period_billing.amount_paid = period_billing.amount_due
                     period_billing.balance = max(0.0, round(period_billing.amount_due - period_billing.amount_paid), 2)
                     period_billing.payment_status = "Fully Paid" if period_billing.balance <= 0.001 and period_billing.amount_due > 0 else ("Partially Paid" if period_billing.amount_paid > 0 else "Unpaid")
                 else:
-                    # Defective booklets are permanently voided and must decrement distributed_count
-                    # so that subsequent replacement distribution does not overcount (e.g. 41 instead of 40)
                     if not getattr(period_billing, 'student_headcount', None):
                         period_billing.student_headcount = enrollment.student_headcount
-                    period_billing.distributed_count = max(0, period_billing.distributed_count - return_qty)
+                    period_billing.distributed_count = max(0, period_billing.distributed_count - len(booklets))
                     period_billing.amount_due = max(0.0, round(period_billing.amount_due - return_value, 2))
                     period_billing.amount_paid = max(0.0, round(period_billing.amount_paid - paid_towards_returned, 2))
                     period_billing.balance = max(0.0, round(period_billing.amount_due - period_billing.amount_paid), 2)
@@ -2928,7 +2976,7 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
 
             # Decrement active class capacity on official drop so subsequent semesters expect fewer students
             if is_student_dropped:
-                enrollment.student_headcount = max(0, enrollment.student_headcount - return_qty)
+                enrollment.student_headcount = max(0, enrollment.student_headcount - total_dropped_qty)
 
             if enrollment.amount_due == 0:
                 enrollment.payment_status = "Unpaid" if enrollment.amount_paid == 0 else "Fully Paid"
@@ -2954,7 +3002,9 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
         notify_lan_mutation("RETURN_PROCESSED", {
             "enrollment_id": req.enrollment_id,
             "reason": req.reason,
-            "return_qty": return_qty,
+            "return_qty": len(booklets),
+            "canceled_defect_qty": actual_canceled_count,
+            "total_dropped": total_dropped_qty if is_student_dropped else 0,
             "is_defective": is_defective,
             "teacher_name": enrollment.teacher_name if enrollment else "",
             "section": enrollment.section if enrollment else "",
@@ -2967,9 +3017,13 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
             }, db=db)
         
         if is_defective:
-            return {"status": "success", "message": f"Voided {return_qty} defective booklet(s). Replacement demand is now active in Point of Distribution."}
+            return {"status": "success", "message": f"Voided {len(booklets)} defective booklet(s). Replacement demand is now active in Point of Distribution."}
+        elif actual_canceled_count > 0 and len(booklets) > 0:
+            return {"status": "success", "message": f"Dropped {total_dropped_qty} student(s): Canceled {actual_canceled_count} pending replacement(s) and moved {len(booklets)} booklet(s) to Loose Stock."}
+        elif actual_canceled_count > 0:
+            return {"status": "success", "message": f"Dropped {actual_canceled_count} student(s) and canceled {actual_canceled_count} pending defective replacement(s). Everything is sufficient."}
         else:
-            return {"status": "success", "message": f"Successfully moved {return_qty} booklet(s) to Loose Stock."}
+            return {"status": "success", "message": f"Successfully moved {len(booklets)} booklet(s) to Loose Stock."}
         
     except Exception as e:
         print(f"Error in /api/process-return: {str(e)}")
@@ -3258,13 +3312,14 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         credit_applied = min(credit_available, gross_total)
         net_amount = max(0.0, round(gross_total - credit_applied, 2))
         
-        defective_count = db.query(models.Booklet).filter(
+        active_defective_count = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == enrollment.id,
             models.Booklet.exam_period == active_period,
             models.Booklet.status == "voided",
-            models.Booklet.return_reason.like("Misprint / Defect%")
+            models.Booklet.return_reason == "Misprint / Defect"
         ).count()
-        is_replacement = bool(defective_count > 0 or credit_applied > 0 or credit_available > 0)
+        replacement_count = min(remaining_demand, active_defective_count)
+        is_replacement = bool(replacement_count > 0 or credit_applied > 0)
         is_prepaid = bool(is_replacement and credit_applied >= gross_total and gross_total > 0)
         
         return {
@@ -3276,6 +3331,8 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
             "total_amount": net_amount,
             "is_replacement": is_replacement,
             "is_prepaid": is_prepaid,
+            "replacement_count": replacement_count,
+            "remaining_demand": remaining_demand,
             "allocated_controls": [b.control_num for b in booklets_to_distribute],
             "allocated_details": [
                 {
@@ -3468,6 +3525,16 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
             b.exam_period = active_period
             b.unit_price = effective_price
             b.return_reason = None
+
+        # Reconcile active voided defective booklets that are being replaced
+        active_voided = db.query(models.Booklet).filter(
+            models.Booklet.enrollment_id == req.enrollment_id,
+            models.Booklet.exam_period == active_period,
+            models.Booklet.status == "voided",
+            models.Booklet.return_reason == "Misprint / Defect"
+        ).order_by(models.Booklet.id.asc()).limit(len(booklets_to_distribute)).all()
+        for vb in active_voided:
+            vb.return_reason = "Misprint / Defect (Replaced)"
             
         enrollment.department = resolve_enrollment_department(enrollment, db=db)
 
@@ -3574,7 +3641,14 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
         all_booklets = booklets_query.order_by(models.Booklet.id).all()
         
         # Group booklets by (enrollment_id, exam_period) in Python memory (<5ms)
-        groups = defaultdict(lambda: {"distributed": [], "defective": [], "dropped": []})
+        groups = defaultdict(lambda: {
+            "distributed": [], 
+            "defective": [], 
+            "active_defective": [], 
+            "canceled_defective": [], 
+            "replaced_defective": [], 
+            "dropped": []
+        })
         for b in all_booklets:
             enr = enr_map.get(b.enrollment_id)
             if not enr:
@@ -3585,6 +3659,13 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
                 groups[key]["distributed"].append(b)
             elif b.status == "voided" and (b.return_reason or "").startswith("Misprint / Defect"):
                 groups[key]["defective"].append(b)
+                r_reason = b.return_reason or ""
+                if r_reason == "Misprint / Defect":
+                    groups[key]["active_defective"].append(b)
+                elif "Canceled" in r_reason:
+                    groups[key]["canceled_defective"].append(b)
+                elif "Replaced" in r_reason:
+                    groups[key]["replaced_defective"].append(b)
             elif b.status == "loose_stock" and (b.return_reason or "").startswith("Student Dropped"):
                 groups[key]["dropped"].append(b)
                 
@@ -3599,6 +3680,9 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
                 dropped_bks = b_dict["dropped"]
                 
                 defective_voided_qty = len(defective_bks)
+                active_defective_qty = len(b_dict["active_defective"])
+                canceled_defective_qty = len(b_dict["canceled_defective"])
+                replaced_defective_qty = len(b_dict["replaced_defective"])
                 dropped_returned_qty = len(dropped_bks)
 
                 if booklets or defective_bks or dropped_bks:
@@ -3659,7 +3743,11 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
                         "exam_period": period if period else "Legacy (No Period)",
                         "days_old": days_old,
                         "defective_voided_qty": defective_voided_qty,
+                        "active_defective_qty": active_defective_qty,
+                        "canceled_defective_qty": canceled_defective_qty,
+                        "replaced_defective_qty": replaced_defective_qty,
                         "dropped_returned_qty": dropped_returned_qty,
+                        "student_headcount": enr.student_headcount,
                         "replacement_credit": float(getattr(enr, 'replacement_credit', 0.0) or 0.0)
                     })
         

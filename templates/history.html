@@ -205,6 +205,12 @@
                 <span style="font-size: 0.85rem;"><em>Usable booklets enter Loose Stock. Defective booklets are permanently voided and will prompt a replacement.</em></span>
             </p>
             
+            <div id="modalSectionMetaBar" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 12px; font-size: 0.8rem; flex-wrap: wrap;">
+                <span style="background: #e2e8f0; color: #334155; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Headcount: <strong id="modalHeadcountDisplay">0</strong></span>
+                <span style="background: #e2e8f0; color: #334155; padding: 2px 8px; border-radius: 4px; font-weight: 600;">Distributed: <strong id="modalDistributedDisplay">0</strong></span>
+                <span id="modalDefectDisplayBadge" style="display: none; background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: 600;">⚠️ Unreplaced Defective: <strong id="modalDefectDisplay">0</strong></span>
+            </div>
+            
             <input type="hidden" id="pendingReturnEnrollmentId">
             
             <div class="form-group">
@@ -215,8 +221,23 @@
                 </select>
             </div>
 
+            <!-- SMART RECONCILIATION: Dropped students cancel unreplaced defective replacements -->
+            <div id="dropDefectReconcileContainer" style="display: none; margin-bottom: 14px; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; text-align: left;">
+                <div style="font-weight: 700; color: #1e40af; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>ℹ️ Pending Defective Replacements:</span>
+                    <span id="modalPendingDefectCount" style="background: #dbeafe; color: #1e40af; padding: 1px 7px; border-radius: 4px; font-weight: 800;">0</span>
+                </div>
+                <p style="font-size: 0.78rem; color: #1e3a8a; margin: 0 0 8px; line-height: 1.35;">
+                    Students who drop while awaiting replacement for defective booklets will first cancel these pending replacements (no physical booklets need to be moved to Loose Stock).
+                </p>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #ffffff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px;">
+                    <label for="cancelDefectInput" style="font-size: 0.82rem; font-weight: 600; color: #1e3a8a; margin: 0;">Drops Canceling Pending Defective Replacements:</label>
+                    <input type="number" id="cancelDefectInput" min="0" max="0" value="0" style="width: 65px; padding: 3px 6px; border: 1.5px solid #3b82f6; border-radius: 4px; font-weight: 700; text-align: center; font-size: 0.9rem;" onchange="onCancelDefectInputChange()" onkeyup="onCancelDefectInputChange()">
+                </div>
+            </div>
+
             <div class="form-group">
-                <label>Select Returned Booklets:</label>
+                <label id="selectBookletsLabel">Select Returned Booklets:</label>
                 <input type="text" id="refSearchInput" class="ref-search" onkeyup="filterModalControls()" placeholder="🔍 Type 1ST26-0001...">
                 
                 <div class="ref-grid" id="refGridContainer">
@@ -783,8 +804,17 @@ ${message}`));
             }
             
             let defectBadge = "";
-            if (row.defective_voided_qty && row.defective_voided_qty > 0) {
-                defectBadge = `<div style="margin-top: 4px;"><span class="badge" style="background-color: #d35400; font-size: 0.72rem; padding: 2px 6px;" title="${row.defective_voided_qty} defective booklet(s) returned and voided for this section">⚠️ ${row.defective_voided_qty} Defective Voided</span></div>`;
+            if (row.active_defective_qty && row.active_defective_qty > 0) {
+                defectBadge += `<div style="margin-top: 4px;"><span class="badge" style="background-color: #d35400; font-size: 0.72rem; padding: 2px 6px;" title="${row.active_defective_qty} defective booklet(s) awaiting replacement">⚠️ ${row.active_defective_qty} Defective (Pending Replacement)</span></div>`;
+            } else if (row.defective_voided_qty && row.defective_voided_qty > 0) {
+                let note = row.replaced_defective_qty ? `${row.replaced_defective_qty} Replaced` : "";
+                if (row.canceled_defective_qty) {
+                    note += (note ? ", " : "") + `${row.canceled_defective_qty} Canceled by Drop`;
+                }
+                defectBadge += `<div style="margin-top: 4px;"><span class="badge" style="background-color: #64748b; font-size: 0.72rem; padding: 2px 6px;" title="${row.defective_voided_qty} defective booklet(s) voided in total (${note || 'Resolved'})">✓ ${row.defective_voided_qty} Defective (${note || 'Resolved'})</span></div>`;
+            }
+            if (row.canceled_defective_qty && row.canceled_defective_qty > 0 && row.active_defective_qty > 0) {
+                defectBadge += `<div style="margin-top: 4px;"><span class="badge" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 0.70rem; padding: 1px 5px;" title="${row.canceled_defective_qty} defective replacement(s) canceled due to dropped students">🔄 ${row.canceled_defective_qty} Defect Canceled (Drop)</span></div>`;
             }
 
             let droppedBadge = "";
@@ -815,15 +845,70 @@ ${message}`));
 
     // --- STANDARD RETURN LOGIC ---
 
+    let modalMetadata = null;
+
     function onReturnReasonChange() {
         const reason = document.getElementById('returnReason').value;
         const btn = document.getElementById('returnActionBtn');
-        if (btn) {
-            if (reason === "Misprint / Defect") {
-                btn.innerText = "Void & Prepare Replacement";
-                btn.style.backgroundColor = "#e74c3c";
+        const reconcileBox = document.getElementById('dropDefectReconcileContainer');
+        const cancelDefectInput = document.getElementById('cancelDefectInput');
+        const selectLabel = document.getElementById('selectBookletsLabel');
+
+        if (reason === "Misprint / Defect") {
+            if (reconcileBox) reconcileBox.style.display = 'none';
+            if (cancelDefectInput) cancelDefectInput.value = '0';
+            if (selectLabel) selectLabel.innerText = "Select Defective Booklets to Void:";
+        } else {
+            // Student Dropped Class
+            const pendingDefects = modalMetadata ? (modalMetadata.unreplaced_defective_count || 0) : 0;
+            if (pendingDefects > 0) {
+                if (reconcileBox) reconcileBox.style.display = 'block';
+                if (cancelDefectInput) {
+                    cancelDefectInput.max = String(pendingDefects);
+                    if (!cancelDefectInput.value || cancelDefectInput.value === '0') {
+                        cancelDefectInput.value = String(pendingDefects);
+                    }
+                }
+                if (selectLabel) selectLabel.innerText = "Additional Physical Booklets Returned to Loose Stock (Optional):";
             } else {
-                btn.innerText = "Move to Loose Stock";
+                if (reconcileBox) reconcileBox.style.display = 'none';
+                if (cancelDefectInput) cancelDefectInput.value = '0';
+                if (selectLabel) selectLabel.innerText = "Select Returned Booklets (To Loose Stock):";
+            }
+        }
+        updateReturnActionBtn();
+    }
+
+    function onCancelDefectInputChange() {
+        const input = document.getElementById('cancelDefectInput');
+        const maxVal = modalMetadata ? (modalMetadata.unreplaced_defective_count || 0) : 0;
+        let val = parseInt(input.value || "0", 10);
+        if (isNaN(val) || val < 0) val = 0;
+        if (val > maxVal) val = maxVal;
+        input.value = val;
+        updateReturnActionBtn();
+    }
+
+    function updateReturnActionBtn() {
+        const btn = document.getElementById('returnActionBtn');
+        if (!btn) return;
+        const reason = document.getElementById('returnReason').value;
+        const selectedCount = document.querySelectorAll('.ref-checkbox:checked').length;
+        const cancelCount = parseInt(document.getElementById('cancelDefectInput')?.value || "0", 10);
+
+        if (reason === "Misprint / Defect") {
+            btn.innerText = selectedCount > 0 ? `Void & Prepare Replacement (${selectedCount})` : "Void & Prepare Replacement";
+            btn.style.backgroundColor = "#e74c3c";
+        } else {
+            // Student Dropped Class
+            if (cancelCount > 0 && selectedCount > 0) {
+                btn.innerText = `Drop ${cancelCount + selectedCount} Pax (${cancelCount} Canceled, ${selectedCount} to Loose)`;
+                btn.style.backgroundColor = "#27ae60";
+            } else if (cancelCount > 0) {
+                btn.innerText = `Drop ${cancelCount} Pax (Cancel ${cancelCount} Replacement${cancelCount > 1 ? 's' : ''})`;
+                btn.style.backgroundColor = "#27ae60";
+            } else {
+                btn.innerText = selectedCount > 0 ? `Move ${selectedCount} to Loose Stock` : "Move to Loose Stock";
                 btn.style.backgroundColor = "#27ae60";
             }
         }
@@ -833,9 +918,9 @@ ${message}`));
         document.getElementById('pendingReturnEnrollmentId').value = enrollmentId;
         document.getElementById('modalTeacherName').innerText = teacherName;
         document.getElementById('returnReason').selectedIndex = 0;
-        onReturnReasonChange();
         document.getElementById('selectedCount').innerText = "0";
         document.getElementById('refSearchInput').value = ""; 
+        modalMetadata = null;
         
         const grid = document.getElementById('refGridContainer');
         grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #7f8c8d;">Loading control numbers...</div>';
@@ -845,8 +930,27 @@ ${message}`));
         fetch(`/api/distributed-booklets/${enrollmentId}?period=${encodeURIComponent(examPeriod)}`)
             .then(res => res.json())
             .then(data => {
+                modalMetadata = data;
+                
+                // Populate metadata bar
+                const hcDisplay = document.getElementById('modalHeadcountDisplay');
+                const distDisplay = document.getElementById('modalDistributedDisplay');
+                const defectBadge = document.getElementById('modalDefectDisplayBadge');
+                const defectDisplay = document.getElementById('modalDefectDisplay');
+                const pendingDefectCount = document.getElementById('modalPendingDefectCount');
+                
+                if (hcDisplay) hcDisplay.innerText = data.student_headcount || '0';
+                if (distDisplay) distDisplay.innerText = data.distributed_count || '0';
+                
+                const unreplacedCount = data.unreplaced_defective_count || 0;
+                if (defectBadge) defectBadge.style.display = unreplacedCount > 0 ? 'inline-block' : 'none';
+                if (defectDisplay) defectDisplay.innerText = unreplacedCount;
+                if (pendingDefectCount) pendingDefectCount.innerText = unreplacedCount;
+                
+                onReturnReasonChange();
+                
                 grid.innerHTML = "";
-                if(data.status === "success" && data.data.length > 0) {
+                if(data.status === "success" && data.data && data.data.length > 0) {
                     data.data.forEach(item => {
                         let div = document.createElement('div');
                         div.className = "ref-item";
@@ -857,7 +961,7 @@ ${message}`));
                         grid.appendChild(div);
                     });
                 } else {
-                    grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #e74c3c;">No booklets found to return.</div>';
+                    grid.innerHTML = '<div style="grid-column: span 3; text-align: center; color: #e74c3c;">No distributed booklets on hand.</div>';
                 }
             })
             .catch(err => {
@@ -867,6 +971,7 @@ ${message}`));
 
     function closeReturnModal() { 
         document.getElementById('returnModal').style.display = 'none'; 
+        modalMetadata = null;
     }
 
     function filterModalControls() {
@@ -879,58 +984,107 @@ ${message}`));
     }
 
     function updateCount() {
-        document.getElementById('selectedCount').innerText = document.querySelectorAll('.ref-checkbox:checked').length;
+        const count = document.querySelectorAll('.ref-checkbox:checked').length;
+        document.getElementById('selectedCount').innerText = count;
+        updateReturnActionBtn();
     }
 
     async function executeReturn() {
         const enrollmentId = document.getElementById('pendingReturnEnrollmentId').value;
         const reason = document.getElementById('returnReason').value;
         const checkboxes = document.querySelectorAll('.ref-checkbox:checked');
-        if(checkboxes.length === 0) {
-            await showAppAlert("Selection Required", "Please select at least one booklet to return.", "warning");
+        const cancelDefectCount = parseInt(document.getElementById('cancelDefectInput')?.value || "0", 10);
+        
+        if (checkboxes.length === 0 && cancelDefectCount === 0) {
+            await showAppAlert("Action Required", "Please select at least one booklet to return, or specify dropped students canceling pending replacements.", "warning");
             return;
         }
 
         const selectedRefs = Array.from(checkboxes).map(cb => cb.value);
         const countText = selectedRefs.length === 1 ? "1 Booklet" : `${selectedRefs.length} Booklets`;
         const isDefective = reason === "Misprint / Defect";
-        const title = isDefective ? "Confirm Booklet Void" : "Confirm Move to Loose Stock";
-        const confirmText = isDefective ? "Void Defective Booklets" : "Move to Loose Stock";
-        const confirmBg = isDefective ? "#e74c3c" : "#27ae60";
-        const type = isDefective ? "danger" : "success";
 
-        const badgesHtml = selectedRefs.map(ref => 
-            `<span style="display: inline-block; background: #ffffff; color: #1e293b; padding: 4px 9px; border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.88rem; font-weight: 700; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">${ref}</span>`
-        ).join('');
+        let title = "Confirm Return";
+        let confirmText = "Confirm";
+        let confirmBg = "#27ae60";
+        let type = "success";
+        let message = "";
 
-        const controlNumbersContainer = `
-            <div style="margin: 14px 0 16px; text-align: left; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
-                <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                    <span>Booklet Control Number${selectedRefs.length > 1 ? 's' : ''} on Hand:</span>
-                    <span style="background: ${isDefective ? '#fee2e2' : '#dcfce7'}; color: ${isDefective ? '#991b1b' : '#166534'}; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">${countText}</span>
+        if (isDefective) {
+            title = "Confirm Booklet Void";
+            confirmText = "Void Defective Booklets";
+            confirmBg = "#e74c3c";
+            type = "danger";
+            
+            const badgesHtml = selectedRefs.map(ref => 
+                `<span style="display: inline-block; background: #ffffff; color: #1e293b; padding: 4px 9px; border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.88rem; font-weight: 700; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">${ref}</span>`
+            ).join('');
+
+            const controlNumbersContainer = `
+                <div style="margin: 14px 0 16px; text-align: left; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                    <div style="font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Booklet Control Number${selectedRefs.length > 1 ? 's' : ''} to Void:</span>
+                        <span style="background: #fee2e2; color: #991b1b; padding: 2px 7px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">${countText}</span>
+                    </div>
+                    <div style="max-height: 125px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0;">
+                        ${badgesHtml}
+                    </div>
                 </div>
-                <div style="max-height: 125px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0;">
-                    ${badgesHtml}
+            `;
+            message = `
+                <div style="text-align: center;">
+                    <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Are you sure you want to void ${countText.toLowerCase()}?</p>
+                    ${controlNumbersContainer}
+                    <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">This will permanently void these defective booklets. Replacement demand will become active in Point of Distribution.</p>
                 </div>
-            </div>
-        `;
+            `;
+        } else {
+            // Student Dropped Class
+            title = "Confirm Student Drop";
+            confirmText = "Process Student Drop";
+            confirmBg = "#27ae60";
+            type = "success";
+            
+            let badgesHtml = "";
+            if (selectedRefs.length > 0) {
+                badgesHtml = selectedRefs.map(ref => 
+                    `<span style="display: inline-block; background: #ffffff; color: #1e293b; padding: 4px 9px; border-radius: 5px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.88rem; font-weight: 700; border: 1.5px solid #cbd5e1; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">${ref}</span>`
+                ).join('');
+            }
 
-        const message = isDefective
-            ? `<div style="text-align: center;">
-                <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Are you sure you want to void ${countText.toLowerCase()}?</p>
-                ${controlNumbersContainer}
-                <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">Please confirm that the physical booklet control number${selectedRefs.length > 1 ? 's' : ''} you have on hand match the selection above. This will permanently void these booklets and adjust the transaction balance. Replacement booklets will be available in Live Distribution.</p>
-               </div>`
-            : `<div style="text-align: center;">
-                <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Are you sure you want to move ${countText.toLowerCase()} back to Loose Stock?</p>
-                ${controlNumbersContainer}
-                <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">Please confirm that the physical booklet control number${selectedRefs.length > 1 ? 's' : ''} you have on hand match the selection above. These usable booklets will immediately return to active inventory for reissuing.</p>
-               </div>`;
+            let breakdownHtml = "";
+            if (cancelDefectCount > 0) {
+                breakdownHtml += `
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; text-align: left; font-size: 0.84rem; color: #1e40af;">
+                        ✓ <strong>${cancelDefectCount} Dropped Student(s)</strong> cancel <strong>${cancelDefectCount} pending defective replacement(s)</strong> (no physical booklets to Loose Stock).
+                    </div>
+                `;
+            }
+            if (selectedRefs.length > 0) {
+                breakdownHtml += `
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; text-align: left; font-size: 0.84rem; color: #166534;">
+                        ✓ <strong>${selectedRefs.length} Physical Booklet(s)</strong> will be moved to <strong>Loose Stock</strong>.
+                    </div>
+                    <div style="max-height: 100px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; margin-bottom: 8px;">
+                        ${badgesHtml}
+                    </div>
+                `;
+            }
+
+            const totalPax = cancelDefectCount + selectedRefs.length;
+            message = `
+                <div style="text-align: center;">
+                    <p style="margin: 0 0 10px; font-weight: 600; color: #1e293b; font-size: 1rem;">Process official drop for ${totalPax} student(s)?</p>
+                    ${breakdownHtml}
+                    <p style="margin: 0; font-size: 0.82rem; color: #64748b; line-height: 1.45;">Section headcount will be deducted by ${totalPax} Pax and billing records updated accordingly.</p>
+                </div>
+            `;
+        }
 
         const confirmed = await showAppConfirm(title, message, {
             type: type,
             confirmText: confirmText,
-            cancelText: "Keep in Record",
+            cancelText: "Cancel",
             confirmBg: confirmBg
         });
         if (!confirmed) return;
@@ -949,7 +1103,8 @@ ${message}`));
                 enrollment_id: parseInt(enrollmentId),
                 control_numbers: selectedRefs,
                 reason: reason,
-                clerk_name: activeUser.username
+                clerk_name: activeUser.username,
+                cancel_defect_count: cancelDefectCount
             })
         }).then(res => res.json()).then(async (data) => {
             if (actionBtn) {
@@ -972,7 +1127,7 @@ ${message}`));
                 actionBtn.disabled = false;
                 actionBtn.innerText = originalText;
             }
-            await showAppAlert("Network Error", "Could not process return. Please check your network connection and try again.", "error");
+            await showAppAlert("Network Error", "An error occurred while communicating with the server.", "error");
         });
     }
 
