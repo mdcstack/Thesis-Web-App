@@ -498,6 +498,11 @@
 
                 </div>
 
+                <!-- Inline Period Status Indicator Pill -->
+                <div id="period_status_pill_container" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                    <div id="period_status_pill" style="display: none; padding: 5px 12px; border-radius: 6px; font-size: 0.80rem; font-weight: 600; transition: all 0.2s ease;"></div>
+                </div>
+
             </div>
 
 
@@ -932,13 +937,31 @@
 
                 </div>
 
-                <!-- Archived Semester Notice Banner -->
+                <!-- Archived Historical Semester Notice Banner (With Records) -->
                 <div id="archived_period_banner" style="display: none; background: #fef2f2; border: 1.5px solid #fecaca; border-left: 5px solid #ef4444; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; font-size: 0.88rem; color: #991b1b; line-height: 1.5;">
                     <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #b91c1c; margin-bottom: 4px;">
                         <span>🔒</span> <span>Previous Examination Semester (Locked &amp; Immutable)</span>
                     </div>
                     <span>This previous semester's production and financial configuration is locked to protect historical audits. You can inspect its parameters or view its historical reports below. Saving configuration for this archived period is disabled.</span>
                     <div id="archived_period_quick_links" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;"></div>
+                </div>
+
+                <!-- Unrecorded Past Semester Notice Banner (No Records Found) -->
+                <div id="unrecorded_past_banner" style="display: none; background: #fffbeb; border: 1.5px solid #fde68a; border-left: 5px solid #f59e0b; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; font-size: 0.88rem; color: #92400e; line-height: 1.5;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #b45309; margin-bottom: 6px;">
+                        <span>⚠️</span> <span>Unrecorded Past Examination Semester (Cannot Activate)</span>
+                    </div>
+                    <div id="unrecorded_past_banner_desc" style="color: #78350f;">
+                        The selected examination period is chronologically prior to your current active semester, but has no historical configuration or transaction records in the database. The institutional ledger cannot be rewound to an unrecorded past period.
+                    </div>
+                    <div style="margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                        <button type="button" onclick="returnToActiveSemester();" style="background: #2563eb; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: background 0.2s;">
+                            <span>↩️</span> <span id="btn_return_active_label">Return to Active Semester</span>
+                        </button>
+                        <button type="button" onclick="advanceToNextSemester();" style="background: #059669; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: background 0.2s;">
+                            <span>⏭️</span> <span id="btn_advance_next_label">Advance to Next Semester</span>
+                        </button>
+                    </div>
                 </div>
 
 
@@ -1420,7 +1443,44 @@
         </div>
     </div>
 
+    <!-- UNRECORDED PAST SEMESTER MODAL -->
+    <div id="unrecordedPastSemesterModal" class="modal-overlay" onclick="if(event.target === this) closeUnrecordedPastSemesterModal();" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 10003; justify-content: center; align-items: center;">
+        <div style="background: white; border-radius: 12px; width: 92%; max-width: 560px; box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: popIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
+            <!-- Modal Header -->
+            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 22px 24px; color: white;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                        ⚠️
+                    </div>
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700;">Unrecorded Past Semester</h2>
+                        <p style="margin: 3px 0 0; font-size: 0.85rem; opacity: 0.95;">Cannot Rewind Institutional Active Period</p>
+                    </div>
+                </div>
+            </div>
 
+            <!-- Modal Body -->
+            <div style="padding: 22px 24px;">
+                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; font-size: 0.88rem; color: #92400e; line-height: 1.5;">
+                    <strong style="display: block; margin-bottom: 4px; font-size: 0.95rem;">🚫 Historical Activation Prohibited</strong>
+                    The examination period <strong id="unrecordedModalPeriodName" style="color: #78350f;">-</strong> is chronologically prior to your current active semester (<strong id="unrecordedModalActivePeriodName" style="color: #1e3a8a;">-</strong>), and has no prior records or configuration in the institutional database.
+                </div>
+
+                <p style="margin: 0 0 16px 0; font-size: 0.85rem; color: #64748b; line-height: 1.45;">
+                    The system operates strictly forward in chronological order. You cannot retroactively activate an unrecorded past period. Please return to your active semester or advance to the next upcoming semester.
+                </p>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" onclick="closeUnrecordedPastSemesterModal();" style="padding: 10px 18px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: 600; font-size: 0.88rem; cursor: pointer; transition: background 0.2s;">
+                        Dismiss
+                    </button>
+                    <button type="button" onclick="closeUnrecordedPastSemesterModal(); returnToActiveSemester();" style="padding: 10px 18px; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 0.88rem; cursor: pointer; transition: background 0.2s; display: inline-flex; align-items: center; gap: 5px;">
+                        <span>↩️</span> Return to Active Semester
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- ZERO BUFFER SAFETY MARGIN CONFIRMATION MODAL -->
 
@@ -2261,64 +2321,53 @@
 
 
 
+            const isPrevPeriod = Boolean(window.currentPeriodState && window.currentPeriodState.isPrevious);
+            const isUnrecordedPast = Boolean(window.currentPeriodState && window.currentPeriodState.isUnrecordedPast);
+            const isFound = Boolean(window.currentPeriodState && window.currentPeriodState.isFound);
+
             dependentIds.forEach(id => {
-
                 const el = document.getElementById(id);
-
                 if (el) {
-
-                    el.disabled = !isUnlocked;
-
+                    el.disabled = !isUnlocked || isUnrecordedPast;
                 }
-
             });
 
-
-
             // Preserve locked readOnly state on department_ream_budget if in locked rollover mode or viewing an archived period
-
-            const isPrevPeriod = Boolean(window.currentPeriodState && window.currentPeriodState.isPrevious);
-
             if (isPrevPeriod || (currentPreviousSummary && currentPreviousSummary.has_previous_period)) {
-
                 const bEl = document.getElementById('department_ream_budget');
-
                 if (bEl) {
-
                     bEl.readOnly = true;
-
                     bEl.style.cursor = 'not-allowed';
-
                     if (isPrevPeriod) {
-
                         bEl.style.backgroundColor = '#f8fafc';
-
                         bEl.style.borderColor = '#cbd5e1';
-
                         bEl.style.color = '#334155';
-
                         bEl.style.fontWeight = '700';
-
                     }
-
                 }
-
                 const lockIcon = document.getElementById('budget_lock_icon');
-
                 if (lockIcon) lockIcon.style.display = 'block';
-
             }
 
-
-
-            // Save Configuration button
-
+            // Save Configuration button state management
             const saveBtn = document.querySelector('.btn-save');
-
             if (saveBtn) {
-
-                saveBtn.disabled = !isUnlocked;
-
+                if (isUnrecordedPast) {
+                    saveBtn.disabled = true;
+                    saveBtn.innerText = '🚫 Cannot Activate Past Semester';
+                    saveBtn.style.backgroundColor = '#94a3b8';
+                    saveBtn.style.cursor = 'not-allowed';
+                } else if (isPrevPeriod && isFound) {
+                    saveBtn.disabled = true;
+                    saveBtn.innerText = '🔒 Archived Period (Read-Only)';
+                    saveBtn.style.backgroundColor = '#94a3b8';
+                    saveBtn.style.cursor = 'not-allowed';
+                } else {
+                    saveBtn.disabled = !isUnlocked;
+                    saveBtn.innerText = 'Save Configuration';
+                    saveBtn.style.backgroundColor = '';
+                    saveBtn.style.cursor = '';
+                }
             }
 
 
@@ -2749,7 +2798,30 @@
 
             const isUnlocked = isPeriodValid && isYearValid;
 
-
+            // Intercept unrecorded past semesters: no material calculations or budget recommendations
+            if (window.currentPeriodState && window.currentPeriodState.isUnrecordedPast) {
+                if (card) {
+                    card.style.borderLeft = '5px solid #f59e0b';
+                    card.style.borderColor = '#fde68a';
+                    card.style.background = '#fffbeb';
+                }
+                if (cardTitle) {
+                    cardTitle.innerHTML = '<span style="color: #b45309;">⚠️</span> <span>Unrecorded Past Semester (No Calculations Available)</span>';
+                    cardTitle.style.color = '#92400e';
+                }
+                const subTitleEl = document.getElementById('rec_budget_subtitle');
+                if (subTitleEl) {
+                    subTitleEl.innerText = 'Material allocation, booklet demand, and paper ream calculations are only available for the live active semester or upcoming examination periods.';
+                }
+                if (recActiveEl) recActiveEl.style.display = 'none';
+                if (recPendingEl) recPendingEl.style.display = 'none';
+                if (recZeroEl) recZeroEl.style.display = 'none';
+                if (applyBtn) {
+                    applyBtn.style.display = 'none';
+                    applyBtn.disabled = true;
+                }
+                return;
+            }
 
             const staplePriceEl = document.getElementById('staples_box_price');
 
@@ -4361,6 +4433,10 @@
                 window.currentPeriodState = null;
                 const archivedBanner = document.getElementById('archived_period_banner');
                 if (archivedBanner) archivedBanner.style.display = 'none';
+                const unrecordedBanner = document.getElementById('unrecorded_past_banner');
+                if (unrecordedBanner) unrecordedBanner.style.display = 'none';
+                const statusPill = document.getElementById('period_status_pill');
+                if (statusPill) statusPill.style.display = 'none';
 
                 updateYieldPreview();
 
@@ -4407,31 +4483,84 @@
 
                 // Track archived status and update UI protection
                 const isPrevious = Boolean(data.is_previous_period);
+                const isFound = Boolean(data.found);
+                const isUnrecordedPast = isPrevious && !isFound;
+                const isActive = Boolean(data.is_active_period);
+
+                if (data.active_period) {
+                    window.systemLiveActivePeriod = data.active_period;
+                }
+
                 window.currentPeriodState = {
                     isPrevious: isPrevious,
-                    periodName: fullPeriod
+                    isFound: isFound,
+                    isUnrecordedPast: isUnrecordedPast,
+                    isActive: isActive,
+                    periodName: fullPeriod,
+                    activePeriod: window.systemLiveActivePeriod || (data.active_period || '')
                 };
 
                 const budgetGroup = document.getElementById('budget_form_group');
-
                 const archivedBanner = document.getElementById('archived_period_banner');
+                const unrecordedBanner = document.getElementById('unrecorded_past_banner');
                 const archivedLinks = document.getElementById('archived_period_quick_links');
+                const statusPill = document.getElementById('period_status_pill');
 
                 if (budgetGroup) {
-
                     budgetGroup.style.display = 'block';
-
                 }
 
+                // Inline Status Pill
+                if (statusPill) {
+                    statusPill.style.display = 'inline-flex';
+                    if (isActive) {
+                        statusPill.innerHTML = '🟢 Current Live Active Semester';
+                        statusPill.style.background = '#dcfce7';
+                        statusPill.style.color = '#15803d';
+                        statusPill.style.border = '1px solid #bbf7d0';
+                    } else if (isPrevious && isFound) {
+                        statusPill.innerHTML = '🔒 Archived Semester (Read-Only Audit Record)';
+                        statusPill.style.background = '#fee2e2';
+                        statusPill.style.color = '#b91c1c';
+                        statusPill.style.border = '1px solid #fecaca';
+                    } else if (isUnrecordedPast) {
+                        statusPill.innerHTML = '⚠️ Unrecorded Past Semester (Cannot Activate)';
+                        statusPill.style.background = '#fef3c7';
+                        statusPill.style.color = '#b45309';
+                        statusPill.style.border = '1px solid #fde68a';
+                    } else {
+                        statusPill.innerHTML = '✨ Upcoming Semester (Ready to Configure)';
+                        statusPill.style.background = '#e0f2fe';
+                        statusPill.style.color = '#0369a1';
+                        statusPill.style.border = '1px solid #bae6fd';
+                    }
+                }
+
+                // Banner 1: True Archived Historical Semester (with records)
                 if (archivedBanner) {
-                    archivedBanner.style.display = isPrevious ? 'block' : 'none';
-                    if (isPrevious && archivedLinks) {
+                    archivedBanner.style.display = (isPrevious && isFound) ? 'block' : 'none';
+                    if (isPrevious && isFound && archivedLinks) {
                         archivedLinks.innerHTML = `
                             <a href="/department-breakdown?period=${encodeURIComponent(fullPeriod)}" style="background: #2563eb; color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">📊 View Department Breakdown</a>
                             <a href="/expenditure-report?period=${encodeURIComponent(fullPeriod)}" style="background: #059669; color: #fff; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">💰 View Expenditure Report</a>
                         `;
                     }
                 }
+
+                // Banner 2: Unrecorded Past Semester (No records found)
+                if (unrecordedBanner) {
+                    unrecordedBanner.style.display = isUnrecordedPast ? 'block' : 'none';
+                    if (isUnrecordedPast) {
+                        const descEl = document.getElementById('unrecorded_past_banner_desc');
+                        if (descEl) {
+                            const curActive = window.systemLiveActivePeriod || 'current active semester';
+                            descEl.innerHTML = `The selected examination period (<strong style="color: #78350f;">${escapeHtml(fullPeriod)}</strong>) is chronologically prior to your current active semester (<strong style="color: #1e3a8a;">${escapeHtml(curActive)}</strong>), but has no historical configuration or transaction records in the database. The institutional ledger cannot be rewound to an unrecorded past period.`;
+                        }
+                    }
+                }
+
+                // Refresh input disabled states and save button state now that window.currentPeriodState is updated
+                updateDependentFieldsState();
 
 
 
@@ -4806,7 +4935,95 @@
             if (modal) modal.style.display = 'none';
         }
 
+        function openUnrecordedPastSemesterModal(periodName, activePeriodName) {
+            const modal = document.getElementById('unrecordedPastSemesterModal');
+            if (!modal) return;
+            const periodEl = document.getElementById('unrecordedModalPeriodName');
+            if (periodEl) periodEl.textContent = periodName || 'Selected Past Semester';
+            const activeEl = document.getElementById('unrecordedModalActivePeriodName');
+            if (activeEl) activeEl.textContent = activePeriodName || window.systemLiveActivePeriod || 'Active Semester';
+            modal.style.display = 'flex';
+        }
 
+        function closeUnrecordedPastSemesterModal() {
+            const modal = document.getElementById('unrecordedPastSemesterModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function getNextChronologicalPeriod(periodStr) {
+            if (!periodStr) return null;
+            const parts = periodStr.split(' | ');
+            const term = parts[0] || '';
+            const ayStr = parts[1] || '';
+            const match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
+            let startYear = match ? parseInt(match[1], 10) : 2026;
+            let endYear = match ? parseInt(match[2], 10) : 2027;
+
+            let nextTerm = '';
+            let nextStartYear = startYear;
+            let nextEndYear = endYear;
+
+            if (term.includes('1st Sem') && (term.includes('Midterm') || term.includes('Midterms'))) {
+                nextTerm = '1st Sem - Final Exam';
+            } else if (term.includes('1st Sem') && (term.includes('Final') || term.includes('Finals'))) {
+                nextTerm = '2nd Sem - Midterm Exam';
+            } else if (term.includes('2nd Sem') && (term.includes('Midterm') || term.includes('Midterms'))) {
+                nextTerm = '2nd Sem - Final Exam';
+            } else if (term.includes('2nd Sem') && (term.includes('Final') || term.includes('Finals'))) {
+                nextTerm = 'Midyear - Exam';
+            } else if (term.includes('Midyear')) {
+                nextTerm = '1st Sem - Midterm Exam';
+                nextStartYear = startYear + 1;
+                nextEndYear = endYear + 1;
+            } else {
+                nextTerm = '2nd Sem - Midterm Exam';
+            }
+
+            return {
+                term: nextTerm,
+                startYear: nextStartYear,
+                endYear: nextEndYear,
+                fullPeriod: `${nextTerm} | AY ${nextStartYear}-${nextEndYear}`
+            };
+        }
+
+        function returnToActiveSemester() {
+            const livePeriod = window.systemLiveActivePeriod;
+            if (!livePeriod) return;
+            const parts = livePeriod.split(' | ');
+            const term = parts[0] || '';
+            const ayStr = parts[1] || '';
+            const match = ayStr.match(/AY\s+(\d{4})-(\d{4})/);
+
+            const activePeriodEl = document.getElementById('active_period');
+            const ayStartEl = document.getElementById('ay_start_year');
+            const ayEndEl = document.getElementById('ay_end_year');
+
+            if (activePeriodEl) activePeriodEl.value = term;
+            if (ayStartEl && match) ayStartEl.value = match[1];
+            if (ayEndEl && match) ayEndEl.value = match[2];
+
+            updateGeneratedPrefix();
+            onPeriodChange();
+        }
+
+        function advanceToNextSemester() {
+            const livePeriod = window.systemLiveActivePeriod;
+            if (!livePeriod) return;
+            const next = getNextChronologicalPeriod(livePeriod);
+            if (!next) return;
+
+            const activePeriodEl = document.getElementById('active_period');
+            const ayStartEl = document.getElementById('ay_start_year');
+            const ayEndEl = document.getElementById('ay_end_year');
+
+            if (activePeriodEl) activePeriodEl.value = next.term;
+            if (ayStartEl) ayStartEl.value = next.startYear;
+            if (ayEndEl) ayEndEl.value = next.endYear;
+
+            updateGeneratedPrefix();
+            onPeriodChange();
+        }
 
         async function executeSaveSettings() {
 
@@ -4860,13 +5077,19 @@
 
                 if (res.status === 409 || (data && data.message && (data.message.includes('locked') || data.message.includes('immutable')))) {
                     closeConfirmSaveSettingsModal();
-                    openPreviousSemesterLockedModal(payload.active_period);
+                    if (window.currentPeriodState && window.currentPeriodState.isUnrecordedPast) {
+                        openUnrecordedPastSemesterModal(payload.active_period, window.systemLiveActivePeriod);
+                    } else {
+                        openPreviousSemesterLockedModal(payload.active_period);
+                    }
                     return;
                 }
 
                 let alertBox = document.getElementById('alertBox');
 
                 if (data.status === 'success') {
+
+                    window.systemLiveActivePeriod = payload.active_period;
 
                     closeConfirmSaveSettingsModal();
 
@@ -5170,7 +5393,9 @@
 
             if (budgetGroup) budgetGroup.style.display = 'block';
 
-            
+            if (data && data.active_period && !data.active_period.includes('UNSET')) {
+                window.systemLiveActivePeriod = data.active_period;
+            }
 
             const isUnset = !data.active_period || data.active_period === "UNSET" || data.active_period.includes("UNSET") || !data.is_initialized;
 
@@ -5474,9 +5699,16 @@
 
         async function saveSettings() {
 
-            // Intercept if attempting to save an archived previous semester
+            // Intercept if attempting to save a previous semester
             if (window.currentPeriodState && window.currentPeriodState.isPrevious) {
-                openPreviousSemesterLockedModal(window.currentPeriodState.periodName || (document.getElementById('active_period').value + ' | ' + getAcademicYearString()));
+                if (window.currentPeriodState.isUnrecordedPast) {
+                    openUnrecordedPastSemesterModal(
+                        window.currentPeriodState.periodName || (document.getElementById('active_period').value + ' | ' + getAcademicYearString()),
+                        window.systemLiveActivePeriod || 'Active Semester'
+                    );
+                } else {
+                    openPreviousSemesterLockedModal(window.currentPeriodState.periodName || (document.getElementById('active_period').value + ' | ' + getAcademicYearString()));
+                }
                 return;
             }
 

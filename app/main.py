@@ -5468,6 +5468,13 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
     if not is_valid_pw:
         return {"status": "error", "message": pw_err}
     
+    # Role Enforcement: Admins cannot grant the Admin role to new accounts
+    role_normalized = req.role.strip().capitalize() if req.role else ""
+    if role_normalized == "Admin":
+        return {"status": "error", "message": "Administrators are not permitted to grant the Admin role to new accounts. Allowed roles are 'Staff' and 'Viewer'."}
+    if role_normalized not in ["Staff", "Viewer"]:
+        return {"status": "error", "message": f"Invalid role '{req.role}'. Allowed roles are 'Staff' and 'Viewer'."}
+
     # Hash password
     hashed_password = bcrypt.hashpw(req.password.strip().encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
@@ -5501,6 +5508,13 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
     if user.username.lower() == "admin" and req.role != "Admin":
         return {"status": "error", "message": "The root 'admin' account role cannot be changed."}
     
+    role_normalized = req.role.strip().capitalize() if req.role else ""
+    # Role Enforcement: Admins cannot promote other accounts to Admin
+    if role_normalized == "Admin" and user.role != "Admin":
+        return {"status": "error", "message": "Administrators are not permitted to grant the Admin role to accounts. Allowed roles are 'Staff' and 'Viewer'."}
+    if user.role != "Admin" and role_normalized not in ["Staff", "Viewer"]:
+        return {"status": "error", "message": f"Invalid role '{req.role}'. Allowed roles are 'Staff' and 'Viewer'."}
+
     final_dept = "All" if req.role == "Admin" else req.department
     admin_actor = getattr(req, "updated_by", None) or "Administrator"
     if req.full_name is not None and req.full_name.strip():
@@ -6080,6 +6094,7 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
         return {
             "found": True,
             "academic_period": cfg.academic_period,
+            "active_period": active_period,
             "is_active_period": is_active_period,
             "is_previous_period": is_previous_period,
             "semester_prefix": cfg.semester_prefix,
@@ -6116,6 +6131,8 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
         # Unconfigured period: return found: False with None for fields to require manual input
         return {
             "found": False,
+            "academic_period": period,
+            "active_period": active_period,
             "is_active_period": is_active_period,
             "is_previous_period": is_previous_period,
             "ream_price": None,

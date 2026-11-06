@@ -491,7 +491,6 @@
                                 <select id="newRole" onchange="handleNewRoleChange()">
                                     <option value="Staff">Staff / Clerk</option>
                                     <option value="Viewer">Viewer (Faculty / Instructor)</option>
-                                    <option value="Admin">Administrator</option>
                                 </select>
                             </div>
 
@@ -565,7 +564,6 @@
                     <select id="editRole" onchange="handleEditRoleChange()">
                         <option value="Staff">Staff / Clerk</option>
                         <option value="Viewer">Viewer (Faculty / Instructor)</option>
-                        <option value="Admin">Administrator</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1185,13 +1183,23 @@
             document.getElementById('editUserId').value = id;
             document.getElementById('editUsername').value = username;
             document.getElementById('editFullName').value = fullName || '';
-            document.getElementById('editRole').value = role;
             
+            const editRoleSelect = document.getElementById('editRole');
             const deptSelect = document.getElementById('editDepartment');
+
             if (role === 'Admin') {
+                editRoleSelect.innerHTML = '<option value="Admin" selected>Administrator (Immutable)</option>';
+                editRoleSelect.disabled = true;
                 deptSelect.innerHTML = '<option value="All">All Scope (Admin)</option>';
                 deptSelect.disabled = true;
             } else {
+                editRoleSelect.innerHTML = `
+                    <option value="Staff">Staff / Clerk</option>
+                    <option value="Viewer">Viewer (Faculty / Instructor)</option>
+                `;
+                editRoleSelect.disabled = false;
+                editRoleSelect.value = role;
+
                 let opts = (systemPrograms || []).map(p => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`).join('');
                 deptSelect.innerHTML = opts || '<option value="CS">Computer Science (CS)</option><option value="IT">Information Technology (IT)</option>';
                 deptSelect.disabled = false;
