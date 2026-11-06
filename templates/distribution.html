@@ -1044,7 +1044,10 @@
 
                             <small style="color: #64748b; font-size: 0.75rem;">Swipe booklets in front of webcam in continuous succession.</small>
 
-                            <button type="button" onclick="clearManualTray()" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0;">Clear Tray</button>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <button type="button" onclick="reloadTrayFromPack()" style="background: none; border: none; color: #2563eb; font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0;" title="Fill tray with booklets from current open box">📦 Reload from Box</button>
+                                <button type="button" onclick="clearManualTray()" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0;">Clear Tray</button>
+                            </div>
 
                         </div>
 
@@ -1638,6 +1641,8 @@
 
     let activePackTemplateSlot = null;
 
+    let activePackBooklets = []; // array of { id, control_num, sort_record_num, status, department } for active pack
+
     let cachedAcademicPrograms = [];
 
     async function loadAcademicProgramsForDistribution() {
@@ -1677,6 +1682,8 @@
     let bridgingPackQR = null; 
 
     let bridgingPackStock = 0;
+
+    let userDismissedBridging = false;
 
     
 
@@ -2176,19 +2183,16 @@ ${message}`));
 
 
                 // 2. Returns processed from history.html
-
                 if (event === "RETURN_PROCESSED") {
-
                     // Update loose stock count & pending demands quietly in the background
-
                     fetchLooseStockList(true);
-
                     fetchPendingDistributions(true);
-
+                    if (payload && payload.details && payload.details.is_defective) {
+                        const secInfo = payload.details.section ? ` for Section ${payload.details.section}` : '';
+                        showToast(`Defective booklet voided${secInfo}. Replacement demand is ready in Live Distribution.`, 'info', 'Defect Return Processed');
+                    }
                     // Crucial: NEVER touch primaryPackQR or reset active form fields!
-
                     return;
-
                 }
 
 
@@ -2455,125 +2459,89 @@ ${message}`));
 
 
 
-                // Always preserve teacher and section selection if user already selected them
-                if (savedTeacher && currentInstructorSelect && currentInstructorSelect.value !== savedTeacher) {
-
+                // Reconcile and preserve teacher, section, and subject selections reactively
+                if (savedTeacher && currentInstructorSelect) {
                     if (enrollmentsData.some(i => i.teacher_name === savedTeacher)) {
-
                         currentInstructorSelect.value = savedTeacher;
-
-                        if (currentSectionSelect && currentSectionSelect.options.length <= 1) {
-
-                            handleInstructorChange();
-
-                        }
-
-                    }
-
-                }
-
-                if (savedSection && currentSectionSelect && currentSectionSelect.value !== savedSection) {
-
-                    if (currentInstructorSelect && enrollmentsData.some(i => i.teacher_name === currentInstructorSelect.value && i.section === savedSection)) {
-
-                        currentSectionSelect.value = savedSection;
-
-                        if (currentSubjectSelect && currentSubjectSelect.options.length <= 1) {
-
-                            handleSectionChange();
-
-                        }
-
-                    }
-
-                }
-
-
-
-                // If running in background and user already has selections in progress:
-
-                if (isBackground) {
-
-
-
-                    // Check concurrency conflict for currently selected section/subject
-
-                    if (savedSubjectId) {
-
-                        const currentClassRecord = enrollmentsData.find(item => item.enrollment_id === savedSubjectId);
-
-                        if (!currentClassRecord) {
-
-                            // Concurrency conflict: The selected section was fulfilled by another clerk
-
-                            const banner = document.getElementById('concurrencyBanner');
-
-                            if (banner) {
-
-                                banner.style.display = 'block';
-
-                                setTimeout(() => { banner.style.display = 'none'; }, 6000);
-
+                        
+                        // Reconcile sections for this teacher
+                        const availableSections = [...new Set(enrollmentsData.filter(i => i.teacher_name === savedTeacher).map(i => i.section))]
+                            .filter(Boolean)
+                            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+                        
+                        if (currentSectionSelect) {
+                            currentSectionSelect.disabled = false;
+                            const existingSecOptions = Array.from(currentSectionSelect.options).slice(1).map(opt => opt.value);
+                            const isSecIdentical = existingSecOptions.length === availableSections.length && 
+                                                  existingSecOptions.every((val, idx) => val === availableSections[idx]);
+                            
+                            if (!isSecIdentical) {
+                                currentSectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+                                availableSections.forEach(sec => {
+                                    currentSectionSelect.innerHTML += `<option value="${sec}">${sec}</option>`;
+                                });
                             }
-
-                            resetDistributionForm();
-
-                        } else {
-
-                            // Section still pending! Preserve selection & update demand dataset cleanly
-
-                            if (currentSubjectSelect && currentSubjectSelect.value !== String(savedSubjectId)) {
-
-                                currentSubjectSelect.value = savedSubjectId;
-
-                            }
-
-                            const selOption = currentSubjectSelect ? currentSubjectSelect.options[currentSubjectSelect.selectedIndex] : null;
-
-                            if (selOption && currentClassRecord.remaining !== undefined) {
-
-                                selOption.dataset.demand = currentClassRecord.remaining;
-
-                                if (currentDemand !== currentClassRecord.remaining && !isScanningModalOpen) {
-
-                                    currentDemand = currentClassRecord.remaining;
-
-                                    updateManualProgress();
-
+                            
+                            // Reconcile subjects if section is selected
+                            if (savedSection && availableSections.includes(savedSection)) {
+                                currentSectionSelect.value = savedSection;
+                                if (currentSubjectSelect) {
+                                    currentSubjectSelect.disabled = false;
+                                    const availableSubs = enrollmentsData.filter(i => i.teacher_name === savedTeacher && i.section === savedSection);
+                                    
+                                    currentSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                                    availableSubs.forEach(sub => {
+                                        let opt = document.createElement('option');
+                                        opt.value = sub.enrollment_id;
+                                        opt.dataset.demand = sub.remaining;
+                                        opt.dataset.isReplacement = sub.is_replacement ? "true" : "false";
+                                        opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
+                                        let badge = "";
+                                        if (sub.is_replacement) {
+                                            badge = sub.is_prepaid ? " 🔄 [Replacement - Pre-Paid]" : " 🔄 [Replacement]";
+                                        }
+                                        opt.text = sub.subject + badge;
+                                        currentSubjectSelect.appendChild(opt);
+                                    });
+                                    
+                                    if (savedSubjectId && availableSubs.some(s => s.enrollment_id === savedSubjectId)) {
+                                        currentSubjectSelect.value = String(savedSubjectId);
+                                        const currentClassRecord = availableSubs.find(s => s.enrollment_id === savedSubjectId);
+                                        if (currentClassRecord) {
+                                            currentDemand = currentClassRecord.remaining;
+                                            updateManualProgress();
+                                            if (currentAllocationMode === 'auto') {
+                                                const effectiveStock = primaryPackStock + (bridgingPackStock || 0);
+                                                if (currentDemand > effectiveStock) {
+                                                    handleBridgingShortageState();
+                                                } else {
+                                                    triggerLivePreview();
+                                                }
+                                            }
+                                        }
+                                    } else if (savedSubjectId) {
+                                        // Concurrency conflict: Selected subject was fulfilled by another transaction
+                                        const banner = document.getElementById('concurrencyBanner');
+                                        if (banner) {
+                                            banner.style.display = 'block';
+                                            setTimeout(() => { banner.style.display = 'none'; }, 6000);
+                                        }
+                                        resetReceipt();
+                                    }
                                 }
-
+                            } else if (savedSection && !availableSections.includes(savedSection)) {
+                                currentSectionSelect.value = "";
+                                if (currentSubjectSelect) {
+                                    currentSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                                    currentSubjectSelect.disabled = true;
+                                }
+                                resetReceipt();
                             }
-
                         }
-
+                    } else {
+                        currentInstructorSelect.value = "";
+                        handleInstructorChange();
                     }
-
-                } else {
-
-                    // Non-background (explicit) call
-
-                    if (savedSubjectId) {
-
-                        const stillExists = enrollmentsData.some(item => item.enrollment_id === savedSubjectId);
-
-                        if (!stillExists) {
-
-                            const banner = document.getElementById('concurrencyBanner');
-
-                            if (banner) {
-
-                                banner.style.display = 'block';
-
-                                setTimeout(() => { banner.style.display = 'none'; }, 6000);
-
-                            }
-
-                            resetDistributionForm();
-
-                        }
-
-                    }
-
                 }
 
             })
@@ -2709,6 +2677,8 @@ ${message}`));
 
     function handleInstructorChange() {
 
+        userDismissedBridging = false;
+
         const teacher = document.getElementById('instructorSelect').value;
 
         const sectionSelect = document.getElementById('sectionSelect');
@@ -2752,6 +2722,8 @@ ${message}`));
 
     function handleSectionChange() {
 
+        userDismissedBridging = false;
+
         const teacher = document.getElementById('instructorSelect').value;
 
         const section = document.getElementById('sectionSelect').value;
@@ -2781,9 +2753,11 @@ ${message}`));
                 opt.dataset.demand = sub.remaining;
 
                 opt.dataset.isReplacement = sub.is_replacement ? "true" : "false";
-
-                let badge = sub.is_replacement ? " 🔄 [Replacement - Pre-Paid]" : "";
-
+                opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
+                let badge = "";
+                if (sub.is_replacement) {
+                    badge = sub.is_prepaid ? " 🔄 [Replacement - Pre-Paid]" : " 🔄 [Replacement]";
+                }
                 opt.text = sub.subject + badge;
 
                 subjectSelect.appendChild(opt);
@@ -2796,58 +2770,51 @@ ${message}`));
 
 
 
-    function handleSubjectChange() {
+    async function handleSubjectChange() {
+        userDismissedBridging = false;
         const select = document.getElementById('subjectSelect');
         if (bridgingPackQR) {
             releasePackAsync(bridgingPackQR);
             bridgingPackQR = null;
             bridgingPackStock = 0;
         }
-        allocatedBooklets = [];
-        renderBookletTray();
-        updateManualProgress();
 
         if (select.value) {
-
             currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
 
+            // Auto-fill booklet tray with control numbers from active Master Pack
+            await prefillTrayFromActivePack(true);
             updateManualProgress();
 
             if (currentAllocationMode === 'auto') {
-
                 checkProactiveBridging();
-
             } else {
-
                 const btn = document.getElementById('submitTxBtn');
-
-                btn.disabled = true;
-
-                btn.innerText = `Scan ${currentDemand} Booklet(s) to Continue`;
-
-                btn.className = "btn";
-
-                const input = document.getElementById('manualBookletInput');
-
-                if (input) input.focus();
-
+                const remaining = Math.max(0, currentDemand - allocatedBooklets.length);
+                if (remaining > 0) {
+                    btn.disabled = true;
+                    btn.innerText = `Scan ${remaining} Booklet(s) to Continue`;
+                    btn.className = "btn";
+                    const input = document.getElementById('manualBookletInput');
+                    if (input) input.focus();
+                } else {
+                    triggerLivePreview();
+                }
             }
-
         } else {
-
             currentDemand = 0;
-
+            allocatedBooklets = [];
+            renderBookletTray();
+            updateManualProgress();
             resetReceipt();
-
         }
-
     }
 
 
 
     // --- 5. PROACTIVE BRIDGING LOGIC ---
 
-    function checkProactiveBridging() {
+    function checkProactiveBridging(isUserInitiated = false) {
 
         if (!primaryPackQR) {
 
@@ -2863,9 +2830,15 @@ ${message}`));
 
         const submitBtn = document.getElementById('submitTxBtn');
 
-        
+        const effectiveStock = primaryPackStock + (bridgingPackStock || 0);
 
-        if (currentDemand > (primaryPackStock + bridgingPackStock)) {
+        if (currentDemand > effectiveStock) {
+
+            // Respect user dismissal: do NOT re-open scannerModal if user previously cancelled
+            if (userDismissedBridging && !isUserInitiated) {
+                handleBridgingShortageState();
+                return;
+            }
 
             submitBtn.disabled = true;
 
@@ -2874,6 +2847,8 @@ ${message}`));
             openScannerModal('bridge', currentDemand - primaryPackStock);
 
         } else {
+
+            userDismissedBridging = false;
 
             triggerLivePreview();
 
@@ -3024,17 +2999,12 @@ ${message}`));
                 btn.style.color = "";
 
                 if (data.is_replacement) {
-
-                    btn.innerText = "🔄 Distribute Replacement (Fully Paid)";
-
+                    const isPre = data.is_prepaid || (data.replacement_credit && data.replacement_credit >= data.gross_amount && data.gross_amount > 0);
+                    btn.innerText = isPre ? "🔄 Distribute Replacement (Fully Paid)" : "🔄 Distribute Replacement";
                     btn.className = "btn btn-success";
-
                 } else {
-
                     btn.innerText = "Verify Booklets & Submit Transaction";
-
                     btn.className = "btn btn-success";
-
                 }
 
             } else {
@@ -3148,11 +3118,17 @@ ${message}`));
 
 
         if (previewData && previewData.is_replacement) {
-
-            if (docTitle) docTitle.innerText = "Document Title: PREVIEW - REPLACEMENT DISTRIBUTION (PRE-PAID)";
-
-            if (amountTable) amountTable.innerHTML = `<span style="color:#27ae60; font-weight:bold;">₱0.00 (Pre-Paid)</span>`;
-
+            const isPrepaid = previewData.is_prepaid || (previewData.replacement_credit && previewData.replacement_credit >= previewData.gross_amount && previewData.gross_amount > 0);
+            if (docTitle) {
+                docTitle.innerText = isPrepaid 
+                    ? "Document Title: PREVIEW - REPLACEMENT DISTRIBUTION (PRE-PAID)" 
+                    : "Document Title: PREVIEW - REPLACEMENT DISTRIBUTION";
+            }
+            if (amountTable) {
+                amountTable.innerHTML = isPrepaid 
+                    ? `<span style="color:#27ae60; font-weight:bold;">₱0.00 (Pre-Paid)</span>`
+                    : `<span style="color:#2c3e50; font-weight:bold;">₱${(previewData.total_amount || 0).toFixed(2)}</span>`;
+            }
         } else {
 
             if (docTitle) docTitle.innerText = "Document Title: PREVIEW (NOT RECORDED)";
@@ -3226,179 +3202,183 @@ ${message}`));
         allocatedBooklets = [];
         globalSelectedLoose = [];
         currentDemand = 0;
+        userDismissedBridging = false;
 
         resetReceipt();
         updateLooseStockUI();
     }
 
-    function handleBridgingShortageState() {
+    async function prefillTrayFromActivePack(force = false) {
+        if (!primaryPackQR || !currentDemand || currentDemand <= 0) return;
+
+        if (!activePackBooklets || activePackBooklets.length === 0) {
+            try {
+                const res = await fetch(`/api/pack-available-booklets/${encodeURIComponent(primaryPackQR)}`);
+                const d = await res.json();
+                if (d.status === 'success' && Array.isArray(d.booklets)) {
+                    activePackBooklets = d.booklets;
+                }
+            } catch (e) {
+                console.warn("Failed to fetch available booklets for active pack:", e);
+            }
+        }
+
+        if (!activePackBooklets || activePackBooklets.length === 0) return;
+
+        const takeCount = Math.min(currentDemand, activePackBooklets.length);
+
+        if (force || !allocatedBooklets || allocatedBooklets.length === 0) {
+            allocatedBooklets = activePackBooklets.slice(0, takeCount).map(b => ({
+                id: b.id,
+                control_num: b.control_num,
+                sort_record_num: b.sort_record_num,
+                status: b.status || 'available',
+                department: b.department || activePackDept,
+                is_swapped: false,
+                from_active_pack: true
+            }));
+        } else {
+            const existingCtrls = new Set(allocatedBooklets.map(b => b.control_num));
+            for (let i = 0; i < activePackBooklets.length && allocatedBooklets.length < takeCount; i++) {
+                const b = activePackBooklets[i];
+                if (!existingCtrls.has(b.control_num)) {
+                    allocatedBooklets.push({
+                        id: b.id,
+                        control_num: b.control_num,
+                        sort_record_num: b.sort_record_num,
+                        status: b.status || 'available',
+                        department: b.department || activePackDept,
+                        is_swapped: false,
+                        from_active_pack: true
+                    });
+                    existingCtrls.add(b.control_num);
+                }
+            }
+        }
+
+        renderBookletTray();
+        updateManualProgress();
+    }
+
+    async function reloadTrayFromPack() {
+        if (!primaryPackQR) {
+            showToast("No active supply box scanned.", "warning", "No Active Box");
+            return;
+        }
+        if (!currentDemand || currentDemand <= 0) {
+            showToast("Please select a subject to establish required booklet demand.", "info", "Demand Not Set");
+            return;
+        }
+        await prefillTrayFromActivePack(true);
+        showToast(`Tray reloaded from box (${allocatedBooklets.length} booklet(s) loaded).`, "info", "Box Booklets Loaded");
+    }
+
+    async function handleBridgingShortageState() {
         if (bridgingPackQR) {
             releasePackAsync(bridgingPackQR);
             bridgingPackQR = null; 
             bridgingPackStock = 0;
         }
 
-        allocatedBooklets = [];
-        renderBookletTray();
-        updateManualProgress();
+        // Maintain or prefill tray with available booklets from active pack instead of leaving it empty!
+        if (!allocatedBooklets || allocatedBooklets.length === 0) {
+            await prefillTrayFromActivePack(true);
+        } else {
+            renderBookletTray();
+            updateManualProgress();
+        }
         document.querySelector('.live-receipt-content').classList.remove('active');
 
-
-
         const effectiveStock = primaryPackStock + (bridgingPackStock || 0) + (globalSelectedLoose ? globalSelectedLoose.length : 0);
-
         const shortage = Math.max(0, currentDemand - effectiveStock);
-
         const btn = document.getElementById('submitTxBtn');
-
         const secSelect = document.getElementById('subjectSelect');
 
         if (btn && shortage > 0 && secSelect && secSelect.value) {
-
             btn.disabled = false;
-
             btn.className = "btn btn-warning";
-
             btn.style.backgroundColor = "#d97706";
-
             btn.style.color = "#ffffff";
-
             btn.innerText = `📷 Scan Bridging Pack (${shortage} pcs needed)`;
-
             btn.onclick = () => {
-
+                userDismissedBridging = false;
                 openScannerModal('bridge', shortage);
-
             };
-
         } else if (btn) {
-
             btn.disabled = true;
-
             btn.className = "btn";
-
             btn.style.backgroundColor = "";
-
             btn.style.color = "";
-
             btn.innerText = "Select Subject to Continue";
-
             btn.onclick = submitTransaction;
-
         }
-
-
 
         const logUl = document.getElementById('r-log');
-
         if (logUl && shortage > 0) {
-
-            logUl.innerHTML = `<li style="color: #d97706; font-weight: bold;">⚠️ Bridging Required: Active pack has only ${primaryPackStock} booklet(s) (short by ${shortage} pcs). Scan another Master Pack to continue or select a different section.</li>`;
-
+            logUl.innerHTML = `<li style="color: #d97706; font-weight: bold;">⚠️ Bridging Required: Active pack has only ${primaryPackStock} booklet(s) (short by ${shortage} pcs). Scan another Master Pack to continue or switch to Manual Scan.</li>`;
         }
-
     }
 
-
-
     // --- DYNAMIC ALLOCATION & TRAY CONTROLS ---
-
-    function switchAllocationMode(mode) {
-
+    async function switchAllocationMode(mode) {
         currentAllocationMode = mode;
-
         const btnAuto = document.getElementById('btnModeAuto');
-
         const btnManual = document.getElementById('btnModeManual');
-
         const manualSection = document.getElementById('manualScanSection');
-
         const trayHint = document.getElementById('trayHintText');
 
-
-
         if (mode === 'auto') {
-
             btnAuto.style.background = '#2563eb';
-
             btnAuto.style.color = '#ffffff';
-
             btnAuto.style.borderColor = '#2563eb';
 
-
-
             btnManual.style.background = '#f8fafc';
-
             btnManual.style.color = '#475569';
-
             btnManual.style.borderColor = '#cbd5e1';
 
-
-
             manualSection.style.display = 'none';
-
             if (trayHint) trayHint.innerText = "Click any chip to swap out";
 
-
-
             if (document.getElementById('subjectSelect').value && currentDemand > 0) {
-
-                allocatedBooklets = [];
-
-                checkProactiveBridging();
-
+                const effectiveStock = primaryPackStock + (bridgingPackStock || 0);
+                if (currentDemand > effectiveStock && userDismissedBridging) {
+                    handleBridgingShortageState();
+                } else {
+                    checkProactiveBridging(false);
+                }
             }
-
         } else {
-
             btnManual.style.background = '#2563eb';
-
             btnManual.style.color = '#ffffff';
-
             btnManual.style.borderColor = '#2563eb';
 
-
-
             btnAuto.style.background = '#f8fafc';
-
             btnAuto.style.color = '#475569';
-
             btnAuto.style.borderColor = '#cbd5e1';
 
-
-
             manualSection.style.display = 'block';
-
             if (trayHint) trayHint.innerText = "Click ✖ on any chip to remove";
 
-
-
-            renderBookletTray();
-
-            updateManualProgress();
-
-
-
-            const input = document.getElementById('manualBookletInput');
-
-            if (input) input.focus();
-
-
-
-            if (allocatedBooklets.length < currentDemand) {
-
-                const btn = document.getElementById('submitTxBtn');
-
-                btn.disabled = true;
-
-                btn.innerText = currentDemand > 0 ? `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...` : "Select Subject to Continue";
-
-                btn.className = "btn";
-
+            // If switching to manual and allocatedBooklets has fewer items than demand, prefill from active pack!
+            if (primaryPackQR && currentDemand > 0 && allocatedBooklets.length < currentDemand) {
+                await prefillTrayFromActivePack(false);
             }
 
-        }
+            renderBookletTray();
+            updateManualProgress();
 
+            const input = document.getElementById('manualBookletInput');
+            if (input) input.focus();
+
+            const btn = document.getElementById('submitTxBtn');
+            if (allocatedBooklets.length < currentDemand) {
+                btn.disabled = true;
+                btn.innerText = currentDemand > 0 ? `Scan ${currentDemand - allocatedBooklets.length} More Booklet(s)...` : "Select Subject to Continue";
+                btn.className = "btn";
+            } else if (currentDemand > 0 && allocatedBooklets.length === currentDemand) {
+                triggerLivePreview();
+            }
+        }
     }
 
 
@@ -3554,19 +3534,17 @@ ${message}`));
 
 
             if (currentAllocationMode === 'manual') {
+                const sourceBadge = b.from_active_pack
+                    ? `<span style="background: #dbeafe; color: #1e40af; font-size: 0.68rem; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px;" title="Loaded from active supply box">📦 Box</span>`
+                    : `<span style="background: #f1f5f9; color: #475569; font-size: 0.68rem; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px;" title="Manually scanned / added">✋ Scanned</span>`;
 
                 html += `
-
-                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; font-family: monospace; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-weight: 600;">
-
+                    <div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 0.82rem; font-family: monospace; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-weight: 600;">
+                        ${sourceBadge}
                         <span>#${index + 1}: ${ctrl}${srn}</span>
-
-                        <span onclick="removeManualBooklet('${ctrl}', event)" title="Remove this booklet" style="cursor: pointer; color: #ef4444; font-weight: bold; font-size: 1.1rem; line-height: 1; padding: 0 2px;">&times;</span>
-
+                        <span onclick="removeManualBooklet('${ctrl}', event)" title="Remove this booklet" style="cursor: pointer; color: #ef4444; font-weight: bold; font-size: 1.1rem; line-height: 1; padding: 0 2px; margin-left: 2px;">&times;</span>
                     </div>
-
                 `;
-
             } else {
 
                 const bg = isSwapped ? '#fef3c7' : '#f8fafc';
@@ -3743,7 +3721,9 @@ ${message}`));
 
                         department: b.department,
 
-                        is_swapped: false
+                        is_swapped: false,
+
+                        from_active_pack: false
 
                     });
 
@@ -4326,6 +4306,10 @@ ${message}`));
 
                     if (stockEl) stockEl.innerText = data.available;
 
+                    if (Array.isArray(data.booklets)) {
+                        activePackBooklets = [...data.booklets];
+                    }
+
                 } else if (data.code === 'PACK_LOCKED') {
 
                     showAppAlert("Supply Access Notice", `This Master Pack is currently claimed by another user (${data.claimed_by}).\n\nYour active supply box has been reset.`, "warning");
@@ -4343,6 +4327,8 @@ ${message}`));
                     activePackTemplateName = null;
 
                     activePackTemplateSlot = null;
+
+                    activePackBooklets = [];
 
                     document.getElementById('active-supply-view').style.display = "none";
 
@@ -4410,7 +4396,7 @@ ${message}`));
 
             if (data.status === "success" && data.available > 0) {
 
-                setPrimarySupply(qr, data.available, data.department, data.template_name, data.template_slot, false);
+                setPrimarySupply(qr, data.available, data.department, data.template_name, data.template_slot, false, data.booklets);
 
             } else {
 
@@ -4433,6 +4419,8 @@ ${message}`));
                 activePackTemplateName = null;
 
                 activePackTemplateSlot = null;
+
+                activePackBooklets = [];
 
                 document.getElementById('active-supply-view').style.display = "none";
 
@@ -4726,6 +4714,8 @@ ${message}`));
 
         if (prevIntent === 'bridge') {
 
+            userDismissedBridging = true;
+
             handleBridgingShortageState();
 
         } else if (prevIntent === 'booklet_swap') {
@@ -4898,7 +4888,9 @@ ${message}`));
 
                             department: b.department,
 
-                            is_swapped: false
+                            is_swapped: false,
+
+                            from_active_pack: false
 
                         });
 
@@ -5052,7 +5044,7 @@ ${message}`));
         fetch(url).then(res => res.json()).then(data => {
             if (data.status === "success") {
                 if (intent === 'primary') {
-                    setPrimarySupply(data.qr_code, data.available, data.department, data.template_name, data.template_slot);
+                    setPrimarySupply(data.qr_code, data.available, data.department, data.template_name, data.template_slot, false, data.booklets);
                 } else if (intent === 'bridge') {
                     if (primaryPackQR && data.qr_code === primaryPackQR) {
                         PosAudio.warning();
@@ -5093,6 +5085,7 @@ ${message}`));
                     }
                     bridgingPackQR = data.qr_code;
                     bridgingPackStock = data.available;
+                    userDismissedBridging = false;
                     triggerLivePreview(); 
                 }
             } else {
@@ -5161,7 +5154,7 @@ ${message}`));
         }
     }
 
-    function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false) {
+    function setPrimarySupply(qr, stock, dept = 'CS', templateName = '', templateSlot = 1, preserveForm = false, booklets = null) {
         if (primaryPackQR && primaryPackQR !== qr) {
             releasePackAsync(primaryPackQR);
         }
@@ -5170,6 +5163,23 @@ ${message}`));
         activePackDept = (dept || '').trim().toUpperCase() || 'CS';
         activePackTemplateName = templateName || `Template ${templateSlot || 1}`;
         activePackTemplateSlot = templateSlot || 1;
+        userDismissedBridging = false;
+
+        if (Array.isArray(booklets)) {
+            activePackBooklets = [...booklets];
+        } else if (qr) {
+            fetch(`/api/pack-available-booklets/${encodeURIComponent(qr)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success' && Array.isArray(data.booklets)) {
+                        activePackBooklets = data.booklets;
+                        if (currentDemand > 0 && (!allocatedBooklets || allocatedBooklets.length === 0)) {
+                            prefillTrayFromActivePack();
+                        }
+                    }
+                })
+                .catch(err => console.warn("Failed to load booklets for primary pack:", err));
+        }
 
         localStorage.setItem(getUserPackKey(), qr);
         document.getElementById('no-supply-view').style.display = "none";
@@ -5252,6 +5262,14 @@ ${message}`));
         activePackTemplateName = null;
 
         activePackTemplateSlot = null;
+
+        activePackBooklets = [];
+
+        allocatedBooklets = [];
+
+        renderBookletTray();
+
+        updateManualProgress();
 
 
 
@@ -5412,9 +5430,16 @@ ${message}`));
 
                 const sub = document.getElementById('subjectSelect');
 
-                const isRep = sub && sub.options[sub.selectedIndex] && sub.options[sub.selectedIndex].dataset.isReplacement === "true";
-
-                document.getElementById('doc-title').innerText = isRep ? "Document Title: Official Acknowledgement Receipt (Replacement - Fully Paid)" : "Document Title: Official Acknowledgement Receipt";
+                const selOpt = sub && sub.options[sub.selectedIndex];
+                const isRep = selOpt && selOpt.dataset.isReplacement === "true";
+                const isPre = selOpt && selOpt.dataset.isPrepaid === "true";
+                if (isRep) {
+                    document.getElementById('doc-title').innerText = isPre 
+                        ? "Document Title: Official Acknowledgement Receipt (Replacement - Fully Paid)"
+                        : "Document Title: Official Acknowledgement Receipt (Replacement)";
+                } else {
+                    document.getElementById('doc-title').innerText = "Document Title: Official Acknowledgement Receipt";
+                }
 
                 document.getElementById('doc-title').style.color = "#000";
 
@@ -5467,6 +5492,16 @@ ${message}`));
                 } else {
                     primaryPackStock -= txDemand;
                     document.getElementById('pack-stock-display').innerText = primaryPackStock;
+                    if (primaryPackQR) {
+                        fetch(`/api/pack-available-booklets/${encodeURIComponent(primaryPackQR)}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.status === 'success' && Array.isArray(data.booklets)) {
+                                    activePackBooklets = data.booklets;
+                                }
+                            })
+                            .catch(err => console.warn("Failed to sync remaining pack booklets:", err));
+                    }
                 }
 
 

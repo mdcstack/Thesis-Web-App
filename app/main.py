@@ -1660,6 +1660,9 @@ def get_pending_distributions(db: Session = Depends(get_db)):
 
             enr_dept = resolve_enrollment_department(e, db=db)
 
+            is_replacement = bool(defective_count > 0)
+            is_prepaid = bool(defective_count > 0 and credit >= effective_price and credit > 0)
+
             data.append({
                 "enrollment_id": e.id,
                 "teacher_name": e.teacher_name,
@@ -1668,7 +1671,8 @@ def get_pending_distributions(db: Session = Depends(get_db)):
                 "headcount": e.student_headcount,
                 "fulfilled": fulfilled_count,
                 "remaining": remaining,
-                "is_replacement": bool(defective_count > 0 and credit > 0),
+                "is_replacement": is_replacement,
+                "is_prepaid": is_prepaid,
                 "replacement_count": defective_count,
                 "replacement_credit": credit,
                 "unit_price": effective_price,
@@ -1696,10 +1700,11 @@ def get_pack_status(qr_code: str, username: Optional[str] = None, takeover: bool
         return {"status": "error", "message": "Invalid QR Code. Pack not found."}
     
     batch_ids = [b.id for b in batches]
-    available_count = db.query(models.Booklet).filter(
+    available_booklets = db.query(models.Booklet).filter(
         models.Booklet.master_batch_id.in_(batch_ids),
         models.Booklet.status == "available"
-    ).count()
+    ).order_by(models.Booklet.control_num).all()
+    available_count = len(available_booklets)
 
     primary_batch = batches[0]
     dept = primary_batch.department or "CS"
@@ -1710,6 +1715,17 @@ def get_pack_status(qr_code: str, username: Optional[str] = None, takeover: bool
     ).first()
     template_name = tpl_config.template_name if (tpl_config and tpl_config.template_name) else f"Template {slot}"
 
+    booklets_data = [
+        {
+            "id": b.id,
+            "control_num": b.control_num,
+            "sort_record_num": b.sort_record_num or "N/A",
+            "status": b.status,
+            "department": dept
+        }
+        for b in available_booklets
+    ]
+
     if available_count == 0:
         return {
             "status": "error",
@@ -1717,7 +1733,8 @@ def get_pack_status(qr_code: str, username: Optional[str] = None, takeover: bool
             "message": "This Master Pack has already been fully depleted (0 pcs remaining).",
             "department": dept,
             "template_slot": slot,
-            "template_name": template_name
+            "template_name": template_name,
+            "booklets": []
         }
 
     # Anti-Overlap Collision Protection: Check if held by another active user
@@ -1748,7 +1765,8 @@ def get_pack_status(qr_code: str, username: Optional[str] = None, takeover: bool
                 "department": dept,
                 "template_slot": slot,
                 "template_name": template_name,
-                "takeover": True
+                "takeover": True,
+                "booklets": booklets_data
             }
         else:
             return {
@@ -1774,7 +1792,43 @@ def get_pack_status(qr_code: str, username: Optional[str] = None, takeover: bool
         "claimed_by": username,
         "department": dept,
         "template_slot": slot,
-        "template_name": template_name
+        "template_name": template_name,
+        "booklets": booklets_data
+    }
+
+
+@app.get("/api/pack-available-booklets/{qr_code}")
+def get_pack_available_booklets(qr_code: str, db: Session = Depends(get_db)):
+    """Returns all available booklets inside a specific pack/batch."""
+    batches = db.query(models.MasterBatch).filter(
+        (models.MasterBatch.qr_code_id == qr_code) |
+        (models.MasterBatch.pack_qr_id == qr_code)
+    ).all()
+    if not batches:
+        return {"status": "error", "message": "Pack not found.", "booklets": []}
+    
+    batch_ids = [b.id for b in batches]
+    booklets = db.query(models.Booklet).filter(
+        models.Booklet.master_batch_id.in_(batch_ids),
+        models.Booklet.status == "available"
+    ).order_by(models.Booklet.control_num).all()
+    
+    dept = batches[0].department or "CS"
+    return {
+        "status": "success",
+        "qr_code": qr_code,
+        "available": len(booklets),
+        "department": dept,
+        "booklets": [
+            {
+                "id": b.id,
+                "control_num": b.control_num,
+                "sort_record_num": b.sort_record_num or "N/A",
+                "status": b.status,
+                "department": dept
+            }
+            for b in booklets
+        ]
     }
 
 
@@ -2862,8 +2916,15 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                     period_billing.balance = max(0.0, round(period_billing.amount_due - period_billing.amount_paid), 2)
                     period_billing.payment_status = "Fully Paid" if period_billing.balance <= 0.001 and period_billing.amount_due > 0 else ("Partially Paid" if period_billing.amount_paid > 0 else "Unpaid")
                 else:
-                    # Defective booklets are permanently voided and do not enter loose stock
-                    pass
+                    # Defective booklets are permanently voided and must decrement distributed_count
+                    # so that subsequent replacement distribution does not overcount (e.g. 41 instead of 40)
+                    if not getattr(period_billing, 'student_headcount', None):
+                        period_billing.student_headcount = enrollment.student_headcount
+                    period_billing.distributed_count = max(0, period_billing.distributed_count - return_qty)
+                    period_billing.amount_due = max(0.0, round(period_billing.amount_due - return_value, 2))
+                    period_billing.amount_paid = max(0.0, round(period_billing.amount_paid - paid_towards_returned, 2))
+                    period_billing.balance = max(0.0, round(period_billing.amount_due - period_billing.amount_paid), 2)
+                    period_billing.payment_status = "Fully Paid" if period_billing.balance <= 0.001 and period_billing.amount_due > 0 else ("Partially Paid" if period_billing.amount_paid > 0 else "Unpaid")
 
             # Decrement active class capacity on official drop so subsequent semesters expect fewer students
             if is_student_dropped:
@@ -2889,11 +2950,15 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                 b.distributed_by = None
             
         db.commit()
+        enr_dept = resolve_enrollment_department(enrollment, db=db) if enrollment else ""
         notify_lan_mutation("RETURN_PROCESSED", {
             "enrollment_id": req.enrollment_id,
             "reason": req.reason,
             "return_qty": return_qty,
-            "is_defective": is_defective
+            "is_defective": is_defective,
+            "teacher_name": enrollment.teacher_name if enrollment else "",
+            "section": enrollment.section if enrollment else "",
+            "department": enr_dept
         }, db=db)
         if is_student_dropped:
             notify_lan_mutation("ENROLLMENT_UPDATED", {
@@ -2902,7 +2967,7 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
             }, db=db)
         
         if is_defective:
-            return {"status": "success", "message": f"Voided {return_qty} defective booklet(s). This section now requires a replacement."}
+            return {"status": "success", "message": f"Voided {return_qty} defective booklet(s). Replacement demand is now active in Point of Distribution."}
         else:
             return {"status": "success", "message": f"Successfully moved {return_qty} booklet(s) to Loose Stock."}
         
@@ -3192,7 +3257,15 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         credit_available = float(getattr(enrollment, 'replacement_credit', 0.0) or 0.0)
         credit_applied = min(credit_available, gross_total)
         net_amount = max(0.0, round(gross_total - credit_applied, 2))
-        is_replacement = bool(credit_applied > 0 or credit_available > 0)
+        
+        defective_count = db.query(models.Booklet).filter(
+            models.Booklet.enrollment_id == enrollment.id,
+            models.Booklet.exam_period == active_period,
+            models.Booklet.status == "voided",
+            models.Booklet.return_reason.like("Misprint / Defect%")
+        ).count()
+        is_replacement = bool(defective_count > 0 or credit_applied > 0 or credit_available > 0)
+        is_prepaid = bool(is_replacement and credit_applied >= gross_total and gross_total > 0)
         
         return {
             "status": "success", 
@@ -3202,6 +3275,7 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
             "replacement_credit": credit_applied,
             "total_amount": net_amount,
             "is_replacement": is_replacement,
+            "is_prepaid": is_prepaid,
             "allocated_controls": [b.control_num for b in booklets_to_distribute],
             "allocated_details": [
                 {
