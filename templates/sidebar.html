@@ -138,7 +138,7 @@
     <a href="/dashboard" class="nav-link staff-op" data-route="/dashboard">📊 Dashboard</a>
     <a href="/enrollments" class="nav-link admin-only" data-route="/enrollments">🎓 Manage Classes</a>
     <a href="/manage_users" class="nav-link" id="navManageUsers" data-route="/manage_users">👥 Manage Users</a>
-    <a href="/booklet-template" class="nav-link admin-only mobile-hide" data-route="/booklet-template">📄 Booklet Template</a>
+    <a href="/booklet-template" class="nav-link staff-op mobile-hide" data-route="/booklet-template">📄 Booklet Template</a>
     <a href="/generator" class="nav-link staff-op mobile-hide" data-route="/generator">🖨️ PDF Generator</a> 
     <a href="/qr-registration" class="nav-link staff-op mobile-hide" data-route="/qr-registration">📥 QR Registration</a>
     <a href="/distribution" class="nav-link staff-op" data-route="/distribution">🛒 Point of Distribution</a>
@@ -545,7 +545,7 @@
                 if (details.id) currentUser.id = details.id;
                 localStorage.setItem('bookletlog_user', JSON.stringify(currentUser));
 
-                const adminPages = ['/manage_users', '/settings', '/enrollments', '/booklet-template'];
+                const adminPages = ['/manage_users', '/settings', '/enrollments'];
                 const currentPath = window.location.pathname.toLowerCase();
 
                 if (newRole !== 'Admin' && adminPages.some(p => currentPath.startsWith(p))) {

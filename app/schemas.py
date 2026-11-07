@@ -89,6 +89,8 @@ class BookletTemplateUpdate(BaseModel):
     qr_size: float
     qr_enabled: bool = True
     is_official: Optional[bool] = False
+    updated_by: Optional[str] = None
+    role: Optional[str] = None
 
 class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None

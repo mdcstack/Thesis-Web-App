@@ -7027,7 +7027,19 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
         except Exception as e:
             print(f"Notice: Failed to update proof image on save: {e}")
 
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "department": dept, "slot": slot_num, "is_official": is_official}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "department": dept,
+            "slot": slot_num,
+            "is_official": is_official,
+            "template_name": config.template_name,
+            "updated_by": req.updated_by or "User",
+            "role": req.role or "Staff"
+        },
+        db=db
+    )
     
     msg = f"Official template for {dept} {config.template_name} saved and activated for printing!" if is_official else f"{dept} {config.template_name} draft coordinates saved."
     return {
@@ -7041,7 +7053,14 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
     }
 
 @app.post("/api/booklet-template/upload")
-async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_booklet_template_pdf(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
     if valid_codes and dept not in valid_codes:
@@ -7083,7 +7102,19 @@ async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, fil
     except Exception as e:
         print(f"Notice: Failed to generate initial proof image on upload: {e}")
 
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "action": "pdf_upload", "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "action": "pdf_upload",
+            "department": dept,
+            "slot": slot_num,
+            "template_name": config.template_name or f"Template {slot_num}",
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success", 
         "is_configured": False,
@@ -7122,7 +7153,13 @@ def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Sess
     }
 
 @app.post("/api/booklet-template/delete")
-def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
+def delete_booklet_template_api(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
     if valid_codes and dept not in valid_codes:
@@ -7170,7 +7207,18 @@ def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessi
     db.commit()
     db.refresh(config)
 
-    notify_lan_mutation("TEMPLATE_DELETED", {"template_id": config.id, "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_DELETED",
+        {
+            "template_id": config.id,
+            "department": dept,
+            "slot": slot_num,
+            "template_name": old_name,
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success",
         "message": f"{dept} {old_name} has been deleted and reset.",
@@ -7179,7 +7227,13 @@ def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessi
     }
 
 @app.post("/api/booklet-template/reset")
-def reset_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
+def reset_booklet_template_api(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     if dept not in ["CS", "IT"]:
         dept = "CS"
@@ -7205,7 +7259,19 @@ def reset_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessio
     config.qr_enabled = True
     db.commit()
     db.refresh(config)
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "action": "reset", "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "action": "reset",
+            "department": dept,
+            "slot": slot_num,
+            "template_name": config.template_name,
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success", 
         "message": f"{dept} {config.template_name} layout coordinates restored to factory defaults.", 
