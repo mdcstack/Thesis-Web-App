@@ -311,7 +311,10 @@ def get_portal_authenticated_user(request: Request, db: Session) -> Optional[mod
     q = db.query(models.User).filter(models.User.session_token == token)
     if username:
         q = q.filter(models.User.username == username)
-    return q.first()
+    user = q.first()
+    if user and getattr(user, 'is_active', True) is False:
+        return None
+    return user
 
 def ensure_schema_migrations():
     try:
@@ -345,6 +348,9 @@ def ensure_schema_migrations():
             with engine.connect() as conn:
                 if 'full_name' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR(100) NULL"))
+                    conn.commit()
+                if 'is_active' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE NOT NULL"))
                     conn.commit()
 
         # 1. system_settings
@@ -1879,6 +1885,9 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
 
     if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
         return {"status": "error", "message": "Invalid username or password."}
+
+    if getattr(user, 'is_active', True) is False:
+        return {"status": "error", "message": "This account has been deactivated. Please contact an Administrator."}
     
     new_token = str(uuid.uuid4())
     user.session_token = new_token
@@ -1904,6 +1913,9 @@ def authorize_admin(req: LoginRequest, db: Session = Depends(get_db)):
 
     if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
         return {"status": "error", "message": "Invalid username or password."}
+
+    if getattr(user, 'is_active', True) is False:
+        return {"status": "error", "message": "This account has been deactivated. Please contact an Administrator."}
     
     if user.role.lower() != 'admin':
         return {"status": "error", "message": "User does not have Admin privileges."}
@@ -1914,6 +1926,8 @@ def authorize_admin(req: LoginRequest, db: Session = Depends(get_db)):
 def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if user and user.session_token == req.session_token:
+        if getattr(user, 'is_active', True) is False:
+            return {"status": "invalid", "message": "Account has been deactivated."}
         return {
             "status": "valid",
             "id": user.id,
@@ -4121,7 +4135,12 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
 
 
 # --- COURSE PRODUCTION METRICS (Dynamic & Settings-Driven) ---
-def calculate_course_production_metrics(db: Session, active_period: Optional[str] = None):
+def calculate_course_production_metrics(
+    db: Session,
+    active_period: Optional[str] = None,
+    override_buffer_pct: Optional[float] = None,
+    override_sheets_per_booklet: Optional[int] = None
+):
     """Calculates period-isolated production demand broken down across all active academic courses with dynamic buffer margin and prior period excess paper sheets credit."""
     if not active_period:
         active_period = get_active_period(db)
@@ -4131,11 +4150,18 @@ def calculate_course_production_metrics(db: Session, active_period: Optional[str
         models.PeriodConfiguration.academic_period == active_period
     ).first() if active_period else None
 
-    if period_cfg:
+    if override_sheets_per_booklet is not None:
+        sheets_per_b = int(override_sheets_per_booklet)
+    elif period_cfg:
         sheets_per_b = period_cfg.sheets_per_booklet or (settings.sheets_per_booklet if settings else 6)
-        buffer_pct = float(period_cfg.reorder_buffer_percent if period_cfg.reorder_buffer_percent is not None else (settings.reorder_buffer_percent if settings and settings.reorder_buffer_percent is not None else 15.0))
     else:
         sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
+
+    if override_buffer_pct is not None:
+        buffer_pct = float(override_buffer_pct)
+    elif period_cfg:
+        buffer_pct = float(period_cfg.reorder_buffer_percent if period_cfg.reorder_buffer_percent is not None else (settings.reorder_buffer_percent if settings and settings.reorder_buffer_percent is not None else 15.0))
+    else:
         buffer_pct = float(settings.reorder_buffer_percent if settings and settings.reorder_buffer_percent is not None else 15.0)
 
     yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
@@ -5415,7 +5441,8 @@ def get_all_users(response: Response, db: Session = Depends(get_db)):
             "full_name": u.full_name or u.username,
             "role": u.role,
             "department": u.department or "All",
-            "is_online": bool(u.session_token)
+            "is_online": bool(u.session_token),
+            "is_active": getattr(u, "is_active", True) if getattr(u, "is_active", True) is not None else True
         })
     return {"status": "success", "users": user_list}
 
@@ -5651,35 +5678,55 @@ def revoke_user_session(user_id: int, db: Session = Depends(get_db)):
     notify_lan_mutation("USER_UPDATED", {"action": "revoke_session", "username": user.username}, db=db)
     return {"status": "success", "message": f"Active session for '{user.username}' has been revoked."}
 
-@app.delete("/api/users/{user_id}")
-def delete_user(user_id: int, current_user: Optional[str] = None, db: Session = Depends(get_db)):
+@app.post("/api/users/{user_id}/toggle-status")
+def toggle_user_status(user_id: int, current_user: Optional[str] = None, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
-    
+
     # Root admin safeguard
     if user.username.lower() == "admin":
-        return {"status": "error", "message": "The primary 'admin' account cannot be deleted."}
-    
-    # Prevent self-deletion if current_user provided
+        return {"status": "error", "message": "The primary 'admin' account cannot be deactivated."}
+
+    # Prevent self-deactivation
     if current_user and user.username.lower() == current_user.strip().lower():
-        return {"status": "error", "message": "You cannot delete your own currently logged-in account."}
-    
-    # Prevent deleting the last Admin
-    if user.role == "Admin":
-        admin_count = db.query(models.User).filter(models.User.role == "Admin").count()
-        if admin_count <= 1:
-            return {"status": "error", "message": "Cannot delete the last remaining Administrator account."}
-    
-    # Release any claimed batches
-    db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == user.username).update({models.MasterBatch.claimed_by: None})
-    
-    uname = user.username
-    db.delete(user)
+        return {"status": "error", "message": "You cannot deactivate your own currently logged-in account."}
+
+    # Prevent deactivating the last active Admin
+    current_status = getattr(user, 'is_active', True)
+    if user.role == "Admin" and current_status:
+        active_admin_count = db.query(models.User).filter(
+            models.User.role == "Admin",
+            models.User.is_active == True
+        ).count()
+        if active_admin_count <= 1:
+            return {"status": "error", "message": "Cannot deactivate the last remaining active Administrator account."}
+
+    # Toggle status
+    new_status = not current_status
+    user.is_active = new_status
+
+    # If deactivating, revoke active session and release claimed batches
+    if not new_status:
+        user.session_token = None
+        db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == user.username).update({models.MasterBatch.claimed_by: None})
+
     db.commit()
-    
-    notify_lan_mutation("USER_UPDATED", {"action": "delete", "username": uname}, db=db)
-    return {"status": "success", "message": f"Account '{uname}' has been deleted."}
+
+    action_text = "activated" if new_status else "deactivated"
+    notify_lan_mutation("USER_UPDATED", {"action": "toggle_status", "username": user.username, "is_active": new_status}, db=db)
+    return {
+        "status": "success",
+        "message": f"Account '{user.username}' has been {action_text}.",
+        "is_active": new_status
+    }
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, current_user: Optional[str] = None, db: Session = Depends(get_db)):
+    return {
+        "status": "error",
+        "message": "Permanent account deletion is disabled for institutional audit compliance. Please deactivate the account instead."
+    }
 
 
 
@@ -5816,9 +5863,9 @@ def get_settings(db: Session = Depends(get_db)):
         "sum_course_rounded_reams": sum_course_rounded_reams,
         "recommended_reams": recommended_reams,
         "recommended_budget": recommended_budget,
-        "staples_box_price": float(settings.staples_box_price if settings.staples_box_price is not None else 50.0),
-        "staples_per_box": int(settings.staples_per_box if settings.staples_per_box is not None else 1000),
-        "staples_per_booklet": int(settings.staples_per_booklet if settings.staples_per_booklet is not None else 2),
+        "staples_box_price": float(settings.staples_box_price) if (settings and settings.staples_box_price is not None) else None,
+        "staples_per_box": int(settings.staples_per_box) if (settings and settings.staples_per_box is not None) else None,
+        "staples_per_booklet": int(settings.staples_per_booklet) if (settings and settings.staples_per_booklet is not None) else None,
         "previous_summary": prev_summary_data,
         "is_initialized": not is_unset and bool(booklet_p and booklet_p > 0)
     }
@@ -5840,6 +5887,33 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
 
     if req.department_ream_budget is None or req.department_ream_budget <= 0:
         raise HTTPException(status_code=400, detail="Department ream budget must be greater than ₱0.00.")
+
+    # --- MINIMUM RECOMMENDED BUDGET GUARD ---
+    course_metrics = calculate_course_production_metrics(
+        db,
+        req.active_period,
+        override_buffer_pct=req.reorder_buffer_percent,
+        override_sheets_per_booklet=req.sheets_per_booklet
+    )
+    sum_rounded_reams = course_metrics.get("sum_course_rounded_reams", 0)
+    total_planned_bks = course_metrics.get("total_planned_production") or course_metrics.get("total_target_production", 0)
+
+    if sum_rounded_reams > 0 and req.ream_price:
+        paper_cost = sum_rounded_reams * req.ream_price
+        staples_needed = total_planned_bks * (req.staples_per_booklet if req.staples_per_booklet is not None else 2)
+        prev_summary = get_previous_period_financial_summary(req.active_period, db)
+        prev_staples = (prev_summary and prev_summary.get("prev_excess_staples")) or 0
+        net_staples = max(0, staples_needed - prev_staples)
+        staples_box_cap = req.staples_per_box if req.staples_per_box is not None else 1000
+        staple_boxes = math.ceil(net_staples / staples_box_cap) if staples_box_cap > 0 and net_staples > 0 else 0
+        staples_cost = staple_boxes * (req.staples_box_price if req.staples_box_price is not None else 50.0)
+        min_rec_budget = round(paper_cost + staples_cost, 2)
+
+        if req.department_ream_budget is not None and req.department_ream_budget < min_rec_budget:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Department material budget (₱{req.department_ream_budget:,.2f}) cannot be lower than the minimum recommended budget (₱{min_rec_budget:,.2f}) required for course production."
+            )
 
     if req.reorder_buffer_percent is None or req.reorder_buffer_percent < 0 or req.reorder_buffer_percent > 100:
         raise HTTPException(status_code=400, detail="Reorder buffer safety margin must be between 0% and 100%.")
@@ -6128,23 +6202,71 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "previous_period_summary": prev_summary
         }
     else:
-        # Unconfigured period: return found: False with None for fields to require manual input
+        # Unconfigured period: carry over settings from preceding period or global system settings so admin does not have to retype
+        configs = db.query(models.PeriodConfiguration).all()
+        prev_cfg = None
+        if period:
+            current_rank = parse_period_chronological_rank(period)
+            preceding_configs = [c for c in configs if parse_period_chronological_rank(c.academic_period) < current_rank]
+            preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+            prev_cfg = preceding_configs[0] if preceding_configs else None
+
+        if not prev_cfg and configs:
+            configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+            prev_cfg = configs[0]
+
+        system_settings = db.query(models.SystemSettings).first()
+        sys_is_configured = bool(system_settings and system_settings.active_period and system_settings.active_period != 'UNSET' and system_settings.sheets_per_booklet is not None)
+        has_carryover_source = bool(prev_cfg or sys_is_configured)
+
+        if has_carryover_source:
+            carried_sheets = prev_cfg.sheets_per_booklet if prev_cfg and prev_cfg.sheets_per_booklet is not None else system_settings.sheets_per_booklet
+            carried_ream_price = prev_cfg.ream_price if prev_cfg and prev_cfg.ream_price is not None else system_settings.ream_price
+            carried_yield = prev_cfg.yield_per_ream if prev_cfg and prev_cfg.yield_per_ream is not None else (500 // carried_sheets if (carried_sheets and carried_sheets > 0) else 0)
+            carried_booklet_price = prev_cfg.booklet_price if prev_cfg and prev_cfg.booklet_price is not None else system_settings.booklet_price
+            carried_buffer = prev_cfg.reorder_buffer_percent if prev_cfg and prev_cfg.reorder_buffer_percent is not None else system_settings.reorder_buffer_percent
+            carried_staples_box_price = prev_cfg.staples_box_price if prev_cfg and prev_cfg.staples_box_price is not None else (system_settings.staples_box_price if system_settings else None)
+            carried_staples_per_box = prev_cfg.staples_per_box if prev_cfg and prev_cfg.staples_per_box is not None else (system_settings.staples_per_box if system_settings else None)
+            carried_staples_per_booklet = prev_cfg.staples_per_booklet if prev_cfg and prev_cfg.staples_per_booklet is not None else (system_settings.staples_per_booklet if system_settings else None)
+            source_name = prev_cfg.academic_period if prev_cfg else (system_settings.active_period if system_settings and system_settings.active_period else "Previous Settings")
+            is_carried_over = True
+
+            recommended_budget = 0.0
+            if total_demand > 0 and carried_yield and carried_yield > 0 and carried_ream_price:
+                effective_reams = sum_course_rounded_reams if sum_course_rounded_reams > 0 else (sum_course_planned_reams if sum_course_planned_reams > 0 else math.ceil(total_demand / carried_yield))
+                recommended_budget = round(effective_reams * carried_ream_price, 2)
+        else:
+            # Day 0 clean slate / First-time setup: NO carryover source exists yet
+            carried_sheets = None
+            carried_ream_price = None
+            carried_yield = None
+            carried_booklet_price = None
+            carried_buffer = None
+            carried_staples_box_price = None
+            carried_staples_per_box = None
+            carried_staples_per_booklet = None
+            source_name = None
+            is_carried_over = False
+            recommended_budget = 0.0
+
         return {
             "found": False,
+            "is_carried_over": is_carried_over,
+            "carried_over_from": source_name,
             "academic_period": period,
             "active_period": active_period,
             "is_active_period": is_active_period,
             "is_previous_period": is_previous_period,
-            "ream_price": None,
-            "sheets_per_booklet": None,
-            "yield_per_ream": None,
-            "booklet_price": None,
+            "ream_price": carried_ream_price,
+            "sheets_per_booklet": carried_sheets,
+            "yield_per_ream": carried_yield,
+            "booklet_price": carried_booklet_price,
             "department_ream_budget": None,
-            "reorder_buffer_percent": None,
-            "staples_box_price": 50.0,
-            "staples_per_box": 1000,
-            "staples_per_booklet": 2,
-            "recommended_budget": 0.0,
+            "reorder_buffer_percent": carried_buffer,
+            "staples_box_price": carried_staples_box_price,
+            "staples_per_box": carried_staples_per_box,
+            "staples_per_booklet": carried_staples_per_booklet,
+            "recommended_budget": recommended_budget,
             "recommended_reams": sum_course_rounded_reams,
             "total_demand": total_demand,
             "total_booklet_demand": total_booklet_demand,

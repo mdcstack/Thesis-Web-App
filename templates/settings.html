@@ -519,7 +519,7 @@
 
                     <label>Bond Paper Sheets Consumed Per Booklet</label>
 
-                    <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
+                    <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="enforceNumericInputLimits(this); clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
 
                     <div class="field-error" id="error_sheets_per_booklet">⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).</div>
 
@@ -537,7 +537,7 @@
 
                     <label>Price per Raw Bond Paper Ream (₱)</label>
 
-                    <input type="number" id="ream_price" step="0.01" min="1" placeholder="e.g., 250.00" required oninput="clearFieldError('ream_price'); updateRecommendationBox();">
+                    <input type="number" id="ream_price" step="0.01" min="1" placeholder="e.g., 250.00" required oninput="enforceNumericInputLimits(this); clearFieldError('ream_price'); updateRecommendationBox();">
 
                     <div class="field-error" id="error_ream_price">⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).</div>
 
@@ -573,7 +573,7 @@
 
                                    style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
 
-                                   oninput="clearFieldError('staples_box_price'); updateStaplesPreview(); updateRecommendationBox();">
+                                   oninput="enforceNumericInputLimits(this); clearFieldError('staples_box_price'); updateStaplesPreview(); updateRecommendationBox();">
 
                             <div class="field-error" id="error_staples_box_price">⚠️ Please enter a valid staple box price (₱).</div>
 
@@ -589,7 +589,7 @@
 
                                    style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
 
-                                   oninput="clearFieldError('staples_per_booklet'); updateStaplesPreview(); updateRecommendationBox();">
+                                   oninput="enforceNumericInputLimits(this); clearFieldError('staples_per_booklet'); updateStaplesPreview(); updateRecommendationBox();">
 
                             <div class="field-error" id="error_staples_per_booklet">⚠️ Please enter staples consumed per booklet (1 to 20).</div>
 
@@ -605,7 +605,7 @@
 
                                    style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
 
-                                   oninput="clearFieldError('staples_per_box'); updateStaplesPreview(); updateRecommendationBox();">
+                                   oninput="enforceNumericInputLimits(this); clearFieldError('staples_per_box'); updateStaplesPreview(); updateRecommendationBox();">
 
                             <div class="field-error" id="error_staples_per_box">⚠️ Please enter staple quantity per box (minimum 100).</div>
 
@@ -629,7 +629,7 @@
 
                     <label>Selling Price per Booklet (₱)</label>
 
-                    <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="clearFieldError('booklet_price');">
+                    <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="enforceNumericInputLimits(this); clearFieldError('booklet_price');">
 
                     <div class="field-error" id="error_booklet_price">⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).</div>
 
@@ -639,7 +639,7 @@
 
                     <label>Reorder Buffer Safety Margin (%)</label>
 
-                    <input type="number" id="reorder_buffer_percent" min="0" max="50" step="1" placeholder="e.g., 15" required oninput="clearFieldError('reorder_buffer_percent'); updateBufferPreview(); updateRecommendationBox();">
+                    <input type="number" id="reorder_buffer_percent" min="0" max="50" step="any" placeholder="e.g., 15" required oninput="enforceNumericInputLimits(this); clearFieldError('reorder_buffer_percent'); updateBufferPreview(); updateRecommendationBox();">
 
                     <div class="field-error" id="error_reorder_buffer_percent">⚠️ This field cannot be empty. Please enter a buffer margin between 0% and 50%.</div>
 
@@ -659,7 +659,7 @@
 
                     <div style="position: relative;">
 
-                        <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="clearFieldError('department_ream_budget'); onBudgetManualInput();">
+                        <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="enforceNumericInputLimits(this); clearFieldError('department_ream_budget'); onBudgetManualInput();">
 
                         <span id="budget_lock_icon" style="display: none; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 1rem; color: #16a34a; pointer-events: none;" title="Field locked to Prior Period Surplus to preserve workflow and accounting integrity">🔒</span>
 
@@ -2615,17 +2615,15 @@
                 const budget = parseFloat(budgetVal);
 
                 if (budgetVal === "" || isNaN(budget) || budget <= 0) {
-
                     showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).');
-
                     isValid = false;
-
                     if (!firstInvalidEl) firstInvalidEl = budgetInput;
-
+                } else if (computedRecommendedBudget > 0 && budget < computedRecommendedBudget) {
+                    showFieldError('department_ream_budget', `⚠️ Department material budget (₱${budget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}) cannot be lower than the recommended material budget (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}). Please increase the budget to sufficiently cover production materials.`);
+                    isValid = false;
+                    if (!firstInvalidEl) firstInvalidEl = budgetInput;
                 } else {
-
                     clearFieldError('department_ream_budget');
-
                 }
 
             } else {
@@ -4237,41 +4235,37 @@
 
 
         function onBudgetManualInput() {
-
             clearFieldError('department_ream_budget');
-
             const budgetInput = document.getElementById('department_ream_budget');
-
             if (!budgetInput || budgetInput.readOnly) return;
 
             const val = parseFloat(budgetInput.value);
-
             const minFloor = currentPreviousCarryover > 0 ? currentPreviousCarryover : 0.0;
-
             const lockBadge = document.getElementById('budget_lock_badge');
 
-
-
-            if (!isNaN(val) && minFloor > 0) {
-
-                const subsidy = Math.max(0, Math.round((val - minFloor + Number.EPSILON) * 100) / 100);
-
+            if (!isNaN(val) && computedRecommendedBudget > 0 && val < computedRecommendedBudget) {
                 if (lockBadge) {
-
                     lockBadge.style.display = 'block';
-
-                    lockBadge.style.background = '#f0f9ff';
-
-                    lockBadge.style.border = '1px solid #bae6fd';
-
-                    lockBadge.style.color = '#0369a1';
-
-                    lockBadge.innerHTML = `🔓 <strong>Custom Allocation:</strong> ₱${minFloor.toFixed(2)} Prior Rollover + ₱${subsidy.toFixed(2)} Institutional Subsidy = <strong>₱${val.toFixed(2)}</strong>.`;
-
+                    lockBadge.style.background = '#fef2f2';
+                    lockBadge.style.border = '1px solid #fecaca';
+                    lockBadge.style.color = '#b91c1c';
+                    const deficit = (computedRecommendedBudget - val).toFixed(2);
+                    lockBadge.innerHTML = `⚠️ <strong>Under-Budget Alert:</strong> Current allocation ₱${val.toFixed(2)} is ₱${deficit} below recommended minimum (₱${computedRecommendedBudget.toFixed(2)}). Saving will be blocked until covered.`;
                 }
-
+            } else if (!isNaN(val) && minFloor > 0) {
+                const subsidy = Math.max(0, Math.round((val - minFloor + Number.EPSILON) * 100) / 100);
+                if (lockBadge) {
+                    lockBadge.style.display = 'block';
+                    lockBadge.style.background = '#f0f9ff';
+                    lockBadge.style.border = '1px solid #bae6fd';
+                    lockBadge.style.color = '#0369a1';
+                    lockBadge.innerHTML = `🔓 <strong>Custom Allocation:</strong> ₱${minFloor.toFixed(2)} Prior Rollover + ₱${subsidy.toFixed(2)} Institutional Subsidy = <strong>₱${val.toFixed(2)}</strong>.`;
+                }
+            } else {
+                if (lockBadge && minFloor <= 0) {
+                    lockBadge.style.display = 'none';
+                }
             }
-
         }
 
         
@@ -4310,44 +4304,60 @@
 
         }
 
+        function enforceNumericInputLimits(input) {
+            if (!input || input.value === '' || input.value === undefined) return;
 
-
-        function onAyStartYearInput() {
-
-            const startVal = document.getElementById('ay_start_year').value.trim();
-
-            const endYearEl = document.getElementById('ay_end_year');
-
-            
-
-            if (startVal.length === 4) {
-
-                const startYear = parseInt(startVal, 10);
-
-                if (!isNaN(startYear) && startYear >= 2000 && startYear <= 2099) {
-
-                    if (endYearEl) endYearEl.value = (startYear + 1).toString();
-
-                    updateGeneratedPrefix();
-
-                    updateDependentFieldsState();
-
-                    onPeriodChange();
-
-                    return;
-
+            // Special case for academic start year: only clamp when 4 digits or exceeding max
+            if (input.id === 'ay_start_year') {
+                if (input.value.length > 4) {
+                    input.value = input.value.slice(0, 4);
                 }
-
+                const yearVal = parseFloat(input.value);
+                if (!isNaN(yearVal) && input.value.length === 4 && yearVal > 2099) {
+                    input.value = '2099';
+                }
+                return;
             }
 
+            const maxAttr = input.getAttribute('max');
+            if (maxAttr !== null && maxAttr !== '') {
+                const maxVal = parseFloat(maxAttr);
+                const val = parseFloat(input.value);
+                if (!isNaN(maxVal) && !isNaN(val) && val > maxVal) {
+                    input.value = maxVal;
+                }
+            }
+
+            const minAttr = input.getAttribute('min');
+            if (minAttr !== null && minAttr !== '') {
+                const minVal = parseFloat(minAttr);
+                const val = parseFloat(input.value);
+                if (!isNaN(minVal) && minVal >= 0 && !isNaN(val) && val < 0) {
+                    input.value = minVal;
+                }
+            }
+        }
+
+        function onAyStartYearInput() {
+            const startInput = document.getElementById('ay_start_year');
+            if (startInput) enforceNumericInputLimits(startInput);
+            const startVal = startInput ? startInput.value.trim() : '';
+            const endYearEl = document.getElementById('ay_end_year');
             
-
+            if (startVal.length === 4) {
+                const startYear = parseInt(startVal, 10);
+                if (!isNaN(startYear) && startYear >= 2000 && startYear <= 2099) {
+                    if (endYearEl) endYearEl.value = (startYear + 1).toString();
+                    updateGeneratedPrefix();
+                    updateDependentFieldsState();
+                    onPeriodChange();
+                    return;
+                }
+            }
+            
             if (endYearEl) endYearEl.value = '';
-
             updateGeneratedPrefix();
-
             updateDependentFieldsState();
-
         }
 
         
@@ -4528,11 +4538,19 @@
                         statusPill.style.background = '#fef3c7';
                         statusPill.style.color = '#b45309';
                         statusPill.style.border = '1px solid #fde68a';
-                    } else {
-                        statusPill.innerHTML = '✨ Upcoming Semester (Ready to Configure)';
+                    } else if (data.is_carried_over && data.carried_over_from) {
+                        statusPill.innerHTML = `✨ Upcoming Semester (Prefilled from ${escapeHtml(data.carried_over_from)})`;
                         statusPill.style.background = '#e0f2fe';
                         statusPill.style.color = '#0369a1';
                         statusPill.style.border = '1px solid #bae6fd';
+                    } else {
+                        const isDay0 = !window.systemLiveActivePeriod || window.systemLiveActivePeriod === 'UNSET';
+                        statusPill.innerHTML = isDay0
+                            ? '✨ First-Time Setup (Please configure your parameters)'
+                            : '✨ Upcoming Semester (Ready to Configure)';
+                        statusPill.style.background = isDay0 ? '#f8fafc' : '#e0f2fe';
+                        statusPill.style.color = isDay0 ? '#475569' : '#0369a1';
+                        statusPill.style.border = isDay0 ? '1px solid #cbd5e1' : '1px solid #bae6fd';
                     }
                 }
 
@@ -4672,37 +4690,39 @@
 
                 } else {
 
-                    // Unconfigured period: clear fields to empty to force user to enter parameters!
+                    if (data.is_carried_over) {
+                        // Unconfigured period with preceding config: carry over previous parameters so admin does not have to retype
+                        document.getElementById('sheets_per_booklet').value = (data.sheets_per_booklet !== null && data.sheets_per_booklet !== undefined) ? data.sheets_per_booklet : '';
 
-                    document.getElementById('sheets_per_booklet').value = '';
+                        document.getElementById('ream_price').value = (data.ream_price !== null && data.ream_price !== undefined) ? data.ream_price : '';
 
-                    document.getElementById('ream_price').value = '';
+                        document.getElementById('booklet_price').value = (data.booklet_price !== null && data.booklet_price !== undefined) ? data.booklet_price : '';
 
-                    document.getElementById('booklet_price').value = '';
+                        document.getElementById('reorder_buffer_percent').value = (data.reorder_buffer_percent !== null && data.reorder_buffer_percent !== undefined) ? data.reorder_buffer_percent : '';
 
-                    document.getElementById('reorder_buffer_percent').value = '';
+                        // If previous period has rollover equity, auto-populate the locked budget!
+                        if (prevSummary && prevSummary.has_previous_period && prevSummary.total_carryover_available > 0) {
+                            document.getElementById('department_ream_budget').value = prevSummary.total_carryover_available.toFixed(2);
+                        } else {
+                            document.getElementById('department_ream_budget').value = '';
+                        }
 
-                    
+                        document.getElementById('staples_box_price').value = (data.staples_box_price !== null && data.staples_box_price !== undefined) ? data.staples_box_price : '';
 
-                    // If previous period has rollover equity, auto-populate the locked budget!
+                        document.getElementById('staples_per_booklet').value = (data.staples_per_booklet !== null && data.staples_per_booklet !== undefined) ? data.staples_per_booklet : '';
 
-                    if (prevSummary && prevSummary.has_previous_period && prevSummary.total_carryover_available > 0) {
-
-                        document.getElementById('department_ream_budget').value = prevSummary.total_carryover_available.toFixed(2);
-
+                        document.getElementById('staples_per_box').value = (data.staples_per_box !== null && data.staples_per_box !== undefined) ? data.staples_per_box : '';
                     } else {
-
+                        // Day 0 Clean Slate / First-time setup: NO previous parameters to carry over, keep completely empty
+                        document.getElementById('sheets_per_booklet').value = '';
+                        document.getElementById('ream_price').value = '';
+                        document.getElementById('booklet_price').value = '';
+                        document.getElementById('reorder_buffer_percent').value = '';
                         document.getElementById('department_ream_budget').value = '';
-
+                        document.getElementById('staples_box_price').value = '';
+                        document.getElementById('staples_per_booklet').value = '';
+                        document.getElementById('staples_per_box').value = '';
                     }
-
-                    
-
-                    document.getElementById('staples_box_price').value = '';
-
-                    document.getElementById('staples_per_booklet').value = '';
-
-                    document.getElementById('staples_per_box').value = '';
 
                     updateStaplesPreview();
 
@@ -5133,17 +5153,28 @@
 
                 } else {
 
+                    let errorMsg = 'Error saving settings.';
+                    if (data) {
+                        if (typeof data.detail === 'string') {
+                            errorMsg = data.detail;
+                        } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+                            errorMsg = data.detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+                        } else if (data.message) {
+                            errorMsg = data.message;
+                        }
+                    }
+
                     if (alertBox) {
 
                         alertBox.className = 'alert error';
 
-                        alertBox.innerText = data.message || 'Error saving settings.';
+                        alertBox.innerText = errorMsg;
 
                         alertBox.style.display = 'block';
 
                     }
 
-                    alert(data.message || 'Error saving settings.');
+                    alert(errorMsg);
 
                 }
 
@@ -5960,7 +5991,21 @@
 
         });
 
+        // Global real-time clamp for numeric inputs with max or non-negative min limits
+        document.addEventListener('input', function(e) {
+            if (e.target && e.target.type === 'number') {
+                enforceNumericInputLimits(e.target);
+            }
+        }, true);
 
+        document.addEventListener('keydown', function(e) {
+            if (e.target && e.target.type === 'number') {
+                const min = e.target.getAttribute('min');
+                if (min !== null && parseFloat(min) >= 0 && (e.key === '-' || e.key === 'e' || e.key === 'E')) {
+                    e.preventDefault();
+                }
+            }
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
 

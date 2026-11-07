@@ -62,7 +62,9 @@
         .action-btn-group { display: flex; gap: 5px; align-items: center; }
         .action-btn { background: #f8fafc; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
         .action-btn:hover { background: #e2e8f0; color: #1e293b; transform: translateY(-1px); }
-        .action-btn.btn-delete:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+        .action-btn.btn-delete:hover, .action-btn.btn-deactivate:hover { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+        .action-btn.btn-activate:hover { background: #dcfce7; border-color: #86efac; color: #16a34a; }
+        .user-row-deactivated { background-color: #f8fafc; opacity: 0.85; }
         .action-btn.btn-revoke:hover { background: #fed7aa; border-color: #fdba74; color: #c2410c; }
         .action-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         
@@ -346,11 +348,12 @@
                     <div class="form-group">
                         <label>New Password</label>
                         <div class="password-input-wrapper">
-                            <input type="password" id="staffNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                            <input type="password" id="staffNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password" oninput="handlePasswordInput(this, 'staffNewPasswordHint')">
                             <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('staffNewPassword', this)" title="Show password" aria-label="Show password">
                                 <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                             </button>
                         </div>
+                        <div id="staffNewPasswordHint" class="input-hint">Minimum 8 characters with at least 1 letter and 1 number.</div>
                     </div>
                     <div class="form-group">
                         <label>Confirm New Password</label>
@@ -433,6 +436,11 @@
                             <option value="IT">Information Technology (IT)</option>
                             <option value="All">All Scope</option>
                         </select>
+                        <select id="statusFilter" class="filter-select" onchange="filterUsers()">
+                            <option value="ALL">All Statuses</option>
+                            <option value="ACTIVE">Active Accounts</option>
+                            <option value="DEACTIVATED">Deactivated Accounts</option>
+                        </select>
                     </div>
 
                     <!-- Accounts Table -->
@@ -479,11 +487,12 @@
                             <div class="form-group">
                                 <label>Password</label>
                                 <div class="password-input-wrapper">
-                                    <input type="password" id="newPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                                    <input type="password" id="newPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password" oninput="handlePasswordInput(this)">
                                     <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('newPassword', this)" title="Show password" aria-label="Show password">
                                         <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                                     </button>
                                 </div>
+                                <div id="newPasswordHint" class="input-hint">Minimum 8 characters with at least 1 letter and 1 number.</div>
                             </div>
                             
                             <div class="form-group">
@@ -640,11 +649,12 @@
                 <div class="form-group">
                     <label>New Password</label>
                     <div class="password-input-wrapper">
-                        <input type="password" id="selfNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
+                        <input type="password" id="selfNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password" oninput="handlePasswordInput(this, 'selfNewPasswordHint')">
                         <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('selfNewPassword', this)" title="Show password" aria-label="Show password">
                             <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                         </button>
                     </div>
+                    <div id="selfNewPasswordHint" class="input-hint">Minimum 8 characters with at least 1 letter and 1 number.</div>
                 </div>
                 <div class="form-group">
                     <label>Confirm New Password</label>
@@ -956,6 +966,33 @@
             return true;
         }
 
+        function handlePasswordInput(el, hintId = 'newPasswordHint') {
+            const hint = document.getElementById(hintId);
+            if (!hint) return;
+            const cleanVal = el.value ? el.value.trim() : '';
+
+            if (cleanVal.length === 0) {
+                hint.style.color = '#64748b';
+                hint.innerHTML = 'Minimum 8 characters with at least 1 letter and 1 number.';
+                return;
+            }
+
+            const hasMinLen = cleanVal.length >= 8;
+            const hasLetter = /[A-Za-z]/.test(cleanVal);
+            const hasNumber = /[0-9]/.test(cleanVal);
+
+            if (!hasMinLen) {
+                hint.style.color = '#d97706';
+                hint.innerHTML = `⚠️ Must be at least 8 characters (currently ${cleanVal.length}/8).`;
+            } else if (!hasLetter || !hasNumber) {
+                hint.style.color = '#d97706';
+                hint.innerHTML = '⚠️ Must include at least 1 letter and 1 number.';
+            } else {
+                hint.style.color = '#16a34a';
+                hint.innerHTML = '✓ Password requirements satisfied.';
+            }
+        }
+
         // --- PASSWORD VALIDATION LOGIC ---
         function validatePasswordRequirements(password, confirmPassword, username = null) {
             const cleanPw = password ? password.trim() : '';
@@ -980,6 +1017,7 @@
         // --- UPDATE KPI COUNTERS ---
         function updateKpis(users) {
             const total = users.length;
+            const activeCount = users.filter(u => u.is_active !== false).length;
             const admins = users.filter(u => u.role === 'Admin').length;
             const staff = users.filter(u => u.role === 'Staff').length;
             const viewers = users.filter(u => u.role === 'Viewer').length;
@@ -997,7 +1035,7 @@
             if (staffEl) staffEl.innerText = staff;
             if (viewersEl) viewersEl.innerText = viewers;
             if (onlineEl) onlineEl.innerText = online;
-            if (countBadge) countBadge.innerText = `${total} Account${total === 1 ? '' : 's'}`;
+            if (countBadge) countBadge.innerText = `${activeCount} Active / ${total} Total Account${total === 1 ? '' : 's'}`;
         }
 
         // --- FILTER & RENDER USERS TABLE ---
@@ -1005,13 +1043,17 @@
             const searchVal = (document.getElementById('userSearchInput')?.value || '').trim().toLowerCase();
             const roleVal = document.getElementById('roleFilter')?.value || 'ALL';
             const deptVal = document.getElementById('deptFilter')?.value || 'ALL';
+            const statusVal = document.getElementById('statusFilter')?.value || 'ALL';
 
             const filtered = allUsers.filter(u => {
                 const fullName = (u.full_name || '').toLowerCase();
                 const matchesSearch = u.username.toLowerCase().includes(searchVal) || fullName.includes(searchVal);
                 const matchesRole = (roleVal === 'ALL') || (u.role === roleVal);
                 const matchesDept = (deptVal === 'ALL') || (u.department === deptVal);
-                return matchesSearch && matchesRole && matchesDept;
+                const matchesStatus = (statusVal === 'ALL') || 
+                                      (statusVal === 'ACTIVE' && u.is_active !== false) || 
+                                      (statusVal === 'DEACTIVATED' && u.is_active === false);
+                return matchesSearch && matchesRole && matchesDept && matchesStatus;
             });
 
             renderUsersTable(filtered);
@@ -1035,6 +1077,7 @@
             tbody.innerHTML = users.map(u => {
                 const isSelf = (u.username.toLowerCase() === activeUser.username.toLowerCase());
                 const isRootAdmin = (u.username.toLowerCase() === 'admin');
+                const isActive = (u.is_active !== false);
                 
                 let roleBadge = `<span class="badge badge-staff">👤 Staff</span>`;
                 if (u.role === 'Admin') {
@@ -1059,14 +1102,20 @@
                     deptBadge = `<span class="badge badge-dept-all">${escapeHtml(u.department)}</span>`;
                 }
 
-                const statusBadge = u.is_online 
-                    ? `<span class="badge badge-online">🟢 Online</span>` 
-                    : `<span class="badge badge-offline">⚪ Offline</span>`;
+                let statusBadge = '';
+                if (!isActive) {
+                    statusBadge = `<span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">⛔ Deactivated</span>`;
+                } else if (u.is_online) {
+                    statusBadge = `<span class="badge badge-online">🟢 Online</span>`;
+                } else {
+                    statusBadge = `<span class="badge badge-offline">⚪ Offline</span>`;
+                }
 
                 const selfTag = isSelf ? `<span class="badge badge-self">You</span>` : '';
+                const rowClass = !isActive ? 'class="user-row-deactivated"' : '';
 
                 return `
-                    <tr>
+                    <tr ${rowClass}>
                         <td>
                             <strong style="color: #1e293b; font-size: 0.95rem;">${displayName}</strong>
                             ${selfTag}
@@ -1088,10 +1137,11 @@
                                         🚪
                                     </button>
                                 ` : ''}
-                                <button class="action-btn btn-delete" title="${isRootAdmin ? 'Root admin cannot be deleted' : isSelf ? 'Cannot delete your active account' : 'Delete Account'}" 
+                                <button class="action-btn ${isActive ? 'btn-deactivate' : 'btn-activate'}" 
+                                        title="${isRootAdmin ? 'Root admin cannot be deactivated' : isSelf ? 'Cannot deactivate your own active account' : (isActive ? 'Deactivate Account' : 'Activate Account')}" 
                                         ${(isRootAdmin || isSelf) ? 'disabled' : ''} 
-                                        onclick="confirmDeleteUser(${u.id}, '${escapeHtml(u.username)}')">
-                                    🗑️
+                                        onclick="confirmToggleUserStatus(${u.id}, '${escapeHtml(u.username)}', ${isActive})">
+                                    ${isActive ? '⛔' : '✅'}
                                 </button>
                             </div>
                         </td>
@@ -1162,6 +1212,7 @@
                     document.getElementById('newPassword').value = '';
                     document.getElementById('newRole').value = 'Staff';
                     handleUsernameInput(document.getElementById('newUsername'));
+                    handlePasswordInput(document.getElementById('newPassword'));
                     handleNewRoleChange();
                     fetchUsers();
                 } else {
@@ -1589,28 +1640,40 @@
                 });
         }
 
-        // --- DELETE USER ---
-        async function confirmDeleteUser(id, username) {
-            const confirmed = await showAppConfirm(
-                "Delete User Account",
-                `Are you sure you want to permanently remove the account for <strong>${escapeHtml(username)}</strong>?<br><br><span style="color: #dc2626;">This action cannot be undone.</span>`
-            );
-            if (!confirmed) return;
+        // --- DEACTIVATE / REACTIVATE USER ---
+        async function confirmToggleUserStatus(id, username, currentActive) {
+            if (currentActive) {
+                const confirmed = await showAppConfirm(
+                    "Deactivate User Account",
+                    `Are you sure you want to deactivate the account for <strong>${escapeHtml(username)}</strong>?<br><br><span style="color: #b91c1c;">The user will be immediately logged out and blocked from logging in until reactivated.</span>`,
+                    { type: 'warning', confirmText: 'Deactivate Account' }
+                );
+                if (!confirmed) return;
+            } else {
+                const confirmed = await showAppConfirm(
+                    "Reactivate User Account",
+                    `Are you sure you want to reactivate the account for <strong>${escapeHtml(username)}</strong>?<br><br><span style="color: #16a34a;">The user will regain access to log in to the system.</span>`,
+                    { type: 'info', confirmText: 'Activate Account', confirmBg: '#16a34a' }
+                );
+                if (!confirmed) return;
+            }
 
-            fetch(`/api/users/${id}?current_user=${encodeURIComponent(activeUser.username)}`, { method: 'DELETE' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showToast(data.message || `Account '${username}' deleted.`, "success", "User Deleted");
-                        fetchUsers();
-                    } else {
-                        showToast(data.message || "Failed to delete user.", "error", "Deletion Blocked");
-                    }
-                })
-                .catch(err => {
-                    console.error("Delete user error:", err);
-                    showToast("Network error deleting user.", "error", "Network Error");
-                });
+            fetch(`/api/users/${id}/toggle-status?current_user=${encodeURIComponent(activeUser.username)}`, { 
+                method: 'POST' 
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast(data.message, "success", currentActive ? "Account Deactivated" : "Account Activated");
+                    fetchUsers();
+                } else {
+                    showToast(data.message || "Failed to update account status.", "error", "Operation Blocked");
+                }
+            })
+            .catch(err => {
+                console.error("Toggle user status error:", err);
+                showToast("Network error updating account status.", "error", "Network Error");
+            });
         }
 
         

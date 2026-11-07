@@ -109,6 +109,7 @@ class User(Base):
     department = Column(String(10))
     session_token = Column(String(255), nullable=True)
     updated_by = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
 
 class SystemSettings(Base):
     __tablename__ = "system_settings"

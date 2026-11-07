@@ -41,6 +41,103 @@
             opacity: 0.7;
         }
 
+        /* Filter Section Styles */
+        .filter-container {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+            background: #ecf0f1;
+            padding: 14px 16px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+            align-items: center;
+        }
+        .filter-container select, .filter-container input[type="text"] {
+            height: 44px;
+            padding: 0 12px;
+            font-size: 0.92rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: #fff;
+            color: #1e293b;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .filter-container select:focus, .filter-container input[type="text"]:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
+        }
+        .btn-refresh-icon {
+            background-color: #34495e;
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .btn-refresh-icon:hover {
+            background-color: #2c3e50;
+        }
+
+        /* Pagination Buttons */
+        .pagination-btn {
+            background: #ffffff;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+            line-height: 1;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+            color: #0f172a;
+        }
+        .pagination-btn.active {
+            background: #2563eb !important;
+            color: #ffffff !important;
+            border-color: #2563eb !important;
+            font-weight: 700;
+            cursor: default;
+            box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+        }
+        .pagination-btn:disabled {
+            background: #f8fafc !important;
+            color: #94a3b8 !important;
+            border-color: #e2e8f0 !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+
+        @media (max-width: 768px) {
+            .filter-container {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 10px !important;
+            }
+            .filter-container > select, .filter-container > div, .filter-container > button {
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+        }
+
         /* App Custom Dialog Modal */
         @keyframes modalPopIn {
             0% { transform: scale(0.92); opacity: 0; }
@@ -365,55 +462,50 @@
                 </div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <button type="button" class="btn-primary admin-only" id="openAddClassBtn" style="background-color: #2563eb; padding: 9px 16px; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px;" onclick="openAddClassModal()"><span style="font-size: 1rem;">➕</span> Add Class</button>
                 <button type="button" class="btn-primary" id="viewArchivedBtn" style="background-color: #0284c7; padding: 9px 15px; font-size: 0.88rem;" onclick="openArchivedRostersModal()" title="View past rosters by semester">📁 View Archived Rosters</button>
                 <button type="button" class="btn-primary admin-only" id="archiveRosterBtn" style="background-color: #94a3b8; padding: 9px 15px; font-size: 0.88rem; cursor: not-allowed;" onclick="promptArchiveEnrollments()" disabled title="Archive button will unlock when 100% of current booklet demand is fulfilled">📦 Archive Current Roster</button>
                 <button type="button" class="btn-primary admin-only" style="background-color: #27ae60; padding: 9px 15px; font-size: 0.88rem;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
             </div>
         </div>
 
-        <!-- INLINE ADD FORM -->
-        <div class="card" style="padding: 20px;">
-            <form id="addForm" onsubmit="submitClass(event)" class="form-grid">
-                <div class="form-field-group">
-                    <div class="form-field-header">
-                        <label for="teacher">Instructor</label>
-                    </div>
+        <!-- DYNAMIC FILTERS & SEARCH SECTION -->
+        <div class="filter-container" id="enrollmentsFilterContainer">
+            <div style="flex: 1.5; min-width: 220px;">
+                <input type="text" id="filterSearch" oninput="onFilterChange()" placeholder="🔍 Search Instructor, Section, or Subject..." style="width: 100%;">
+            </div>
+            <select id="filterProgram" onchange="onFilterChange()" style="flex: 1; min-width: 170px;">
+                <option value="">-- All Academic Programs --</option>
+            </select>
+            <select id="filterInstructor" onchange="onFilterChange()" style="flex: 1; min-width: 180px;">
+                <option value="">-- All Instructors --</option>
+            </select>
+            <select id="filterPageSize" onchange="changePageSize(this.value)" style="width: 130px;" title="Cards per page">
+                <option value="8" selected>8 per page</option>
+                <option value="16">16 per page</option>
+                <option value="24">24 per page</option>
+                <option value="all">Show All</option>
+            </select>
+            <button type="button" class="btn-refresh-icon" onclick="resetFilters()" title="Reset all filters">
+                🔄
+            </button>
+        </div>
 
-                    <input type="text" id="teacher" placeholder="e.g., Grace S. Ibañez" required>
-                </div>
-                <div class="form-field-group">
-                    <div class="form-field-header">
-                        <label for="section">Section</label>
-                        <span id="section-dept-badge" style="font-size: 0.72rem; font-weight: 700; line-height: 1;"></span>
-                    </div>
-
-                    <input type="text" id="section" placeholder="e.g., BSCS-1E" required>
-                </div>
-                <div class="form-field-group">
-                    <div class="form-field-header">
-                        <label for="subject">Subject</label>
-                    </div>
-
-                    <input type="text" id="subject" placeholder="e.g., COSC 105" required>
-                </div>
-                <div class="form-field-group">
-                    <div class="form-field-header">
-                        <label for="headcount">Headcount</label>
-                    </div>
-
-                    <input type="number" id="headcount" min="1" placeholder="e.g., 40" required>
-                </div>
-                <div class="form-field-group">
-                    <div class="form-field-header"></div>
-                    <button type="submit" class="btn-primary" id="addBtn" disabled>Add Class</button>
-                </div>
-            </form>
+        <!-- TOP RESULTS SUMMARY & QUICK NAV -->
+        <div id="topPaginationBar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 0.88rem; color: #64748b; flex-wrap: wrap; gap: 8px;">
+            <div id="topPaginationSummary" style="font-weight: 600; color: #334155;">Showing results 8 of 0 instructors</div>
+            <div id="topPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
         </div>
 
         <!-- GROUPED INSTRUCTOR CARDS -->
         <div class="instructor-grid">
             {% for teacher, classes in enrollments|groupby('teacher_name') %}
-            <div class="instructor-card" id="card-{{ loop.index }}">
+            <div class="instructor-card" id="card-{{ loop.index }}"
+                 data-teacher="{{ teacher|lower }}"
+                 data-teacher-display="{{ teacher }}"
+                 data-sections="{% for c in classes %}{{ c.section|lower }} {% endfor %}"
+                 data-subjects="{% for c in classes %}{{ c.subject|lower }} {% endfor %}"
+                 data-departments="{% for c in classes %}{{ (c.department or '')|upper }} {% endfor %}">
                 <h3>
                     <span>{{ teacher }}</span>
                     <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
@@ -482,11 +574,54 @@
                     Class enrollments for the current semester have not been imported yet, or previous classes have been safely archived. You can now import a new set of classes for the upcoming semester.
                 </p>
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button type="button" class="btn-primary admin-only" style="background-color: #2563eb; padding: 9px 20px; font-size: 0.9rem;" onclick="openAddClassModal()">➕ Add Class</button>
                     <button type="button" class="btn-primary admin-only" style="background-color: #27ae60; padding: 9px 20px; font-size: 0.9rem;" onclick="openBulkImportModal()">📥 Batch Import Classes</button>
                     <button type="button" class="btn-primary" style="background-color: #0284c7; padding: 9px 20px; font-size: 0.9rem;" onclick="openArchivedRostersModal()">📁 View Past Archived Rosters</button>
                 </div>
             </div>
             {% endfor %}
+        </div>
+
+        <!-- BOTTOM PAGINATION CONTROLS -->
+        <div id="bottomPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding: 14px 20px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+            <div id="bottomPaginationSummary" style="font-size: 0.88rem; color: #475569; font-weight: 600;">
+                Showing results 8 of 0 instructors
+            </div>
+            <div id="bottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+        </div>
+    </div>
+
+    <!-- ADD CLASS MODAL (Hidden by default) -->
+    <div class="modal-overlay" id="addClassModal" style="display: none;">
+        <div class="modal-card" style="max-width: 480px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ecf0f1; padding-bottom: 12px; margin-bottom: 18px;">
+                <h3 style="margin: 0; color: #2c3e50; font-size: 1.15rem; display: flex; align-items: center; gap: 8px;">
+                    <span>➕</span> Add Class Enrollment
+                </h3>
+                <button type="button" onclick="closeAddClassModal()" style="background: none; border: none; font-size: 1.5rem; color: #7f8c8d; cursor: pointer; line-height: 1; padding: 0 4px;">&times;</button>
+            </div>
+            <form id="addForm" onsubmit="submitClass(event)">
+                <label for="teacher">Instructor</label>
+                <input type="text" id="teacher" placeholder="e.g., Grace S. Ibañez" required list="instructorSuggestions" autocomplete="off">
+                <datalist id="instructorSuggestions"></datalist>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <label for="section" style="margin: 0;">Section</label>
+                    <span id="section-dept-badge" style="font-size: 0.75rem; font-weight: 700; line-height: 1;"></span>
+                </div>
+                <input type="text" id="section" placeholder="e.g., BSCS-1E" required autocomplete="off">
+
+                <label for="subject">Subject</label>
+                <input type="text" id="subject" placeholder="e.g., COSC 105" required autocomplete="off">
+
+                <label for="headcount">Student Headcount</label>
+                <input type="number" id="headcount" min="1" placeholder="e.g., 40" required>
+
+                <div style="display: flex; gap: 10px; margin-top: 18px;">
+                    <button type="submit" class="btn-primary" style="flex: 1;" id="addBtn" disabled>Add Class</button>
+                    <button type="button" class="btn-cancel-modal" style="flex: 1;" onclick="closeAddClassModal()">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1170,6 +1305,7 @@
                 const data = await res.json();
                 if (data.status === 'success' && data.programs) {
                     enrolledAcademicPrograms = data.programs;
+                    populateProgramFilter();
                 }
             } catch (e) {
                 console.error("Failed to load academic programs for enrollments:", e);
@@ -1249,6 +1385,7 @@
         // Attach validation listeners once DOM is ready
         document.addEventListener('DOMContentLoaded', () => {
             loadEnrolledAcademicPrograms();
+            initEnrollmentsPagination();
             ['teacher', 'section', 'subject', 'headcount'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -1273,12 +1410,276 @@
             checkArchiveStatus();
         });
 
+        // --- ADD CLASS MODAL CONTROLS ---
+        function openAddClassModal(teacherName = '') {
+            const modal = document.getElementById('addClassModal');
+            const teacherEl = document.getElementById('teacher');
+            const sectionEl = document.getElementById('section');
+            const subjectEl = document.getElementById('subject');
+            const headcountEl = document.getElementById('headcount');
+
+            if (teacherEl) teacherEl.value = teacherName || '';
+            if (!teacherName) {
+                if (sectionEl) sectionEl.value = '';
+                if (subjectEl) subjectEl.value = '';
+                if (headcountEl) headcountEl.value = '';
+            }
+            if (modal) modal.style.display = 'flex';
+            validateAddForm();
+
+            setTimeout(() => {
+                if (teacherName && sectionEl) {
+                    sectionEl.focus();
+                } else if (teacherEl) {
+                    teacherEl.focus();
+                }
+            }, 60);
+        }
+
+        function closeAddClassModal() {
+            const modal = document.getElementById('addClassModal');
+            if (modal) modal.style.display = 'none';
+        }
+
         // --- QUICK ADD HELPER ---
         function quickAdd(teacherName) {
-            document.getElementById('teacher').value = teacherName;
-            document.getElementById('mainView').scrollTop = 0; 
-            document.getElementById('section').focus(); 
-            validateAddForm();
+            openAddClassModal(teacherName);
+        }
+
+        // --- ENROLLMENTS PAGINATION & FILTER CONTROLLER ---
+        let enrollmentsCurrentPage = 1;
+        let enrollmentsPageSize = 8;
+        let allInstructorCards = [];
+
+        function initEnrollmentsPagination() {
+            const grid = document.querySelector('.instructor-grid');
+            if (!grid) return;
+
+            allInstructorCards = Array.from(grid.querySelectorAll('.instructor-card'));
+            if (allInstructorCards.length === 0) {
+                const filterContainer = document.getElementById('enrollmentsFilterContainer');
+                if (filterContainer) filterContainer.style.display = 'none';
+                const topBar = document.getElementById('topPaginationBar');
+                if (topBar) topBar.style.display = 'none';
+                const bottomPag = document.getElementById('bottomPaginationContainer');
+                if (bottomPag) bottomPag.style.display = 'none';
+                return;
+            }
+
+            // Populate unique instructors for filter and datalist
+            const instructorSelect = document.getElementById('filterInstructor');
+            const suggestionsList = document.getElementById('instructorSuggestions');
+            const uniqueTeachers = Array.from(new Set(allInstructorCards.map(c => c.getAttribute('data-teacher-display') || ''))).filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+            if (instructorSelect) {
+                instructorSelect.innerHTML = '<option value="">-- All Instructors --</option>' + 
+                    uniqueTeachers.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+            }
+            if (suggestionsList) {
+                suggestionsList.innerHTML = uniqueTeachers.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+            }
+
+            populateProgramFilter();
+            applyFilters();
+        }
+
+        function populateProgramFilter() {
+            const programSelect = document.getElementById('filterProgram');
+            if (!programSelect) return;
+
+            let programs = [];
+            if (enrolledAcademicPrograms && enrolledAcademicPrograms.length > 0) {
+                programs = enrolledAcademicPrograms.map(p => ({ code: p.code, name: p.name }));
+            } else if (allInstructorCards && allInstructorCards.length > 0) {
+                const depts = new Set();
+                allInstructorCards.forEach(c => {
+                    const dStr = c.getAttribute('data-departments') || '';
+                    dStr.split(/\s+/).filter(Boolean).forEach(d => depts.add(d.toUpperCase()));
+                });
+                programs = Array.from(depts).sort().map(d => ({ code: d, name: d }));
+            }
+
+            const currentVal = programSelect.value;
+            programSelect.innerHTML = '<option value="">-- All Academic Programs --</option>' + 
+                programs.map(p => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`).join('');
+            if (currentVal) programSelect.value = currentVal;
+        }
+
+        function onFilterChange() {
+            enrollmentsCurrentPage = 1;
+            applyFilters();
+        }
+
+        function changePageSize(size) {
+            enrollmentsPageSize = (size === 'all') ? 999999 : (parseInt(size, 10) || 8);
+            enrollmentsCurrentPage = 1;
+            applyFilters();
+        }
+
+        function resetFilters() {
+            const searchInput = document.getElementById('filterSearch');
+            const programSelect = document.getElementById('filterProgram');
+            const instructorSelect = document.getElementById('filterInstructor');
+            const pageSizeSelect = document.getElementById('filterPageSize');
+
+            if (searchInput) searchInput.value = '';
+            if (programSelect) programSelect.value = '';
+            if (instructorSelect) instructorSelect.value = '';
+            if (pageSizeSelect) pageSizeSelect.value = '8';
+
+            enrollmentsPageSize = 8;
+            enrollmentsCurrentPage = 1;
+            applyFilters();
+        }
+
+        function applyFilters() {
+            if (!allInstructorCards || allInstructorCards.length === 0) return;
+
+            const searchVal = (document.getElementById('filterSearch') ? document.getElementById('filterSearch').value : '').trim().toLowerCase();
+            const selectedProg = (document.getElementById('filterProgram') ? document.getElementById('filterProgram').value : '').trim().toUpperCase();
+            const selectedInst = (document.getElementById('filterInstructor') ? document.getElementById('filterInstructor').value : '').trim();
+
+            const isFiltered = Boolean(searchVal || selectedProg || selectedInst);
+
+            const filteredCards = allInstructorCards.filter(card => {
+                const teacherLower = card.getAttribute('data-teacher') || '';
+                const teacherDisplay = card.getAttribute('data-teacher-display') || '';
+                const sections = card.getAttribute('data-sections') || '';
+                const subjects = card.getAttribute('data-subjects') || '';
+                const departments = card.getAttribute('data-departments') || '';
+
+                if (selectedInst && teacherDisplay !== selectedInst) return false;
+                if (selectedProg && !departments.includes(selectedProg)) return false;
+                if (searchVal) {
+                    const match = teacherLower.includes(searchVal) || sections.includes(searchVal) || subjects.includes(searchVal);
+                    if (!match) return false;
+                }
+                return true;
+            });
+
+            const totalFiltered = filteredCards.length;
+            const totalAll = allInstructorCards.length;
+            const totalPages = Math.ceil(totalFiltered / enrollmentsPageSize) || 1;
+
+            if (enrollmentsCurrentPage > totalPages) enrollmentsCurrentPage = totalPages;
+            if (enrollmentsCurrentPage < 1) enrollmentsCurrentPage = 1;
+
+            const startIndex = (enrollmentsCurrentPage - 1) * enrollmentsPageSize;
+            const endIndex = Math.min(startIndex + enrollmentsPageSize, totalFiltered);
+            const pageSlice = filteredCards.slice(startIndex, endIndex);
+
+            // Hide all cards first
+            allInstructorCards.forEach(c => c.style.display = 'none');
+            // Show only cards for this page
+            pageSlice.forEach(c => c.style.display = '');
+
+            // Update No Match container
+            let noMatchEl = document.getElementById('enrollmentsNoMatchMessage');
+            if (totalFiltered === 0) {
+                if (!noMatchEl) {
+                    noMatchEl = document.createElement('div');
+                    noMatchEl.id = 'enrollmentsNoMatchMessage';
+                    noMatchEl.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: white; border-radius: 8px; border: 1.5px dashed #cbd5e1; color: #64748b; font-size: 0.95rem;';
+                    const grid = document.querySelector('.instructor-grid');
+                    if (grid) grid.appendChild(noMatchEl);
+                }
+                noMatchEl.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 8px;">🔍</div>
+                    <div style="font-weight: 700; color: #1e293b; font-size: 1.05rem; margin-bottom: 4px;">No Matching Instructors Found</div>
+                    <div style="font-size: 0.88rem; color: #64748b; margin-bottom: 12px;">No instructors or classes match your search criteria.</div>
+                    <button type="button" class="btn-primary" onclick="resetFilters()" style="padding: 7px 16px; font-size: 0.85rem;">🔄 Reset Filters</button>
+                `;
+                noMatchEl.style.display = 'block';
+            } else if (noMatchEl) {
+                noMatchEl.style.display = 'none';
+            }
+
+            // Update Summary Text
+            const countShown = pageSlice.length;
+            const summaryStr = totalFiltered === 0 
+                ? 'Showing results 0 of 0 instructors' 
+                : (enrollmentsPageSize >= 999999 
+                    ? `Showing results ${totalFiltered} of ${totalFiltered} instructors` 
+                    : `Showing results ${countShown} of ${totalFiltered} instructor${totalFiltered === 1 ? '' : 's'}`);
+            const filteredSuffix = isFiltered ? ` (filtered from ${totalAll} total)` : '';
+            const fullSummary = summaryStr + filteredSuffix;
+
+            const topSummaryEl = document.getElementById('topPaginationSummary');
+            const bottomSummaryEl = document.getElementById('bottomPaginationSummary');
+            if (topSummaryEl) topSummaryEl.innerText = fullSummary;
+            if (bottomSummaryEl) bottomSummaryEl.innerText = fullSummary;
+
+            // Render Pagination Buttons
+            renderPaginationControls(totalPages);
+        }
+
+        function renderPaginationControls(totalPages) {
+            const topPills = document.getElementById('topPaginationPills');
+            const bottomButtons = document.getElementById('bottomPaginationButtons');
+            const bottomContainer = document.getElementById('bottomPaginationContainer');
+
+            if (bottomContainer) {
+                bottomContainer.style.display = (allInstructorCards.length > 0) ? 'flex' : 'none';
+            }
+
+            if (totalPages <= 1) {
+                if (topPills) topPills.innerHTML = '';
+                if (bottomButtons) bottomButtons.innerHTML = '';
+                return;
+            }
+
+            // Top mini pills (‹ Page X of Y ›)
+            if (topPills) {
+                topPills.innerHTML = `
+                    <button type="button" class="pagination-btn" style="padding: 3px 8px; height: 28px; font-size: 0.8rem;" onclick="goToPage(${enrollmentsCurrentPage - 1})" ${enrollmentsCurrentPage === 1 ? 'disabled' : ''} title="Previous Page">‹</button>
+                    <span style="font-size: 0.82rem; font-weight: 600; color: #475569; padding: 0 4px;">Page ${enrollmentsCurrentPage} of ${totalPages}</span>
+                    <button type="button" class="pagination-btn" style="padding: 3px 8px; height: 28px; font-size: 0.8rem;" onclick="goToPage(${enrollmentsCurrentPage + 1})" ${enrollmentsCurrentPage === totalPages ? 'disabled' : ''} title="Next Page">›</button>
+                `;
+            }
+
+            // Bottom comprehensive button set
+            if (bottomButtons) {
+                let html = '';
+                html += `<button type="button" class="pagination-btn" onclick="goToPage(1)" ${enrollmentsCurrentPage === 1 ? 'disabled' : ''} title="First Page">« First</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToPage(${enrollmentsCurrentPage - 1})" ${enrollmentsCurrentPage === 1 ? 'disabled' : ''} title="Previous Page">‹ Prev</button>`;
+
+                // Dynamic window of page buttons around current page
+                const maxButtons = 5;
+                let startP = Math.max(1, enrollmentsCurrentPage - Math.floor(maxButtons / 2));
+                let endP = Math.min(totalPages, startP + maxButtons - 1);
+                if (endP - startP + 1 < maxButtons) {
+                    startP = Math.max(1, endP - maxButtons + 1);
+                }
+
+                if (startP > 1) {
+                    html += `<button type="button" class="pagination-btn" onclick="goToPage(1)">1</button>`;
+                    if (startP > 2) html += `<span style="padding: 0 4px; color: #94a3b8;">…</span>`;
+                }
+
+                for (let p = startP; p <= endP; p++) {
+                    const activeClass = (p === enrollmentsCurrentPage) ? 'active' : '';
+                    html += `<button type="button" class="pagination-btn ${activeClass}" onclick="goToPage(${p})">${p}</button>`;
+                }
+
+                if (endP < totalPages) {
+                    if (endP < totalPages - 1) html += `<span style="padding: 0 4px; color: #94a3b8;">…</span>`;
+                    html += `<button type="button" class="pagination-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+                }
+
+                html += `<button type="button" class="pagination-btn" onclick="goToPage(${enrollmentsCurrentPage + 1})" ${enrollmentsCurrentPage === totalPages ? 'disabled' : ''} title="Next Page">Next ›</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToPage(${totalPages})" ${enrollmentsCurrentPage === totalPages ? 'disabled' : ''} title="Last Page">Last »</button>`;
+
+                bottomButtons.innerHTML = html;
+            }
+        }
+
+        function goToPage(pageNum) {
+            enrollmentsCurrentPage = pageNum;
+            applyFilters();
+            const filterEl = document.getElementById('enrollmentsFilterContainer');
+            if (filterEl) {
+                filterEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         }
     
         // --- ADD NEW RECORD ---
