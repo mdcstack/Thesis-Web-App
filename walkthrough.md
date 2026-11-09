@@ -1797,3 +1797,65 @@ Addressed user design and accounting isolation requirements in [`templates/payme
      - Legacy Receipt: Qty: 40, Due: ₱100.00, Paid: ₱100.00, Balance: ₱0.00, Status: `Fully Paid`, Installments: 1.
      - Active Receipt: Qty: 40, Due: ₱100.00, Paid: ₱0.00, Balance: ₱100.00, Status: `Unpaid`, Installments: 0.
    - Confirmed zero cross-semester contamination (`[VERIFICATION SUCCEEDED: NO LUMPING, STRICT ISOLATION MAINTAINED!]`).
+
+
+---
+
+## 127. Universal Table Anti-Tamper & DevTools Inspection Defense
+
+### Problem Addressed
+If users opened Chrome DevTools (Inspect Element / F12) and manually edited values inside any table cells (`<td>`, `<th>`), rows, or modals across any HTML page, the DOM would reflect the tampered values. In worse scenarios, clicking Save or Print from modals could attempt to submit or print the tampered data.
+
+### Solution Applied
+1. **Centralized Anti-Tamper Engine (`static/dom_integrity.js`)**:
+   - **`autoProtectAllTables()` & `autoProtectTable(tableEl)`**: Automatically scans and attaches an active `MutationObserver` to every `<table>` in the document.
+   - **Dynamic Table Watcher**: A document-level `MutationObserver` on `document.body` auto-detects dynamically injected tables (e.g. inside modals, filter switches, and dialogs) and instantly seals them.
+   - **Authoritative Snapshot WeakMap (`saveTableSnapshot`)**: Maintains clean, authoritative DOM snapshots mapped via a garbage-collection-safe `WeakMap`. If any unauthorized change is made via DevTools, the observer automatically restores the authoritative snapshot in under 60ms and triggers `showTamperToast()`.
+   - **Contextmenu & Shortcut Guard**:
+     - Disables context-menu inspection (`e.preventDefault()`) when clicking on tables or protected data containers.
+     - Intercepts F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, and Ctrl+U when focus or mouse hover is over protected records.
+   - **Print Rehydration Pipeline**: Intercepts `window.print()` and browser `beforeprint` events to audit and re-hydrate all tables and printable areas (`#receipt-print-area`, `#modal-receipt-mirror`, `#reportDynamicContent`, `.kpi-grid`) from authoritative server records before rendering.
+
+2. **Universal Authoritative State Registry (`window.registerAuthoritativeData`)**:
+   All templates dynamically register their authentic fetched data:
+   - `department_breakdown.html`: `department_breakdown`
+   - `expenditure_report.html`: `expenditure_report`
+   - `payment_tracking.html`: `payment_tracking`
+   - `receipts.html`: `receipts`
+   - `transaction_profile.html`: `transaction_profile_receipts`, `transaction_profile_instructors`
+   - `settings.html`: `academic_programs`, `period_configurations`
+   - `enrollments.html`: `enrollments_roster`, `enrollments_archived`
+   - `history.html`: `history`
+   - `dashboard.html`: `dashboard_stats`
+   - `manage_user.html`: `users`
+
+3. **Strict ID-Based Modal Lookups (No Mutable DOM Attribute Reliance)**:
+   All modal openers and action handlers were refactored to take ID only, querying authoritative state in memory:
+   - `manage_user.html`: `openEditUserModal(id)`, `openAdminResetPwModal(id)`, `revokeUserSession(id)`, `confirmToggleUserStatus(id)`
+   - `settings.html`: `openEditProgramModal(id)` queries `getAuthoritativeRecord('academic_programs', id)`
+   - `enrollments.html`: `openEditClassModal(id)` queries `enrollments_roster`; `deleteClassRecord(id)` queries authentic section/subject from roster
+   - `history.html`: `openReturnModal(enrollmentId)` queries `getAuthoritativeRecord('history', enrollmentId)`
+   - `payment_tracking.html`: `openPaymentModal(id)` queries `getAuthoritativeRecord('payment_tracking', id)`; `openBreakdownModal(id)` queries authentic payment records
+   - `receipts.html`: `openReceipt(id)` queries `getAuthoritativeRecord('receipts', id)`
+
+4. **Universal Coverage Across All 11 Table Templates**:
+   - `dashboard.html` (4 tables)
+   - `department_breakdown.html` (2 tables)
+   - `distribution.html` (2 tables)
+   - `enrollments.html` (6 tables, including `#detailModalClassesTableBody`, `#archivedTableBody`)
+   - `expenditure_report.html` (3 tables)
+   - `history.html` (3 tables)
+   - `manage_user.html` (2 tables, including `#userTableBody`)
+   - `payment_tracking.html` (3 tables, including `#paymentTableBody`, `#calcPaymentHistoryBody`)
+   - `receipts.html` (3 tables)
+   - `settings.html` (2 tables, including `#academicProgramsTableBody`, `#periodArchiveTableBody`)
+   - `transaction_profile.html` (5 tables, including `#directoryTableBody`, `#instructorClassesBody`, `#instructorPaymentsBody`, `#r-payment-history-body`)
+
+### Verification Results
+- **`scratch/test_all_tables_tamper.py`**:
+  - `dom_integrity.js` verified with all anti-tamper mechanisms (`WeakMap`, `autoProtectAllTables`, contextmenu guard, F12/Ctrl+Shift+I guard, print rehydration).
+  - All 11 templates with `<table>` tags verified to include `dom_integrity.js` via sidebar or script.
+  - All critical modal handlers verified to look up authoritative records by ID.
+  - Test passed: **100% SUCCESS**.
+- **`scratch/test_rbac.py`**:
+  - Unauthenticated navigation, Viewer/Staff/Admin boundaries, API endpoints, and session cookies all verified: **100% SUCCESS**.

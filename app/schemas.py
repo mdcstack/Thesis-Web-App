@@ -89,6 +89,8 @@ class BookletTemplateUpdate(BaseModel):
     qr_size: float
     qr_enabled: bool = True
     is_official: Optional[bool] = False
+    updated_by: Optional[str] = None
+    role: Optional[str] = None
 
 class UpdateUserRequest(BaseModel):
     full_name: Optional[str] = None
@@ -115,6 +117,8 @@ class AcademicProgramBase(BaseModel):
     section_prefix: str
     color_hex: Optional[str] = "#3498db"
     is_active: Optional[bool] = True
+    sheets_per_booklet: Optional[int] = None
+    booklet_price: Optional[float] = None
 
 class AcademicProgramCreate(AcademicProgramBase):
     pass
@@ -124,10 +128,28 @@ class AcademicProgramUpdate(BaseModel):
     section_prefix: Optional[str] = None
     color_hex: Optional[str] = None
     is_active: Optional[bool] = None
+    sheets_per_booklet: Optional[int] = None
+    booklet_price: Optional[float] = None
 
 class AcademicProgramResponse(AcademicProgramBase):
     id: int
 
     class Config:
         from_attributes = True
+
+class FacultyRosterItem(BaseModel):
+    name: str
+    department: Optional[str] = "CS"
+
+class BulkFacultyImport(BaseModel):
+    records: List[FacultyRosterItem]
+
+class FacultyClassItem(BaseModel):
+    subject: str
+    section: str
+    student_headcount: int
+
+class FacultyUploadRequest(BaseModel):
+    teacher_name: str
+    classes: List[FacultyClassItem]
 

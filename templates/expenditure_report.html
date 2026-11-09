@@ -4,7 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Expenditure Report - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -529,6 +554,9 @@
                                 sessionStorage.setItem(FINANCIAL_CACHE_KEY, JSON.stringify(data));
                             } catch (e) {}
                         }
+                        if (window.registerAuthoritativeData) {
+                            window.registerAuthoritativeData('expenditure_report', data);
+                        }
                         renderExpenditureReport(data);
                     } else if (!isBackground) {
                         alert("Could not load financial data: " + (data.message || 'Unknown server response'));
@@ -543,6 +571,15 @@
         }
 
         function renderExpenditureReport(data) {
+            if (window.withSystemRendering) {
+                return window.withSystemRendering(function() {
+                    _executeRenderExpenditureReport(data);
+                });
+            }
+            return _executeRenderExpenditureReport(data);
+        }
+
+        function _executeRenderExpenditureReport(data) {
             const fin = data.financials;
             const kpi = data.kpi || {};
 
@@ -969,7 +1006,17 @@
             }
 
             document.getElementById('prodBookletsYield').innerText = `${totalGenerated.toLocaleString()} pcs`;
-            document.getElementById('prodBookletPrice').innerText = `₱${bookletPrice.toFixed(2)} / pc`;
+            if (fin.course_prices && Object.keys(fin.course_prices).length > 0) {
+                const uniquePrices = new Set(Object.values(fin.course_prices).map(v => Number(v).toFixed(2)));
+                if (uniquePrices.size > 1) {
+                    const priceBreakdown = Object.entries(fin.course_prices).map(([c, pr]) => `${c}: ₱${Number(pr).toFixed(2)}`).join(' | ');
+                    document.getElementById('prodBookletPrice').innerText = priceBreakdown;
+                } else {
+                    document.getElementById('prodBookletPrice').innerText = `₱${bookletPrice.toFixed(2)} / pc`;
+                }
+            } else {
+                document.getElementById('prodBookletPrice').innerText = `₱${bookletPrice.toFixed(2)} / pc`;
+            }
 
             // 4. Income Statement Waterfall - Dynamic Per-Course Program Allocations (1%)
             document.getElementById('isGross').innerText = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -1033,44 +1080,42 @@
             document.getElementById('isNetIncome').innerText = `₱${displayIsNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         }
 
+        // Register pre-print rehydration to wipe out any DevTools tampering before printing
+        if (window.registerPrintRehydrator) {
+            window.registerPrintRehydrator(function() {
+                var auth = window.getAuthoritativeData('expenditure_report');
+                if (auth) {
+                    renderExpenditureReport(auth);
+                }
+            });
+        }
+
+        // Protect critical financial tables against Inspect Element tampering
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (window.protectContainer) {
+                    var container = document.getElementById('reportDynamicContent');
+                    if (container) {
+                        window.protectContainer(container, function() {
+                            var auth = window.getAuthoritativeData('expenditure_report');
+                            if (auth) renderExpenditureReport(auth);
+                        });
+                    }
+                }
+            }, 300);
+        });
+
         function printFinancialStatement() {
             document.getElementById('printDateLabel').innerText = "Generated on: " + new Date().toLocaleString();
+            if (window.executePrintRehydration) {
+                window.executePrintRehydration();
+            }
             window.print();
         }
 
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (typeof window.refreshSidebarDSSAlert === 'function') {
+            window.refreshSidebarDSSAlert();
         }
-
-        fetch('/api/dss-alert').then(response => response.json()).then(data => {
-            const badge = document.getElementById('notifBadge');
-            const panel = document.getElementById('notifPanel');
-            const bell = document.getElementById('notifBell');
-            if (!badge || !panel || !bell) return;
-            if (data.alert) {
-                badge.style.display = 'inline-block';
-                bell.style.color = 'white'; 
-                if (activeUser.role === 'Admin') {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                } else {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                }
-            } else {
-                badge.style.display = 'none';
-                if (data.has_enrollments === false) {
-                    panel.style.borderLeftColor = '#64748b';
-                    if (activeUser && activeUser.role === 'Admin') {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                    } else {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                    }
-                } else {
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                }
-            }
-        }).catch(err => console.log('Alert check error:', err));
 
         
     // --- IN-APP CONFIRMATION DIALOG SYSTEM ---

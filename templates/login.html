@@ -128,6 +128,20 @@
     localStorage.removeItem('bookletlog_user');
     localStorage.removeItem('bookletlog_active_pack');
 
+    // Display unauthorized error if redirected
+    (function checkLoginError() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error') === 'unauthorized') {
+                const errorMsg = document.getElementById('errorMsg');
+                if (errorMsg) {
+                    errorMsg.innerText = "Please log in with an authorized account to access that page.";
+                    errorMsg.style.display = "block";
+                }
+            }
+        } catch(e) {}
+    })();
+
     function togglePasswordVisibility() {
         const passwordInput = document.getElementById('password');
         const toggleBtn = document.getElementById('togglePasswordBtn');
@@ -182,10 +196,25 @@
                 // Save the session securely to the device
                 localStorage.setItem('bookletlog_user', JSON.stringify(data.user));
                 
-                // Check if user was redirected from a protected page
+                // Check if user was redirected from a protected page and role has permission
                 const urlParams = new URLSearchParams(window.location.search);
                 const redirectTarget = urlParams.get('redirect');
+                const roleLower = (data.user.role || '').toLowerCase();
+                const adminOnlyPaths = ['/settings'];
+                const staffOrAdminPaths = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template'];
+                
+                let targetPermitted = false;
                 if (redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')) {
+                    if (roleLower === 'admin') {
+                        targetPermitted = true;
+                    } else if (roleLower === 'staff') {
+                        targetPermitted = !adminOnlyPaths.some(p => redirectTarget.startsWith(p));
+                    } else if (roleLower === 'viewer') {
+                        targetPermitted = !adminOnlyPaths.some(p => redirectTarget.startsWith(p)) && !staffOrAdminPaths.some(p => redirectTarget.startsWith(p));
+                    }
+                }
+
+                if (targetPermitted) {
                     window.location.href = redirectTarget;
                 } else if (data.user.role === 'Admin') {
                     window.location.href = '/dashboard';

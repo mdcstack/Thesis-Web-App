@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Booklet Template & Alignment - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { display: flex; height: 100vh; background-color: #f4f6f9; }
@@ -256,6 +280,7 @@
         }
 
 </style>
+    <script src="/static/lan_sync.js"></script>
 </head>
 <body>
 
@@ -1456,7 +1481,9 @@
                         qr_y: activeConfig.qr_y,
                         qr_size: activeConfig.qr_size,
                         qr_enabled: activeConfig.qr_enabled,
-                        is_official: isOfficial
+                        is_official: isOfficial,
+                        updated_by: activeUser.username || activeUser.full_name || 'User',
+                        role: activeUser.role || 'Staff'
                     })
                 });
                 const data = await res.json();
@@ -1682,7 +1709,10 @@
         async function executeDeleteTemplate() {
             closeDeleteConfirmModal();
             try {
-                const res = await fetch(`/api/booklet-template/delete?department=${currentDept}&slot=${currentSlot}`, { method: 'POST' });
+                const u = activeUser || {};
+                const updatedBy = encodeURIComponent(u.username || u.full_name || 'User');
+                const role = encodeURIComponent(u.role || 'Staff');
+                const res = await fetch(`/api/booklet-template/delete?department=${currentDept}&slot=${currentSlot}&updated_by=${updatedBy}&role=${role}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.status === 'success') {
                     showToast(`[${currentDept} - Template ${currentSlot}] Template deleted and reset successfully!`, 'success', 'Template Deleted');
@@ -1709,7 +1739,10 @@
             formData.append('file', file);
 
             try {
-                const res = await fetch(`/api/booklet-template/upload?department=${currentDept}&slot=${currentSlot}`, {
+                const u = activeUser || {};
+                const updatedBy = encodeURIComponent(u.username || u.full_name || 'User');
+                const role = encodeURIComponent(u.role || 'Staff');
+                const res = await fetch(`/api/booklet-template/upload?department=${currentDept}&slot=${currentSlot}&updated_by=${updatedBy}&role=${role}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1873,6 +1906,59 @@
                 updateSlotTabStyles();
             });
         });
+
+        // --- REAL-TIME LAN OFFLINE SYNCHRONIZATION ---
+        if (window.lanSync) {
+            window.lanSync.onUpdate(async (payload) => {
+                if (!payload) return;
+                const evt = payload.event;
+                if (evt === 'TEMPLATE_UPDATED' || evt === 'TEMPLATE_DELETED' || evt === 'PROGRAM_CREATED' || evt === 'PROGRAM_UPDATED' || evt === 'PROGRAM_DELETED') {
+                    const evtDept = (payload.department || '').toUpperCase();
+                    const evtSlot = parseInt(payload.slot || 1);
+                    const updatedBy = payload.updated_by || 'Another terminal';
+                    const userRole = payload.role ? ` (${payload.role})` : '';
+
+                    // Invalidate caches
+                    try {
+                        if (evtDept && evtSlot) {
+                            sessionStorage.removeItem(`${TPL_CONFIG_CACHE_PREFIX}${evtDept}_slot${evtSlot}`);
+                        }
+                        sessionStorage.removeItem(TPL_STATUS_CACHE_KEY);
+                        if (evt && evt.startsWith('PROGRAM_')) {
+                            sessionStorage.removeItem(TPL_PROGRAMS_CACHE_KEY);
+                        }
+                    } catch (e) {}
+
+                    // Refresh slot statuses and programs in the background
+                    if (evt && evt.startsWith('PROGRAM_') && typeof loadAcademicProgramsForStudio === 'function') {
+                        await loadAcademicProgramsForStudio();
+                    }
+                    if (typeof refreshDeptStatuses === 'function') {
+                        await refreshDeptStatuses();
+                    }
+
+                    // If the active department & slot matches the modified template
+                    if (evtDept === currentDept && evtSlot === currentSlot) {
+                        const checkAndReload = async () => {
+                            // If user is currently dragging an element on canvas, defer reload slightly
+                            if (document.querySelector('.is-dragging')) {
+                                setTimeout(checkAndReload, 800);
+                                return;
+                            }
+                            await loadTemplateConfig(currentDept, currentSlot);
+                            const actionMsg = evt === 'TEMPLATE_DELETED'
+                                ? `Template design was deleted & reset by ${escapeHtml(updatedBy)}${escapeHtml(userRole)}.`
+                                : `Template was updated by ${escapeHtml(updatedBy)}${escapeHtml(userRole)}. Canvas synchronized.`;
+                            showToast(actionMsg, 'info', 'LAN Sync');
+                        };
+                        checkAndReload();
+                    } else {
+                        // Different slot or department: update slot tab styling silently
+                        updateSlotTabStyles();
+                    }
+                }
+            });
+        }
     </script>
 
 <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->

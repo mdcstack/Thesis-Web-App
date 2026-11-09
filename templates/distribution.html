@@ -3,16 +3,36 @@
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Point of Distribution - Bookledger</title>
-
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/html5-qrcode.min.js"></script>
-
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
 
     <style>
 
@@ -3108,17 +3128,17 @@ ${message}`));
 
         
 
+        const effectivePrice = (previewData && previewData.booklet_price !== undefined) 
+            ? parseFloat(previewData.booklet_price) 
+            : ((typeof selectedEnrollment !== 'undefined' && selectedEnrollment && (selectedEnrollment.unit_price || selectedEnrollment.booklet_price)) 
+                ? parseFloat(selectedEnrollment.unit_price || selectedEnrollment.booklet_price) 
+                : (typeof globalBookletPrice === 'number' ? globalBookletPrice : 2.50));
+
         const unitPriceEl = document.getElementById('r-unit-price');
-
-        if (unitPriceEl) unitPriceEl.innerText = `₱${globalBookletPrice.toFixed(2)}`;
-
-
+        if (unitPriceEl) unitPriceEl.innerText = `₱${effectivePrice.toFixed(2)}`;
 
         const docTitle = document.getElementById('doc-title');
-
         const amountTable = document.getElementById('r-amount-table');
-
-
 
         if (previewData && previewData.is_replacement) {
             const isPrepaid = previewData.is_prepaid || (previewData.replacement_credit && previewData.replacement_credit >= previewData.gross_amount && previewData.gross_amount > 0);
@@ -3133,13 +3153,11 @@ ${message}`));
                     : `<span style="color:#2c3e50; font-weight:bold;">₱${(previewData.total_amount || 0).toFixed(2)}</span>`;
             }
         } else {
-
             if (docTitle) docTitle.innerText = "Document Title: PREVIEW (NOT RECORDED)";
-
-            const amount = (currentDemand * globalBookletPrice).toFixed(2);
-
+            const amount = (previewData && previewData.total_amount !== undefined)
+                ? parseFloat(previewData.total_amount).toFixed(2)
+                : (currentDemand * effectivePrice).toFixed(2);
             if (amountTable) amountTable.innerText = amount;
-
         }
 
 
@@ -5450,31 +5468,48 @@ ${message}`));
 
                 // --- CLONE LIVE RECEIPT FOR MODAL MIRROR ---
 
+                window._lastDistributionResult = data;
+                if (window.registerAuthoritativeData) {
+                    window.registerAuthoritativeData('last_distribution', data);
+                }
+
                 const originalReceipt = document.getElementById('receipt-print-area');
-
                 const mirrorContainer = document.getElementById('modal-receipt-mirror');
-
                 
+                if (window.withSystemRendering) {
+                    window.withSystemRendering(function() {
+                        mirrorContainer.innerHTML = ''; 
+                        const clonedReceipt = originalReceipt.cloneNode(true);
+                        clonedReceipt.removeAttribute('id'); 
+                        clonedReceipt.style.opacity = '1';
+                        clonedReceipt.style.pointerEvents = 'auto';
+                        clonedReceipt.style.padding = '25px'; 
+                        mirrorContainer.appendChild(clonedReceipt);
+                    });
+                } else {
+                    mirrorContainer.innerHTML = ''; 
+                    const clonedReceipt = originalReceipt.cloneNode(true);
+                    clonedReceipt.removeAttribute('id'); 
+                    clonedReceipt.style.opacity = '1';
+                    clonedReceipt.style.pointerEvents = 'auto';
+                    clonedReceipt.style.padding = '25px'; 
+                    mirrorContainer.appendChild(clonedReceipt);
+                }
 
-                mirrorContainer.innerHTML = ''; 
-
-                const clonedReceipt = originalReceipt.cloneNode(true);
-
-                clonedReceipt.removeAttribute('id'); 
-
-                
-
-                clonedReceipt.style.opacity = '1';
-
-                clonedReceipt.style.pointerEvents = 'auto';
-
-                clonedReceipt.style.padding = '25px'; 
-
-                
-
-                mirrorContainer.appendChild(clonedReceipt);
-
-                
+                // Protect distribution receipt from inspect tampering
+                if (window.protectContainer) {
+                    window.protectContainer(mirrorContainer, function() {
+                        if (originalReceipt) {
+                            mirrorContainer.innerHTML = '';
+                            const cloned = originalReceipt.cloneNode(true);
+                            cloned.removeAttribute('id');
+                            cloned.style.opacity = '1';
+                            cloned.style.pointerEvents = 'auto';
+                            cloned.style.padding = '25px';
+                            mirrorContainer.appendChild(cloned);
+                        }
+                    });
+                }
 
                 document.getElementById('successModal').style.display = "flex";
 

@@ -3,6 +3,8 @@
    Include via: {% include 'sidebar.html' %}
    ============================================================ #}
 
+<script src="/static/dom_integrity.js"></script>
+
 <!-- Dedicated Sidebar Stylesheet (Encapsulated) -->
 <style>
     .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; font-family: Arial, sans-serif; }
@@ -136,9 +138,9 @@
     <!-- Navigation Directory -->
     <div class="sidebar-header" id="sidebarHeaderTitle">Bookledger</div>
     <a href="/dashboard" class="nav-link staff-op" data-route="/dashboard">📊 Dashboard</a>
-    <a href="/enrollments" class="nav-link admin-only" data-route="/enrollments">🎓 Manage Classes</a>
+    <a href="/enrollments" class="nav-link" id="navEnrollments" data-route="/enrollments">🎓 Manage Classes</a>
     <a href="/manage_users" class="nav-link" id="navManageUsers" data-route="/manage_users">👥 Manage Users</a>
-    <a href="/booklet-template" class="nav-link admin-only mobile-hide" data-route="/booklet-template">📄 Booklet Template</a>
+    <a href="/booklet-template" class="nav-link staff-op mobile-hide" data-route="/booklet-template">📄 Booklet Template</a>
     <a href="/generator" class="nav-link staff-op mobile-hide" data-route="/generator">🖨️ PDF Generator</a> 
     <a href="/qr-registration" class="nav-link staff-op mobile-hide" data-route="/qr-registration">📥 QR Registration</a>
     <a href="/distribution" class="nav-link staff-op" data-route="/distribution">🛒 Point of Distribution</a>
@@ -170,7 +172,11 @@
     function toggleNotifPanel() {
         const panel = document.getElementById('notifPanel');
         if (panel) {
-            panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? 'block' : 'none';
+            const isOpening = panel.style.display === 'none' || !panel.style.display;
+            panel.style.display = isOpening ? 'block' : 'none';
+            if (isOpening && typeof window.refreshSidebarDSSAlert === 'function') {
+                window.refreshSidebarDSSAlert();
+            }
         }
     }
 
@@ -383,7 +389,7 @@
 
     // 2. Network revalidation (background fetch)
     window.refreshSidebarDSSAlert = function() {
-        fetch('/api/dss-alert')
+        fetch('/api/dss-alert', { cache: 'no-store' })
             .then(res => res.json())
             .then(data => {
                 try {
@@ -405,6 +411,27 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         window.refreshSidebarDSSAlert();
+    });
+
+    // 3. Real-time tab visibility & focus listeners for instant alert synchronization
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            try { sessionStorage.removeItem(DSS_ALERT_CACHE_KEY); } catch(e) {}
+            window.refreshSidebarDSSAlert();
+        }
+    });
+
+    window.addEventListener('focus', () => {
+        try { sessionStorage.removeItem(DSS_ALERT_CACHE_KEY); } catch(e) {}
+        window.refreshSidebarDSSAlert();
+    });
+
+    // 4. Cross-tab storage synchronization listener
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'bookletlog_settings_version' || e.key === 'bookletlog_programs_version' || e.key === 'bookletlog_sync_mutation') {
+            try { sessionStorage.removeItem(DSS_ALERT_CACHE_KEY); } catch(err) {}
+            window.refreshSidebarDSSAlert();
+        }
     });
 
     // Dynamic Route Highlighting Engine
@@ -462,6 +489,7 @@
             const headerTitle = document.getElementById('sidebarHeaderTitle');
             const topUtility = document.getElementById('sidebarTopUtilityBar');
             const navUsers = document.getElementById('navManageUsers');
+            const navEnrollments = document.getElementById('navEnrollments');
 
             if (user && user.role === 'Viewer') {
                 if (headerTitle) headerTitle.innerText = 'Faculty Portal';
@@ -470,6 +498,10 @@
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'none');
                 document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'block');
                 if (navUsers) navUsers.innerHTML = '👤 My Account & Security';
+                if (navEnrollments) {
+                    navEnrollments.style.display = 'block';
+                    navEnrollments.innerHTML = '🎓 My Teaching Load';
+                }
             } else if (user && user.role === 'Staff') {
                 if (headerTitle) headerTitle.innerText = 'Staff Portal';
                 if (topUtility) topUtility.style.display = 'block';
@@ -477,6 +509,10 @@
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
                 document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
                 if (navUsers) navUsers.innerHTML = '👤 My Account';
+                if (navEnrollments) {
+                    navEnrollments.style.display = 'block';
+                    navEnrollments.innerHTML = '🎓 Manage Classes';
+                }
             } else {
                 if (headerTitle) headerTitle.innerText = 'Bookledger';
                 if (topUtility) topUtility.style.display = 'block';
@@ -484,6 +520,10 @@
                 document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
                 document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
                 if (navUsers) navUsers.innerHTML = '👥 Manage Users';
+                if (navEnrollments) {
+                    navEnrollments.style.display = 'block';
+                    navEnrollments.innerHTML = '🎓 Manage Classes';
+                }
             }
         } catch (e) {
             console.error('Sidebar RBAC error:', e);
@@ -545,17 +585,45 @@
                 if (details.id) currentUser.id = details.id;
                 localStorage.setItem('bookletlog_user', JSON.stringify(currentUser));
 
-                const adminPages = ['/manage_users', '/settings', '/enrollments', '/booklet-template'];
+                const roleLower = (newRole || '').toLowerCase();
                 const currentPath = window.location.pathname.toLowerCase();
+                const adminOnlyPages = ['/settings'];
+                const staffPages = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template'];
 
-                if (newRole !== 'Admin' && adminPages.some(p => currentPath.startsWith(p))) {
-                    window.location.href = '/distribution';
+                if (roleLower === 'viewer' && (adminOnlyPages.some(p => currentPath.startsWith(p)) || staffPages.some(p => currentPath.startsWith(p)))) {
+                    window.location.href = '/transaction-profile?error=unauthorized';
+                } else if (roleLower === 'staff' && adminOnlyPages.some(p => currentPath.startsWith(p))) {
+                    window.location.href = '/dashboard?error=unauthorized';
                 } else {
                     window.location.reload();
                 }
             };
         }
     };
+
+    // --- UNAUTHORIZED REDIRECT TOAST NOTIFIER ---
+    (function checkUnauthorizedRedirect() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error') === 'unauthorized') {
+                urlParams.delete('error');
+                const newQuery = urlParams.toString();
+                const newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '') + window.location.hash;
+                window.history.replaceState({}, document.title, newUrl);
+
+                setTimeout(() => {
+                    const toast = document.createElement('div');
+                    toast.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 999999; background: #dc2626; color: white; padding: 14px 22px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-family: Arial, sans-serif; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; pointer-events: none; transition: opacity 0.4s ease;';
+                    toast.innerHTML = '<span style="font-size: 18px;">🚫</span><span>Access Denied: You do not have permission to view that page.</span>';
+                    document.body.appendChild(toast);
+                    setTimeout(() => {
+                        toast.style.opacity = '0';
+                        setTimeout(() => toast.remove(), 400);
+                    }, 4000);
+                }, 200);
+            }
+        } catch(e) {}
+    })();
 
     // --- REAL-TIME SESSION VERIFICATION & ROLE/DEPT HOT-SYNC ---
     (function initSessionHotSync() {
@@ -613,6 +681,11 @@
                             }
                         } catch (e) {}
                     }
+                }
+                // Refresh sidebar alert on any data mutation
+                try { sessionStorage.removeItem('bookletlog_dss_alert_cache'); } catch(e) {}
+                if (typeof window.refreshSidebarDSSAlert === 'function') {
+                    window.refreshSidebarDSSAlert();
                 }
             });
         }

@@ -189,6 +189,11 @@ class AcademicProgram(Base):
     section_prefix = Column(String(20), nullable=False, index=True)    # e.g., "BSCS", "BSIT", "BSIM"
     color_hex = Column(String(10), default="#3498db")                  # e.g., "#3498db", "#e67e22"
     is_active = Column(Boolean, default=True)
+    
+    # Course-specific sheet consumption and pricing flexibility (None = inherit system default)
+    sheets_per_booklet = Column(Integer, nullable=True, default=None)
+    booklet_price = Column(Float, nullable=True, default=None)
+
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

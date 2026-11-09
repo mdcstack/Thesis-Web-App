@@ -4,7 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faculty Transaction Profile - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff', 'viewer'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    window.location.replace('/login?error=unauthorized');
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f6f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
@@ -665,6 +686,10 @@
             }
             if (receiptsData.status === 'success') {
                 globalRawReceipts = receiptsData.data || [];
+                if (window.registerAuthoritativeData) {
+                    window.registerAuthoritativeData('transaction_profile_receipts', globalRawReceipts);
+                    window.registerAuthoritativeData('transaction_profile_instructors', globalInstructors);
+                }
             }
 
             populateDropdowns();
@@ -1152,8 +1177,22 @@
     // -------------------------------------------------------------
     // RECEIPT MODAL LOGIC
     // -------------------------------------------------------------
+    var currentTxReceiptIndex = null;
+
     function openReceiptModalByIndex(index) {
-        const data = globalRawReceipts[index];
+        currentTxReceiptIndex = index;
+        if (window.withSystemRendering) {
+            return window.withSystemRendering(function() {
+                _executeOpenReceiptModalByIndex(index);
+            });
+        }
+        return _executeOpenReceiptModalByIndex(index);
+    }
+
+    function _executeOpenReceiptModalByIndex(index) {
+        const data = (window.getAuthoritativeData ? window.getAuthoritativeData('transaction_profile_receipts') : null)
+            ? (window.getAuthoritativeData('transaction_profile_receipts')[index] || globalRawReceipts[index])
+            : globalRawReceipts[index];
         if (!data) return;
 
         document.getElementById('r-period').innerText = data.exam_period || "Current Semester"; 
@@ -1242,9 +1281,38 @@
 
     function closeReceipt() {
         document.getElementById('receiptModal').style.display = 'none';
+        currentTxReceiptIndex = null;
     }
 
+    // Register pre-print rehydration to guarantee authentic printouts
+    if (window.registerPrintRehydrator) {
+        window.registerPrintRehydrator(function() {
+            if (currentTxReceiptIndex !== null && typeof currentTxReceiptIndex === 'number') {
+                openReceiptModalByIndex(currentTxReceiptIndex);
+            }
+        });
+    }
+
+    // Protect receipt modal against Inspect Element modification
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.protectContainer) {
+                var receiptArea = document.getElementById('receipt-print-area');
+                if (receiptArea) {
+                    window.protectContainer(receiptArea, function() {
+                        if (currentTxReceiptIndex !== null && typeof currentTxReceiptIndex === 'number') {
+                            openReceiptModalByIndex(currentTxReceiptIndex);
+                        }
+                    });
+                }
+            }
+        }, 400);
+    });
+
     function printStatement() {
+        if (window.executePrintRehydration) {
+            window.executePrintRehydration();
+        }
         window.print();
     }
 </script>

@@ -4,7 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Official Receipts - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff', 'viewer'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    window.location.replace('/login?error=unauthorized');
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -501,6 +522,10 @@
                         return new Date(b.date) - new Date(a.date);
                     });
 
+                    if (window.registerAuthoritativeData) {
+                        window.registerAuthoritativeData('receipts', globalReceipts);
+                    }
+
                     populateDropdowns();
                     applyFilters();
                 }
@@ -727,8 +752,23 @@
         });
     }
 
+    var currentReceiptIndex = null;
+
     function openReceipt(index) {
-        const data = globalReceipts[index];
+        currentReceiptIndex = index;
+        if (window.withSystemRendering) {
+            return window.withSystemRendering(function() {
+                _executeOpenReceipt(index);
+            });
+        }
+        return _executeOpenReceipt(index);
+    }
+
+    function _executeOpenReceipt(index) {
+        const data = (window.getAuthoritativeData ? window.getAuthoritativeData('receipts') : null) 
+            ? (window.getAuthoritativeData('receipts')[index] || globalReceipts[index])
+            : globalReceipts[index];
+        if (!data) return;
 
         document.getElementById('r-period').innerText = data.exam_period; 
         document.getElementById('r-date').innerText = data.date;
@@ -816,7 +856,33 @@
 
     function closeReceipt() {
         document.getElementById('receiptModal').style.display = 'none';
+        currentReceiptIndex = null;
     }
+
+    // Register pre-print rehydration to wipe out any DevTools tampering
+    if (window.registerPrintRehydrator) {
+        window.registerPrintRehydrator(function() {
+            if (currentReceiptIndex !== null && typeof currentReceiptIndex === 'number') {
+                openReceipt(currentReceiptIndex);
+            }
+        });
+    }
+
+    // Protect receipt modal against Inspect Element modification
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.protectContainer) {
+                var receiptArea = document.getElementById('receipt-print-area');
+                if (receiptArea) {
+                    window.protectContainer(receiptArea, function() {
+                        if (currentReceiptIndex !== null && typeof currentReceiptIndex === 'number') {
+                            openReceipt(currentReceiptIndex);
+                        }
+                    });
+                }
+            }
+        }, 400);
+    });
 
     // Session verification and role-specific UI adjustments
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || 'null');

@@ -4,9 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Executive Dashboard - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <!-- Import Chart.js -->
     <script src="/static/chart.js"></script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -1087,6 +1112,9 @@
                     try {
                         sessionStorage.setItem('bookletlog_dashboard_stats_cache', JSON.stringify(data));
                     } catch(e) {}
+                    if (window.registerAuthoritativeData) {
+                        window.registerAuthoritativeData('dashboard_stats', data);
+                    }
                     applyDashboardData(data, periodQuery);
                 } else {
                     console.error("Dashboard API Error:", data.message);
@@ -1115,8 +1143,39 @@
                 if (typeof fetchExpertSystemData === 'function') {
                     fetchExpertSystemData();
                 }
+                if (typeof window.refreshSidebarDSSAlert === 'function') {
+                    window.refreshSidebarDSSAlert();
+                }
             });
         }
+
+        // 4. Tab visibility, focus & cross-tab storage synchronization
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                fetchDashboardData();
+                if (typeof fetchExpertSystemData === 'function') fetchExpertSystemData();
+                if (typeof window.refreshSidebarDSSAlert === 'function') window.refreshSidebarDSSAlert();
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            fetchDashboardData();
+            if (typeof fetchExpertSystemData === 'function') fetchExpertSystemData();
+            if (typeof window.refreshSidebarDSSAlert === 'function') window.refreshSidebarDSSAlert();
+        });
+
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'bookletlog_settings_version' || e.key === 'bookletlog_programs_version' || e.key === 'bookletlog_sync_mutation') {
+                try {
+                    sessionStorage.removeItem('bookletlog_dashboard_stats_cache');
+                    sessionStorage.removeItem('bookletlog_dashboard_dss_cache');
+                    sessionStorage.removeItem('bookletlog_dss_alert_cache');
+                } catch(err) {}
+                fetchDashboardData();
+                if (typeof fetchExpertSystemData === 'function') fetchExpertSystemData();
+                if (typeof window.refreshSidebarDSSAlert === 'function') window.refreshSidebarDSSAlert();
+            }
+        });
     });
 
     // --- TRANSPARENT COMPUTATIONS RENDERER ---
@@ -1318,6 +1377,31 @@
         setTimeout(() => { document.body.classList.remove("print-computations-mode"); area.innerHTML = ""; }, 500);
     }
 
+    // Register pre-print rehydration to wipe out any Inspect Element tampering
+    if (window.registerPrintRehydrator) {
+        window.registerPrintRehydrator(function() {
+            var auth = window.getAuthoritativeData('dashboard_stats');
+            if (auth) {
+                applyDashboardData(auth);
+            }
+        });
+    }
+
+    // Protect dashboard KPI cards against Inspect Element modification
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.protectContainer) {
+                var kpiGrid = document.querySelector('.kpi-grid');
+                if (kpiGrid) {
+                    window.protectContainer(kpiGrid, function() {
+                        var auth = window.getAuthoritativeData('dashboard_stats');
+                        if (auth) applyDashboardData(auth);
+                    });
+                }
+            }
+        }, 500);
+    });
+
     // --- STANDARD PRINT PREP (For KPI Dashboard) ---
     window.addEventListener('beforeprint', () => {
         if (!document.body.classList.contains("print-computations-mode")) {
@@ -1474,44 +1558,8 @@
     }
 
     // --- DECISION SUPPORT SYSTEM (DSS) HYBRID ALERT ---
-    fetch('/api/dss-alert').then(response => response.json()).then(data => {
-        const badge = document.getElementById('notifBadge');
-        const panel = document.getElementById('notifPanel');
-        const bell = document.getElementById('notifBell');
-        if (data.alert) {
-            badge.style.display = 'inline-block';
-            bell.style.color = 'white'; 
-            if (activeUser.role === 'Admin') {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-            } else {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-            }
-        } else {
-            badge.style.display = 'none';
-            if (data.is_configured === false || data.status === 'awaiting_settings') {
-                panel.style.borderLeftColor = '#f59e0b';
-                if (activeUser && activeUser.role === 'Admin') {
-                    panel.innerHTML = '⚙️ <strong>Awaiting System Configuration:</strong><br>Academic period and booklet parameters have not been established yet.<br><br><a href="/settings" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to System Settings ➔</a>';
-                } else {
-                    panel.innerHTML = '⚙️ <strong>Awaiting System Configuration:</strong><br>Academic period and booklet parameters have not been established yet. Awaiting Administrator setup in Settings.';
-                }
-            } else if (data.has_enrollments === false) {
-                panel.style.borderLeftColor = '#64748b';
-                if (activeUser && activeUser.role === 'Admin') {
-                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                } else {
-                    panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                }
-            } else {
-                panel.style.borderLeftColor = '#27ae60'; 
-                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-            }
-        }
-    });
-
-    function toggleNotifPanel() {
-        const panel = document.getElementById('notifPanel');
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    if (typeof window.refreshSidebarDSSAlert === 'function') {
+        window.refreshSidebarDSSAlert();
     }
 
     // --- REAL-TIME SESSION POLLING ---
@@ -1829,7 +1877,7 @@
     }
 
     function fetchExpertSystemData() {
-        fetch('/api/reorder-decision-expert')
+        fetch('/api/reorder-decision-expert', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
             try {
@@ -1838,6 +1886,9 @@
             renderExpertRecommendation(data.recommendation, data.advice, data.color);
             if (data.course_production && data.course_production.courses) {
                 updateCourseBreakdownUI(data.course_production);
+            }
+            if (typeof window.refreshSidebarDSSAlert === 'function') {
+                window.refreshSidebarDSSAlert();
             }
         }).catch(err => {
             console.error("Expert System Error:", err);

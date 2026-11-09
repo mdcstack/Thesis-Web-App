@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Generator - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -758,7 +782,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
         async function loadAcademicProgramsForGenerator() {
             try {
-                const res = await fetch('/api/academic-programs');
+                const res = await fetch('/api/academic-programs', { cache: 'no-store' });
                 if (res.ok) {
                     const data = await res.json();
                     const list = Array.isArray(data) ? data : (data.programs || []);
@@ -772,6 +796,10 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                             sessionStorage.setItem('bookletlog_pdfgen_programs', JSON.stringify(activeProgramsList));
                         } catch(e) {}
                         populateDepartmentDropdown();
+                        if (!isPageInitializing) {
+                            updateCourseDemandUI();
+                            updateTargetYield();
+                        }
                         return;
                     }
                 }
@@ -787,6 +815,10 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 'IT': activeProgramsList[1]
             };
             populateDepartmentDropdown();
+            if (!isPageInitializing) {
+                updateCourseDemandUI();
+                updateTargetYield();
+            }
         }
 
         function populateDepartmentDropdown() {
@@ -846,6 +878,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             updatePreviewCard();
             updateTemplateGuardUI();
             updateCourseDemandUI();
+            updateTargetYield();
         }
 
         function onTemplateSlotChange() {
@@ -1265,27 +1298,36 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         async function fetchGeneratorSettings() {
             try {
                 const [settingsRes, statusRes, courseProdRes] = await Promise.all([
-                    fetch('/api/settings').then(res => res.json()).catch(() => ({})),
-                    fetch('/api/system-status').then(res => res.json()).catch(() => ({})),
-                    fetch('/api/course-production-metrics').then(res => res.json()).catch(() => ({}))
+                    fetch('/api/settings', { cache: 'no-store' }).then(res => res.json()).catch(() => ({})),
+                    fetch('/api/system-status', { cache: 'no-store' }).then(res => res.json()).catch(() => ({})),
+                    fetch('/api/course-production-metrics', { cache: 'no-store' }).then(res => res.json()).catch(() => ({}))
                 ]);
 
                 if (courseProdRes && courseProdRes.courses) {
                     courseProductionData = courseProdRes;
-                    updateCourseDemandUI();
                 }
 
-                if (settingsRes.sheets_per_booklet) {
+                // Check selected department's course-specific sheets count first!
+                const selectedDept = document.getElementById('deptSelect')?.value || 'CS';
+                const pMeta = (activeProgramsMap && activeProgramsMap[selectedDept]) ? activeProgramsMap[selectedDept] : null;
+                const dData = (courseProductionData && courseProductionData.courses) ? courseProductionData.courses[selectedDept] : null;
+                const courseSpecificSheets = (dData && dData.sheets_per_booklet) || (pMeta && pMeta.sheets_per_booklet);
+
+                if (courseSpecificSheets) {
+                    currentSheetsPerBooklet = parseInt(courseSpecificSheets, 10);
+                    currentYieldPerReam = Math.floor(500 / currentSheetsPerBooklet);
+                } else if (settingsRes.sheets_per_booklet) {
                     currentSheetsPerBooklet = settingsRes.sheets_per_booklet;
                     currentYieldPerReam = settingsRes.yield_per_ream || Math.floor(500 / currentSheetsPerBooklet);
-                    
-                    const sheetsEl = document.getElementById('explainerSheets');
-                    const yieldEl = document.getElementById('explainerYield');
-                    if (sheetsEl) sheetsEl.innerText = currentSheetsPerBooklet;
-                    if (yieldEl) yieldEl.innerText = currentYieldPerReam;
-                    
-                    updateTargetYield();
                 }
+
+                const sheetsEl = document.getElementById('explainerSheets');
+                const yieldEl = document.getElementById('explainerYield');
+                if (sheetsEl) sheetsEl.innerText = currentSheetsPerBooklet;
+                if (yieldEl) yieldEl.innerText = currentYieldPerReam;
+
+                updateCourseDemandUI();
+                updateTargetYield();
 
                 // Update Active Period & System Initialized State
                 currentActivePeriod = (statusRes && statusRes.active_period) ? statusRes.active_period : (settingsRes.active_period || 'UNSET');
@@ -1339,6 +1381,17 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             }
 
             card.style.display = 'block';
+
+            // Dynamically synchronize sheets per booklet and yield for selected department
+            if (d && d.sheets_per_booklet) {
+                currentSheetsPerBooklet = parseInt(d.sheets_per_booklet, 10);
+                currentYieldPerReam = d.yield_per_ream || Math.floor(500 / currentSheetsPerBooklet);
+                const explainerSheets = document.getElementById('explainerSheets');
+                const explainerYield = document.getElementById('explainerYield');
+                if (explainerSheets) explainerSheets.innerText = currentSheetsPerBooklet;
+                if (explainerYield) explainerYield.innerText = currentYieldPerReam;
+            }
+
             const pMeta = (activeProgramsMap && activeProgramsMap[selectedDept]) ? activeProgramsMap[selectedDept] : null;
             const deptName = d.name || (pMeta ? pMeta.name : (selectedDept === 'CS' ? 'Computer Science' : 'Information Technology'));
             const fullDeptTitle = `${deptName} (${selectedDept})`;
@@ -1718,6 +1771,12 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                         activeProgramsMap = {};
                         parsed.forEach(p => { activeProgramsMap[p.code] = p; });
                         populateDepartmentDropdown();
+                        const selDept = document.getElementById('deptSelect')?.value || 'CS';
+                        const selProg = activeProgramsMap[selDept];
+                        if (selProg && selProg.sheets_per_booklet) {
+                            currentSheetsPerBooklet = parseInt(selProg.sheets_per_booklet, 10);
+                            currentYieldPerReam = Math.floor(500 / currentSheetsPerBooklet);
+                        }
                     }
                 }
                 const cachedSettings = sessionStorage.getItem('bookletlog_pdfgen_settings');
@@ -2119,16 +2178,64 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
         // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
         if (window.lanSync) {
-            window.lanSync.onUpdate(() => {
+            window.lanSync.onUpdate(async () => {
                 // Do not disrupt active generation stamping
                 if (isStampingInProgress) return;
-                fetchGeneratorSettings();
+                try {
+                    sessionStorage.removeItem('bookletlog_pdfgen_programs');
+                    sessionStorage.removeItem('bookletlog_pdfgen_settings');
+                } catch(err) {}
+                await loadAcademicProgramsForGenerator();
+                await fetchGeneratorSettings();
+                updateCourseDemandUI();
+                updateTargetYield();
                 if (typeof window.refreshSidebarDSSAlert === 'function') {
                     window.refreshSidebarDSSAlert();
                 }
-                fetchTemplateStatuses(false);
+                await fetchTemplateStatuses(false);
             });
         }
+
+        // --- REAL-TIME TAB FOCUS & VISIBILITY SYNCHRONIZATION ---
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible' && !isStampingInProgress) {
+                try {
+                    sessionStorage.removeItem('bookletlog_pdfgen_programs');
+                    sessionStorage.removeItem('bookletlog_pdfgen_settings');
+                } catch(e) {}
+                await loadAcademicProgramsForGenerator();
+                await fetchGeneratorSettings();
+                updateCourseDemandUI();
+                updateTargetYield();
+            }
+        });
+
+        window.addEventListener('focus', async () => {
+            if (!isStampingInProgress) {
+                try {
+                    sessionStorage.removeItem('bookletlog_pdfgen_programs');
+                    sessionStorage.removeItem('bookletlog_pdfgen_settings');
+                } catch(e) {}
+                await loadAcademicProgramsForGenerator();
+                await fetchGeneratorSettings();
+                updateCourseDemandUI();
+                updateTargetYield();
+            }
+        });
+
+        // --- CROSS-TAB LOCALSTORAGE BROADCAST LISTENER ---
+        window.addEventListener('storage', async (e) => {
+            if ((e.key === 'bookletlog_programs_version' || e.key === 'bookletlog_settings_version') && !isStampingInProgress) {
+                try {
+                    sessionStorage.removeItem('bookletlog_pdfgen_programs');
+                    sessionStorage.removeItem('bookletlog_pdfgen_settings');
+                } catch(err) {}
+                await loadAcademicProgramsForGenerator();
+                await fetchGeneratorSettings();
+                updateCourseDemandUI();
+                updateTargetYield();
+            }
+        });
     
     // --- REAL-TIME SESSION POLLING ---
     // This constantly checks if another device has logged in and instantly kicks this device out.

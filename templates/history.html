@@ -4,7 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Process Return &amp; Audit Trail - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -221,20 +246,8 @@
                 </select>
             </div>
 
-            <!-- SMART RECONCILIATION: Dropped students cancel unreplaced defective replacements -->
-            <div id="dropDefectReconcileContainer" style="display: none; margin-bottom: 14px; background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; text-align: left;">
-                <div style="font-weight: 700; color: #1e40af; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                    <span>ℹ️ Pending Defective Replacements:</span>
-                    <span id="modalPendingDefectCount" style="background: #dbeafe; color: #1e40af; padding: 1px 7px; border-radius: 4px; font-weight: 800;">0</span>
-                </div>
-                <p style="font-size: 0.78rem; color: #1e3a8a; margin: 0 0 8px; line-height: 1.35;">
-                    Students who drop while awaiting replacement for defective booklets will first cancel these pending replacements (no physical booklets need to be moved to Loose Stock).
-                </p>
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #ffffff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 6px 10px;">
-                    <label for="cancelDefectInput" style="font-size: 0.82rem; font-weight: 600; color: #1e3a8a; margin: 0;">Drops Canceling Pending Defective Replacements:</label>
-                    <input type="number" id="cancelDefectInput" min="0" max="0" value="0" style="width: 65px; padding: 3px 6px; border: 1.5px solid #3b82f6; border-radius: 4px; font-weight: 700; text-align: center; font-size: 0.9rem;" onchange="onCancelDefectInputChange()" onkeyup="onCancelDefectInputChange()">
-                </div>
-            </div>
+            <!-- HIDDEN BACKGROUND RECONCILIATION FOR DROPPED STUDENTS -->
+            <input type="hidden" id="cancelDefectInput" value="0">
 
             <div class="form-group">
                 <label id="selectBookletsLabel">Select Returned Booklets:</label>
@@ -507,6 +520,10 @@ ${message}`));
                     let dateB = new Date(b.date.replace(/-/g, ' '));
                     return dateB - dateA; 
                 });
+
+                if (window.registerAuthoritativeData) {
+                    window.registerAuthoritativeData('history', globalHistory);
+                }
                 
                 try {
                     sessionStorage.setItem('bookletlog_history_cache', JSON.stringify(globalHistory));
@@ -731,6 +748,15 @@ ${message}`));
     }
 
     function renderTable(dataArray) {
+        if (window.withSystemRendering) {
+            return window.withSystemRendering(function() {
+                _executeRenderTable(dataArray);
+            });
+        }
+        return _executeRenderTable(dataArray);
+    }
+
+    function _executeRenderTable(dataArray) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         
@@ -813,7 +839,7 @@ ${message}`));
                 }
                 defectBadge += `<div style="margin-top: 4px;"><span class="badge" style="background-color: #64748b; font-size: 0.72rem; padding: 2px 6px;" title="${row.defective_voided_qty} defective booklet(s) voided in total (${note || 'Resolved'})">✓ ${row.defective_voided_qty} Defective (${note || 'Resolved'})</span></div>`;
             }
-            if (row.canceled_defective_qty && row.canceled_defective_qty > 0 && row.active_defective_qty > 0) {
+            if (row.canceled_defective_qty && row.canceled_defective_qty > 0) {
                 defectBadge += `<div style="margin-top: 4px;"><span class="badge" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 0.70rem; padding: 1px 5px;" title="${row.canceled_defective_qty} defective replacement(s) canceled due to dropped students">🔄 ${row.canceled_defective_qty} Defect Canceled (Drop)</span></div>`;
             }
 
@@ -843,49 +869,50 @@ ${message}`));
         });
     }
 
+    // Register pre-print rehydration to wipe out Inspect Element edits
+    if (window.registerPrintRehydrator) {
+        window.registerPrintRehydrator(function() {
+            applyFilters();
+        });
+    }
+
+    // Protect history table against DevTools inspect tampering
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.protectContainer) {
+                var tbody = document.getElementById('tableBody');
+                if (tbody) {
+                    window.protectContainer(tbody, function() {
+                        applyFilters();
+                    });
+                }
+            }
+        }, 500);
+    });
+
     // --- STANDARD RETURN LOGIC ---
 
     let modalMetadata = null;
 
     function onReturnReasonChange() {
         const reason = document.getElementById('returnReason').value;
-        const btn = document.getElementById('returnActionBtn');
-        const reconcileBox = document.getElementById('dropDefectReconcileContainer');
         const cancelDefectInput = document.getElementById('cancelDefectInput');
         const selectLabel = document.getElementById('selectBookletsLabel');
 
         if (reason === "Misprint / Defect") {
-            if (reconcileBox) reconcileBox.style.display = 'none';
             if (cancelDefectInput) cancelDefectInput.value = '0';
             if (selectLabel) selectLabel.innerText = "Select Defective Booklets to Void:";
         } else {
-            // Student Dropped Class
+            // Student Dropped Class: automatically cancel pending defective replacements in the background
             const pendingDefects = modalMetadata ? (modalMetadata.unreplaced_defective_count || 0) : 0;
             if (pendingDefects > 0) {
-                if (reconcileBox) reconcileBox.style.display = 'block';
-                if (cancelDefectInput) {
-                    cancelDefectInput.max = String(pendingDefects);
-                    if (!cancelDefectInput.value || cancelDefectInput.value === '0') {
-                        cancelDefectInput.value = String(pendingDefects);
-                    }
-                }
-                if (selectLabel) selectLabel.innerText = "Additional Physical Booklets Returned to Loose Stock (Optional):";
+                if (cancelDefectInput) cancelDefectInput.value = String(pendingDefects);
+                if (selectLabel) selectLabel.innerText = "";
             } else {
-                if (reconcileBox) reconcileBox.style.display = 'none';
                 if (cancelDefectInput) cancelDefectInput.value = '0';
                 if (selectLabel) selectLabel.innerText = "Select Returned Booklets (To Loose Stock):";
             }
         }
-        updateReturnActionBtn();
-    }
-
-    function onCancelDefectInputChange() {
-        const input = document.getElementById('cancelDefectInput');
-        const maxVal = modalMetadata ? (modalMetadata.unreplaced_defective_count || 0) : 0;
-        let val = parseInt(input.value || "0", 10);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > maxVal) val = maxVal;
-        input.value = val;
         updateReturnActionBtn();
     }
 
@@ -915,6 +942,15 @@ ${message}`));
     }
 
     function openReturnModal(enrollmentId, teacherName, examPeriod) {
+        // Look up verified server record to prevent Inspect Element tampering
+        const record = (window.getAuthoritativeRecord ? window.getAuthoritativeRecord('history', enrollmentId) : null)
+            || (globalHistory || []).find(r => r && r.enrollment_id === Number(enrollmentId));
+
+        if (record) {
+            teacherName = record.teacher || teacherName;
+            examPeriod = record.exam_period || examPeriod;
+        }
+
         document.getElementById('pendingReturnEnrollmentId').value = enrollmentId;
         document.getElementById('modalTeacherName').innerText = teacherName;
         document.getElementById('returnReason').selectedIndex = 0;
@@ -996,7 +1032,7 @@ ${message}`));
         const cancelDefectCount = parseInt(document.getElementById('cancelDefectInput')?.value || "0", 10);
         
         if (checkboxes.length === 0 && cancelDefectCount === 0) {
-            await showAppAlert("Action Required", "Please select at least one booklet to return, or specify dropped students canceling pending replacements.", "warning");
+            await showAppAlert("Action Required", "Please select at least one booklet to return.", "warning");
             return;
         }
 
@@ -1056,7 +1092,7 @@ ${message}`));
             if (cancelDefectCount > 0) {
                 breakdownHtml += `
                     <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; text-align: left; font-size: 0.84rem; color: #1e40af;">
-                        ✓ <strong>${cancelDefectCount} Dropped Student(s)</strong> cancel <strong>${cancelDefectCount} pending defective replacement(s)</strong> (no physical booklets to Loose Stock).
+                        ✓ <strong>${cancelDefectCount} Dropped Student(s)</strong> will cancel <strong>${cancelDefectCount} pending defective replacement(s)</strong> in the background (no extra physical booklets needed).
                     </div>
                 `;
             }

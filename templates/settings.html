@@ -3,14 +3,36 @@
 <html lang="en">
 
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>System Settings - Bookledger</title>
-
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                if (role !== 'admin') {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else if (role === 'staff') {
+                        window.location.replace('/dashboard?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
 
     <style>
 
@@ -517,11 +539,13 @@
 
                 <div class="form-group">
 
-                    <label>Bond Paper Sheets Consumed Per Booklet</label>
+                    <label>Default Bond Paper Sheets Consumed Per Booklet</label>
 
                     <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="enforceNumericInputLimits(this); clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
 
                     <div class="field-error" id="error_sheets_per_booklet">⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).</div>
+
+                    <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Institutional default rate applied to any course without custom page overrides in the Academic Courses table below.</p>
 
                     <div id="yield_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #3498db; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
 
@@ -627,11 +651,13 @@
 
                 <div class="form-group">
 
-                    <label>Selling Price per Booklet (₱)</label>
+                    <label>Default Selling Price per Booklet (₱)</label>
 
                     <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="enforceNumericInputLimits(this); clearFieldError('booklet_price');">
 
                     <div class="field-error" id="error_booklet_price">⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).</div>
+
+                    <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Institutional default fee applied to any course without custom price overrides in the Academic Courses table below.</p>
 
                 </div>
 
@@ -1034,17 +1060,21 @@
 
                         <tr>
 
-                            <th style="width: 130px;">Course Code</th>
+                            <th style="width: 120px;">Course Code</th>
 
                             <th>Full Course / Degree Name</th>
 
                             <th>Section Identifier Prefix</th>
 
-                            <th style="width: 130px; text-align: center;">Theme Color</th>
+                            <th style="width: 155px; text-align: center;">Sheets / Booklet</th>
 
-                            <th style="width: 110px; text-align: center;">Status</th>
+                            <th style="width: 130px; text-align: center;">Selling Price</th>
 
-                            <th style="width: 150px; text-align: center;">Actions</th>
+                            <th style="width: 120px; text-align: center;">Theme Color</th>
+
+                            <th style="width: 100px; text-align: center;">Status</th>
+
+                            <th style="width: 140px; text-align: center;">Actions</th>
 
                         </tr>
 
@@ -1054,7 +1084,7 @@
 
                         <tr>
 
-                            <td colspan="6" style="text-align: center; color: #64748b; padding: 24px;">
+                            <td colspan="8" style="text-align: center; color: #64748b; padding: 24px;">
 
                                 Loading academic courses...
 
@@ -1550,6 +1580,38 @@
 
                 </div>
 
+                <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+
+                    <div style="flex: 1;">
+
+                        <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+
+                            Sheets / Booklet <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+
+                        </label>
+
+                        <input type="number" id="newProgSheets" min="1" max="50" placeholder="Default (e.g. 6)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" oninput="updateNewProgYieldPreview()">
+
+                        <div id="newProgYieldPreview" style="margin-top: 4px; font-size: 0.76rem; color: #2563eb; font-weight: 600;"></div>
+
+                    </div>
+
+                    <div style="flex: 1;">
+
+                        <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+
+                            Selling Price (₱) <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+
+                        </label>
+
+                        <input type="number" id="newProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;">
+
+                        <div style="margin-top: 4px; font-size: 0.74rem; color: #64748b;">Leave blank for default.</div>
+
+                    </div>
+
+                </div>
+
                 <div style="margin-bottom: 20px;">
 
                     <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
@@ -1663,6 +1725,38 @@
                     </label>
 
                     <input type="text" id="editProgPrefix" maxlength="15" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700; font-family: monospace; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase();">
+
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+
+                    <div style="flex: 1;">
+
+                        <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+
+                            Sheets / Booklet <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+
+                        </label>
+
+                        <input type="number" id="editProgSheets" min="1" max="50" placeholder="Default (e.g. 6)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" oninput="updateEditProgYieldPreview()">
+
+                        <div id="editProgYieldPreview" style="margin-top: 4px; font-size: 0.76rem; color: #2563eb; font-weight: 600;"></div>
+
+                    </div>
+
+                    <div style="flex: 1;">
+
+                        <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
+
+                            Selling Price (₱) <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+
+                        </label>
+
+                        <input type="number" id="editProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;">
+
+                        <div style="margin-top: 4px; font-size: 0.74rem; color: #64748b;">Leave blank for default.</div>
+
+                    </div>
 
                 </div>
 
@@ -5113,37 +5207,34 @@
 
                     closeConfirmSaveSettingsModal();
 
-                    // Clear stale dashboard stats & DSS caches so dashboard immediately renders fresh semester metrics
+                    // Immediately update in-memory defaults
+                    cachedDefaultSheets = payload.sheets_per_booklet || cachedDefaultSheets;
+                    cachedDefaultPrice = payload.booklet_price || cachedDefaultPrice;
 
+                    // Clear stale dashboard stats, DSS, programs & settings caches so other pages render fresh metrics
                     sessionStorage.removeItem('bookletlog_dashboard_stats_cache');
-
                     sessionStorage.removeItem('bookletlog_dashboard_dss_cache');
-
                     sessionStorage.removeItem('bookletlog_dss_alert_cache');
-
                     sessionStorage.removeItem('dss_acknowledged');
-
                     sessionStorage.removeItem('bookletlog_dept_breakdown_cache');
-
                     sessionStorage.removeItem('bookletlog_expenditure_cache');
+                    sessionStorage.removeItem(ACADEMIC_PROGRAMS_CACHE_KEY);
+                    sessionStorage.removeItem(SETTINGS_CACHE_KEY);
 
                     if (alertBox) {
-
                         alertBox.className = 'alert success';
-
                         alertBox.innerText = data.message;
-
                         alertBox.style.display = 'block';
-
                         setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
-
                     }
 
                     showSaveSuccessModal(data.message, payload);
 
                     loadPeriodConfigurationsHistory();
 
-                    fetchSettings(true);
+                    await fetchSettings(true);
+                    await loadAcademicPrograms();
+                    broadcastAcademicProgramsUpdated();
 
                     if (typeof window.refreshSidebarDSSAlert === 'function') {
 
@@ -5618,7 +5709,7 @@
 
             try {
 
-                let res = await fetch('/api/settings');
+                let res = await fetch('/api/settings', { cache: 'no-store' });
 
                 let data = await res.json();
 
@@ -6164,13 +6255,18 @@
 
         try {
 
-            const res = await fetch('/api/academic-programs?include_inactive=true');
+            const res = await fetch('/api/academic-programs?include_inactive=true', { cache: 'no-store' });
 
             const data = await res.json();
 
             if (data.status === 'success' && data.programs) {
 
                 cachedAcademicPrograms = data.programs;
+                if (window.registerAuthoritativeData) {
+                    window.registerAuthoritativeData('academic_programs', data.programs);
+                }
+                cachedDefaultSheets = data.default_sheets_per_booklet || 6;
+                cachedDefaultPrice = data.default_booklet_price || 2.50;
 
                 try {
 
@@ -6182,7 +6278,7 @@
 
             } else if (!tbody.children.length) {
 
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Failed to load programs: ${data.message || 'Unknown error'}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #dc2626; padding: 16px;">Failed to load programs: ${data.message || 'Unknown error'}</td></tr>`;
 
             }
 
@@ -6192,7 +6288,7 @@
 
             if (!tbody.children.length) {
 
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #dc2626; padding: 16px;">Error connecting to server.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #dc2626; padding: 16px;">Error connecting to server.</td></tr>`;
 
             }
 
@@ -6200,25 +6296,57 @@
 
     }
 
+    let cachedDefaultSheets = 6;
+    let cachedDefaultPrice = 2.50;
 
+    function updateNewProgYieldPreview() {
+        const val = parseInt(document.getElementById('newProgSheets')?.value || '', 10);
+        const prev = document.getElementById('newProgYieldPreview');
+        if (!prev) return;
+        if (!isNaN(val) && val > 0 && val <= 50) {
+            const y = Math.floor(500 / val);
+            const rem = 500 % val;
+            prev.innerText = `⚡ Yield: ${y} booklets/ream (${rem} leftover sheets)`;
+        } else {
+            prev.innerText = '';
+        }
+    }
+
+    function updateEditProgYieldPreview() {
+        const val = parseInt(document.getElementById('editProgSheets')?.value || '', 10);
+        const prev = document.getElementById('editProgYieldPreview');
+        if (!prev) return;
+        if (!isNaN(val) && val > 0 && val <= 50) {
+            const y = Math.floor(500 / val);
+            const rem = 500 % val;
+            prev.innerText = `⚡ Yield: ${y} booklets/ream (${rem} leftover sheets)`;
+        } else {
+            prev.innerText = '';
+        }
+    }
 
     function renderAcademicProgramsTable(programs) {
+        if (window.withSystemRendering) {
+            return window.withSystemRendering(function() {
+                _executeRenderAcademicProgramsTable(programs);
+            });
+        }
+        return _executeRenderAcademicProgramsTable(programs);
+    }
+
+    function _executeRenderAcademicProgramsTable(programs) {
 
         const tbody = document.getElementById('academicProgramsTableBody');
 
         if (!tbody) return;
 
-
-
         if (!programs || programs.length === 0) {
 
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">No academic programs registered. Click "Add New Course" to create one.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #64748b; padding: 20px;">No academic programs registered. Click "Add New Course" to create one.</td></tr>`;
 
             return;
 
         }
-
-
 
         tbody.innerHTML = programs.map(p => {
 
@@ -6230,7 +6358,16 @@
 
                 : `<span style="background: #fee2e2; color: #b91c1c; font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 9999px; border: 1px solid #fecaca;">Inactive</span>`;
 
+            const sheetsHtml = (p.sheets_per_booklet && p.sheets_per_booklet > 0)
+                ? `<span style="background: #eff6ff; color: #1d4ed8; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-size: 0.82rem; border: 1px solid #bfdbfe;">${p.sheets_per_booklet} sheets</span><br><small style="color: #64748b; font-weight: 600;">(${p.yield_per_ream || Math.floor(500/p.sheets_per_booklet)} pcs/ream)</small>`
+                : `<span style="color: #64748b; font-size: 0.82rem; font-style: italic;">Default (${p.effective_sheets || cachedDefaultSheets} sh)</span>`;
 
+            const priceHtml = (p.booklet_price !== null && p.booklet_price !== undefined && p.booklet_price > 0)
+                ? `<span style="background: #f0fdf4; color: #15803d; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-size: 0.84rem; border: 1px solid #bbf7d0;">₱${parseFloat(p.booklet_price).toFixed(2)}</span>`
+                : `<span style="color: #64748b; font-size: 0.82rem; font-style: italic;">Default (₱${parseFloat(p.effective_price || cachedDefaultPrice).toFixed(2)})</span>`;
+
+            const sheetsArg = (p.sheets_per_booklet !== null && p.sheets_per_booklet !== undefined) ? p.sheets_per_booklet : 'null';
+            const priceArg = (p.booklet_price !== null && p.booklet_price !== undefined) ? p.booklet_price : 'null';
 
             return `
 
@@ -6264,6 +6401,18 @@
 
                     <td style="padding: 12px 16px; text-align: center;">
 
+                        ${sheetsHtml}
+
+                    </td>
+
+                    <td style="padding: 12px 16px; text-align: center;">
+
+                        ${priceHtml}
+
+                    </td>
+
+                    <td style="padding: 12px 16px; text-align: center;">
+
                         <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-family: monospace; color: #475569;">
 
                             <span style="display: inline-block; width: 18px; height: 18px; border-radius: 4px; background: ${color}; border: 1px solid rgba(0,0,0,0.15);"></span>
@@ -6284,7 +6433,7 @@
 
                         <div style="display: flex; gap: 8px; justify-content: center;">
 
-                            <button type="button" onclick="openEditProgramModal(${p.id}, '${escapeHtml(p.code)}', '${escapeHtml(p.name)}', '${escapeHtml(p.section_prefix)}', '${color}', ${p.is_active})" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 5px 10px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                            <button type="button" onclick="openEditProgramModal(${p.id})" style="background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 5px 10px; border-radius: 4px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
 
                                 ✏️ Edit
 
@@ -6308,6 +6457,21 @@
 
     }
 
+    // Protect academic programs table against Inspect Element manipulation
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            if (window.protectContainer) {
+                var tbody = document.getElementById('academicProgramsTableBody');
+                if (tbody) {
+                    window.protectContainer(tbody, function() {
+                        var auth = window.getAuthoritativeData ? window.getAuthoritativeData('academic_programs') : cachedAcademicPrograms;
+                        renderAcademicProgramsTable(auth || cachedAcademicPrograms);
+                    });
+                }
+            }
+        }, 500);
+    });
+
 
 
     function openAddProgramModal() {
@@ -6319,6 +6483,12 @@
         document.getElementById('newProgPrefix').value = '';
 
         document.getElementById('newProgColor').value = '#9b59b6';
+
+        if (document.getElementById('newProgSheets')) document.getElementById('newProgSheets').value = '';
+
+        if (document.getElementById('newProgPrice')) document.getElementById('newProgPrice').value = '';
+
+        if (document.getElementById('newProgYieldPreview')) document.getElementById('newProgYieldPreview').innerText = '';
 
         updateProgPreview();
 
@@ -6376,7 +6546,11 @@
 
         const color_hex = document.getElementById('newProgColor').value.trim();
 
+        const sheetsVal = document.getElementById('newProgSheets')?.value.trim();
+        const priceVal = document.getElementById('newProgPrice')?.value.trim();
 
+        const sheets_per_booklet = sheetsVal ? parseInt(sheetsVal, 10) : null;
+        const booklet_price = priceVal ? parseFloat(priceVal) : null;
 
         if (!code) {
 
@@ -6402,8 +6576,6 @@
 
         }
 
-
-
         try {
 
             const res = await fetch('/api/academic-programs', {
@@ -6412,7 +6584,15 @@
 
                 headers: { 'Content-Type': 'application/json' },
 
-                body: JSON.stringify({ code, name, section_prefix, color_hex, is_active: true })
+                body: JSON.stringify({ 
+                    code, 
+                    name, 
+                    section_prefix, 
+                    color_hex, 
+                    is_active: true,
+                    sheets_per_booklet: sheets_per_booklet,
+                    booklet_price: booklet_price
+                })
 
             });
 
@@ -6423,6 +6603,8 @@
                 closeAddProgramModal();
 
                 showCustomLogModal(`Academic course '${code}' created successfully! Cover booklet templates calibrated.`, 'success');
+
+                broadcastAcademicProgramsUpdated();
 
                 await loadAcademicPrograms();
 
@@ -6444,19 +6626,41 @@
 
 
 
-    function openEditProgramModal(id, code, name, prefix, color, isActive) {
+    function openEditProgramModal(id, code, name, prefix, color, isActive, sheets, price) {
+        // Look up verified server record to prevent Inspect Element tampering
+        const programRecord = (typeof window.getAuthoritativeRecord === 'function')
+            ? window.getAuthoritativeRecord('academic_programs', id)
+            : (cachedAcademicPrograms || []).find(function(p) { return p && p.id === Number(id); });
+
+        if (programRecord) {
+            code = programRecord.code;
+            name = programRecord.name;
+            prefix = programRecord.section_prefix;
+            color = programRecord.color_hex || programRecord.badge_color || color;
+            isActive = programRecord.is_active;
+            sheets = programRecord.sheets_per_booklet;
+            price = (programRecord.course_price !== undefined && programRecord.course_price !== null) ? programRecord.course_price : programRecord.booklet_price;
+        }
 
         document.getElementById('editProgId').value = id;
 
-        document.getElementById('editProgCode').value = code;
+        document.getElementById('editProgCode').value = code || '';
 
-        document.getElementById('editProgName').value = name;
+        document.getElementById('editProgName').value = name || '';
 
-        document.getElementById('editProgPrefix').value = prefix;
+        document.getElementById('editProgPrefix').value = prefix || '';
 
         document.getElementById('editProgColor').value = color || '#3498db';
 
         document.getElementById('editProgActive').checked = !!isActive;
+
+        const editSheetsEl = document.getElementById('editProgSheets');
+        if (editSheetsEl) editSheetsEl.value = (sheets !== null && sheets !== undefined && sheets > 0) ? sheets : '';
+
+        const editPriceEl = document.getElementById('editProgPrice');
+        if (editPriceEl) editPriceEl.value = (price !== null && price !== undefined && price > 0) ? price : '';
+
+        updateEditProgYieldPreview();
 
         const m = document.getElementById('editProgramModal');
 
@@ -6488,7 +6692,11 @@
 
         const is_active = document.getElementById('editProgActive').checked;
 
+        const sheetsVal = document.getElementById('editProgSheets')?.value.trim();
+        const priceVal = document.getElementById('editProgPrice')?.value.trim();
 
+        const sheets_per_booklet = sheetsVal ? parseInt(sheetsVal, 10) : null;
+        const booklet_price = priceVal ? parseFloat(priceVal) : null;
 
         if (!name || !section_prefix) {
 
@@ -6498,8 +6706,6 @@
 
         }
 
-
-
         try {
 
             const res = await fetch(`/api/academic-programs/${id}`, {
@@ -6508,8 +6714,14 @@
 
                 headers: { 'Content-Type': 'application/json' },
 
-                body: JSON.stringify({ name, section_prefix, color_hex, is_active })
-
+                body: JSON.stringify({
+                    name,
+                    section_prefix,
+                    color_hex,
+                    is_active,
+                    sheets_per_booklet: sheets_per_booklet,
+                    booklet_price: booklet_price
+                })
             });
 
             const data = await res.json();
@@ -6519,6 +6731,8 @@
                 closeEditProgramModal();
 
                 showCustomLogModal('Academic course updated successfully!', 'success');
+
+                broadcastAcademicProgramsUpdated();
 
                 await loadAcademicPrograms();
 
@@ -6576,6 +6790,8 @@
 
                 showCustomLogModal(data.message, 'info');
 
+                broadcastAcademicProgramsUpdated();
+
                 await loadAcademicPrograms();
 
             } else {
@@ -6592,6 +6808,18 @@
 
         }
 
+    }
+
+    function broadcastAcademicProgramsUpdated() {
+        try {
+            sessionStorage.removeItem('bookletlog_pdfgen_programs');
+            sessionStorage.removeItem('bookletlog_pdfgen_settings');
+            sessionStorage.removeItem('bookletlog_academic_programs');
+            sessionStorage.removeItem('bookletlog_settings');
+            const now = Date.now().toString();
+            localStorage.setItem('bookletlog_programs_version', now);
+            localStorage.setItem('bookletlog_settings_version', now);
+        } catch(e) {}
     }
 
 

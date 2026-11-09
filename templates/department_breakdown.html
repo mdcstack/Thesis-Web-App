@@ -4,7 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Departmental Breakdown - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
     <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; }
@@ -406,6 +431,13 @@
                                 }));
                             } catch (e) {}
                         }
+                        if (window.registerAuthoritativeData) {
+                            window.registerAuthoritativeData('department_breakdown', {
+                                computations_data: data.computations_data,
+                                financials: data.financials,
+                                active_period: activePeriod
+                            });
+                        }
                         renderBreakdown(data.computations_data, activePeriod, data.financials);
                     } else if (!isBackground) {
                         alert("Could not load computation data: " + (data.message || "Unknown error"));
@@ -417,10 +449,21 @@
         }
 
         function renderBreakdown(computationsPayload, periodStr, financialsPayload) {
+            if (window.withSystemRendering) {
+                return window.withSystemRendering(function() {
+                    _executeRenderBreakdown(computationsPayload, periodStr, financialsPayload);
+                });
+            }
+            return _executeRenderBreakdown(computationsPayload, periodStr, financialsPayload);
+        }
+
+        function _executeRenderBreakdown(computationsPayload, periodStr, financialsPayload) {
             const comp = computationsPayload.records || {};
             const summ = computationsPayload.summary || {};
             const sheetsPerBooklet = computationsPayload.sheets_per_booklet || 6;
             const bookletPrice = computationsPayload.booklet_price || 2.50;
+            const coursePrices = computationsPayload.course_prices || {};
+            const courseSheets = computationsPayload.course_sheets || {};
 
             // Global real-time collections and receivables metrics
             const totalBilled = computationsPayload.total_billed !== undefined ? computationsPayload.total_billed : 0;
@@ -445,6 +488,8 @@
 
             programs.forEach(p => {
                 const dept = p.code;
+                const progSheets = p.effective_sheets || courseSheets[dept] || sheetsPerBooklet;
+                const progPrice = p.effective_price || coursePrices[dept] || bookletPrice;
                 const dSumm = summ[dept] || { "1": 0, "2": 0, "3": 0, "4": 0, total: 0 };
                 const dComp = comp[dept] || { "1": [], "2": [], "3": [], "4": [] };
                 
@@ -466,7 +511,7 @@
                     (dComp[y.toString()] || []).forEach(r => { dBooklets += r.headcount; });
                 }
 
-                const dSheets = dBooklets * sheetsPerBooklet;
+                const dSheets = dBooklets * progSheets;
                 totalSheets += dSheets;
                 const dReams = Math.floor(dSheets / 500);
                 const dLoose = dSheets % 500;
@@ -539,8 +584,8 @@
             
             const paperDetailsHtml = programs.map((p, idx) => {
                 const s = deptStats[p.code] || { reams: 0, loose: 0, sheets: 0 };
-                const isLast = idx === programs.length - 1;
-                const specSuffix = isLast ? ` <span style="color: #64748b; font-size: 0.75rem; font-weight: normal;">[${sheetsPerBooklet} sheets/pc]</span>` : '';
+                const pSheets = p.effective_sheets || courseSheets[p.code] || sheetsPerBooklet;
+                const specSuffix = ` <span style="color: #64748b; font-size: 0.75rem; font-weight: normal;">[${pSheets} sheets/pc]</span>`;
                 return `<div style="margin-top: 2px;"><strong>${escapeHtml(p.code)}:</strong> ${s.reams}R ${s.loose}s (${s.sheets.toLocaleString()} sheets)${specSuffix}</div>`;
             }).join('');
             document.getElementById('kpiPaperDetails').innerHTML = paperDetailsHtml;
@@ -597,6 +642,8 @@
             
             programs.forEach(p => {
                 const dept = p.code;
+                const progSheets = p.effective_sheets || courseSheets[dept] || sheetsPerBooklet;
+                const progPrice = p.effective_price || coursePrices[dept] || bookletPrice;
                 const dComp = comp[dept] || { "1": [], "2": [], "3": [], "4": [] };
                 const dSumm = summ[dept] || { "1": 0, "2": 0, "3": 0, "4": 0, total: 0 };
                 const s = deptStats[dept] || { gross: 0, billed: 0, pending: 0 };
@@ -661,13 +708,13 @@
                                         <tbody>
                             `;
                             rows.forEach(r => {
-                                const sUsed = r.sheets_used || (r.headcount * sheetsPerBooklet);
+                                const sUsed = (r.sheets_used !== undefined) ? r.sheets_used : (r.headcount * progSheets);
                                 const rowReams = Math.floor(sUsed / 500);
                                 const rowLoose = sUsed % 500;
                                 const rowReamsDisplay = rowReams > 0 ? `${rowReams} Ream(s) + ${rowLoose} sheets` : `0 Reams + ${rowLoose} sheets`;
                                 const paidVal = (r.amount_paid !== undefined) ? r.amount_paid : (r.amount || 0);
 
-                                const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * bookletPrice);
+                                const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * progPrice);
                                 const initialPriorDebt = (r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
                                 const remainingPriorDebt = (r.remaining_prior_debt !== undefined) ? r.remaining_prior_debt : initialPriorDebt;
                                 const dueVal = (r.amount_due !== undefined) ? r.amount_due : (currBilled + initialPriorDebt);
@@ -759,45 +806,45 @@
             document.getElementById('deptRostersContainer').innerHTML = rostersHtml;
         }
 
+        // Register pre-print rehydration to guarantee un-tampered printouts
+        if (window.registerPrintRehydrator) {
+            window.registerPrintRehydrator(function() {
+                var auth = window.getAuthoritativeData('department_breakdown');
+                if (auth && auth.computations_data) {
+                    renderBreakdown(auth.computations_data, auth.active_period, auth.financials);
+                }
+            });
+        }
+
+        // Protect critical breakdown tables against DevTools inspect tampering
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                if (window.protectContainer) {
+                    var container = document.getElementById('deptRostersContainer');
+                    if (container) {
+                        window.protectContainer(container, function() {
+                            var auth = window.getAuthoritativeData('department_breakdown');
+                            if (auth && auth.computations_data) {
+                                renderBreakdown(auth.computations_data, auth.active_period, auth.financials);
+                            }
+                        });
+                    }
+                }
+            }, 300);
+        });
+
         function printOfficialReport() {
             document.getElementById('printDateLabel').innerText = "Generated on: " + new Date().toLocaleString();
+            if (window.executePrintRehydration) {
+                window.executePrintRehydration();
+            }
             window.print();
         }
 
 
-        function toggleNotifPanel() {
-            const panel = document.getElementById('notifPanel');
-            if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (typeof window.refreshSidebarDSSAlert === 'function') {
+            window.refreshSidebarDSSAlert();
         }
-
-        fetch('/api/dss-alert').then(response => response.json()).then(data => {
-            const badge = document.getElementById('notifBadge');
-            const panel = document.getElementById('notifPanel');
-            const bell = document.getElementById('notifBell');
-            if (!badge || !panel || !bell) return;
-            if (data.alert) {
-                badge.style.display = 'inline-block';
-                bell.style.color = 'white'; 
-                if (activeUser.role === 'Admin') {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #3498db; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                } else {
-                    panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f39c12; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
-                }
-            } else {
-                badge.style.display = 'none';
-                if (data.has_enrollments === false) {
-                    panel.style.borderLeftColor = '#64748b';
-                    if (activeUser && activeUser.role === 'Admin') {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #3498db; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>';
-                    } else {
-                        panel.innerHTML = '📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.';
-                    }
-                } else {
-                    panel.style.borderLeftColor = '#27ae60'; 
-                    panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
-                }
-            }
-        }).catch(err => console.log('Alert check error:', err));
 
         
     // --- IN-APP CONFIRMATION DIALOG SYSTEM ---

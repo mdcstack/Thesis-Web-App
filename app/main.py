@@ -11,6 +11,8 @@ from sqlalchemy import func, or_, and_, text
 from pydantic import BaseModel
 import datetime
 from fastapi.responses import RedirectResponse, HTMLResponse, Response
+from fastapi import status
+from urllib.parse import quote
 # Import local modules
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -103,6 +105,14 @@ def sync_enrollment_period_billings(db: Session):
 
         billings_created_or_updated = False
 
+        # Pre-cache active programs for course-specific pricing overrides
+        active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).all()
+        course_price_map = {
+            p.code.upper(): float(p.booklet_price)
+            for p in active_programs
+            if p.booklet_price is not None and p.booklet_price > 0
+        }
+
         for enr in enrollments:
             periods = enr_periods_map.get(enr.id, set())
             for pr_p in enr_pr_map.get(enr.id, {}).keys():
@@ -114,6 +124,13 @@ def sync_enrollment_period_billings(db: Session):
                 else:
                     continue
 
+            # Resolve course-specific override price for this enrollment
+            if 'resolve_enrollment_department' in globals():
+                enr_dept = (resolve_enrollment_department(enr, db=db) or enr.department or "").strip().upper()
+            else:
+                enr_dept = (enr.department or "").strip().upper()
+            course_override_price = course_price_map.get(enr_dept)
+
             for p_name in periods:
                 p_booklets = enr_bks_map.get(enr.id, {}).get(p_name, [])
                 dist_bks = [b for b in p_booklets if b.status == "distributed"]
@@ -123,6 +140,8 @@ def sync_enrollment_period_billings(db: Session):
 
                 if dist_bks and getattr(dist_bks[0], 'unit_price', None):
                     eff_price = float(dist_bks[0].unit_price)
+                elif course_override_price is not None:
+                    eff_price = course_override_price
                 else:
                     eff_price = period_price_map.get(p_name, global_price)
 
@@ -304,7 +323,12 @@ def auto_provision_instructor_account(instructor_name: str, department: str, db:
     return new_user, True
 
 def get_portal_authenticated_user(request: Request, db: Session) -> Optional[models.User]:
-    token = request.headers.get("X-Session-Token") or request.query_params.get("session_token") or request.query_params.get("token")
+    token = (
+        request.cookies.get("bookletlog_session")
+        or request.headers.get("X-Session-Token")
+        or request.query_params.get("session_token")
+        or request.query_params.get("token")
+    )
     username = request.headers.get("X-Username") or request.query_params.get("username")
     if not token:
         return None
@@ -314,6 +338,44 @@ def get_portal_authenticated_user(request: Request, db: Session) -> Optional[mod
     user = q.first()
     if user and getattr(user, 'is_active', True) is False:
         return None
+    return user
+
+def verify_page_role_access(request: Request, allowed_roles: List[str], db: Session) -> Optional[Response]:
+    """
+    Enforces Role-Based Access Control (RBAC) on page routes before template delivery.
+    Returns None if access is granted, or a RedirectResponse if access is denied.
+    """
+    user = get_portal_authenticated_user(request, db)
+    if not user:
+        target = request.url.path
+        if request.url.query:
+            target += f"?{request.url.query}"
+        return RedirectResponse(url=f"/login?redirect={quote(target)}", status_code=status.HTTP_302_FOUND)
+
+    role_clean = (user.role or "").strip().capitalize()
+    allowed_clean = [r.strip().capitalize() for r in allowed_roles]
+
+    if role_clean not in allowed_clean:
+        if role_clean == "Viewer":
+            return RedirectResponse(url="/transaction-profile?error=unauthorized", status_code=status.HTTP_302_FOUND)
+        elif role_clean == "Staff":
+            return RedirectResponse(url="/dashboard?error=unauthorized", status_code=status.HTTP_302_FOUND)
+        else:
+            return RedirectResponse(url="/login?error=unauthorized", status_code=status.HTTP_302_FOUND)
+
+    return None
+
+def verify_api_role_access(request: Request, allowed_roles: List[str], db: Session) -> models.User:
+    """
+    Enforces RBAC on sensitive API endpoints. Raises HTTPException(401/403) if unauthorized.
+    """
+    user = get_portal_authenticated_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required. Please log in.")
+    role_clean = (user.role or "").strip().capitalize()
+    allowed_clean = [r.strip().capitalize() for r in allowed_roles]
+    if role_clean not in allowed_clean:
+        raise HTTPException(status_code=403, detail=f"Access denied: Requires role in {allowed_roles}.")
     return user
 
 def ensure_schema_migrations():
@@ -423,6 +485,16 @@ def ensure_schema_migrations():
                     conn.commit()
                 if 'archived_at' not in columns:
                     conn.execute(text("ALTER TABLE enrollments ADD COLUMN archived_at DATETIME NULL"))
+                    conn.commit()
+
+        if 'academic_programs' in tables:
+            columns = [c['name'] for c in inspector.get_columns('academic_programs')]
+            with engine.connect() as conn:
+                if 'sheets_per_booklet' not in columns:
+                    conn.execute(text("ALTER TABLE academic_programs ADD COLUMN sheets_per_booklet INT NULL"))
+                    conn.commit()
+                if 'booklet_price' not in columns:
+                    conn.execute(text("ALTER TABLE academic_programs ADD COLUMN booklet_price FLOAT NULL"))
                     conn.commit()
 
         os.makedirs("static/templates", exist_ok=True)
@@ -960,7 +1032,10 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         )
 
     ream_count = max(0, request_data.ream_count or 0)
-    sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
+    prog = db.query(models.AcademicProgram).filter(
+        func.upper(models.AcademicProgram.code) == (department or "").upper()
+    ).first() if department else None
+    sheets_per_b = int(prog.sheets_per_booklet) if (prog and prog.sheets_per_booklet and prog.sheets_per_booklet > 0) else (settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6)
     
     # Carryover-aware conversion capacity combining newly procured reams and vault carryover sheets
     prev_excess = course_metric.get("prev_excess_sheets", 0) if course_metric else 0
@@ -1060,7 +1135,7 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         end_srn=end_srn_str,
         registered_period=current_period,
         ream_price=settings.ream_price,
-        sheets_per_booklet=settings.sheets_per_booklet,
+        sheets_per_booklet=sheets_per_b,
         template_slot=template_slot
     )
     db.add(new_batch)
@@ -1124,6 +1199,9 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def read_dashboard(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     active_period = get_active_period(db)
     # 1. Total Enrolled Students (This is the Absolute Demand)
     total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
@@ -1155,6 +1233,9 @@ def read_dashboard(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/history", response_class=HTMLResponse)
 def read_history(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     enrollments = db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).all()
     history_data = []
     
@@ -1183,14 +1264,19 @@ def read_history(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("history.html", {"request": request, "history_data": history_data})
 
 @app.get("/generator")
-def view_generator(request: Request):
-    # This page doesn't need database math to load, it just needs the HTML template
+def view_generator(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("pdf_generator.html", {"request": request})
 
 from fastapi import HTTPException
 
 @app.get("/qr-registration")
-def view_qr_registration(request: Request):
+def view_qr_registration(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("qr_registration.html", {"request": request})
 
 @app.get("/api/pending-batches")
@@ -1500,8 +1586,11 @@ from sqlalchemy import func
 # ---------------------------------------------------------
 
 @app.get("/distribution")
-def distribution_page(request: Request):
+def distribution_page(request: Request, db: Session = Depends(get_db)):
     """Renders the QR scanner and distribution UI"""
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("distribution.html", {"request": request})
 
 
@@ -1651,16 +1740,20 @@ def get_pending_distributions(db: Session = Depends(get_db)):
             # Active replacement demand cannot exceed actual remaining shortfall
             replacement_count = min(remaining, active_defective_count)
 
-            # Check grandfathered price
+            # Check grandfathered price or course-specific price
+            enr_dept = resolve_enrollment_department(e, db=db)
+            prog = db.query(models.AcademicProgram).filter(
+                func.upper(models.AcademicProgram.code) == (enr_dept or "").upper()
+            ).first() if enr_dept else None
+            course_price = float(prog.booklet_price) if (prog and prog.booklet_price is not None and prog.booklet_price > 0) else float(booklet_price)
+
             prior_b = db.query(models.Booklet).filter(
                 models.Booklet.enrollment_id == e.id,
                 models.Booklet.exam_period == active_period,
                 models.Booklet.unit_price.isnot(None)
             ).first()
-            effective_price = float(prior_b.unit_price) if prior_b else float(booklet_price)
+            effective_price = float(prior_b.unit_price) if prior_b else float(course_price)
             credit = float(getattr(e, 'replacement_credit', 0.0) or 0.0)
-
-            enr_dept = resolve_enrollment_department(e, db=db)
 
             is_replacement = bool(replacement_count > 0)
             is_prepaid = bool(replacement_count > 0 and credit >= effective_price and credit > 0)
@@ -1880,7 +1973,7 @@ def read_login(request: Request):
 import uuid
 
 @app.post("/api/login")
-def login_user(req: LoginRequest, db: Session = Depends(get_db)):
+def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
 
     if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
@@ -1894,6 +1987,16 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
     notify_lan_mutation("USER_UPDATED", {"action": "login", "username": user.username, "id": user.id}, db=db)
     
+    # Set session cookie for seamless server-side page authorization
+    response.set_cookie(
+        key="bookletlog_session",
+        value=new_token,
+        httponly=True,
+        samesite="lax",
+        max_age=86400 * 7,
+        path="/"
+    )
+
     # Return user details so the browser knows what role they are
     return {
         "status": "success", 
@@ -1923,11 +2026,21 @@ def authorize_admin(req: LoginRequest, db: Session = Depends(get_db)):
     return {"status": "success", "message": "Authorized"}
 
 @app.post("/api/verify-session")
-def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_db)):
+def verify_session(req: schemas.VerifySessionRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if user and user.session_token == req.session_token:
         if getattr(user, 'is_active', True) is False:
+            response.delete_cookie(key="bookletlog_session", path="/")
             return {"status": "invalid", "message": "Account has been deactivated."}
+        # Refresh session cookie
+        response.set_cookie(
+            key="bookletlog_session",
+            value=user.session_token,
+            httponly=True,
+            samesite="lax",
+            max_age=86400 * 7,
+            path="/"
+        )
         return {
             "status": "valid",
             "id": user.id,
@@ -1937,10 +2050,11 @@ def verify_session(req: schemas.VerifySessionRequest, db: Session = Depends(get_
             "department": user.department,
             "updated_by": getattr(user, "updated_by", None) or "Administrator"
         }
+    response.delete_cookie(key="bookletlog_session", path="/")
     return {"status": "invalid"}
 
 @app.post("/api/logout")
-def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
+def logout_session(req: schemas.LogoutRequest, response: Response, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if user:
         user.session_token = None
@@ -1948,6 +2062,7 @@ def logout_session(req: schemas.LogoutRequest, db: Session = Depends(get_db)):
         db.query(models.MasterBatch).filter(models.MasterBatch.claimed_by == user.username).update({models.MasterBatch.claimed_by: None})
         db.commit()
         notify_lan_mutation("USER_UPDATED", {"action": "logout", "username": user.username, "id": user.id}, db=db)
+    response.delete_cookie(key="bookletlog_session", path="/")
     return {"status": "success"}
 
 @app.get("/api/dss-alert")
@@ -2080,6 +2195,9 @@ def check_dss_alert(db: Session = Depends(get_db)):
 
 @app.get("/enrollments", response_class=HTMLResponse)
 def read_enrollments(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    if guard:
+        return guard
     # Order by teacher, subject, and section to support neat nested grouping in template
     # Only active (non-archived) enrollments are shown in the active masterfile
     enrollments = db.query(models.Enrollment).filter(
@@ -2187,21 +2305,419 @@ def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Dep
         "total": added_count + updated_count
     }
 
-@app.get("/api/enrollments/template")
-def download_enrollment_template():
-    csv_content = (
-        "Instructor,Section,Subject,Headcount\n"
-        "Dr. Maria Santos,BSCS-1A,Introduction to Computing,37\n"
-        "Dr. Maria Santos,BSCS-1B,Computer Programming 1,42\n"
-        "Engr. Mark Bautista,BSIT-1A,Introduction to Information Technology,44\n"
-        "Engr. Mark Bautista,BSIT-1B,Computer Programming 1,43\n"
-        "Prof. Juan Reyes,BSCS-2A,Data Structures and Algorithms,38\n"
+def create_excel_template_response(headers: list[str], rows: list[list], filename: str) -> Response:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    import io
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Template"
+
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
     )
+
+    ws.append(headers)
+    ws.row_dimensions[1].height = 26
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    data_font = Font(name="Calibri", size=11, color="1E293B")
+    data_align_left = Alignment(horizontal="left", vertical="center")
+    data_align_center = Alignment(horizontal="center", vertical="center")
+
+    for r_idx, row_data in enumerate(rows, start=2):
+        ws.append(row_data)
+        ws.row_dimensions[r_idx].height = 20
+        for col_idx, val in enumerate(row_data, start=1):
+            cell = ws.cell(row=r_idx, column=col_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            if isinstance(val, (int, float)) or (isinstance(val, str) and len(val) <= 5):
+                cell.alignment = data_align_center
+            else:
+                cell.alignment = data_align_left
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or '')
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 5, 15)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    
     return Response(
-        content=csv_content,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=class_enrollment_template.csv"}
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+@app.get("/api/enrollments/template")
+def download_enrollment_template(format: Optional[str] = "xlsx"):
+    headers = ["Instructor", "Section", "Subject", "Headcount"]
+    sample_rows = [
+        ["Dr. Maria Santos", "BSCS-1A", "Introduction to Computing", 37],
+        ["Dr. Maria Santos", "BSCS-1B", "Computer Programming 1", 42],
+        ["Engr. Mark Bautista", "BSIT-1A", "Introduction to Information Technology", 44],
+        ["Engr. Mark Bautista", "BSIT-1B", "Computer Programming 1", 43],
+        ["Prof. Juan Reyes", "BSCS-2A", "Data Structures and Algorithms", 38]
+    ]
+    if format == "csv":
+        csv_content = (
+            "Instructor,Section,Subject,Headcount\n"
+            "Dr. Maria Santos,BSCS-1A,Introduction to Computing,37\n"
+            "Dr. Maria Santos,BSCS-1B,Computer Programming 1,42\n"
+            "Engr. Mark Bautista,BSIT-1A,Introduction to Information Technology,44\n"
+            "Engr. Mark Bautista,BSIT-1B,Computer Programming 1,43\n"
+            "Prof. Juan Reyes,BSCS-2A,Data Structures and Algorithms,38\n"
+        )
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=class_enrollment_template.csv"}
+        )
+    return create_excel_template_response(headers, sample_rows, "class_enrollment_template.xlsx")
+
+@app.get("/api/enrollments/roster")
+def get_enrollments_roster(db: Session = Depends(get_db)):
+    active_period = get_active_period(db)
+    
+    # 1. Fetch active faculty accounts (role == 'Viewer')
+    faculty_users = db.query(models.User).filter(
+        models.User.role == "Viewer"
+    ).order_by(models.User.full_name.asc(), models.User.username.asc()).all()
+    
+    # 2. Fetch all active non-archived enrollments
+    active_enrollments = db.query(models.Enrollment).filter(
+        models.Enrollment.is_archived == False
+    ).order_by(
+        models.Enrollment.teacher_name.asc(),
+        models.Enrollment.subject.asc(),
+        models.Enrollment.section.asc()
+    ).all()
+    
+    # 3. Map enrollments by teacher_name (normalized lowercase)
+    enr_by_teacher = {}
+    for enr in active_enrollments:
+        t_key = (enr.teacher_name or "").strip().lower()
+        if not t_key:
+            continue
+        if t_key not in enr_by_teacher:
+            enr_by_teacher[t_key] = []
+        
+        # Count distributed booklets
+        dist_count = db.query(models.Booklet).filter(
+            models.Booklet.enrollment_id == enr.id,
+            models.Booklet.status == "distributed"
+        ).count()
+        
+        enr_by_teacher[t_key].append({
+            "id": enr.id,
+            "section": enr.section,
+            "subject": enr.subject,
+            "student_headcount": enr.student_headcount or 0,
+            "department": enr.department or "CS",
+            "distributed_count": dist_count
+        })
+    
+    # 4. Build combined instructor list
+    instructors = []
+    processed_keys = set()
+    
+    for u in faculty_users:
+        disp_name = (u.full_name or u.username).strip()
+        k = disp_name.lower()
+        processed_keys.add(k)
+        classes = enr_by_teacher.get(k, [])
+        
+        # Unique subjects
+        unique_subjects = list(dict.fromkeys([c["subject"] for c in classes if c.get("subject")]))
+        total_pax = sum(c["student_headcount"] for c in classes)
+        
+        instructors.append({
+            "user_id": u.id,
+            "name": disp_name,
+            "username": u.username,
+            "department": u.department or "CS",
+            "is_active": getattr(u, "is_active", True) is not False,
+            "classes": classes,
+            "total_subjects": len(unique_subjects),
+            "subjects_list": unique_subjects,
+            "total_sections": len(classes),
+            "total_headcount": total_pax,
+            "status": "submitted" if len(classes) > 0 else "pending"
+        })
+        
+    # Any teachers in enrollments who don't have a Viewer account yet
+    for enr in active_enrollments:
+        disp_name = (enr.teacher_name or "").strip()
+        k = disp_name.lower()
+        if k and k not in processed_keys:
+            processed_keys.add(k)
+            classes = enr_by_teacher.get(k, [])
+            unique_subjects = list(dict.fromkeys([c["subject"] for c in classes if c.get("subject")]))
+            total_pax = sum(c["student_headcount"] for c in classes)
+            inferred_dept = classes[0]["department"] if classes else "CS"
+            
+            instructors.append({
+                "user_id": None,
+                "name": disp_name,
+                "username": generate_clean_instructor_username(disp_name),
+                "department": inferred_dept,
+                "is_active": True,
+                "classes": classes,
+                "total_subjects": len(unique_subjects),
+                "subjects_list": unique_subjects,
+                "total_sections": len(classes),
+                "total_headcount": total_pax,
+                "status": "submitted" if len(classes) > 0 else "pending"
+            })
+            
+    # Sort instructors by name
+    instructors.sort(key=lambda x: x["name"].lower())
+    
+    # Compute summary stats
+    total_faculty = len(instructors)
+    submitted_faculty = sum(1 for i in instructors if i["status"] == "submitted")
+    pending_faculty = total_faculty - submitted_faculty
+    total_sections = len(active_enrollments)
+    total_students = sum((e.student_headcount or 0) for e in active_enrollments)
+    
+    stats = {
+        "total_faculty": total_faculty,
+        "submitted_faculty": submitted_faculty,
+        "pending_faculty": pending_faculty,
+        "total_sections": total_sections,
+        "total_students": total_students
+    }
+    
+    return {
+        "status": "success",
+        "active_period": active_period,
+        "stats": stats,
+        "instructors": instructors
+    }
+
+@app.post("/api/enrollments/import-faculty")
+def import_faculty_roster(req: schemas.BulkFacultyImport, db: Session = Depends(get_db)):
+    if not req.records:
+        return {"status": "error", "message": "No faculty records provided."}
+        
+    created_count = 0
+    existing_count = 0
+    results = []
+    
+    for item in req.records:
+        name = item.name.strip()
+        dept = (item.department or "CS").strip().upper()
+        if not name:
+            continue
+            
+        user, is_new = auto_provision_instructor_account(name, dept, db)
+        if user:
+            if is_new:
+                created_count += 1
+            else:
+                existing_count += 1
+            results.append({
+                "name": user.full_name or user.username,
+                "username": user.username,
+                "department": user.department,
+                "is_new": is_new
+            })
+            
+    if created_count > 0:
+        notify_lan_mutation("USER_UPDATED", {"action": "bulk_faculty_created", "created": created_count}, db=db)
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "import_faculty", "total": len(results)}, db=db)
+    
+    msg = f"Faculty onboarding complete: {created_count} new faculty account(s) provisioned (default password: user12345), {existing_count} existing account(s) confirmed."
+    return {
+        "status": "success",
+        "message": msg,
+        "created": created_count,
+        "existing": existing_count,
+        "total": created_count + existing_count,
+        "faculty": results
+    }
+
+@app.post("/api/enrollments/add-faculty")
+def add_single_faculty(item: schemas.FacultyRosterItem, db: Session = Depends(get_db)):
+    name = item.name.strip()
+    dept = (item.department or "CS").strip().upper()
+    if not name:
+        return {"status": "error", "message": "Instructor name cannot be empty."}
+        
+    user, is_new = auto_provision_instructor_account(name, dept, db)
+    if not user:
+        return {"status": "error", "message": "Failed to provision faculty account."}
+        
+    if is_new:
+        notify_lan_mutation("USER_UPDATED", {"action": "create", "username": user.username, "id": user.id}, db=db)
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "add_faculty", "name": name}, db=db)
+    
+    msg = f"Faculty '{name}' added successfully!"
+    if is_new:
+        msg += f" Login account provisioned: @{user.username} (default password: user12345)."
+    return {
+        "status": "success",
+        "message": msg,
+        "user_id": user.id,
+        "username": user.username,
+        "name": user.full_name,
+        "is_new": is_new
+    }
+
+@app.post("/api/enrollments/faculty-upload")
+def faculty_upload_classes(req: schemas.FacultyUploadRequest, db: Session = Depends(get_db)):
+    t_name = req.teacher_name.strip()
+    if not t_name:
+        return {"status": "error", "message": "Instructor name is required."}
+    if not req.classes:
+        return {"status": "error", "message": "No class schedule items provided."}
+        
+    added_count = 0
+    updated_count = 0
+    
+    # Ensure user exists for this instructor
+    auto_provision_instructor_account(t_name, "CS", db)
+    
+    for item in req.classes:
+        subj_upper = item.subject.strip().upper()
+        sec_upper = item.section.strip().upper()
+        headcount = int(item.student_headcount)
+        
+        if not subj_upper or not sec_upper or headcount < 1:
+            continue
+            
+        existing = db.query(models.Enrollment).filter(
+            models.Enrollment.teacher_name == t_name,
+            models.Enrollment.section == sec_upper,
+            models.Enrollment.subject == subj_upper,
+            models.Enrollment.is_archived == False
+        ).first()
+        
+        inferred_dept = detect_department_from_section(sec_upper, db=db)
+        
+        if existing:
+            existing.student_headcount = headcount
+            existing.department = inferred_dept
+            updated_count += 1
+        else:
+            new_enr = models.Enrollment(
+                teacher_name=t_name,
+                section=sec_upper,
+                subject=subj_upper,
+                student_headcount=headcount,
+                department=inferred_dept,
+                is_archived=False
+            )
+            db.add(new_enr)
+            added_count += 1
+            
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "faculty_upload", "teacher": t_name, "added": added_count, "updated": updated_count}, db=db)
+    
+    msg = f"Schedule updated for {t_name}: {added_count} class(es) added, {updated_count} class(es) updated."
+    return {
+        "status": "success",
+        "message": msg,
+        "added": added_count,
+        "updated": updated_count,
+        "total": added_count + updated_count
+    }
+
+@app.get("/api/enrollments/faculty-roster-template")
+def download_faculty_roster_template(format: Optional[str] = "xlsx"):
+    headers = ["Instructor Name", "Department"]
+    sample_rows = [
+        ["Dr. Maria Santos", "CS"],
+        ["Engr. Mark Bautista", "IT"],
+        ["Prof. Juan Reyes", "CS"],
+        ["Prof. Alicia Gomez", "IT"]
+    ]
+    if format == "csv":
+        csv_content = (
+            "Instructor Name,Department\n"
+            "Dr. Maria Santos,CS\n"
+            "Engr. Mark Bautista,IT\n"
+            "Prof. Juan Reyes,CS\n"
+            "Prof. Alicia Gomez,IT\n"
+        )
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=faculty_roster_template.csv"}
+        )
+    return create_excel_template_response(headers, sample_rows, "faculty_roster_template.xlsx")
+
+@app.get("/api/enrollments/faculty-schedule-template")
+def download_faculty_schedule_template(format: Optional[str] = "xlsx"):
+    headers = ["Subject", "Section", "Headcount"]
+    sample_rows = [
+        ["Introduction to Computing", "BSCS-1A", 38],
+        ["Computer Programming 1", "BSCS-1B", 42],
+        ["Data Structures and Algorithms", "BSCS-2A", 35]
+    ]
+    if format == "csv":
+        csv_content = (
+            "Subject,Section,Headcount\n"
+            "Introduction to Computing,BSCS-1A,38\n"
+            "Computer Programming 1,BSCS-1B,42\n"
+            "Data Structures and Algorithms,BSCS-2A,35\n"
+        )
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=class_schedule_template.csv"}
+        )
+    return create_excel_template_response(headers, sample_rows, "class_schedule_template.xlsx")
+
+@app.delete("/api/enrollments/faculty/{teacher_name}")
+def delete_faculty_roster_entry(teacher_name: str, db: Session = Depends(get_db)):
+    t_clean = teacher_name.strip()
+    active_enrs = db.query(models.Enrollment).filter(
+        models.Enrollment.teacher_name == t_clean,
+        models.Enrollment.is_archived == False
+    ).all()
+    
+    # Check if any booklets are distributed
+    enr_ids = [e.id for e in active_enrs]
+    if enr_ids:
+        linked_bks = db.query(models.Booklet).filter(
+            models.Booklet.enrollment_id.in_(enr_ids)
+        ).count()
+        if linked_bks > 0:
+            return {
+                "status": "error",
+                "message": f"Cannot remove '{t_clean}': {linked_bks} booklet(s) have already been distributed to their classes. Void or return booklets first."
+            }
+            
+    # Delete all active enrollments for this teacher
+    for e in active_enrs:
+        db.delete(e)
+    db.commit()
+    
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "delete_faculty", "teacher": t_clean}, db=db)
+    return {"status": "success", "message": f"Teaching load for '{t_clean}' successfully cleared."}
+
 
 @app.get("/api/enrollment-archive-status")
 def get_enrollment_archive_status(db: Session = Depends(get_db)):
@@ -2538,6 +3054,8 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
         
         settings = db.query(models.SystemSettings).first()
         booklet_price = settings.booklet_price if settings else 2.50
+        active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
+        prog_lookup = {p.code.upper(): p for p in active_progs}
         
         for enr in enrollments:
             reconcile_enrollment_payments(enr, db)
@@ -2662,12 +3180,18 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
 
 # --- PUBLIC RECEIPTS PORTAL ROUTE ---
 @app.get("/receipts", response_class=HTMLResponse)
-def public_receipts_portal(request: Request):
+def public_receipts_portal(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("receipts.html", {"request": request})
 
 # --- PUBLIC INSTRUCTOR TRANSACTION PROFILE ROUTE ---
 @app.get("/transaction-profile", response_class=HTMLResponse)
-def public_transaction_profile_portal(request: Request):
+def public_transaction_profile_portal(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("transaction_profile.html", {"request": request})
 
 @app.get("/api/public-instructor-profiles")
@@ -2695,6 +3219,8 @@ def get_public_instructor_profiles(request: Request, db: Session = Depends(get_d
 
         settings = db.query(models.SystemSettings).first()
         booklet_price = settings.booklet_price if settings else 2.50
+        active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
+        prog_lookup = {p.code.upper(): p for p in active_progs}
 
         enrollments_query = db.query(models.Enrollment)
         if auth_user.role.lower() == "viewer":
@@ -2893,6 +3419,17 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
         is_student_dropped = bool(req.reason and req.reason.strip().startswith("Student Dropped"))
         cancel_defect_count = max(0, int(getattr(req, 'cancel_defect_count', 0) or 0)) if is_student_dropped else 0
         
+        # Background fallback: if student dropped with 0 physical booklets and cancel_defect_count was not provided,
+        # automatically reconcile against any pending unreplaced defective booklets in the background
+        if is_student_dropped and cancel_defect_count == 0 and not req.control_numbers:
+            pending_defects = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == req.enrollment_id,
+                models.Booklet.status == "voided",
+                models.Booklet.return_reason == "Misprint / Defect"
+            ).count()
+            if pending_defects > 0:
+                cancel_defect_count = pending_defects
+        
         booklets = []
         if req.control_numbers:
             booklets = db.query(models.Booklet).filter(
@@ -2969,6 +3506,8 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                 if not is_defective:
                     if not getattr(period_billing, 'student_headcount', None):
                         period_billing.student_headcount = enrollment.student_headcount
+                    if is_student_dropped:
+                        period_billing.student_headcount = max(0, (period_billing.student_headcount or enrollment.student_headcount) - total_dropped_qty)
                     period_billing.distributed_count = max(0, period_billing.distributed_count - len(booklets))
                     period_billing.loose_returned = (period_billing.loose_returned or 0) + len(booklets)
                     period_billing.amount_due = max(0.0, round(period_billing.amount_due - phys_return_value, 2))
@@ -3104,7 +3643,8 @@ def lookup_booklet(identifier: str, expected_dept: Optional[str] = None, db: Ses
 
 # --- 1. PREVIEW ROUTE (DRY RUN) ---
 @app.post("/api/preview-distribution")
-def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends(get_db)):
+def preview_distribution(req: schemas.DistributionRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
     try:
         # 1. Fetch the active period
         active_period = get_active_period(db)
@@ -3313,13 +3853,20 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
         settings = db.query(models.SystemSettings).first()
         fallback_price = settings.booklet_price if settings else 2.50
         
+        # Resolve course-specific price from AcademicProgram
+        enr_dept = enrollment.department or resolve_enrollment_department(enrollment, db)
+        prog = db.query(models.AcademicProgram).filter(
+            func.upper(models.AcademicProgram.code) == (enr_dept or "").upper()
+        ).first() if enr_dept else None
+        course_price = float(prog.booklet_price) if (prog and prog.booklet_price is not None and prog.booklet_price > 0) else float(fallback_price)
+
         # Grandfather price from prior booklets for this enrollment
         prior_b = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == enrollment.id,
             models.Booklet.exam_period == active_period,
             models.Booklet.unit_price.isnot(None)
         ).first()
-        effective_price = float(prior_b.unit_price) if prior_b else float(fallback_price)
+        effective_price = float(prior_b.unit_price) if prior_b else float(course_price)
         
         gross_total = round(remaining_demand * effective_price, 2)
         credit_available = float(getattr(enrollment, 'replacement_credit', 0.0) or 0.0)
@@ -3367,7 +3914,8 @@ def preview_distribution(req: schemas.DistributionRequest, db: Session = Depends
     
 # --- 2. EXECUTION ROUTE (SINGLE-SAVE) ---
 @app.post("/api/execute-distribution")
-def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends(get_db)):
+def execute_distribution(req: schemas.DistributionRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
     try:
         # 1. Fetch the active period
         active_period = get_active_period(db)
@@ -3523,13 +4071,20 @@ def execute_distribution(req: schemas.DistributionRequest, db: Session = Depends
         settings = db.query(models.SystemSettings).first()
         fallback_price = settings.booklet_price if settings else 2.50
         
+        # Resolve course-specific price from AcademicProgram
+        enr_dept = enrollment.department or resolve_enrollment_department(enrollment, db)
+        prog = db.query(models.AcademicProgram).filter(
+            func.upper(models.AcademicProgram.code) == (enr_dept or "").upper()
+        ).first() if enr_dept else None
+        course_price = float(prog.booklet_price) if (prog and prog.booklet_price is not None and prog.booklet_price > 0) else float(fallback_price)
+
         # Grandfather price from prior booklets for this enrollment in this period
         prior_b = db.query(models.Booklet).filter(
             models.Booklet.enrollment_id == enrollment.id,
             models.Booklet.exam_period == active_period,
             models.Booklet.unit_price.isnot(None)
         ).first()
-        effective_price = float(prior_b.unit_price) if prior_b else float(fallback_price)
+        effective_price = float(prior_b.unit_price) if prior_b else float(course_price)
 
         for b in booklets_to_distribute:
             b.status = "distributed"
@@ -3643,6 +4198,8 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
         
         settings = db.query(models.SystemSettings).first()
         booklet_price = settings.booklet_price if settings else 2.50
+        active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).all()
+        prog_lookup = {p.code.upper(): p for p in active_progs}
         
         # High-performance bulk query: fetch all eligible booklets in a single SQL query
         booklets_query = db.query(models.Booklet).filter(
@@ -3721,22 +4278,25 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
                     is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
                     b_prices = [getattr(b, 'unit_price', None) for b in (booklets or defective_bks or dropped_bks) if getattr(b, 'unit_price', None) is not None]
 
+                    enr_dept = enr.department or resolve_enrollment_department(enr, db)
+                    prog = prog_lookup.get((enr_dept or "").strip().upper())
+                    course_fallback_price = float(prog.booklet_price) if (prog and prog.booklet_price is not None and prog.booklet_price > 0) else float(booklet_price)
+
                     if is_fully_paid:
                         if b_prices:
                             effective_price = float(b_prices[0])
                         elif qty > 0 and enr.amount_due > 0:
                             effective_price = round(float(enr.amount_due) / qty, 2)
                         else:
-                            effective_price = float(booklet_price)
+                            effective_price = course_fallback_price
                     else:
                         if b_prices:
                             effective_price = float(b_prices[0])
                         else:
-                            effective_price = float(booklet_price)
+                            effective_price = course_fallback_price
 
                     transaction_total = round(qty * effective_price, 2)
                     paid_display = transaction_total if is_fully_paid else min(transaction_total, float(enr.amount_paid or 0.0))
-                    enr_dept = enr.department or resolve_enrollment_department(enr, db)
 
                     history_data.append({
                         "enrollment_id": enr.id,
@@ -3770,7 +4330,10 @@ def get_history_data(department: Optional[str] = "ALL", db: Session = Depends(ge
         return {"status": "error", "message": str(e), "data": []}
 
 @app.get("/history", response_class=HTMLResponse)
-def read_history_page(request: Request):
+def read_history_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("history.html", {"request": request})
 
 @app.get("/api/search-transaction")
@@ -4180,18 +4743,28 @@ def calculate_course_production_metrics(
     active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).order_by(models.AcademicProgram.id.asc()).all()
     if not active_progs:
         program_list = [
-            {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db"},
-            {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22"}
+            {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db", "sheets_per_booklet": None, "booklet_price": None},
+            {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22", "sheets_per_booklet": None, "booklet_price": None}
         ]
     else:
         program_list = [
-            {"code": p.code, "name": p.name, "prefix": p.section_prefix, "color": p.color_hex or "#3498db"}
+            {
+                "code": p.code,
+                "name": p.name,
+                "prefix": p.section_prefix,
+                "color": p.color_hex or "#3498db",
+                "sheets_per_booklet": p.sheets_per_booklet,
+                "booklet_price": p.booklet_price
+            }
             for p in active_progs
         ]
 
     data = {}
     for p_info in program_list:
         dept = p_info["code"]
+        course_sheets_per_b = int(p_info.get("sheets_per_booklet") or sheets_per_b)
+        course_yield_per_r = 500 // course_sheets_per_b if course_sheets_per_b > 0 else 83
+
         dept_enrollments = [e for e in enrollments if resolve_enrollment_department(e, db) == dept]
         dept_enrollment_count = len(dept_enrollments)
         headcount = sum(e.student_headcount for e in dept_enrollments)
@@ -4266,7 +4839,7 @@ def calculate_course_production_metrics(
 
         # Batches converted in active period for this department (tracking actual paper consumption)
         dept_current_batches = [b for b in all_dept_batches if b.registered_period == active_period]
-        dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or sheets_per_b) for b in dept_current_batches)
+        dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or course_sheets_per_b) for b in dept_current_batches)
         # Commercial whole reams required for actual sheets converted so far (avoiding over-counting individual small top-up batches)
         net_converted_sheets = max(0, dept_consumed_sheets - prev_excess)
         dept_reams_used = math.ceil(net_converted_sheets / 500) if net_converted_sheets > 0 else 0
@@ -4279,12 +4852,12 @@ def calculate_course_production_metrics(
         # Grounded strictly in Headcount + Safety Buffer Demand and whole reams procured.
         # This represents raw blank paper sheets and is completely immune to booklet distributions or returns.
         course_planned_production = max(0, gross_demand_booklets - prior_available_booklets)
-        course_planned_gross_sheets = course_planned_production * sheets_per_b
+        course_planned_gross_sheets = course_planned_production * course_sheets_per_b
         course_planned_net_sheets = max(0, course_planned_gross_sheets - prev_excess)
         course_planned_reams = math.ceil(course_planned_net_sheets / 500) if course_planned_net_sheets > 0 else 0
 
         # Tier 2 (Raw Materials): Exact paper sheets needed for current unfulfilled replenishment target
-        gross_sheets_needed = target_production * sheets_per_b
+        gross_sheets_needed = target_production * course_sheets_per_b
         # Offset replenishment demand using actual live residual paper sheets currently in the vault
         net_sheets_needed = max(0, gross_sheets_needed - live_residual_sheets)
 
@@ -4296,7 +4869,7 @@ def calculate_course_production_metrics(
         # Strictly represents physical blank paper sheets currently sitting in the vault.
         # Excess sheets are only deducted when the user actually generates batch PDF front pages.
         course_excess_sheets = live_residual_sheets
-        course_excess_booklets = course_excess_sheets // sheets_per_b if sheets_per_b > 0 else 0
+        course_excess_booklets = course_excess_sheets // course_sheets_per_b if course_sheets_per_b > 0 else 0
 
         if target_production == 0:
             paper_required_text = "0 Sheets (Demand Met)"
@@ -4312,6 +4885,9 @@ def calculate_course_production_metrics(
             "name": p_info["name"],
             "prefix": p_info["prefix"],
             "color": p_info["color"],
+            "sheets_per_booklet": course_sheets_per_b,
+            "yield_per_ream": course_yield_per_r,
+            "booklet_price": p_info.get("booklet_price"),
             "headcount": headcount,
             "enrollment_count": dept_enrollment_count,
             "has_enrollments": dept_has_enrollments,
@@ -4447,15 +5023,26 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         active_progs = db.query(models.AcademicProgram).filter_by(is_active=True).order_by(models.AcademicProgram.id.asc()).all()
         if not active_progs:
             programs_meta = [
-                {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db"},
-                {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22"}
+                {"code": "CS", "name": "Computer Science", "prefix": "BSCS", "color": "#3498db", "sheets_per_booklet": None, "effective_sheets": sheets_per_b, "booklet_price": None, "effective_price": float(booklet_price)},
+                {"code": "IT", "name": "Information Technology", "prefix": "BSIT", "color": "#e67e22", "sheets_per_booklet": None, "effective_sheets": sheets_per_b, "booklet_price": None, "effective_price": float(booklet_price)}
             ]
         else:
             programs_meta = [
-                {"code": p.code, "name": p.name, "prefix": p.section_prefix, "color": p.color_hex or "#3498db"}
+                {
+                    "code": p.code,
+                    "name": p.name,
+                    "prefix": p.section_prefix,
+                    "color": p.color_hex or "#3498db",
+                    "sheets_per_booklet": p.sheets_per_booklet,
+                    "effective_sheets": int(p.sheets_per_booklet) if (p.sheets_per_booklet and p.sheets_per_booklet > 0) else int(sheets_per_b),
+                    "booklet_price": float(p.booklet_price) if (p.booklet_price is not None and p.booklet_price > 0) else None,
+                    "effective_price": float(p.booklet_price) if (p.booklet_price is not None and p.booklet_price > 0) else float(booklet_price)
+                }
                 for p in active_progs
             ]
         prog_codes = [p["code"] for p in programs_meta]
+        course_price_map = {p["code"]: p["effective_price"] for p in programs_meta}
+        course_sheets_map = {p["code"]: p["effective_sheets"] for p in programs_meta}
 
         period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == active_period).all()
         total_generated = sum([b.total_yield for b in period_batches])
@@ -4621,8 +5208,12 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             prior_debt_paid = enr_prior_payments_map.get(enr.id, 0.0)
             prior_unpaid = prior_unpaid_by_enr.get(enr.id, 0.0)
 
+            dept = resolve_enrollment_department(enr, db)
+            enr_price = course_price_map.get(dept, float(booklet_price))
+            enr_sheets = course_sheets_map.get(dept, int(sheets_per_b))
+
             if b_count > 0 or period_paid > 0 or prior_unpaid > 0:
-                current_due = float(b_count * booklet_price) if b_count > 0 else 0.0
+                current_due = float(b_count * enr_price) if b_count > 0 else 0.0
                 total_amount_due = round(current_due + prior_unpaid, 2)
                 amount_paid = float(period_paid)
                 current_paid = float(current_period_paid)
@@ -4646,7 +5237,6 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 else:
                     payment_status = "Unpaid"
 
-                dept = resolve_enrollment_department(enr, db)
                 if dept in dept_counts:
                     dept_counts[dept] += b_count
                 else:
@@ -4685,7 +5275,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                         comp_summary[dept]["total_collected"] += amount_paid
                         comp_summary[dept]["total_pending"] += pending_balance
 
-                        sheets_used = b_count * sheets_per_b
+                        sheets_used = b_count * enr_sheets
                         s_reams = sheets_used // 500
                         s_loose = sheets_used % 500
                         if b_count > 0:
@@ -4715,7 +5305,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                             "payment_status": payment_status
                         })
 
-        distributed_sheets_by_dept = {code: dept_counts.get(code, 0) * sheets_per_b for code in prog_codes}
+        distributed_sheets_by_dept = {code: dept_counts.get(code, 0) * course_sheets_map.get(code, sheets_per_b) for code in prog_codes}
         reams_distributed_by_dept = {code: distributed_sheets_by_dept[code] // 500 for code in prog_codes}
         loose_distributed_by_dept = {code: distributed_sheets_by_dept[code] % 500 for code in prog_codes}
         
@@ -4737,8 +5327,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         current_billed_by_dept = {code: 0.0 for code in prog_codes}
         for enr in period_enrollments:
             dept = resolve_enrollment_department(enr, db)
+            enr_price = course_price_map.get(dept, float(booklet_price))
             enr_b_count = sum(1 for b in issued_booklets if b.enrollment_id == enr.id)
-            enr_billed = round(enr_b_count * booklet_price, 2)
+            enr_billed = round(enr_b_count * enr_price, 2)
             current_billed_by_dept[dept] = round(current_billed_by_dept.get(dept, 0.0) + enr_billed, 2)
 
         # Cumulative Billed across active semester (Current Billed + Prior Carried Over AR)
@@ -4806,7 +5397,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         for p_info in programs_meta:
             code = p_info["code"]
             dist_b = dept_counts.get(code, 0)
-            sheets_used = dist_b * sheets_per_b
+            sheets_used = dist_b * course_sheets_map.get(code, sheets_per_b)
             r_whole = sheets_used // 500
             s_rem = sheets_used % 500
             
@@ -4874,7 +5465,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             code = p_info["code"]
             c_metric = course_metrics.get("courses", {}).get(code, {})
             target_b = c_metric.get("target_production", 0)
-            sheets_needed = c_metric.get("sheets_needed", target_b * sheets_per_b)
+            sheets_needed = c_metric.get("sheets_needed", target_b * course_sheets_map.get(code, sheets_per_b))
             r_whole = sheets_needed // 500
             s_rem = sheets_needed % 500
             
@@ -4970,6 +5561,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "igp_share": igp_share,
             "net_income": net_income,
             "booklet_price": booklet_price,
+            "course_prices": course_price_map,
+            "course_sheets": course_sheets_map,
             "ream_price": ream_price,
             "reorder_buffer_percent": float(course_metrics["buffer_percent"]),
             # Multi-Course Actual Paper Consumption Breakdown
@@ -5073,6 +5666,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 "total_billed": total_billed,
                 "total_collected": total_collected,
                 "total_pending": accounts_receivable,
+                "course_prices": course_price_map,
+                "course_sheets": course_sheets_map,
                 "is_active_semester": is_active_semester
             },
             "financials": financials,
@@ -5424,7 +6019,10 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
 
 
 @app.get("/manage_users")
-def manage_users_page(request: Request):
+def manage_users_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("manage_user.html", {"request": request})
 
 @app.get("/api/users")
@@ -5486,7 +6084,8 @@ def validate_password(password: str, username: Optional[str] = None, current_pas
     return True, ""
 
 @app.post("/api/users/create")
-def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
+def create_user(req: schemas.CreateUserRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     is_valid_user, user_err = validate_username(req.username, db)
     if not is_valid_user:
         return {"status": "error", "message": user_err}
@@ -5526,7 +6125,8 @@ def create_user(req: schemas.CreateUserRequest, db: Session = Depends(get_db)):
     return {"status": "success", "message": f"Account '{new_user.username}' created successfully!", "id": new_user.id}
 
 @app.put("/api/users/{user_id}")
-def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depends(get_db)):
+def update_user(user_id: int, req: schemas.UpdateUserRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
@@ -5575,7 +6175,8 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, db: Session = Depe
     }
 
 @app.post("/api/users/{user_id}/reset-password")
-def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, db: Session = Depends(get_db)):
+def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
@@ -5666,7 +6267,8 @@ def user_change_password(req: schemas.ChangePasswordRequest, db: Session = Depen
     return {"status": "success", "message": "Your password has been changed successfully!"}
 
 @app.post("/api/users/{user_id}/revoke-session")
-def revoke_user_session(user_id: int, db: Session = Depends(get_db)):
+def revoke_user_session(user_id: int, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
@@ -5679,7 +6281,8 @@ def revoke_user_session(user_id: int, db: Session = Depends(get_db)):
     return {"status": "success", "message": f"Active session for '{user.username}' has been revoked."}
 
 @app.post("/api/users/{user_id}/toggle-status")
-def toggle_user_status(user_id: int, current_user: Optional[str] = None, db: Session = Depends(get_db)):
+def toggle_user_status(user_id: int, request: Request, current_user: Optional[str] = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
@@ -5752,7 +6355,10 @@ class SettingsUpdate(BaseModel):
     staples_per_booklet: Optional[int] = 0
 
 @app.get("/settings", response_class=HTMLResponse)
-def get_settings_page(request: Request):
+def get_settings_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("settings.html", {"request": request})
 
 @app.get("/api/settings")
@@ -5871,7 +6477,8 @@ def get_settings(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/settings")
-def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
+def update_settings(req: SettingsUpdate, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     # --- STRICT VALIDATION GUARDS ---
     if not req.active_period or "UNSET" in req.active_period or " | " not in req.active_period:
         raise HTTPException(status_code=400, detail="Active examination period and academic year must be selected.")
@@ -5993,10 +6600,22 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     adjusted_count = 0
 
     if old_price != new_price:
+        active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).all()
+        custom_price_codes = {
+            p.code.upper() for p in active_programs
+            if p.booklet_price is not None and p.booklet_price > 0
+        }
+
         enrollments = db.query(models.Enrollment).all()
         for enr in enrollments:
             # Rule 1: Fully Paid transactions are 100% IMMUTABLE / LOCKED
             if enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due):
+                preserved_count += 1
+                continue
+
+            # Preserve course-specific pricing overrides!
+            enr_dept = (resolve_enrollment_department(enr, db=db) or enr.department or "").strip().upper()
+            if enr_dept in custom_price_codes:
                 preserved_count += 1
                 continue
 
@@ -6021,6 +6640,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
                     enr.payment_status = "Unpaid"
 
                 adjusted_count += 1
+
+        sync_enrollment_period_billings(db)
 
     db.commit()
     notify_lan_mutation("SETTINGS_UPDATED", {
@@ -6295,13 +6916,20 @@ class PaymentRequest(BaseModel):
 
 @app.get("/api/academic-programs")
 def list_academic_programs(include_inactive: bool = False, db: Session = Depends(get_db)):
-    """Returns all configured academic programs/courses with section prefix identifiers and theme colors."""
+    """Returns all configured academic programs/courses with section prefix identifiers, theme colors, sheets per booklet, and pricing."""
     query = db.query(models.AcademicProgram)
     if not include_inactive:
         query = query.filter_by(is_active=True)
     programs = query.order_by(models.AcademicProgram.id.asc()).all()
+    
+    settings = db.query(models.SystemSettings).first()
+    default_sheets = int(settings.sheets_per_booklet or 6) if settings and settings.sheets_per_booklet else 6
+    default_price = float(settings.booklet_price or 2.50) if settings and settings.booklet_price else 2.50
+    
     return {
         "status": "success",
+        "default_sheets_per_booklet": default_sheets,
+        "default_booklet_price": default_price,
         "programs": [
             {
                 "id": p.id,
@@ -6310,6 +6938,11 @@ def list_academic_programs(include_inactive: bool = False, db: Session = Depends
                 "section_prefix": p.section_prefix,
                 "color_hex": p.color_hex or "#3498db",
                 "is_active": p.is_active,
+                "sheets_per_booklet": p.sheets_per_booklet,
+                "effective_sheets": p.sheets_per_booklet if (p.sheets_per_booklet and p.sheets_per_booklet > 0) else default_sheets,
+                "yield_per_ream": 500 // (p.sheets_per_booklet if (p.sheets_per_booklet and p.sheets_per_booklet > 0) else default_sheets),
+                "booklet_price": p.booklet_price,
+                "effective_price": float(p.booklet_price) if (p.booklet_price is not None and p.booklet_price > 0) else default_price,
                 "created_at": p.created_at.strftime("%Y-%m-%d %H:%M:%S") if p.created_at else "",
                 "updated_at": p.updated_at.strftime("%Y-%m-%d %H:%M:%S") if p.updated_at else ""
             }
@@ -6319,11 +6952,14 @@ def list_academic_programs(include_inactive: bool = False, db: Session = Depends
 
 @app.post("/api/academic-programs")
 def create_academic_program(prog: schemas.AcademicProgramCreate, db: Session = Depends(get_db)):
-    """Registers a new academic program with code, full name, section naming prefix, and visual color."""
+    """Registers a new academic program with code, full name, section naming prefix, visual color, custom sheet count, and custom price."""
     code_clean = prog.code.strip().upper()
     name_clean = prog.name.strip()
     prefix_clean = prog.section_prefix.strip().upper()
     color_clean = (prog.color_hex or "#3498db").strip()
+    
+    sheets_clean = int(prog.sheets_per_booklet) if (prog.sheets_per_booklet and prog.sheets_per_booklet > 0) else None
+    price_clean = round(float(prog.booklet_price), 2) if (prog.booklet_price is not None and prog.booklet_price > 0) else None
 
     if not code_clean:
         raise HTTPException(status_code=400, detail="Course Code is required (e.g. 'IM', 'CPE').")
@@ -6343,6 +6979,8 @@ def create_academic_program(prog: schemas.AcademicProgramCreate, db: Session = D
             existing_code.name = name_clean
             existing_code.section_prefix = prefix_clean
             existing_code.color_hex = color_clean
+            existing_code.sheets_per_booklet = sheets_clean
+            existing_code.booklet_price = price_clean
             db.commit()
             ensure_program_template_slots(code_clean, db)
             notify_lan_mutation("PROGRAM_UPDATED", {"code": code_clean, "action": "reactivate"}, db=db)
@@ -6361,7 +6999,9 @@ def create_academic_program(prog: schemas.AcademicProgramCreate, db: Session = D
         name=name_clean,
         section_prefix=prefix_clean,
         color_hex=color_clean,
-        is_active=True
+        is_active=True,
+        sheets_per_booklet=sheets_clean,
+        booklet_price=price_clean
     )
     db.add(new_prog)
     db.commit()
@@ -6380,13 +7020,15 @@ def create_academic_program(prog: schemas.AcademicProgramCreate, db: Session = D
             "name": new_prog.name,
             "section_prefix": new_prog.section_prefix,
             "color_hex": new_prog.color_hex,
-            "is_active": new_prog.is_active
+            "is_active": new_prog.is_active,
+            "sheets_per_booklet": new_prog.sheets_per_booklet,
+            "booklet_price": new_prog.booklet_price
         }
     }
 
 @app.put("/api/academic-programs/{prog_id}")
 def update_academic_program(prog_id: int, prog: schemas.AcademicProgramUpdate, db: Session = Depends(get_db)):
-    """Updates academic program metadata (name, section prefix, color, or active status)."""
+    """Updates academic program metadata (name, section prefix, color, active status, sheets, or price)."""
     item = db.query(models.AcademicProgram).filter(models.AcademicProgram.id == prog_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Academic program not found.")
@@ -6408,6 +7050,61 @@ def update_academic_program(prog_id: int, prog: schemas.AcademicProgramUpdate, d
         item.color_hex = prog.color_hex.strip()
     if prog.is_active is not None:
         item.is_active = bool(prog.is_active)
+    
+    # Custom sheets per booklet (null or <= 0 means revert to global default)
+    if hasattr(prog, 'sheets_per_booklet'):
+        if prog.sheets_per_booklet is not None and prog.sheets_per_booklet > 0:
+            item.sheets_per_booklet = int(prog.sheets_per_booklet)
+        else:
+            item.sheets_per_booklet = None
+
+    # Custom booklet selling price (null or <= 0 means revert to global default)
+    price_changed = False
+    old_item_price = item.booklet_price
+    if hasattr(prog, 'booklet_price'):
+        new_price_val = round(float(prog.booklet_price), 2) if (prog.booklet_price is not None and prog.booklet_price > 0) else None
+        if old_item_price != new_price_val:
+            item.booklet_price = new_price_val
+            price_changed = True
+
+    if price_changed:
+        settings = db.query(models.SystemSettings).first()
+        global_default_price = float(settings.booklet_price) if settings and settings.booklet_price is not None else 2.50
+        effective_course_price = float(item.booklet_price) if (item.booklet_price is not None and item.booklet_price > 0) else global_default_price
+
+        all_enrollments = db.query(models.Enrollment).all()
+        target_code = (item.code or "").strip().upper()
+
+        for enr in all_enrollments:
+            enr_dept = (resolve_enrollment_department(enr, db=db) or enr.department or "").strip().upper()
+            if enr_dept != target_code:
+                continue
+
+            # Rule 1: Fully Paid transactions are 100% IMMUTABLE / LOCKED
+            if enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due):
+                continue
+
+            # Rule 2 & 3: Unpaid and Partially Paid accounts re-priced for the course
+            distributed_count = db.query(models.Booklet).filter(
+                models.Booklet.enrollment_id == enr.id,
+                models.Booklet.status == "distributed"
+            ).count()
+
+            if distributed_count > 0:
+                enr.amount_due = round(distributed_count * effective_course_price, 2)
+                db.query(models.Booklet).filter(
+                    models.Booklet.enrollment_id == enr.id,
+                    models.Booklet.status == "distributed"
+                ).update({models.Booklet.unit_price: effective_course_price}, synchronize_session=False)
+
+                if enr.amount_paid >= enr.amount_due:
+                    enr.payment_status = "Fully Paid"
+                elif enr.amount_paid > 0:
+                    enr.payment_status = "Partially Paid"
+                else:
+                    enr.payment_status = "Unpaid"
+
+        sync_enrollment_period_billings(db)
 
     db.commit()
     notify_lan_mutation("PROGRAM_UPDATED", {"id": prog_id, "code": item.code}, db=db)
@@ -6456,15 +7153,24 @@ def delete_academic_program(prog_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/payment-tracking", response_class=HTMLResponse)
-def payment_tracking_page(request: Request):
+def payment_tracking_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("payment_tracking.html", {"request": request})
 
 @app.get("/department-breakdown", response_class=HTMLResponse)
-def department_breakdown_page(request: Request):
+def department_breakdown_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("department_breakdown.html", {"request": request})
 
 @app.get("/expenditure-report", response_class=HTMLResponse)
-def expenditure_report_page(request: Request):
+def expenditure_report_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("expenditure_report.html", {"request": request})
 
 
@@ -6669,7 +7375,8 @@ def get_payment_tracking(department: Optional[str] = "ALL", period: Optional[str
 
 
 @app.post("/api/enrollments/{enrollment_id}/pay")
-def receive_payment(enrollment_id: int, req: PaymentRequest, db: Session = Depends(get_db)):
+def receive_payment(enrollment_id: int, req: PaymentRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
     try:
         if req.amount <= 0:
             return {"status": "error", "message": "Payment amount must be greater than zero."}
@@ -6847,7 +7554,10 @@ def get_enrollment_payment_history(enrollment_id: int, db: Session = Depends(get
 # ==========================================
 
 @app.get("/booklet-template", response_class=HTMLResponse)
-def get_booklet_template_page(request: Request):
+def get_booklet_template_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
     return templates.TemplateResponse("booklet_template.html", {"request": request})
 
 @app.get("/api/booklet-template/status")
@@ -7027,7 +7737,19 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
         except Exception as e:
             print(f"Notice: Failed to update proof image on save: {e}")
 
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "department": dept, "slot": slot_num, "is_official": is_official}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "department": dept,
+            "slot": slot_num,
+            "is_official": is_official,
+            "template_name": config.template_name,
+            "updated_by": req.updated_by or "User",
+            "role": req.role or "Staff"
+        },
+        db=db
+    )
     
     msg = f"Official template for {dept} {config.template_name} saved and activated for printing!" if is_official else f"{dept} {config.template_name} draft coordinates saved."
     return {
@@ -7041,7 +7763,14 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
     }
 
 @app.post("/api/booklet-template/upload")
-async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_booklet_template_pdf(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
     if valid_codes and dept not in valid_codes:
@@ -7083,7 +7812,19 @@ async def upload_booklet_template_pdf(department: str = "CS", slot: int = 1, fil
     except Exception as e:
         print(f"Notice: Failed to generate initial proof image on upload: {e}")
 
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "action": "pdf_upload", "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "action": "pdf_upload",
+            "department": dept,
+            "slot": slot_num,
+            "template_name": config.template_name or f"Template {slot_num}",
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success", 
         "is_configured": False,
@@ -7122,7 +7863,13 @@ def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Sess
     }
 
 @app.post("/api/booklet-template/delete")
-def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
+def delete_booklet_template_api(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
     if valid_codes and dept not in valid_codes:
@@ -7170,7 +7917,18 @@ def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessi
     db.commit()
     db.refresh(config)
 
-    notify_lan_mutation("TEMPLATE_DELETED", {"template_id": config.id, "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_DELETED",
+        {
+            "template_id": config.id,
+            "department": dept,
+            "slot": slot_num,
+            "template_name": old_name,
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success",
         "message": f"{dept} {old_name} has been deleted and reset.",
@@ -7179,7 +7937,13 @@ def delete_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessi
     }
 
 @app.post("/api/booklet-template/reset")
-def reset_booklet_template_api(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
+def reset_booklet_template_api(
+    department: str = "CS",
+    slot: int = 1,
+    updated_by: Optional[str] = None,
+    role: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     if dept not in ["CS", "IT"]:
         dept = "CS"
@@ -7205,7 +7969,19 @@ def reset_booklet_template_api(department: str = "CS", slot: int = 1, db: Sessio
     config.qr_enabled = True
     db.commit()
     db.refresh(config)
-    notify_lan_mutation("TEMPLATE_UPDATED", {"template_id": config.id, "action": "reset", "department": dept, "slot": slot_num}, db=db)
+    notify_lan_mutation(
+        "TEMPLATE_UPDATED",
+        {
+            "template_id": config.id,
+            "action": "reset",
+            "department": dept,
+            "slot": slot_num,
+            "template_name": config.template_name,
+            "updated_by": updated_by or "User",
+            "role": role or "Staff"
+        },
+        db=db
+    )
     return {
         "status": "success", 
         "message": f"{dept} {config.template_name} layout coordinates restored to factory defaults.", 

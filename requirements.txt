@@ -21,3 +21,5 @@ reportlab
 pillow
 pypdfium2
 PySide6
+openpyxl
+
