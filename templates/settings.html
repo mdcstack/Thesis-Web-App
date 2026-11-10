@@ -286,6 +286,47 @@
 
         }
 
+        #addProgramModal > div, 
+        #editProgramModal > div, 
+        #confirmSaveSettingsModal > div, 
+        #saveSuccessModal > div, 
+        #zeroBufferModal > div, 
+        #previousSemesterLockedModal > div, 
+        #unrecordedPastSemesterModal > div {
+            box-sizing: border-box !important;
+            max-height: 90vh !important;
+            max-height: 90dvh !important;
+            overflow-y: auto !important;
+            margin: auto !important;
+        }
+
+        .settings-confirm-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 16px;
+        }
+
+        @media (max-width: 600px) {
+            #addProgramModal > div, 
+            #editProgramModal > div, 
+            #confirmSaveSettingsModal > div, 
+            #saveSuccessModal > div, 
+            #zeroBufferModal > div, 
+            #previousSemesterLockedModal > div, 
+            #unrecordedPastSemesterModal > div {
+                width: 95% !important;
+                max-width: 95% !important;
+            }
+            .modal-overlay, .modal {
+                padding: 12px 8px !important;
+                box-sizing: border-box !important;
+            }
+            .settings-confirm-grid {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+            }
+        }
+
 
 
         @keyframes popIn {
@@ -1374,7 +1415,7 @@
 
                     </div>
 
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;">
+                    <div class="settings-confirm-grid">
 
                         <div><span style="color: #64748b;">Exam Period:</span> <strong id="confirmModalPeriodVal" style="color: #0f172a; display: block;">-</strong></div>
 
@@ -2982,7 +3023,29 @@
                     // Net booklets that must physically be produced
                     const cTarget = Math.max(0, unfulfilledDemand - availBooklets);
 
-                    const cGrossSheets = cTarget * sheets;
+                    // Resolve course-specific sheets per booklet with fallback to global default
+                    const courseSheets = (c.sheets_per_booklet && Number(c.sheets_per_booklet) > 0)
+                        ? Number(c.sheets_per_booklet)
+                        : (function() {
+                            if (typeof window.getAuthoritativeData === 'function') {
+                                const progs = window.getAuthoritativeData('academic_programs');
+                                if (Array.isArray(progs)) {
+                                    const found = progs.find(p => p && p.code === c.code);
+                                    if (found && found.sheets_per_booklet && Number(found.sheets_per_booklet) > 0) {
+                                        return Number(found.sheets_per_booklet);
+                                    }
+                                }
+                            }
+                            if (Array.isArray(cachedAcademicPrograms)) {
+                                const found = cachedAcademicPrograms.find(p => p && p.code === c.code);
+                                if (found && found.sheets_per_booklet && Number(found.sheets_per_booklet) > 0) {
+                                    return Number(found.sheets_per_booklet);
+                                }
+                            }
+                            return sheets;
+                        })();
+
+                    const cGrossSheets = cTarget * courseSheets;
 
                     // Physical blank paper stock sitting in vault
                     const prevExcess = (c.excess_sheets !== undefined && c.excess_sheets !== null)
@@ -3020,7 +3083,7 @@
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
                             <!-- Course Header -->
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
-                                <span style="color: #1e293b;">${c.code}:</span>
+                                <span style="color: #1e293b;">${c.code} <span style="font-size: 0.68rem; font-weight: 600; color: #64748b;">(${courseSheets} sh/bk)</span>:</span>
                                 <span style="color: ${cReams > 0 ? '#2563eb' : '#15803d'};">${reamLabel}</span>
                             </div>
                             <!-- 2-Column Aligned Ledger Rows -->
@@ -3111,7 +3174,7 @@
 
                 if (cardTitle) {
 
-                    cardTitle.innerHTML = '<span style="color: #059669;">✨</span> <span>Demand-Driven Material Budget Recommendation</span>';
+                    cardTitle.innerHTML = '<span style="color: #059669;"></span> <span>Demand-Driven Material Budget Recommendation</span>';
 
                     cardTitle.style.color = '#065f46';
 
@@ -3382,7 +3445,7 @@
 
                             applyBtn.style.boxShadow = '0 2px 4px rgba(5,150,105,0.25)';
 
-                            applyBtn.innerText = `✨ Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                            applyBtn.innerText = `Use Recommendation (₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
 
                         }
 
@@ -4074,7 +4137,7 @@
 
                     lockBadge.style.color = '#1e40af';
 
-                    lockBadge.innerHTML = `✨ <strong>Demand-Driven Initial Budget:</strong> Populated with ₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} calculated to cover paper and staples for current enrolled students.`;
+                    lockBadge.innerHTML = `<strong>Demand-Driven Initial Budget:</strong> Populated with ₱${computedRecommendedBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} calculated to cover paper and staples for current enrolled students.`;
 
                 }
 
@@ -4633,15 +4696,15 @@
                         statusPill.style.color = '#b45309';
                         statusPill.style.border = '1px solid #fde68a';
                     } else if (data.is_carried_over && data.carried_over_from) {
-                        statusPill.innerHTML = `✨ Upcoming Semester (Prefilled from ${escapeHtml(data.carried_over_from)})`;
+                        statusPill.innerHTML = `Upcoming Semester (Prefilled from ${escapeHtml(data.carried_over_from)})`;
                         statusPill.style.background = '#e0f2fe';
                         statusPill.style.color = '#0369a1';
                         statusPill.style.border = '1px solid #bae6fd';
                     } else {
                         const isDay0 = !window.systemLiveActivePeriod || window.systemLiveActivePeriod === 'UNSET';
                         statusPill.innerHTML = isDay0
-                            ? '✨ First-Time Setup (Please configure your parameters)'
-                            : '✨ Upcoming Semester (Ready to Configure)';
+                            ? 'First-Time Setup (Please configure your parameters)'
+                            : 'Upcoming Semester (Ready to Configure)';
                         statusPill.style.background = isDay0 ? '#f8fafc' : '#e0f2fe';
                         statusPill.style.color = isDay0 ? '#475569' : '#0369a1';
                         statusPill.style.border = isDay0 ? '1px solid #cbd5e1' : '1px solid #bae6fd';
@@ -6275,6 +6338,9 @@
                 } catch (e) {}
 
                 renderAcademicProgramsTable(data.programs);
+                if (typeof updateRecommendationBox === 'function') {
+                    updateRecommendationBox();
+                }
 
             } else if (!tbody.children.length) {
 

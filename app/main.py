@@ -4,13 +4,15 @@ import os
 import re
 import asyncio
 import json
+import secrets
+import string
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, UploadFile, File
 import bcrypt
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_, and_, text
 from pydantic import BaseModel
-import datetime
-from fastapi.responses import RedirectResponse, HTMLResponse, Response
+from fastapi.responses import RedirectResponse, HTMLResponse, Response, FileResponse
 from fastapi import status
 from urllib.parse import quote
 # Import local modules
@@ -20,7 +22,16 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models, schemas
 from .database import SessionLocal, engine
-from .utils import generate_batch_pdf, get_active_template_config, generate_sample_preview_pdf, render_template_preview_image, get_template_pdf_path, get_raw_template_pdf_path
+from .utils import (
+    generate_batch_pdf, 
+    get_active_template_config, 
+    generate_sample_preview_pdf, 
+    render_template_preview_image, 
+    get_template_pdf_path, 
+    get_raw_template_pdf_path,
+    regenerate_batch_pdf_file,
+    generate_pack_qr_label_file
+)
 import qrcode
 import base64
 from io import BytesIO
@@ -310,7 +321,8 @@ def auto_provision_instructor_account(instructor_name: str, department: str, db:
         full_name=clean_name,
         password=hashed_pw,
         role="Viewer",
-        department=department or "CS"
+        department=department or "CS",
+        must_change_password=True
     )
     db.add(new_user)
     db.commit()
@@ -323,6 +335,8 @@ def auto_provision_instructor_account(instructor_name: str, department: str, db:
     return new_user, True
 
 def get_portal_authenticated_user(request: Request, db: Session) -> Optional[models.User]:
+    if not request:
+        return None
     token = (
         request.cookies.get("bookletlog_session")
         or request.headers.get("X-Session-Token")
@@ -378,6 +392,15 @@ def verify_api_role_access(request: Request, allowed_roles: List[str], db: Sessi
         raise HTTPException(status_code=403, detail=f"Access denied: Requires role in {allowed_roles}.")
     return user
 
+def generate_secure_temporary_password(length: int = 10) -> str:
+    """Generates a cryptographically strong temporary password with mixed alphanumeric and symbols."""
+    chars = string.ascii_letters + string.digits + "!@#$%"
+    temp = "".join(secrets.choice(chars) for _ in range(length))
+    # Guarantee at least one digit and one letter for complexity validation
+    if not any(c.isdigit() for c in temp) or not any(c.isalpha() for c in temp):
+        temp = "B8" + temp[2:]
+    return temp
+
 def ensure_schema_migrations():
     try:
         from sqlalchemy import inspect, text
@@ -389,6 +412,109 @@ def ensure_schema_migrations():
         if 'academic_programs' not in tables:
             models.AcademicProgram.__table__.create(bind=engine, checkfirst=True)
             tables.append('academic_programs')
+        
+        # 0.1 activity_logs table creation & Day-0 historical backfill
+        if 'activity_logs' not in tables:
+            models.ActivityLog.__table__.create(bind=engine, checkfirst=True)
+            tables.append('activity_logs')
+
+        db_act_seed = SessionLocal()
+        try:
+            if db_act_seed.query(models.ActivityLog).count() == 0:
+                settings_rec = db_act_seed.query(models.SystemSettings).first()
+                seed_period = settings_rec.active_period if settings_rec else "1st Sem 2026-2027"
+
+                # 1. Backfill previous distributions
+                dist_records = (
+                    db_act_seed.query(
+                        models.Booklet.enrollment_id,
+                        models.Booklet.date_distributed,
+                        models.Booklet.distributed_by,
+                        func.count(models.Booklet.id).label("cnt")
+                    )
+                    .filter(models.Booklet.status == "Distributed", models.Booklet.date_distributed != None)
+                    .group_by(models.Booklet.enrollment_id, models.Booklet.date_distributed, models.Booklet.distributed_by)
+                    .all()
+                )
+                for enr_id, dist_at, dist_by, cnt in dist_records:
+                    enr = db_act_seed.query(models.Enrollment).filter(models.Enrollment.id == enr_id).first()
+                    sec = enr.section if enr else f"Class #{enr_id}"
+                    subj = enr.subject if enr else "Exam"
+                    teacher = enr.teacher_name if enr else "Faculty"
+                    dept = enr.department if enr else "All"
+                    db_act_seed.add(models.ActivityLog(
+                        timestamp=dist_at or datetime.now(),
+                        username=dist_by or "admin",
+                        user_role="Staff",
+                        action_type="DISTRIBUTION",
+                        action_title="Booklets Distributed",
+                        details=f"Distributed {cnt} booklet(s) to Section {sec} ({subj}) handled by {teacher}.",
+                        target_ref=f"{sec} ({subj})",
+                        department=dept,
+                        academic_period=seed_period,
+                        ip_address="127.0.0.1"
+                    ))
+
+                # 2. Backfill payments
+                payments = db_act_seed.query(models.PaymentRecord).all()
+                for p in payments:
+                    enr = p.enrollment
+                    sec = enr.section if enr else "Unknown"
+                    subj = enr.subject if enr else "General"
+                    dept = enr.department if enr else "All"
+                    db_act_seed.add(models.ActivityLog(
+                        timestamp=p.created_at or datetime.now(),
+                        username=p.recorded_by or "admin",
+                        user_role="Staff",
+                        action_type="PAYMENT",
+                        action_title=f"Payment Received: ₱{p.amount:,.2f}",
+                        details=f"Received payment of ₱{p.amount:,.2f} for Section {sec} ({subj}). Receipt OR: {p.or_number or 'N/A'}.",
+                        target_ref=f"Receipt #{p.or_number or p.id}",
+                        department=dept,
+                        academic_period=p.academic_period or seed_period,
+                        ip_address="127.0.0.1"
+                    ))
+
+                # 3. Backfill batches
+                batches = db_act_seed.query(models.MasterBatch).all()
+                for b in batches:
+                    b_ref = b.pack_qr_id or b.qr_code_id or f"Batch #{b.id}"
+                    b_yield = b.total_yield or 83
+                    b_dept = b.department or "All"
+                    b_period = b.registered_period or seed_period
+                    db_act_seed.add(models.ActivityLog(
+                        timestamp=b.date_registered or datetime.now(),
+                        username="admin",
+                        user_role="Admin",
+                        action_type="PRODUCTION",
+                        action_title=f"Supply Pack Registered ({b_ref})",
+                        details=f"Registered Supply Pack {b_ref} with {b_yield} booklets.",
+                        target_ref=b_ref,
+                        department=b_dept,
+                        academic_period=b_period,
+                        ip_address="127.0.0.1"
+                    ))
+
+                # 4. Initial system log
+                db_act_seed.add(models.ActivityLog(
+                    timestamp=datetime.now(),
+                    username="System",
+                    user_role="Admin",
+                    action_type="SYSTEM",
+                    action_title="System Audit Ledger Initialized",
+                    details="Audit trail engine and security event logging activated.",
+                    target_ref="Audit Engine",
+                    department="All",
+                    academic_period=seed_period,
+                    ip_address="127.0.0.1"
+                ))
+
+                db_act_seed.commit()
+        except Exception as seed_act_err:
+            db_act_seed.rollback()
+            print(f"Notice: ActivityLog seeding: {seed_act_err}")
+        finally:
+            db_act_seed.close()
         
         db_prog_seed = SessionLocal()
         try:
@@ -410,10 +536,31 @@ def ensure_schema_migrations():
             with engine.connect() as conn:
                 if 'full_name' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN full_name VARCHAR(100) NULL"))
-                    conn.commit()
                 if 'is_active' not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE NOT NULL"))
-                    conn.commit()
+                if 'email' in columns:
+                    conn.execute(text("ALTER TABLE users DROP COLUMN email"))
+                if 'must_change_password' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT FALSE NOT NULL"))
+                if 'failed_login_attempts' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN failed_login_attempts INT DEFAULT 0 NOT NULL"))
+                if 'lockout_until' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN lockout_until DATETIME NULL"))
+                if 'lockout_tier' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN lockout_tier INT DEFAULT 0 NOT NULL"))
+                if 'is_schedule_locked' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_schedule_locked BOOLEAN DEFAULT FALSE NOT NULL"))
+                if 'schedule_locked_at' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN schedule_locked_at DATETIME NULL"))
+                if 'schedule_locked_by' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN schedule_locked_by VARCHAR(50) NULL"))
+                if 'schedule_unlock_requested' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN schedule_unlock_requested BOOLEAN DEFAULT FALSE NOT NULL"))
+                if 'schedule_unlock_reason' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN schedule_unlock_reason TEXT NULL"))
+                if 'schedule_unlock_requested_at' not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN schedule_unlock_requested_at DATETIME NULL"))
+                conn.commit()
 
         # 1. system_settings
         if 'system_settings' in tables:
@@ -421,10 +568,13 @@ def ensure_schema_migrations():
             with engine.connect() as conn:
                 if 'department_ream_budget' not in columns:
                     conn.execute(text("ALTER TABLE system_settings ADD COLUMN department_ream_budget FLOAT DEFAULT 0.0"))
-                    conn.commit()
                 if 'reorder_buffer_percent' not in columns:
                     conn.execute(text("ALTER TABLE system_settings ADD COLUMN reorder_buffer_percent FLOAT DEFAULT 0.0"))
-                    conn.commit()
+                if 'smtp_sender_email' in columns:
+                    conn.execute(text("ALTER TABLE system_settings DROP COLUMN smtp_sender_email"))
+                if 'smtp_app_password' in columns:
+                    conn.execute(text("ALTER TABLE system_settings DROP COLUMN smtp_app_password"))
+                conn.commit()
 
         # 2. booklet_template_configs
         if 'booklet_template_configs' in tables:
@@ -485,6 +635,9 @@ def ensure_schema_migrations():
                     conn.commit()
                 if 'archived_at' not in columns:
                     conn.execute(text("ALTER TABLE enrollments ADD COLUMN archived_at DATETIME NULL"))
+                    conn.commit()
+                if 'is_locked' not in columns:
+                    conn.execute(text("ALTER TABLE enrollments ADD COLUMN is_locked TINYINT(1) DEFAULT 0 NOT NULL"))
                     conn.commit()
 
         if 'academic_programs' in tables:
@@ -736,6 +889,86 @@ def notify_lan_mutation(event_type: str, details: dict = None, db: Session = Non
                 loop.run_until_complete(manager.broadcast(payload))
         except Exception:
             pass
+
+def log_system_activity(
+    action_type: str,           # DISTRIBUTION, PAYMENT, RETURN, PRODUCTION, SECURITY, ROSTER, SYSTEM
+    action_title: str,
+    details: str,
+    db: Session,
+    request: Optional[Request] = None,
+    target_ref: Optional[str] = None,
+    department: Optional[str] = "All",
+    username: Optional[str] = None,
+    user_role: Optional[str] = None,
+    academic_period: Optional[str] = None,
+    ip_address: Optional[str] = None
+) -> Optional[models.ActivityLog]:
+    """
+    Persists an immutable audit log row into activity_logs and broadcasts
+    ACTIVITY_LOGGED via WebSocket to all connected LAN screens for live rendering.
+    """
+    try:
+        ip = ip_address or "127.0.0.1"
+        if request and not ip_address:
+            if request.client and request.client.host:
+                ip = request.client.host
+            elif request.headers.get("x-forwarded-for"):
+                ip = request.headers.get("x-forwarded-for").split(",")[0].strip()
+
+        if request and not username:
+            auth_user = get_portal_authenticated_user(request, db)
+            if auth_user:
+                username = auth_user.username
+                user_role = auth_user.role
+
+        if not username:
+            username = "System"
+        if not user_role:
+            user_role = "Staff"
+
+        # Determine academic period
+        acad_period = academic_period
+        if not acad_period:
+            settings = db.query(models.SystemSettings).first()
+            if settings and settings.active_period:
+                acad_period = settings.active_period
+
+        entry = models.ActivityLog(
+            timestamp=datetime.now(),
+            username=username,
+            user_role=user_role,
+            action_type=action_type.upper(),
+            action_title=action_title,
+            details=details,
+            target_ref=target_ref,
+            department=department or "All",
+            academic_period=acad_period,
+            ip_address=ip
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        # Broadcast live event for active WebSocket terminals
+        notify_lan_mutation("ACTIVITY_LOGGED", {
+            "id": entry.id,
+            "timestamp": entry.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp_formatted": entry.timestamp.strftime("%b %d, %Y, %I:%M %p"),
+            "username": entry.username,
+            "user_role": entry.user_role,
+            "action_type": entry.action_type,
+            "action_title": entry.action_title,
+            "details": entry.details,
+            "target_ref": entry.target_ref,
+            "department": entry.department,
+            "academic_period": entry.academic_period,
+            "ip_address": entry.ip_address
+        }, db=db)
+
+        return entry
+    except Exception as e:
+        print(f"[ActivityLog Error] Failed to log activity '{action_title}': {e}")
+        return None
 
 
 # Auto-provision viewer accounts for existing teachers if any
@@ -1178,6 +1411,14 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     )
     
     batch_msg = f"{ream_count} Reams successfully converted for {department} using {template_config.template_name or f'Template {template_slot}'}." if ream_count > 0 else f"{total_yield} Booklets successfully converted from residual excess reserve for {department} using {template_config.template_name or f'Template {template_slot}'}."
+    log_system_activity(
+        action_type="PRODUCTION",
+        action_title=f"Batch Generated ({batch_id})",
+        details=f"Generated {total_yield} booklets for {department} (Controls: {new_batch.start_control_num} to {new_batch.end_control_num}).",
+        db=db,
+        target_ref=batch_id,
+        department=department
+    )
     return {
         "message": batch_msg,
         "department": department,
@@ -1194,6 +1435,389 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         "has_warning_page": has_warning_page,
         "warning_page_number": warning_page_number,
         "recommended_print_range": recommended_print_range
+    }
+
+# =========================================================================
+# SYSTEM STORAGE LOCATION & FILE RECOVERY ENDPOINTS
+# =========================================================================
+
+@app.get("/api/system/storage-info")
+def get_system_storage_info(folder_type: Optional[str] = None, request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    
+    # 1. Master Batch Front Page PDFs
+    pdf_rel = "static/front_page_pdfs"
+    os.makedirs(pdf_rel, exist_ok=True)
+    pdf_disk = [f for f in os.listdir(pdf_rel) if f.lower().endswith(".pdf")]
+    batches = db.query(models.MasterBatch).all()
+    pdf_missing = sum(1 for b in batches if not os.path.exists(f"static/front_page_pdfs/{b.qr_code_id}.pdf"))
+    front_page_pdfs_info = {
+        "label": "Master Batch Front Page PDFs",
+        "relative_path": pdf_rel,
+        "absolute_path": os.path.abspath(pdf_rel),
+        "files_on_disk": len(pdf_disk),
+        "expected_records": len(batches),
+        "missing_files": pdf_missing,
+        "is_all_healthy": (pdf_missing == 0)
+    }
+
+    # 2. Supply Pack QR Code Labels
+    qr_rel = "static/qrcodes"
+    os.makedirs(qr_rel, exist_ok=True)
+    qr_disk = [f for f in os.listdir(qr_rel) if f.lower().endswith(".png")]
+    packs = db.query(models.MasterBatch.pack_qr_id).filter(models.MasterBatch.pack_qr_id.isnot(None)).distinct().all()
+    qr_missing = sum(1 for p in packs if not os.path.exists(f"static/qrcodes/{p[0]}_LABEL.png"))
+    qrcodes_info = {
+        "label": "Supply Pack QR Code Labels",
+        "relative_path": qr_rel,
+        "absolute_path": os.path.abspath(qr_rel),
+        "files_on_disk": len(qr_disk),
+        "expected_records": len(packs),
+        "missing_files": qr_missing,
+        "is_all_healthy": (qr_missing == 0)
+    }
+
+    # 3. Booklet Cover Design Templates
+    tmpl_rel = "static/templates"
+    os.makedirs(tmpl_rel, exist_ok=True)
+    tmpl_disk = [f for f in os.listdir(tmpl_rel) if f.lower().endswith(".pdf")]
+    templates_info = {
+        "label": "Booklet Cover Templates",
+        "relative_path": tmpl_rel,
+        "absolute_path": os.path.abspath(tmpl_rel),
+        "files_on_disk": len(tmpl_disk),
+        "expected_records": len(tmpl_disk),
+        "missing_files": 0,
+        "is_all_healthy": True
+    }
+
+    return {
+        "status": "success",
+        "front_page_pdfs": front_page_pdfs_info,
+        "qrcodes": qrcodes_info,
+        "templates": templates_info
+    }
+
+@app.post("/api/system/open-folder")
+def open_system_folder(req: dict, request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    import subprocess
+    import sys
+    
+    folder_type = req.get("folder") or req.get("folder_type", "front_page_pdfs")
+    folder_map = {
+        "front_page_pdfs": os.path.abspath("static/front_page_pdfs"),
+        "qrcodes": os.path.abspath("static/qrcodes"),
+        "templates": os.path.abspath("static/templates"),
+    }
+    target_dir = folder_map.get(folder_type)
+    if not target_dir:
+        raise HTTPException(status_code=400, detail="Invalid folder type.")
+        
+    os.makedirs(target_dir, exist_ok=True)
+    opened = False
+    try:
+        if sys.platform == "win32":
+            os.startfile(target_dir)
+            opened = True
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", target_dir])
+            opened = True
+        else:
+            subprocess.Popen(["xdg-open", target_dir])
+            opened = True
+    except Exception as e:
+        print(f"Notice: Shell open folder failed: {e}")
+        opened = False
+        
+    return {
+        "status": "success",
+        "success": True,
+        "opened": opened,
+        "path": target_dir,
+        "message": "Opened folder in File Explorer." if opened else f"Folder location: {target_dir}"
+    }
+
+# =========================================================================
+# BATCH PDF HISTORY & ON-DEMAND REGENERATION ENDPOINTS
+# =========================================================================
+
+@app.get("/api/batches/history")
+def get_batches_history(request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    batches = db.query(models.MasterBatch).order_by(models.MasterBatch.date_registered.desc(), models.MasterBatch.id.desc()).all()
+    
+    progs = {p.code: p.name for p in db.query(models.AcademicProgram).all()}
+    
+    batch_list = []
+    for b in batches:
+        pdf_file = f"static/front_page_pdfs/{b.qr_code_id}.pdf"
+        file_exists = os.path.exists(pdf_file)
+        file_size_kb = round(os.path.getsize(pdf_file) / 1024, 1) if file_exists else 0
+        
+        tpl = db.query(models.BookletTemplateConfig).filter_by(
+            department=b.department, slot_number=b.template_slot or 1
+        ).first()
+        tpl_name = tpl.template_name if (tpl and tpl.template_name) else f"Template {b.template_slot or 1}"
+        
+        batch_list.append({
+            "id": b.id,
+            "batch_id": b.qr_code_id,
+            "master_batch_id": b.qr_code_id,
+            "department": b.department,
+            "department_name": progs.get(b.department, b.department),
+            "template_slot": b.template_slot or 1,
+            "template_name": tpl_name,
+            "ream_count": b.ream_count,
+            "reams_consumed": b.ream_count,
+            "total_yield": b.total_yield,
+            "booklets_generated": b.total_yield,
+            "start_control_num": b.start_control_num,
+            "end_control_num": b.end_control_num,
+            "start_srn": b.start_srn or "N/A",
+            "end_srn": b.end_srn or "N/A",
+            "date_registered": b.date_registered.strftime("%b %d, %Y %I:%M %p") if b.date_registered else "-",
+            "created_at": b.date_registered.strftime("%b %d, %Y %I:%M %p") if b.date_registered else "-",
+            "registered_period": b.registered_period or "UNSET",
+            "status": b.status,
+            "pack_qr_id": b.pack_qr_id,
+            "file_exists": file_exists,
+            "file_size_kb": file_size_kb,
+            "pdf_filename": f"{b.qr_code_id}.pdf",
+            "download_url": f"/api/download-batch-pdf/{b.qr_code_id}"
+        })
+        
+    return {"status": "success", "batches": batch_list}
+
+@app.post("/api/batches/{batch_id}/regenerate-pdf")
+def regenerate_batch_pdf_endpoint(batch_id: str, request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    try:
+        out_path = regenerate_batch_pdf_file(batch_id, db=db)
+        return {
+            "status": "success",
+            "success": True,
+            "message": f"Successfully regenerated Master Batch PDF for '{batch_id}'.",
+            "batch_id": batch_id,
+            "filename": f"{batch_id}.pdf",
+            "download_url": f"/api/download-batch-pdf/{batch_id}",
+            "file_path": f"/{out_path}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Regeneration failed: {str(e)}")
+
+@app.get("/api/download-batch-pdf/{batch_id}")
+def download_batch_pdf_stream(batch_id: str, db: Session = Depends(get_db)):
+    """Self-healing download endpoint: automatically regenerates missing PDFs before serving."""
+    batch = db.query(models.MasterBatch).filter(models.MasterBatch.qr_code_id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch ID not found.")
+        
+    pdf_path = f"static/front_page_pdfs/{batch_id}.pdf"
+    if not os.path.exists(pdf_path):
+        try:
+            regenerate_batch_pdf_file(batch_id, db=db)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Automatic PDF regeneration failed: {str(e)}")
+            
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="File could not be recovered.")
+        
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"{batch_id}.pdf"
+    )
+
+@app.post("/api/batches/regenerate-all-missing")
+def regenerate_all_missing_batches(request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    batches = db.query(models.MasterBatch).all()
+    regenerated = []
+    failed = []
+    
+    for b in batches:
+        pdf_path = f"static/front_page_pdfs/{b.qr_code_id}.pdf"
+        if not os.path.exists(pdf_path):
+            try:
+                regenerate_batch_pdf_file(b.qr_code_id, db=db)
+                regenerated.append(b.qr_code_id)
+            except Exception as e:
+                failed.append({"batch_id": b.qr_code_id, "error": str(e)})
+                
+    return {
+        "status": "success",
+        "success": True,
+        "restored_count": len(regenerated),
+        "total_batches": len(batches),
+        "regenerated_count": len(regenerated),
+        "regenerated_batches": regenerated,
+        "failed_count": len(failed),
+        "failed_batches": failed,
+        "message": f"Successfully regenerated {len(regenerated)} missing batch PDF(s)."
+    }
+
+# =========================================================================
+# PACK QR CODE HISTORY & ON-DEMAND REGENERATION ENDPOINTS
+# =========================================================================
+
+@app.get("/api/packs/history")
+def get_packs_history(request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    pack_rows = db.query(
+        models.MasterBatch.pack_qr_id,
+        func.max(models.MasterBatch.date_registered).label("max_date")
+    ).filter(
+        models.MasterBatch.pack_qr_id.isnot(None)
+    ).group_by(
+        models.MasterBatch.pack_qr_id
+    ).order_by(
+        func.max(models.MasterBatch.date_registered).desc()
+    ).all()
+    pack_ids = [p[0] for p in pack_rows]
+    
+    progs = {p.code: p.name for p in db.query(models.AcademicProgram).all()}
+    
+    pack_list = []
+    for pid in pack_ids:
+        batches = db.query(models.MasterBatch).filter(models.MasterBatch.pack_qr_id == pid).order_by(models.MasterBatch.id.asc()).all()
+        if not batches:
+            continue
+            
+        file_path = f"static/qrcodes/{pid}_LABEL.png"
+        file_exists = os.path.exists(file_path)
+        file_size_kb = round(os.path.getsize(file_path) / 1024, 1) if file_exists else 0
+        
+        all_booklets = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_([b.id for b in batches])).all()
+        booklet_count = len(all_booklets) if all_booklets else sum(b.total_yield for b in batches)
+        
+        dept = (batches[0].department or "CS").upper()
+        slot = batches[0].template_slot or 1
+        tpl = db.query(models.BookletTemplateConfig).filter_by(department=dept, slot_number=slot).first()
+        tpl_name = tpl.template_name if (tpl and tpl.template_name) else f"Template {slot}"
+        
+        dist_count = sum(1 for b in all_booklets if b.status == "distributed")
+        
+        pack_list.append({
+            "pack_id": pid,
+            "department": dept,
+            "department_name": progs.get(dept, dept),
+            "template_name": tpl_name,
+            "batch_count": len(batches),
+            "batch_ids": [b.qr_code_id for b in batches],
+            "batches_included": [b.qr_code_id for b in batches],
+            "total_booklets": booklet_count,
+            "booklet_count": booklet_count,
+            "distributed_booklets": dist_count,
+            "start_control_num": batches[0].start_control_num,
+            "end_control_num": batches[-1].end_control_num,
+            "start_srn": batches[0].start_srn or "N/A",
+            "end_srn": batches[-1].end_srn or "N/A",
+            "date_activated": batches[0].date_registered.strftime("%b %d, %Y %I:%M %p") if batches[0].date_registered else "-",
+            "created_at": batches[0].date_registered.strftime("%b %d, %Y %I:%M %p") if batches[0].date_registered else "-",
+            "file_exists": file_exists,
+            "file_size_kb": file_size_kb,
+            "file_filename": f"{pid}_LABEL.png",
+            "download_url": f"/api/download-pack-label/{pid}",
+            "label_url": f"/{file_path}" if file_exists else None
+        })
+        
+    return {"status": "success", "packs": pack_list}
+
+@app.get("/api/download-pack-label/{pack_id}")
+def download_pack_label_stream(pack_id: str, db: Session = Depends(get_db)):
+    """Self-healing download endpoint: automatically reconstructs missing pack QR label stickers before serving."""
+    batches = db.query(models.MasterBatch).filter(models.MasterBatch.pack_qr_id == pack_id).all()
+    if not batches:
+        raise HTTPException(status_code=404, detail="Supply Pack ID not found.")
+        
+    file_path = f"static/qrcodes/{pack_id}_LABEL.png"
+    if not os.path.exists(file_path):
+        try:
+            generate_pack_qr_label_file(pack_id, db=db)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Automatic label regeneration failed: {str(e)}")
+            
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Label file could not be recovered.")
+        
+    return FileResponse(
+        file_path,
+        media_type="image/png",
+        filename=f"{pack_id}_LABEL.png"
+    )
+
+@app.post("/api/packs/{pack_id}/regenerate-qr")
+def regenerate_pack_qr_endpoint(pack_id: str, request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    try:
+        out_path = generate_pack_qr_label_file(pack_id, db=db)
+        
+        qr_obj = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr_obj.add_data(pack_id)
+        qr_obj.make(fit=True)
+        img = qr_obj.make_image(fill_color="black", back_color="white")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        pure_qr_b64 = f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode('utf-8')}"
+        
+        batches = db.query(models.MasterBatch).filter(models.MasterBatch.pack_qr_id == pack_id).order_by(models.MasterBatch.id.asc()).all()
+        dept = (batches[0].department or "CS").upper() if batches else "CS"
+        slot = batches[0].template_slot or 1 if batches else 1
+        tpl = db.query(models.BookletTemplateConfig).filter_by(department=dept, slot_number=slot).first()
+        tpl_name = tpl.template_name if (tpl and tpl.template_name) else f"Template {slot}"
+        
+        all_booklets = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_([b.id for b in batches])).all() if batches else []
+        booklet_count = len(all_booklets) if all_booklets else sum(b.total_yield for b in batches)
+        
+        return {
+            "status": "success",
+            "success": True,
+            "message": f"Successfully regenerated QR Code Sticker for '{pack_id}'.",
+            "pack_id": pack_id,
+            "filename": f"{pack_id}_LABEL.png",
+            "file_path": f"/{out_path}",
+            "pure_qr_b64": pure_qr_b64,
+            "department": dept,
+            "template_name": tpl_name,
+            "total_booklets": booklet_count,
+            "start_control_num": batches[0].start_control_num if batches else "",
+            "end_control_num": batches[-1].end_control_num if batches else "",
+            "start_srn": batches[0].start_srn if batches else "",
+            "end_srn": batches[-1].end_srn if batches else ""
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"QR regeneration failed: {str(e)}")
+
+@app.post("/api/packs/regenerate-all-missing")
+def regenerate_all_missing_packs(request: Request = None, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    pack_ids = [p[0] for p in db.query(models.MasterBatch.pack_qr_id).filter(
+        models.MasterBatch.pack_qr_id.isnot(None)
+    ).distinct().all()]
+    
+    regenerated = []
+    failed = []
+    
+    for pid in pack_ids:
+        file_path = f"static/qrcodes/{pid}_LABEL.png"
+        if not os.path.exists(file_path):
+            try:
+                generate_pack_qr_label_file(pid, db=db)
+                regenerated.append(pid)
+            except Exception as e:
+                failed.append({"pack_id": pid, "error": str(e)})
+                
+    return {
+        "status": "success",
+        "success": True,
+        "restored_count": len(regenerated),
+        "total_packs": len(pack_ids),
+        "regenerated_count": len(regenerated),
+        "regenerated_packs": regenerated,
+        "failed_count": len(failed),
+        "failed_packs": failed,
+        "message": f"Successfully regenerated {len(regenerated)} missing pack QR label(s)."
     }
 
 
@@ -1974,18 +2598,83 @@ import uuid
 
 @app.post("/api/login")
 def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.username == req.username).first()
+    clean_username = req.username.strip() if req.username else ""
+    user = db.query(models.User).filter(func.lower(models.User.username) == clean_username.lower()).first()
 
-    if not user or not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
+    if not user:
         return {"status": "error", "message": "Invalid username or password."}
 
+    # 1. Deactivated Account Check
     if getattr(user, 'is_active', True) is False:
-        return {"status": "error", "message": "This account has been deactivated. Please contact an Administrator."}
-    
+        return {
+            "status": "deactivated",
+            "message": "This account is deactivated. Please contact an Administrator to activate your account."
+        }
+
+    # 2. Lockout Check
+    now = datetime.now()
+    if user.lockout_until and user.lockout_until > now:
+        remaining_seconds = int((user.lockout_until - now).total_seconds())
+        remaining_mins = max(1, (remaining_seconds + 59) // 60)
+        return {
+            "status": "locked",
+            "lockout_seconds": remaining_seconds,
+            "lockout_until": user.lockout_until.isoformat(),
+            "message": f"Account temporarily locked due to multiple failed login attempts. Please wait {remaining_mins} minute(s) before trying again, or contact an Administrator to unlock your account."
+        }
+
+    # 3. Password Verification
+    if not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
+        attempts = (user.failed_login_attempts or 0) + 1
+        if attempts >= 5:
+            user.lockout_tier = (user.lockout_tier or 0) + 1
+            delay_mins = 5 * user.lockout_tier  # Progressive 5-min increments: 5m, 10m, 15m...
+            user.lockout_until = now + timedelta(minutes=delay_mins)
+            user.failed_login_attempts = 0
+            db.commit()
+            log_system_activity(
+                action_type="SECURITY",
+                action_title="Account Lockout Triggered",
+                details=f"Account '{clean_username}' temporarily locked for {delay_mins} minutes after 5 failed attempts.",
+                db=db,
+                target_ref=clean_username,
+                username=clean_username,
+                user_role="User"
+            )
+            return {
+                "status": "locked",
+                "lockout_seconds": delay_mins * 60,
+                "lockout_until": user.lockout_until.isoformat(),
+                "message": f"Too many failed login attempts. Your account has been temporarily locked for {delay_mins} minutes. Please wait before trying again, or contact an Administrator to unlock your account."
+            }
+        else:
+            user.failed_login_attempts = attempts
+            db.commit()
+            remaining_attempts = 5 - attempts
+            return {
+                "status": "error",
+                "attempts_left": remaining_attempts,
+                "message": f"Invalid username or password. {remaining_attempts} attempt(s) remaining before account lockout."
+            }
+
+    # 4. Successful Authentication: Reset lockouts and failed attempts
+    user.failed_login_attempts = 0
+    user.lockout_until = None
     new_token = str(uuid.uuid4())
     user.session_token = new_token
     db.commit()
     notify_lan_mutation("USER_UPDATED", {"action": "login", "username": user.username, "id": user.id}, db=db)
+    
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="User Logged In",
+        details=f"User '{user.username}' ({user.role}) logged in successfully.",
+        db=db,
+        target_ref=user.username,
+        username=user.username,
+        user_role=user.role,
+        department=user.department or "All"
+    )
     
     # Set session cookie for seamless server-side page authorization
     response.set_cookie(
@@ -2006,7 +2695,8 @@ def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_
             "full_name": user.full_name or user.username,
             "role": user.role,
             "department": user.department,
-            "session_token": new_token
+            "session_token": new_token,
+            "must_change_password": bool(user.must_change_password)
         }
     }
 
@@ -2069,6 +2759,22 @@ def logout_session(req: schemas.LogoutRequest, response: Response, db: Session =
 def check_dss_alert(db: Session = Depends(get_db)):
     settings = db.query(models.SystemSettings).first()
 
+    # Pending schedule unlock requests
+    pending_unlock_users = db.query(models.User).filter(
+        models.User.role == "Viewer",
+        models.User.schedule_unlock_requested == True
+    ).all()
+    unlock_req_list = [
+        {
+            "name": (u.full_name or u.username).strip(),
+            "department": u.department or "CS",
+            "reason": u.schedule_unlock_reason or "Schedule modification requested",
+            "requested_at": u.schedule_unlock_requested_at.strftime("%b %d, %Y %I:%M %p") if u.schedule_unlock_requested_at else "Recently"
+        }
+        for u in pending_unlock_users
+    ]
+    pending_unlock_count = len(unlock_req_list)
+
     # Check if enrollments exist
     enrollment_count = db.query(models.Enrollment).count()
     total_students = int(db.query(func.sum(models.Enrollment.student_headcount)).scalar() or 0)
@@ -2093,7 +2799,9 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "message": "System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet. Awaiting Administrator configuration in Settings.",
             "reams_needed": 0,
             "deficit_booklets": 0,
-            "deficit_sheets": 0
+            "deficit_sheets": 0,
+            "unlock_requests": unlock_req_list,
+            "pending_unlock_count": pending_unlock_count
         }
 
     active_period = settings.active_period if settings else None
@@ -2117,7 +2825,9 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "buffer_sheets": 0,
             "buffer_percent": 0.0,
             "target_production": 0,
-            "total_sheets_needed": 0
+            "total_sheets_needed": 0,
+            "unlock_requests": unlock_req_list,
+            "pending_unlock_count": pending_unlock_count
         }
 
     total_deficit = metrics.get("total_deficit", 0)
@@ -2174,7 +2884,9 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "reams_needed": reams_recommended,
             "sum_course_rounded_reams": sum_course_rounded_reams,
             "total_reams_to_procure": reams_recommended,
-            "courses": metrics.get("courses", {})
+            "courses": metrics.get("courses", {}),
+            "unlock_requests": unlock_req_list,
+            "pending_unlock_count": pending_unlock_count
         }
 
     return {
@@ -2190,7 +2902,9 @@ def check_dss_alert(db: Session = Depends(get_db)):
         "buffer_sheets": 0,
         "buffer_percent": buffer_pct,
         "target_production": 0,
-        "total_sheets_needed": 0
+        "total_sheets_needed": 0,
+        "unlock_requests": unlock_req_list,
+        "pending_unlock_count": pending_unlock_count
     }    
 
 @app.get("/enrollments", response_class=HTMLResponse)
@@ -2209,15 +2923,74 @@ def read_enrollments(request: Request, db: Session = Depends(get_db)):
     ).all()
     return templates.TemplateResponse("enrollments.html", {"request": request, "enrollments": enrollments})
 
+def is_teacher_schedule_locked(teacher_name: str, db: Session) -> bool:
+    if not teacher_name:
+        return False
+    t_clean = teacher_name.strip().lower()
+    u = db.query(models.User).filter(
+        or_(
+            func.lower(models.User.full_name) == t_clean,
+            func.lower(models.User.username) == t_clean
+        )
+    ).first()
+    if u and getattr(u, "is_schedule_locked", False):
+        return True
+    locked_enr = db.query(models.Enrollment).filter(
+        func.lower(models.Enrollment.teacher_name) == t_clean,
+        models.Enrollment.is_archived == False,
+        models.Enrollment.is_locked == True
+    ).first()
+    return locked_enr is not None
+
 @app.post("/api/enrollments")
-def create_enrollment(enr: schemas.EnrollmentCreate, db: Session = Depends(get_db)):
+def create_enrollment(enr: schemas.EnrollmentCreate, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    t_clean = enr.teacher_name.strip()
+    if not t_clean:
+        return {"status": "error", "message": "Instructor name is required."}
+
+    # Schedule Lock Guard
+    if is_teacher_schedule_locked(t_clean, db) and auth_user.role != "Admin":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Teaching schedule for '{t_clean}' is locked by Administrator. Submit an unlock request to make changes."
+        )
+
+    # Strict Viewer role isolation: Faculty members can ONLY add classes assigned to their own account
+    if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
+        u_fullname = (auth_user.full_name or "").strip().lower()
+        u_username = (auth_user.username or "").strip().lower()
+        req_teacher_lower = t_clean.lower()
+        if req_teacher_lower != u_fullname and req_teacher_lower != u_username:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access denied: As a faculty member, you can only add classes assigned to yourself ('{auth_user.full_name or auth_user.username}')."
+            )
+
     section_upper = enr.section.strip().upper()
+    subject_upper = enr.subject.strip().upper()
+
+    if not section_upper or not subject_upper:
+        return {"status": "error", "message": "Section and Subject are required."}
+
+    # Duplicate Class Prevention: Ensure (section, subject) is unique among active (non-archived) enrollments
+    existing = db.query(models.Enrollment).filter(
+        models.Enrollment.section == section_upper,
+        models.Enrollment.subject == subject_upper,
+        models.Enrollment.is_archived == False
+    ).first()
+    if existing:
+        return {
+            "status": "error",
+            "message": f"A class with Section '{section_upper}' and Subject '{subject_upper}' already exists (assigned to {existing.teacher_name}). Duplicate class sections are not allowed."
+        }
+
     inferred_dept = detect_department_from_section(section_upper, db=db)
 
     new_enr = models.Enrollment(
-        teacher_name=enr.teacher_name.strip(),
+        teacher_name=t_clean,
         section=section_upper,
-        subject=enr.subject.strip().upper(),
+        subject=subject_upper,
         student_headcount=enr.student_headcount,
         department=inferred_dept,
         is_archived=False
@@ -2226,16 +2999,26 @@ def create_enrollment(enr: schemas.EnrollmentCreate, db: Session = Depends(get_d
     db.commit()
     db.refresh(new_enr)
     was_prov = False
-    if enr.teacher_name.strip():
-        _, was_prov = auto_provision_instructor_account(enr.teacher_name.strip(), inferred_dept, db)
+    if t_clean:
+        _, was_prov = auto_provision_instructor_account(t_clean, inferred_dept, db)
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "create", "section": section_upper, "id": new_enr.id}, db=db)
+    log_system_activity(
+        action_type="ROSTER",
+        action_title="Class Enrolled",
+        details=f"Added class section {section_upper} ({subject_upper}) for {t_clean} (Headcount: {enr.student_headcount}).",
+        db=db,
+        request=request,
+        target_ref=f"{section_upper} ({subject_upper})",
+        department=inferred_dept
+    )
     msg = "Class record added successfully!"
     if was_prov:
         msg += f" Faculty login account auto-provisioned (default password: user12345)."
     return {"status": "success", "message": msg, "id": new_enr.id}
 
 @app.post("/api/enrollments/bulk-import")
-def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Depends(get_db)):
+def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     if not req.records:
         return {"status": "error", "message": "No enrollment records provided."}
         
@@ -2251,15 +3034,15 @@ def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Dep
         if not t_name or not sec_upper or not subj_upper or headcount < 1:
             continue
             
-        # Deduplication check: Match instructor, section, and subject within active (non-archived) enrollments
+        # Deduplication check: Match section and subject within active (non-archived) enrollments
         existing = db.query(models.Enrollment).filter(
-            models.Enrollment.teacher_name == t_name,
             models.Enrollment.section == sec_upper,
             models.Enrollment.subject == subj_upper,
             models.Enrollment.is_archived == False
         ).first()
         
         if existing:
+            existing.teacher_name = t_name
             existing.student_headcount = headcount
             existing.department = detect_department_from_section(sec_upper, db=db)
             updated_count += 1
@@ -2291,6 +3074,14 @@ def bulk_import_enrollments(req: schemas.BulkEnrollmentImport, db: Session = Dep
             prov_count += 1
 
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "bulk_import", "added": added_count, "updated": updated_count}, db=db)
+    log_system_activity(
+        action_type="ROSTER",
+        action_title="Bulk Roster Imported",
+        details=f"Processed Excel roster import: {added_count} added, {updated_count} updated across {len(req.records)} entries.",
+        db=db,
+        request=request,
+        target_ref=f"{len(req.records)} records"
+    )
     
     msg = f"Bulk import complete: {added_count} new class(es) added, {updated_count} existing class(es) updated."
     if prov_count > 0:
@@ -2458,6 +3249,12 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
             "username": u.username,
             "department": u.department or "CS",
             "is_active": getattr(u, "is_active", True) is not False,
+            "is_locked": bool(getattr(u, "is_schedule_locked", False)),
+            "locked_at": u.schedule_locked_at.strftime("%b %d, %Y %I:%M %p") if getattr(u, "schedule_locked_at", None) else None,
+            "locked_by": getattr(u, "schedule_locked_by", None),
+            "unlock_requested": bool(getattr(u, "schedule_unlock_requested", False)),
+            "unlock_reason": getattr(u, "schedule_unlock_reason", None),
+            "unlock_requested_at": u.schedule_unlock_requested_at.strftime("%b %d, %Y %I:%M %p") if getattr(u, "schedule_unlock_requested_at", None) else None,
             "classes": classes,
             "total_subjects": len(unique_subjects),
             "subjects_list": unique_subjects,
@@ -2483,6 +3280,12 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
                 "username": generate_clean_instructor_username(disp_name),
                 "department": inferred_dept,
                 "is_active": True,
+                "is_locked": False,
+                "locked_at": None,
+                "locked_by": None,
+                "unlock_requested": False,
+                "unlock_reason": None,
+                "unlock_requested_at": None,
                 "classes": classes,
                 "total_subjects": len(unique_subjects),
                 "subjects_list": unique_subjects,
@@ -2498,6 +3301,8 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
     total_faculty = len(instructors)
     submitted_faculty = sum(1 for i in instructors if i["status"] == "submitted")
     pending_faculty = total_faculty - submitted_faculty
+    locked_faculty = sum(1 for i in instructors if i.get("is_locked"))
+    unlock_requested_count = sum(1 for i in instructors if i.get("unlock_requested"))
     total_sections = len(active_enrollments)
     total_students = sum((e.student_headcount or 0) for e in active_enrollments)
     
@@ -2505,6 +3310,8 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
         "total_faculty": total_faculty,
         "submitted_faculty": submitted_faculty,
         "pending_faculty": pending_faculty,
+        "locked_faculty": locked_faculty,
+        "unlock_requested_count": unlock_requested_count,
         "total_sections": total_sections,
         "total_students": total_students
     }
@@ -2517,7 +3324,8 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/enrollments/import-faculty")
-def import_faculty_roster(req: schemas.BulkFacultyImport, db: Session = Depends(get_db)):
+def import_faculty_roster(req: schemas.BulkFacultyImport, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     if not req.records:
         return {"status": "error", "message": "No faculty records provided."}
         
@@ -2559,7 +3367,8 @@ def import_faculty_roster(req: schemas.BulkFacultyImport, db: Session = Depends(
     }
 
 @app.post("/api/enrollments/add-faculty")
-def add_single_faculty(item: schemas.FacultyRosterItem, db: Session = Depends(get_db)):
+def add_single_faculty(item: schemas.FacultyRosterItem, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
     name = item.name.strip()
     dept = (item.department or "CS").strip().upper()
     if not name:
@@ -2586,10 +3395,30 @@ def add_single_faculty(item: schemas.FacultyRosterItem, db: Session = Depends(ge
     }
 
 @app.post("/api/enrollments/faculty-upload")
-def faculty_upload_classes(req: schemas.FacultyUploadRequest, db: Session = Depends(get_db)):
+def faculty_upload_classes(req: schemas.FacultyUploadRequest, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
     t_name = req.teacher_name.strip()
     if not t_name:
         return {"status": "error", "message": "Instructor name is required."}
+
+    # Schedule Lock Guard
+    if is_teacher_schedule_locked(t_name, db) and auth_user.role != "Admin":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Teaching schedule for '{t_name}' is locked by Administrator. Submit an unlock request to make changes."
+        )
+
+    # Strict Viewer role isolation: Faculty members can ONLY upload schedules for their own account
+    if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
+        u_fullname = (auth_user.full_name or "").strip().lower()
+        u_username = (auth_user.username or "").strip().lower()
+        req_teacher_lower = t_name.lower()
+        if req_teacher_lower != u_fullname and req_teacher_lower != u_username:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Faculty members can only upload schedules for their own account."
+            )
+
     if not req.classes:
         return {"status": "error", "message": "No class schedule items provided."}
         
@@ -2608,7 +3437,6 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, db: Session = Depe
             continue
             
         existing = db.query(models.Enrollment).filter(
-            models.Enrollment.teacher_name == t_name,
             models.Enrollment.section == sec_upper,
             models.Enrollment.subject == subj_upper,
             models.Enrollment.is_archived == False
@@ -2617,6 +3445,14 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, db: Session = Depe
         inferred_dept = detect_department_from_section(sec_upper, db=db)
         
         if existing:
+            # If owned by another instructor and current user is Viewer, avoid hijacking
+            if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
+                u_fullname = (auth_user.full_name or "").strip().lower()
+                u_username = (auth_user.username or "").strip().lower()
+                curr_owner = (existing.teacher_name or "").strip().lower()
+                if curr_owner != u_fullname and curr_owner != u_username:
+                    continue  # Skip class section assigned to another faculty member
+            existing.teacher_name = t_name
             existing.student_headcount = headcount
             existing.department = inferred_dept
             updated_count += 1
@@ -2634,6 +3470,14 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, db: Session = Depe
             
     db.commit()
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "faculty_upload", "teacher": t_name, "added": added_count, "updated": updated_count}, db=db)
+    log_system_activity(
+        action_type="ROSTER",
+        action_title="Faculty Schedule Uploaded",
+        details=f"Schedule updated for {t_name}: {added_count} class(es) added, {updated_count} class(es) updated.",
+        db=db,
+        request=request,
+        target_ref=t_name
+    )
     
     msg = f"Schedule updated for {t_name}: {added_count} class(es) added, {updated_count} class(es) updated."
     return {
@@ -2691,7 +3535,8 @@ def download_faculty_schedule_template(format: Optional[str] = "xlsx"):
     return create_excel_template_response(headers, sample_rows, "class_schedule_template.xlsx")
 
 @app.delete("/api/enrollments/faculty/{teacher_name}")
-def delete_faculty_roster_entry(teacher_name: str, db: Session = Depends(get_db)):
+def delete_faculty_roster_entry(teacher_name: str, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
     t_clean = teacher_name.strip()
     active_enrs = db.query(models.Enrollment).filter(
         models.Enrollment.teacher_name == t_clean,
@@ -2717,6 +3562,201 @@ def delete_faculty_roster_entry(teacher_name: str, db: Session = Depends(get_db)
     
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "delete_faculty", "teacher": t_clean}, db=db)
     return {"status": "success", "message": f"Teaching load for '{t_clean}' successfully cleared."}
+
+def find_instructor_user(teacher_name: str, db: Session):
+    t_clean = teacher_name.strip()
+    u = db.query(models.User).filter(
+        func.lower(models.User.full_name) == t_clean.lower()
+    ).first()
+    if not u:
+        u = db.query(models.User).filter(
+            func.lower(models.User.username) == t_clean.lower()
+        ).first()
+    if not u:
+        u, _ = auto_provision_instructor_account(t_clean, "CS", db)
+    return u
+
+@app.post("/api/enrollments/instructors/{teacher_name}/lock")
+def lock_instructor_schedule(teacher_name: str, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin"], db)
+    admin_name = auth_user.username if auth_user else "Admin"
+    t_clean = teacher_name.strip()
+    
+    u = find_instructor_user(t_clean, db)
+    if u:
+        u.is_schedule_locked = True
+        u.schedule_locked_at = datetime.now()
+        u.schedule_locked_by = admin_name
+        u.schedule_unlock_requested = False
+        u.schedule_unlock_reason = None
+        u.schedule_unlock_requested_at = None
+        
+    enrs = db.query(models.Enrollment).filter(
+        func.lower(models.Enrollment.teacher_name) == t_clean.lower(),
+        models.Enrollment.is_archived == False
+    ).all()
+    for e in enrs:
+        e.is_locked = True
+        
+    log_system_activity(
+        action_type="SECURITY",
+        action_title=f"Schedule Locked: {t_clean}",
+        details=f"Admin '{admin_name}' locked the teaching schedule for instructor '{t_clean}'. All section modifications disabled.",
+        db=db,
+        request=request,
+        username=admin_name,
+        user_role="Admin",
+        department=u.department if u else "CS",
+        target_ref=t_clean
+    )
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "schedule_locked", "teacher": t_clean}, db=db)
+    return {"status": "success", "message": f"Teaching schedule for '{t_clean}' is now locked.", "is_locked": True}
+
+@app.post("/api/enrollments/instructors/{teacher_name}/unlock")
+def unlock_instructor_schedule(teacher_name: str, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin"], db)
+    admin_name = auth_user.username if auth_user else "Admin"
+    t_clean = teacher_name.strip()
+    
+    u = find_instructor_user(t_clean, db)
+    if u:
+        u.is_schedule_locked = False
+        u.schedule_unlock_requested = False
+        u.schedule_unlock_reason = None
+        u.schedule_unlock_requested_at = None
+        
+    enrs = db.query(models.Enrollment).filter(
+        func.lower(models.Enrollment.teacher_name) == t_clean.lower(),
+        models.Enrollment.is_archived == False
+    ).all()
+    for e in enrs:
+        e.is_locked = False
+        
+    log_system_activity(
+        action_type="SECURITY",
+        action_title=f"Schedule Unlocked: {t_clean}",
+        details=f"Admin '{admin_name}' unlocked the teaching schedule for instructor '{t_clean}'. Modifications re-enabled.",
+        db=db,
+        request=request,
+        username=admin_name,
+        user_role="Admin",
+        department=u.department if u else "CS",
+        target_ref=t_clean
+    )
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "schedule_unlocked", "teacher": t_clean}, db=db)
+    return {"status": "success", "message": f"Teaching schedule for '{t_clean}' is now unlocked.", "is_locked": False}
+
+@app.post("/api/enrollments/lock-all")
+def lock_all_instructor_schedules(request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin"], db)
+    admin_name = auth_user.username if auth_user else "Admin"
+    now_ts = datetime.now()
+    
+    viewers = db.query(models.User).filter(models.User.role == "Viewer").all()
+    for v in viewers:
+        v.is_schedule_locked = True
+        v.schedule_locked_at = now_ts
+        v.schedule_locked_by = admin_name
+        v.schedule_unlock_requested = False
+        v.schedule_unlock_reason = None
+        v.schedule_unlock_requested_at = None
+        
+    db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).update({"is_locked": True})
+    
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="All Instructor Schedules Locked",
+        details=f"Admin '{admin_name}' executed bulk lock across all instructor schedules.",
+        db=db,
+        request=request,
+        username=admin_name,
+        user_role="Admin",
+        department="All"
+    )
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "schedule_lock_all"}, db=db)
+    return {"status": "success", "message": "All instructor schedules have been locked."}
+
+@app.post("/api/enrollments/unlock-all")
+def unlock_all_instructor_schedules(request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin"], db)
+    admin_name = auth_user.username if auth_user else "Admin"
+    
+    viewers = db.query(models.User).filter(models.User.role == "Viewer").all()
+    for v in viewers:
+        v.is_schedule_locked = False
+        v.schedule_unlock_requested = False
+        v.schedule_unlock_reason = None
+        v.schedule_unlock_requested_at = None
+        
+    db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).update({"is_locked": False})
+    
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="All Instructor Schedules Unlocked",
+        details=f"Admin '{admin_name}' executed bulk unlock across all instructor schedules.",
+        db=db,
+        request=request,
+        username=admin_name,
+        user_role="Admin",
+        department="All"
+    )
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "schedule_unlock_all"}, db=db)
+    return {"status": "success", "message": "All instructor schedules have been unlocked."}
+
+@app.post("/api/enrollments/instructors/{teacher_name}/request-unlock")
+def request_instructor_schedule_unlock(teacher_name: str, req: schemas.UnlockScheduleRequest, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
+    sender_name = auth_user.username if auth_user else "Instructor"
+    t_clean = teacher_name.strip()
+    reason = (req.reason or "Schedule modification requested").strip()
+    
+    u = find_instructor_user(t_clean, db)
+    if not u:
+        raise HTTPException(status_code=404, detail="Instructor account not found.")
+        
+    u.schedule_unlock_requested = True
+    u.schedule_unlock_reason = reason
+    u.schedule_unlock_requested_at = datetime.now()
+    
+    log_system_activity(
+        action_type="ROSTER",
+        action_title=f"Schedule Unlock Requested: {t_clean}",
+        details=f"Instructor '{t_clean}' submitted an unlock request: '{reason}'.",
+        db=db,
+        request=request,
+        username=sender_name,
+        user_role=auth_user.role if auth_user else "Viewer",
+        department=u.department or "CS",
+        target_ref=t_clean
+    )
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "unlock_requested", "teacher": t_clean}, db=db)
+    return {"status": "success", "message": "Unlock request submitted. The Administrator has been notified via the alert bell."}
+
+@app.get("/api/enrollments/unlock-requests")
+def get_pending_schedule_unlock_requests(request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
+    pending_users = db.query(models.User).filter(
+        models.User.schedule_unlock_requested == True
+    ).order_by(models.User.schedule_unlock_requested_at.desc()).all()
+    
+    results = []
+    for u in pending_users:
+        disp_name = (u.full_name or u.username).strip()
+        results.append({
+            "user_id": u.id,
+            "name": disp_name,
+            "username": u.username,
+            "department": u.department or "CS",
+            "reason": u.schedule_unlock_reason or "Schedule modification requested",
+            "requested_at": u.schedule_unlock_requested_at.strftime("%b %d, %Y %I:%M %p") if u.schedule_unlock_requested_at else "Recently",
+            "is_locked": bool(getattr(u, "is_schedule_locked", False))
+        })
+    return {"status": "success", "requests": results, "unlock_requests": results}
 
 
 @app.get("/api/enrollment-archive-status")
@@ -2811,15 +3851,14 @@ def get_enrollment_archive_status(db: Session = Depends(get_db)):
     }
 
 class ArchiveEnrollmentRequest(BaseModel):
-    username: str
+    username: Optional[str] = None
 
 @app.post("/api/archive-enrollments")
-def archive_enrollments(req: ArchiveEnrollmentRequest, db: Session = Depends(get_db)):
+@app.post("/api/enrollments/archive")
+def archive_enrollments(request: Request, db: Session = Depends(get_db), req: Optional[ArchiveEnrollmentRequest] = None):
     """Archives all currently active enrollments under the active academic period.
     The active masterfile is cleared (reset to empty) for the new semester roster import."""
-    user = db.query(models.User).filter(models.User.username == req.username).first()
-    if not user or user.role.lower() != 'admin':
-        raise HTTPException(status_code=403, detail="Only System Administrators can archive semester enrollments.")
+    user = verify_api_role_access(request, ["Admin"], db)
 
     status_check = get_enrollment_archive_status(db)
     if not status_check.get("can_archive"):
@@ -2898,10 +3937,29 @@ def get_archived_enrollments(period: Optional[str] = None, db: Session = Depends
     }
 
 @app.delete("/api/enrollments/{enr_id}")
-def delete_enrollment(enr_id: int, db: Session = Depends(get_db)):
+def delete_enrollment(enr_id: int, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
     enr = db.query(models.Enrollment).filter(models.Enrollment.id == enr_id).first()
     if not enr:
         return {"status": "error", "message": "Class record not found."}
+
+    # Schedule Lock Guard
+    if (getattr(enr, "is_locked", False) or is_teacher_schedule_locked(enr.teacher_name, db)) and auth_user.role != "Admin":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Teaching schedule for '{enr.teacher_name}' is locked by Administrator. Submit an unlock request to make changes."
+        )
+
+    # Strict Viewer role isolation: Faculty can ONLY delete their own classes
+    if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
+        u_fullname = (auth_user.full_name or "").strip().lower()
+        u_username = (auth_user.username or "").strip().lower()
+        current_owner = (enr.teacher_name or "").strip().lower()
+        if current_owner != u_fullname and current_owner != u_username:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Faculty members can only delete their own classes."
+            )
     
     # Transaction Protection Guard: Check if any booklets are distributed to this class
     linked_bks = db.query(models.Booklet).filter(models.Booklet.enrollment_id == enr_id).count()
@@ -2912,32 +3970,95 @@ def delete_enrollment(enr_id: int, db: Session = Depends(get_db)):
         }
 
     sec_name = enr.section
+    sec_subj = enr.subject
+    sec_dept = enr.department
     db.delete(enr)
     db.commit()
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "delete", "enrollment_id": enr_id}, db=db)
+    log_system_activity(
+        action_type="ROSTER",
+        action_title="Class Deleted",
+        details=f"Removed class section '{sec_name}' ({sec_subj}) from active roster.",
+        db=db,
+        request=request,
+        target_ref=f"{sec_name} ({sec_subj})",
+        department=sec_dept
+    )
     return {"status": "success", "message": f"Class '{sec_name}' removed successfully."}
 
 @app.put("/api/enrollments/{enr_id}")
-def update_enrollment(enr_id: int, enr: schemas.EnrollmentCreate, db: Session = Depends(get_db)):
+def update_enrollment(enr_id: int, enr: schemas.EnrollmentCreate, request: Request, db: Session = Depends(get_db)):
+    auth_user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
     # 1. Find the existing record
     db_enr = db.query(models.Enrollment).filter(models.Enrollment.id == enr_id).first()
+    if not db_enr:
+        return {"status": "error", "message": "Record not found"}
+
+    t_clean = enr.teacher_name.strip()
+    sec_clean = enr.section.strip().upper()
+    subj_clean = enr.subject.strip().upper()
+
+    if not t_clean or not sec_clean or not subj_clean:
+        return {"status": "error", "message": "Instructor, Section, and Subject are all required."}
+
+    # Schedule Lock Guard
+    if (getattr(db_enr, "is_locked", False) or is_teacher_schedule_locked(db_enr.teacher_name, db) or is_teacher_schedule_locked(t_clean, db)) and auth_user.role != "Admin":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Teaching schedule for '{db_enr.teacher_name}' is locked by Administrator. Submit an unlock request to make changes."
+        )
+
+    # Strict Viewer role isolation: Faculty can only edit their own classes and cannot reassign ownership
+    if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
+        u_fullname = (auth_user.full_name or "").strip().lower()
+        u_username = (auth_user.username or "").strip().lower()
+        current_owner = (db_enr.teacher_name or "").strip().lower()
+        req_teacher_lower = t_clean.lower()
+        if current_owner != u_fullname and current_owner != u_username:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: Faculty members can only edit their own classes."
+            )
+        if req_teacher_lower != u_fullname and req_teacher_lower != u_username:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: You cannot reassign your class to another instructor."
+            )
+
+    # Duplicate Class Prevention: Check if another active class already has this (section, subject)
+    duplicate = db.query(models.Enrollment).filter(
+        models.Enrollment.section == sec_clean,
+        models.Enrollment.subject == subj_clean,
+        models.Enrollment.id != enr_id,
+        models.Enrollment.is_archived == False
+    ).first()
+    if duplicate:
+        return {
+            "status": "error",
+            "message": f"Cannot update class: Section '{sec_clean}' and Subject '{subj_clean}' is already assigned to {duplicate.teacher_name}."
+        }
+
+    # 2. Overwrite the old data with the new validated data
+    db_enr.teacher_name = t_clean
+    db_enr.section = sec_clean
+    db_enr.subject = subj_clean
+    db_enr.student_headcount = enr.student_headcount
     
-    if db_enr:
-        # 2. Overwrite the old data with the new data from the form
-        sec_clean = enr.section.strip().upper()
-        db_enr.teacher_name = enr.teacher_name.strip()
-        db_enr.section = sec_clean
-        db_enr.subject = enr.subject.strip().upper()
-        db_enr.student_headcount = enr.student_headcount
-        
-        # 3. Recalculate and update department upon editing
-        db_enr.department = detect_department_from_section(sec_clean, db=db)
-        
-        db.commit()
-        notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "update", "enrollment_id": enr_id}, db=db)
-        return {"status": "success", "message": "Class updated successfully!"}
-        
-    return {"status": "error", "message": "Record not found"}
+    # 3. Recalculate and update department upon editing
+    db_enr.department = detect_department_from_section(sec_clean, db=db)
+    
+    db.commit()
+    notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "update", "enrollment_id": enr_id}, db=db)
+    log_system_activity(
+        action_type="ROSTER",
+        action_title="Class Updated",
+        details=f"Updated class section {sec_clean} ({subj_clean}) for {t_clean} (Headcount: {enr.student_headcount}).",
+        db=db,
+        request=request,
+        target_ref=f"{sec_clean} ({subj_clean})",
+        department=db_enr.department
+    )
+    return {"status": "success", "message": "Class updated successfully!"}
 
 
 from typing import Optional
@@ -3563,6 +4684,17 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
             "section": enrollment.section if enrollment else "",
             "department": enr_dept
         }, db=db)
+
+        sec_label = enrollment.section if enrollment else f"Class #{req.enrollment_id}"
+        subj_label = enrollment.subject if enrollment else ""
+        log_system_activity(
+            action_type="RETURN",
+            action_title=f"Booklet Return Processed ({req.reason or 'Return'})",
+            details=f"Processed return of {len(booklets)} booklet(s) for Section {sec_label} ({subj_label}). Reason: {req.reason}.",
+            db=db,
+            target_ref=f"{sec_label} ({len(booklets)} pcs)",
+            department=enr_dept or "All"
+        )
         if is_student_dropped:
             notify_lan_mutation("ENROLLMENT_UPDATED", {
                 "enrollment_id": req.enrollment_id,
@@ -4178,6 +5310,17 @@ def execute_distribution(req: schemas.DistributionRequest, request: Request, db:
             "clerk": req.clerk_name,
             "qty": len(booklets_to_distribute)
         }, db=db)
+
+        log_system_activity(
+            action_type="DISTRIBUTION",
+            action_title="Booklets Distributed",
+            details=f"Distributed {len(booklets_to_distribute)} booklet(s) to Section {enrollment.section} ({enrollment.subject}) handled by {enrollment.teacher_name}.",
+            db=db,
+            request=request,
+            target_ref=f"{enrollment.section} ({enrollment.subject})",
+            department=enrollment.department,
+            username=req.clerk_name
+        )
         
         return {"status": "success", "message": "Transaction perfectly recorded."}
     except Exception as e:
@@ -4509,10 +5652,10 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
     if current_period:
         current_rank = parse_period_chronological_rank(current_period)
         preceding_configs = [c for c in configs if parse_period_chronological_rank(c.academic_period) < current_rank]
-        preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+        preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.min), reverse=True)
         prev_cfg = preceding_configs[0] if preceding_configs else None
     else:
-        configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+        configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.min), reverse=True)
         prev_cfg = configs[0] if configs else None
     
     if not prev_cfg:
@@ -4920,6 +6063,8 @@ def calculate_course_production_metrics(
             "excess_sheets": course_excess_sheets,
             "excess_booklets_yield": course_excess_booklets,
             "projected_yield": projected_yield,
+            "sheets_per_booklet": course_sheets_per_b,
+            "yield_per_ream": course_yield_per_r,
             "prev_period_name": prev_period_name,
             "is_satisfied": bool(target_production == 0)
         }
@@ -6032,7 +7177,10 @@ def get_all_users(response: Response, db: Session = Depends(get_db)):
     response.headers["Expires"] = "0"
     users = db.query(models.User).order_by(models.User.id.asc()).all()
     user_list = []
+    now = datetime.now()
     for u in users:
+        is_locked = bool(u.lockout_until and u.lockout_until > now)
+        lockout_sec = max(0, int((u.lockout_until - now).total_seconds())) if is_locked else 0
         user_list.append({
             "id": u.id,
             "username": u.username,
@@ -6040,7 +7188,10 @@ def get_all_users(response: Response, db: Session = Depends(get_db)):
             "role": u.role,
             "department": u.department or "All",
             "is_online": bool(u.session_token),
-            "is_active": getattr(u, "is_active", True) if getattr(u, "is_active", True) is not None else True
+            "is_active": getattr(u, "is_active", True) if getattr(u, "is_active", True) is not None else True,
+            "must_change_password": bool(u.must_change_password),
+            "is_locked": is_locked,
+            "lockout_seconds": lockout_sec
         })
     return {"status": "success", "users": user_list}
 
@@ -6175,11 +7326,74 @@ def update_user(user_id: int, req: schemas.UpdateUserRequest, request: Request, 
     }
 
 @app.post("/api/users/{user_id}/reset-password")
-def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
+def admin_reset_password(user_id: int, req: Optional[schemas.AdminTriggerPasswordResetRequest] = None, request: Request = None, db: Session = Depends(get_db)):
     verify_api_role_access(request, ["Admin"], db)
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         return {"status": "error", "message": "User not found."}
+
+    if user.role == "Admin" or user.username.lower() == "admin":
+        return {
+            "status": "error",
+            "message": "Admin account credentials cannot be reset with single-use temporary passcodes. Please use the Change My Password feature."
+        }
+
+    # Generate a strong 10-char temporary single-use password
+    temp_pw = generate_secure_temporary_password(10)
+    hashed_pw = bcrypt.hashpw(temp_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    user.password = hashed_pw
+    user.must_change_password = True
+    user.failed_login_attempts = 0
+    user.lockout_until = None
+    user.lockout_tier = 0
+    user.session_token = None
+    db.commit()
+
+    delivery_note = "Generated for single-use manual handover. The user will be required to create their own confidential private password upon signing in."
+    notify_lan_mutation("USER_UPDATED", {"action": "reset_password", "user_id": user_id, "username": user.username}, db=db)
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="Password Reset by Admin",
+        details=f"Admin generated single-use temporary password for user '{user.username}' ({user.role}).",
+        db=db,
+        request=request,
+        target_ref=user.username
+    )
+    return {
+        "status": "success",
+        "message": f"Temporary password generated for '{user.username}'.",
+        "temp_password": temp_pw,
+        "username": user.username,
+        "full_name": user.full_name or user.username,
+        "delivery_note": delivery_note
+    }
+
+@app.post("/api/users/{user_id}/unlock")
+def admin_unlock_user(user_id: int, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin"], db)
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        return {"status": "error", "message": "User not found."}
+    
+    user.lockout_until = None
+    user.failed_login_attempts = 0
+    user.lockout_tier = 0
+    db.commit()
+
+    notify_lan_mutation("USER_UPDATED", {"action": "unlock", "user_id": user_id, "username": user.username}, db=db)
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="Account Unlocked by Admin",
+        details=f"Admin removed temporary lockout on user account '{user.username}'.",
+        db=db,
+        request=request,
+        target_ref=user.username
+    )
+    return {"status": "success", "message": f"User '{user.username}' has been successfully unlocked."}
+
+@app.post("/api/users/first-time-setup")
+def user_first_time_setup(req: schemas.FirstTimeSetupRequest, request: Request, db: Session = Depends(get_db)):
+    user = verify_api_role_access(request, ["Admin", "Staff", "Viewer"], db)
     
     is_valid_pw, pw_err = validate_password(req.new_password, username=user.username)
     if not is_valid_pw:
@@ -6187,13 +7401,39 @@ def admin_reset_password(user_id: int, req: schemas.AdminResetPasswordRequest, r
     
     hashed_pw = bcrypt.hashpw(req.new_password.strip().encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     user.password = hashed_pw
-    # Invalidate session token to require logging in with new credentials
-    user.session_token = None
+    user.must_change_password = False
     db.commit()
-    
-    notify_lan_mutation("USER_UPDATED", {"action": "reset_password", "user_id": user_id, "username": user.username}, db=db)
-    return {"status": "success", "message": f"Password for '{user.username}' has been reset successfully!"}
 
+    notify_lan_mutation("USER_UPDATED", {"action": "first_setup", "username": user.username, "user_id": user.id}, db=db)
+    log_system_activity(
+        action_type="SECURITY",
+        action_title="Private Password Configured",
+        details=f"User '{user.username}' established their confidential private password.",
+        db=db,
+        request=request,
+        target_ref=user.username,
+        username=user.username,
+        user_role=user.role
+    )
+    return {
+        "status": "success",
+        "message": "Account security setup completed! Your private password has been saved.",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name or user.username,
+            "role": user.role,
+            "department": user.department,
+            "must_change_password": False
+        }
+    }
+
+@app.post("/api/users/forgot-password")
+def forgot_password_public(req: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    return {
+        "status": "info",
+        "message": "For system security on our offline network, please approach an Administrator to issue a single-use temporary access password."
+    }
 
 @app.post("/api/users/change-username")
 def user_change_username(req: schemas.ChangeUsernameRequest, db: Session = Depends(get_db)):
@@ -6651,6 +7891,15 @@ def update_settings(req: SettingsUpdate, request: Request, db: Session = Depends
         "reorder_buffer_percent": settings.reorder_buffer_percent
     }, db=db)
     
+    log_system_activity(
+        action_type="SYSTEM",
+        action_title="System Settings Modified",
+        details=f"Parameters updated: Price=₱{new_price:.2f}/pc, Sheets={req.sheets_per_booklet}, Period={req.active_period}.",
+        db=db,
+        request=request,
+        target_ref="System Configuration"
+    )
+
     msg = f"Settings updated successfully. (Grandfathered {preserved_count} fully paid account(s); re-priced {adjusted_count} pending account(s) at ₱{new_price:.2f}/pc)" if old_price != new_price else "Settings updated successfully."
     return {"status": "success", "message": msg}
 
@@ -6731,7 +7980,9 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "prior_available_booklets": c.get("prior_available_booklets", 0),
             "prev_excess_sheets": c.get("prev_excess_sheets", 0),
             "excess_sheets": c.get("excess_sheets", 0),
-            "excess_booklets_yield": c.get("excess_booklets_yield", 0)
+            "excess_booklets_yield": c.get("excess_booklets_yield", 0),
+            "sheets_per_booklet": c.get("sheets_per_booklet"),
+            "yield_per_ream": c.get("yield_per_ream")
         }
         for c in course_metrics.get("courses", {}).values()
     ]
@@ -6829,11 +8080,11 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
         if period:
             current_rank = parse_period_chronological_rank(period)
             preceding_configs = [c for c in configs if parse_period_chronological_rank(c.academic_period) < current_rank]
-            preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+            preceding_configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.min), reverse=True)
             prev_cfg = preceding_configs[0] if preceding_configs else None
 
         if not prev_cfg and configs:
-            configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.datetime.min), reverse=True)
+            configs.sort(key=lambda c: (parse_period_chronological_rank(c.academic_period), c.updated_at or datetime.min), reverse=True)
             prev_cfg = configs[0]
 
         system_settings = db.query(models.SystemSettings).first()
@@ -7151,6 +8402,253 @@ def delete_academic_program(prog_id: int, db: Session = Depends(get_db)):
             "action": "deleted"
         }
 
+
+@app.get("/activity-log", response_class=HTMLResponse)
+def activity_log_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
+    return templates.TemplateResponse("activity_log.html", {"request": request})
+
+@app.get("/api/activity-logs")
+def get_activity_logs(
+    action_type: Optional[str] = "ALL",
+    department: Optional[str] = "ALL",
+    operator: Optional[str] = "ALL",
+    username: Optional[str] = None,
+    academic_period: Optional[str] = "CURRENT",
+    date_preset: Optional[str] = "ALL",
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    limit: Optional[int] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+
+    query = db.query(models.ActivityLog)
+
+    # 1. Action Type Filter
+    if action_type and action_type.strip().upper() != "ALL":
+        query = query.filter(models.ActivityLog.action_type == action_type.strip().upper())
+
+    # 2. Department Filter
+    if department and department.strip().upper() != "ALL":
+        query = query.filter(
+            or_(
+                models.ActivityLog.department == department.strip().upper(),
+                models.ActivityLog.department == "All"
+            )
+        )
+
+    # 3. Operator Filter (Disambiguated from session auth 'username')
+    target_op = operator if (operator and operator.strip().upper() != "ALL") else (username if (username and username.strip().upper() != "ALL") else None)
+    if target_op:
+        query = query.filter(models.ActivityLog.username == target_op.strip())
+
+    # 4. Academic Period Filter (Defaults to CURRENT active semester)
+    active_period = get_active_period(db)
+    if academic_period and academic_period.strip().upper() == "CURRENT":
+        if active_period and active_period != "UNSET":
+            query = query.filter(models.ActivityLog.academic_period == active_period)
+    elif academic_period and academic_period.strip().upper() != "ALL":
+        query = query.filter(models.ActivityLog.academic_period == academic_period.strip())
+
+    # 5. Date Preset Filter
+    now = datetime.now()
+    if date_preset == "today":
+        start_of_day = datetime(now.year, now.month, now.day, 0, 0, 0)
+        query = query.filter(models.ActivityLog.timestamp >= start_of_day)
+    elif date_preset == "week":
+        query = query.filter(models.ActivityLog.timestamp >= now - timedelta(days=7))
+    elif date_preset == "month":
+        query = query.filter(models.ActivityLog.timestamp >= now - timedelta(days=30))
+    elif date_preset == "period":
+        if active_period and active_period != "UNSET":
+            query = query.filter(models.ActivityLog.academic_period == active_period)
+
+    # 6. Search Text Filter
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                models.ActivityLog.username.ilike(term),
+                models.ActivityLog.target_ref.ilike(term),
+                models.ActivityLog.action_title.ilike(term),
+                models.ActivityLog.details.ilike(term)
+            )
+        )
+
+    total_count = query.count()
+
+    # Pagination calculation
+    actual_limit = limit if (limit is not None and limit > 0) else page_size
+    actual_limit = max(10, min(actual_limit, 200))
+    safe_page = max(1, page)
+    total_pages = max(1, math.ceil(total_count / actual_limit))
+    if safe_page > total_pages and total_count > 0:
+        safe_page = total_pages
+    offset = (safe_page - 1) * actual_limit
+
+    logs = query.order_by(models.ActivityLog.timestamp.desc(), models.ActivityLog.id.desc()).offset(offset).limit(actual_limit).all()
+
+    # KPI Metrics
+    start_today = datetime(now.year, now.month, now.day, 0, 0, 0)
+    today_count = db.query(models.ActivityLog).filter(models.ActivityLog.timestamp >= start_today).count()
+    all_total = db.query(models.ActivityLog).count()
+    dist_count = db.query(models.ActivityLog).filter(models.ActivityLog.action_type == "DISTRIBUTION").count()
+    pay_count = db.query(models.ActivityLog).filter(models.ActivityLog.action_type == "PAYMENT").count()
+
+    # Available operators
+    operators = [
+        row[0] for row in db.query(models.ActivityLog.username).distinct().order_by(models.ActivityLog.username.asc()).all() if row[0]
+    ]
+
+    # Available academic periods
+    available_periods = [
+        row[0] for row in db.query(models.ActivityLog.academic_period)
+        .filter(models.ActivityLog.academic_period.isnot(None), models.ActivityLog.academic_period != "")
+        .distinct()
+        .order_by(models.ActivityLog.academic_period.desc())
+        .all() if row[0]
+    ]
+    if active_period and active_period != "UNSET" and active_period not in available_periods:
+        available_periods.insert(0, active_period)
+
+    log_list = []
+    for item in logs:
+        log_list.append({
+            "id": item.id,
+            "timestamp": item.timestamp.strftime("%Y-%m-%d %H:%M:%S") if item.timestamp else "",
+            "timestamp_formatted": item.timestamp.strftime("%b %d, %Y, %I:%M %p") if item.timestamp else "",
+            "username": item.username,
+            "user_role": item.user_role or "Staff",
+            "action_type": item.action_type,
+            "action_title": item.action_title,
+            "details": item.details,
+            "target_ref": item.target_ref or "",
+            "department": item.department or "All",
+            "academic_period": item.academic_period or "",
+            "ip_address": item.ip_address or "Localhost"
+        })
+
+    return {
+        "status": "success",
+        "total_count": total_count,
+        "page": safe_page,
+        "page_size": actual_limit,
+        "total_pages": total_pages,
+        "current_period": active_period,
+        "available_periods": available_periods,
+        "available_operators": operators,
+        "metrics": {
+            "total_actions": all_total,
+            "today_actions": today_count,
+            "distributions": dist_count,
+            "payments": pay_count
+        },
+        "logs": log_list
+    }
+
+@app.get("/api/activity-logs/export-csv")
+def export_activity_logs_csv(
+    action_type: Optional[str] = "ALL",
+    department: Optional[str] = "ALL",
+    operator: Optional[str] = "ALL",
+    username: Optional[str] = None,
+    academic_period: Optional[str] = "CURRENT",
+    date_preset: Optional[str] = "ALL",
+    search: Optional[str] = None,
+    request: Request = None,
+    db: Session = Depends(get_db)
+):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+
+    query = db.query(models.ActivityLog)
+    if action_type and action_type.strip().upper() != "ALL":
+        query = query.filter(models.ActivityLog.action_type == action_type.strip().upper())
+    if department and department.strip().upper() != "ALL":
+        query = query.filter(
+            or_(
+                models.ActivityLog.department == department.strip().upper(),
+                models.ActivityLog.department == "All"
+            )
+        )
+    target_op = operator if (operator and operator.strip().upper() != "ALL") else (username if (username and username.strip().upper() != "ALL") else None)
+    if target_op:
+        query = query.filter(models.ActivityLog.username == target_op.strip())
+
+    active_period = get_active_period(db)
+    if academic_period and academic_period.strip().upper() == "CURRENT":
+        if active_period and active_period != "UNSET":
+            query = query.filter(models.ActivityLog.academic_period == active_period)
+    elif academic_period and academic_period.strip().upper() != "ALL":
+        query = query.filter(models.ActivityLog.academic_period == academic_period.strip())
+
+    now = datetime.now()
+    if date_preset == "today":
+        start_of_day = datetime(now.year, now.month, now.day, 0, 0, 0)
+        query = query.filter(models.ActivityLog.timestamp >= start_of_day)
+    elif date_preset == "week":
+        query = query.filter(models.ActivityLog.timestamp >= now - timedelta(days=7))
+    elif date_preset == "month":
+        query = query.filter(models.ActivityLog.timestamp >= now - timedelta(days=30))
+    elif date_preset == "period":
+        if active_period and active_period != "UNSET":
+            query = query.filter(models.ActivityLog.academic_period == active_period)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                models.ActivityLog.username.ilike(term),
+                models.ActivityLog.target_ref.ilike(term),
+                models.ActivityLog.action_title.ilike(term),
+                models.ActivityLog.details.ilike(term)
+            )
+        )
+
+    records = query.order_by(models.ActivityLog.timestamp.desc(), models.ActivityLog.id.desc()).all()
+
+    import io
+    import csv
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Timestamp",
+        "Operator",
+        "Role",
+        "Category",
+        "Event Title",
+        "Details",
+        "Target Reference",
+        "Department",
+        "Academic Period",
+        "Terminal IP"
+    ])
+    for r in records:
+        ts = r.timestamp.strftime("%Y-%m-%d %H:%M:%S") if r.timestamp else ""
+        writer.writerow([
+            ts,
+            r.username or "",
+            r.user_role or "",
+            r.action_type or "",
+            r.action_title or "",
+            r.details or "",
+            r.target_ref or "",
+            r.department or "",
+            r.academic_period or "",
+            r.ip_address or ""
+        ])
+
+    csv_data = output.getvalue()
+    period_slug = re.sub(r'[^a-zA-Z0-9_\-]', '_', (academic_period or "audit").strip())
+    filename = f"activity_audit_trail_{period_slug}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 @app.get("/payment-tracking", response_class=HTMLResponse)
 def payment_tracking_page(request: Request, db: Session = Depends(get_db)):
@@ -7499,6 +8997,17 @@ def receive_payment(enrollment_id: int, req: PaymentRequest, request: Request, d
             "payment_period": target_period,
             "payment_date": payment_record.payment_date.strftime("%Y-%m-%d %H:%M:%S")
         }, db=db)
+
+        log_system_activity(
+            action_type="PAYMENT",
+            action_title=f"Payment Received: ₱{req.amount:,.2f}",
+            details=f"Received ₱{req.amount:,.2f} for Section {enrollment.section} ({enrollment.subject}). Balance remaining: ₱{new_period_balance:,.2f}. Period: {target_period}.",
+            db=db,
+            request=request,
+            target_ref=f"OR #{getattr(payment_record, 'or_number', None) or payment_record.id}",
+            department=enrollment.department,
+            username=req.recorded_by
+        )
 
         return {
             "status": "success", 

@@ -734,3 +734,171 @@ def generate_sample_preview_pdf(sample_control_num="1ST26-0001", sample_srn="SRN
         print(f"Notice: Failed to render preview proof image: {e}")
 
     return output_path
+
+def regenerate_batch_pdf_file(batch_id: str, db=None) -> str:
+    """
+    Authoritatively regenerates and saves static/front_page_pdfs/{batch_id}.pdf
+    using the exact parameters preserved in the database.
+    """
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
+        
+    try:
+        batch = db.query(models.MasterBatch).filter(models.MasterBatch.qr_code_id == batch_id).first()
+        if not batch:
+            raise ValueError(f"MasterBatch with ID '{batch_id}' does not exist in the database.")
+            
+        dept = (batch.department or "CS").upper()
+        slot = batch.template_slot or 1
+        
+        # 1. Parse start control number
+        start_num = 1
+        if batch.start_control_num:
+            try:
+                start_num = int(batch.start_control_num.split("-")[-1])
+            except Exception:
+                start_num = 1
+                
+        # 2. Parse start SRN number
+        start_srn_num = 1
+        if batch.start_srn:
+            try:
+                start_srn_num = int(batch.start_srn.split("-")[-1])
+            except Exception:
+                start_srn_num = 1
+                
+        # 3. Resolve prefix from start_control_num (e.g. "2ND27-CS-0001" -> "2ND27")
+        parts = batch.start_control_num.split("-") if batch.start_control_num else []
+        if len(parts) >= 3:
+            prefix = parts[0]
+        else:
+            settings = db.query(models.SystemSettings).first()
+            prefix = settings.current_semester_name if settings else ""
+            
+        output_path = generate_batch_pdf(
+            start_num=start_num,
+            total_yield=batch.total_yield,
+            batch_id=batch.qr_code_id,
+            prefix=prefix,
+            start_srn_num=start_srn_num,
+            department=dept,
+            slot=slot,
+            db=db,
+            target_needed=batch.total_yield,
+            academic_period=batch.registered_period,
+            buffer_pct=15.0,
+            created_at=batch.date_registered,
+            ream_count=batch.ream_count
+        )
+        return output_path
+    finally:
+        if close_db:
+            db.close()
+
+def generate_pack_qr_label_file(pack_id: str, db=None) -> str:
+    """
+    Authoritatively regenerates and saves a physical supply pack sticker PNG to static/qrcodes/{pack_id}_LABEL.png
+    using database records.
+    """
+    import qrcode
+    from PIL import Image, ImageDraw, ImageFont
+    
+    close_db = False
+    if db is None:
+        db = SessionLocal()
+        close_db = True
+        
+    try:
+        batches = db.query(models.MasterBatch).filter(models.MasterBatch.pack_qr_id == pack_id).all()
+        if not batches:
+            raise ValueError(f"No batches found for Pack ID: {pack_id}")
+            
+        def extract_num(ref_str):
+            try:
+                return int(ref_str.split('-')[-1])
+            except Exception:
+                return 0
+                
+        batches.sort(key=lambda x: extract_num(x.start_control_num))
+        
+        dept = (batches[0].department or "CS").upper()
+        prog = db.query(models.AcademicProgram).filter_by(code=dept).first()
+        dept_label = prog.name if prog else ("Computer Science (CS)" if dept == "CS" else ("Information Technology (IT)" if dept == "IT" else dept))
+        dept_color = prog.color_hex if (prog and prog.color_hex) else ("#2563eb" if dept == "CS" else "#e67e22")
+        
+        slot = batches[0].template_slot or 1
+        tpl = db.query(models.BookletTemplateConfig).filter_by(department=dept, slot_number=slot).first()
+        tpl_name = tpl.template_name if (tpl and tpl.template_name) else f"Template {slot}"
+        
+        # Calculate totals and ranges
+        all_booklets = db.query(models.Booklet).filter(models.Booklet.master_batch_id.in_([b.id for b in batches])).all()
+        total_booklets = len(all_booklets) if all_booklets else sum(b.total_yield for b in batches)
+        
+        start_ctrl = batches[0].start_control_num
+        end_ctrl = batches[-1].end_control_num
+        start_srn = batches[0].start_srn
+        end_srn = batches[-1].end_srn
+        
+        os.makedirs("static/qrcodes", exist_ok=True)
+        file_path = f"static/qrcodes/{pack_id}_LABEL.png"
+        
+        # 1. Generate QR Code
+        qr_obj = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr_obj.add_data(pack_id)
+        qr_obj.make(fit=True)
+        qr_img = qr_obj.make_image(fill_color="black", back_color="white").convert("RGB")
+        
+        native_qr_size = qr_img.width
+        canvas_width = max(400, native_qr_size + 60)
+        canvas_height = 550
+        
+        canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
+        draw = ImageDraw.Draw(canvas)
+        
+        # Draw outer border
+        draw.rectangle([2, 2, canvas_width - 4, canvas_height - 4], outline="black", width=2)
+        
+        # Font setup (fallback to default font if TrueType is unavailable)
+        try:
+            font_title = ImageFont.truetype("arial.ttf", 20)
+            font_dept = ImageFont.truetype("arialbd.ttf", 13)
+            font_pack = ImageFont.truetype("courbd.ttf", 17)
+            font_booklets = ImageFont.truetype("arialbd.ttf", 15)
+            font_ranges = ImageFont.truetype("courbd.ttf", 12)
+            font_sub = ImageFont.truetype("ariali.ttf", 11)
+            font_footer = ImageFont.truetype("arialbd.ttf", 13)
+        except Exception:
+            font_title = font_dept = font_pack = font_booklets = font_ranges = font_sub = font_footer = ImageFont.load_default()
+            
+        def draw_centered_text(y, text, font, fill="black"):
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_w = bbox[2] - bbox[0]
+            draw.text(((canvas_width - text_w) // 2, y), text, font=font, fill=fill)
+            
+        draw_centered_text(18, "BOOKLEDGER SUPPLY PACK", font_title, fill="black")
+        draw_centered_text(48, f"[ {dept_label.upper()} ]", font_dept, fill=dept_color)
+        draw_centered_text(74, pack_id, font_pack, fill="#166534")
+        draw_centered_text(100, f"Contains {total_booklets} Booklets", font_booklets, fill="#1e293b")
+        
+        if start_ctrl and end_ctrl:
+            draw_centered_text(124, f"Ctrl: {start_ctrl} to {end_ctrl}", font_ranges, fill="#334155")
+        if start_srn and end_srn and start_srn != 'N/A':
+            draw_centered_text(142, f"SRN: {start_srn} to {end_srn}", font_ranges, fill="#2563eb")
+            
+        # Paste QR Code
+        x_pos = (canvas_width - native_qr_size) // 2
+        y_pos = 165
+        canvas.paste(qr_img, (x_pos, y_pos))
+        
+        if tpl_name:
+            draw_centered_text(y_pos + native_qr_size + 14, f"Cover: {tpl_name}", font_sub, fill="#64748b")
+            
+        draw_centered_text(y_pos + native_qr_size + 36, "Scan this label during distribution.", font_footer, fill="#333333")
+        
+        canvas.save(file_path, "PNG")
+        return file_path
+    finally:
+        if close_db:
+            db.close()

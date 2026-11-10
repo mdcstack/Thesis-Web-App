@@ -1859,3 +1859,649 @@ If users opened Chrome DevTools (Inspect Element / F12) and manually edited valu
   - Test passed: **100% SUCCESS**.
 - **`scratch/test_rbac.py`**:
   - Unauthenticated navigation, Viewer/Staff/Admin boundaries, API endpoints, and session cookies all verified: **100% SUCCESS**.
+
+
+---
+
+## 128. Enrollments CSV/Excel Unified Upload & Input Sanitization
+
+### Problem Addressed
+1. The faculty import modal previously allowed arbitrary non-spreadsheet files to be selected and processed.
+2. The UI presented fragmented duplicate import interfaces ("Upload Excel / CSV File" and "Paste Names") causing user confusion.
+3. Paste inputs lacked delimiter flexibility for comma-separated records (`Dr. Maria Santos, BSCS-1A, Introduction to Computing, 37`).
+4. Risk of SQL injection or script tampering if users entered raw commands (e.g. `DROP TABLE`, `<script>`) into roster text boxes.
+
+### Solution Applied
+1. **File Type Enforcement**: Restricted file input strictly to `.csv`, `.xlsx`, `.xls` via both HTML `accept` attributes and client-side MIME/extension verification.
+2. **Unified Upload & Paste Interface**: Streamlined the import modal into a cohesive workflow featuring a clear, unified file uploader alongside comma-delimited batch entry.
+3. **Robust Comma-Delimited Parser**: Upgraded string parsing in `enrollments.html` to parse comma-separated teacher, course, subject, and student count records smoothly.
+4. **Input Sanitization & ORM SQL Injection Immunity**: All inputs are validated via Pydantic validators (`sanitize_clean_string`) and parameterized through SQLAlchemy ORM queries, neutralizing SQL injection attempts.
+
+
+---
+
+## 129. Zero-Knowledge Password Reset, Gmail Recovery, Progressive Lockout, and First-Time Setup
+
+### Problem Addressed
+1. **Admin Plaintext Password Flaw**: Previously, in `adminResetPwModal` (`manage_user.html`), the administrator was asked to manually type and assign a password for instructors (role: `Viewer`). This design broke zero-knowledge privacy because the administrator saw and knew instructors' private passwords.
+2. **Lack of Automated Recovery**: Instructors who forgot their password had no self-service retrieval channel.
+3. **No Rate-Limiting or Brute-Force Defense**: In `login.html`, unauthorized actors could attempt passwords indefinitely without triggering a rate limit or account lockout.
+4. **Vague Error Feedback**: Deactivated or locked accounts received generic error text without clear guidance on how to reactivate or unlock.
+
+### Solution Applied
+
+1. **Zero-Knowledge Architecture & Server-Generated Passcodes**:
+   - In [app/main.py](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/main.py), eliminated manual password typing by administrators in `POST /api/users/{user_id}/reset-password`.
+   - The server generates a cryptographically random, single-use temporary password (`generate_secure_temporary_password(10)`).
+   - If internet/SMTP is active and the user has a registered Gmail, the server sends the temporary password directly to the instructor's personal Gmail inbox.
+   - For offline LAN environments, the server provides a fail-safe fallback: the temporary passcode is displayed securely on the admin console for single-use manual handover.
+   - Once generated, previous sessions are invalidated (`user.session_token = None`) and `user.must_change_password` is flagged as `True`.
+
+2. **Mandatory First-Time Setup Overlay (`firstTimeSetupModal`)**:
+   - In [templates/sidebar.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/sidebar.html), added a full-screen, unclosable security setup modal that intercepts any session where `must_change_password === true`.
+   - The user is compelled to create their own private permanent password (enforcing minimum 8 characters, letters & numbers, no username matching) and register their personal recovery Gmail.
+   - Calling `POST /api/users/first-time-setup` hashes the new password with bcrypt, saves the recovery Gmail, and clears `must_change_password` to `False`. The administrator never sees this password.
+
+3. **Progressive Rate Limiting & Account Lockout**:
+   - In `POST /api/login`: tracks `failed_login_attempts`.
+   - 1st to 4th failed attempts: returns remaining attempts warning (`"Invalid username or password. X attempt(s) remaining before account lockout."`).
+   - 5th failed attempt: triggers a 5-minute lockout (`lockout_until = now + 5 minutes`).
+   - Progressive multiplier: if 5 failures occur again in a subsequent cycle, duration scales progressively (`5m`, `10m`, `15m`, ...).
+   - While locked, all login attempts are blocked immediately (`status: "locked"`), returning remaining seconds countdown.
+
+4. **Dedicated Deactivated & Lockout UI Feedback in `login.html`**:
+   - **Account Deactivated Modal (`#accountDeactivatedModal`)**: Triggered when `status: "deactivated"`. Informs the user clearly that their account has been deactivated and provides immediate instructions to approach an Administrator.
+   - **Account Locked Modal (`#accountLockedModal`)**: Displays an active ticking countdown timer (`⏳ 04:59...`) and recommends contacting an Administrator for immediate unlock.
+   - **Self-Service Forgot Password Modal (`#forgotPasswordModal`)**: Lets users submit their username or recovery Gmail to receive an automated temporary recovery code.
+
+5. **Admin Management & User Profile Enhancements in `manage_user.html`**:
+   - Redesigned `adminResetPwModal`: displays user name, recipient Gmail, and options to "Send to Gmail" or "Generate Code Only (Manual Handover)".
+   - Added `updateEmailModal` allowing users (Admin, Staff, Faculty) to update their personal recovery Gmail at any time.
+   - Added user table `🔒 Locked (Xm)` badges and quick 1-click `🔓` unlock buttons (`POST /api/users/{id}/unlock`).
+   - Populated `profileEmail` and `staffEmail` dynamically from `activeUser.email`.
+
+6. **Database Schema Migrations**:
+   - Automatically added columns to `users`: `email` (VARCHAR 150), `must_change_password` (BOOLEAN, default False), `failed_login_attempts` (INT, default 0), `lockout_until` (DATETIME), `lockout_tier` (INT, default 0).
+   - Added columns to `system_settings`: `smtp_sender_email` (VARCHAR 150), `smtp_app_password` (VARCHAR 150).
+
+### Verification Results
+- **Automated Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+  - Test 1: Deactivated user receives `status: "deactivated"` on login & contact-admin guidance -> **PASSED**.
+  - Test 2: Failed login tracking and 5-attempt lockout (5 minutes) -> **PASSED**.
+  - Test 3: Rejection during active lockout -> **PASSED**.
+  - Test 4: Admin unlock endpoint clears lockout and resets attempts -> **PASSED**.
+  - Test 5: Progressive lockout scaling to Tier 2 (10 minutes) -> **PASSED**.
+  - Test 6: Admin password reset (generates temporary code, clears lockout, flags must_change) -> **PASSED**.
+  - Test 7: Faculty login with temporary password -> **PASSED**.
+  - Test 8: First-time setup validates password complexity and updates email + private password -> **PASSED**.
+  - Test 9: Login with newly created permanent private password -> **PASSED**.
+  - Test 10: Public forgot-password endpoint validates registered email and triggers temporary password -> **PASSED**.
+  - Test 11: Update recovery email endpoint updates registered Gmail -> **PASSED**.
+  - **Result**: **11/11 TESTS PASSED CLEANLY (100%)**.
+- **Regression Testing**:
+  - `scratch/test_rbac.py`: **ALL RBAC TESTS PASSED**.
+  - `scratch/test_anti_tamper.py`: **ALL ANTI-TAMPER TESTS PASSED**.
+
+
+---
+
+## 130. Resolve Manage Users Page Freeze & "Loading Accounts Directory..."
+
+### Problem Addressed
+When navigating to [templates/manage_user.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/manage_user.html), the page appeared blank/empty: all 5 KPI cards displayed horizontal dashes (`-`), the accounts directory table remained frozen on `Loading accounts directory...`, the badge showed `Loading...`, and the right profile card showed `-`.
+
+### Root Cause
+Inside [templates/manage_user.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/manage_user.html) at line 1200, a duplicate variable declaration was present:
+```javascript
+let statusBadge = '';
+let statusBadge = ''; // <-- Fatal SyntaxError: Identifier 'statusBadge' has already been declared
+```
+Under modern ECMAScript, duplicate `let` declarations in the same block scope cause a fatal compile-time syntax error. Because this script failed parsing, the browser aborted execution of the entire script before running `fetchUsers()`, `loadSystemPrograms()`, or KPI calculations.
+
+### Solution Applied
+1. **Removed Duplicate Variable Declaration**:
+   - Deleted the redundant `let statusBadge = '';` in [templates/manage_user.html](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/manage_user.html).
+2. **Defensive DOM Property Guarding**:
+   - Added null-safe checks for `loggedInUser` and `loggedInRole` in the header initialization block (`if (loggedInUserEl) loggedInUserEl.innerText = ...`).
+
+### Verification Results
+1. **Full-Codebase AST Syntax Scanner (`scratch/check_syntax.py`)**:
+   - Scanned all `<script>` tags across all 15 template files.
+   - All scripts passed with **0 syntax errors** (`manage_user.html Script #3: PASSED`).
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - All 11 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All role boundaries, page authorizations, and DOM anti-tamper protections passed with **100% SUCCESS**.
+
+
+---
+
+## 131. Admin Reset Modal Buttons, Login Eye Icon, & Instructor Role Display
+
+### Problem Addressed
+1. **Manage Users Reset Modal Layout**:
+   - `adminResetPwModal` included a redundant bottom "Close" button when a close button (`&times;`) already existed in the top-right modal header.
+   - The action buttons ("Generate Code Only" and "Send Temporary Pass to Gmail") were wrapped with emojis (`📋` and `🚀`) and had uneven spacing.
+2. **User Table Role Display**:
+   - Accounts with role `Viewer` previously displayed the badge `👁️ Viewer`, which the user requested to be cleanly renamed to `Instructor` without the eye emoji.
+3. **Login Password Field Duplicate Eye Icon**:
+   - On Windows/Edge browsers, typing inside `<input type="password">` triggered Edge's native `::-ms-reveal` icon alongside the web app's custom eye button, doubling the eye icons.
+   - The custom eye button was displayed by default even when the password input field was completely empty.
+
+### Solution Applied
+1. **Manage Users Modal Refinements (`manage_user.html`)**:
+   - Removed the bottom "Close" button from `adminResetPwModal`.
+   - Stripped emoji icons (`📋` and `🚀`) from both "Generate Code Only (Manual Handover)" and "Send Temporary Pass to Gmail" buttons across both HTML markup and dynamic JavaScript states (`openAdminResetPwModal` and `triggerAdminGeneratePass`).
+   - Aligned the two buttons in a clean, side-by-side flex container (`display: flex; gap: 10px; margin-top: 18px;`) with equal widths (`flex: 1`).
+2. **Role Column Renamed to "Instructor" (`manage_user.html`)**:
+   - Updated `renderUsersTable(users)` to render:
+     ```javascript
+     roleBadge = `<span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 600;">Instructor</span>`;
+     ```
+   - Updated the role filter dropdown and profile card badge to reflect `Instructor`.
+3. **Login Eye Icon Clean Behavior (`login.html`)**:
+   - Suppressed Microsoft Edge and Chromium native password reveal icons via CSS:
+     ```css
+     input[type="password"]::-ms-reveal,
+     input[type="password"]::-ms-clear {
+         display: none !important;
+     }
+     ```
+   - Set `.toggle-password-btn` to `display: none;` by default.
+   - Added `handlePasswordInput(this)`: when the user inputs characters, the single toggle eye appears (`display: flex`); when the field is cleared, it hides (`display: none`).
+
+### Verification Results
+1. **JavaScript Syntax Verification (`scratch/check_syntax.py`)**:
+   - All 15 templates verified with **0 syntax errors**.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 11/11 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All role boundaries and anti-tamper protections passed with **100% SUCCESS**.
+
+---
+
+## 133. Complete Removal of User Email Column and Dead SMTP Schema
+
+### Problem Addressed
+- While the previous step removed Gmail SMTP features from the user interface, the MySQL `users` database table still had an `email` column, and `system_settings` still had `smtp_sender_email` and `smtp_app_password` columns.
+- The user requested to completely eliminate the email column from the database since the web application operates 100% offline.
+
+### Solution Applied
+1. **Database Schema Migration (`ensure_schema_migrations` in `app/main.py`)**:
+   - Added automatic migration checking if `email` exists in `users` and executes `ALTER TABLE users DROP COLUMN email`.
+   - Added automatic migration checking if `smtp_sender_email` or `smtp_app_password` exists in `system_settings` and executes `ALTER TABLE system_settings DROP COLUMN ...`.
+2. **Model & Schema Updates**:
+   - In [`app/models.py`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/models.py): Removed `email` column from `models.User` and removed `smtp_sender_email` and `smtp_app_password` from `models.SystemSettings`.
+   - In [`app/schemas.py`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/schemas.py): Removed `email` from `FirstTimeSetupRequest`, removed `target_email` from `AdminTriggerPasswordResetRequest`, deleted `UpdateRecoveryEmailRequest`, and updated `ForgotPasswordRequest`.
+3. **Dead Code Cleanup (`app/main.py`)**:
+   - Deleted unused `smtplib`, `MIMEMultipart`, and `MIMEText` imports.
+   - Deleted dead `send_temporary_password_email` utility function.
+   - Removed `email` dictionary fields from `/api/login` and `/api/users/list`.
+   - Deleted dead endpoint `/api/users/update-recovery-email`.
+
+### Verification Results
+1. **Database Column Verification (`scratch/verify_drop_email.py`)**:
+   - Verified that `email` is **NOT present** in the MySQL `users` table.
+   - Verified that `smtp_sender_email` and `smtp_app_password` are **NOT present** in `system_settings`.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 10/10 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Security Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All tests passed with **100% SUCCESS**.
+
+---
+
+## 134. First-Time Setup Modal Password Reveal Icon Polish
+
+### Problem Addressed
+- In `#firstTimeSetupModal` (`templates/sidebar.html`), password input fields (`#setupNewPw` and `#setupConfirmPw`) displayed an emoji toggle button (`👁️` / `🙈`) by default even when empty.
+- When typing in Microsoft Edge or Chromium-based browsers, the browser's native `::-ms-reveal` icon appeared alongside the custom button, causing **two eye icons to be visible simultaneously (doubled)**.
+
+### Solution Applied
+1. **Native Reveal Icon Suppression**:
+   - Added CSS in `templates/sidebar.html` to suppress browser-generated reveal buttons:
+     ```css
+     #firstTimeSetupModal input[type="password"]::-ms-reveal,
+     #firstTimeSetupModal input[type="password"]::-ms-clear {
+         display: none !important;
+     }
+     ```
+2. **Vector SVG Icons & Hidden by Default**:
+   - Replaced emoji buttons with `.setup-pw-toggle-btn` containing vector SVG open-eye and slashed-eye icons.
+   - Set `.setup-pw-toggle-btn` to `display: none;` by default.
+3. **Dynamic Visibility on Input**:
+   - Added `handleSetupPwInput(input, toggleBtnId)`: displays the button (`display: flex;`) only when characters are present in the input field, and hides it when empty.
+   - Added modal reset in `checkAndPromptFirstTimeSetup(user)` so inputs start cleared with hidden toggle buttons when the modal opens.
+
+### Verification Results
+1. **JavaScript Syntax Verification (`scratch/check_syntax.py`)**:
+   - All 15 templates verified with **0 syntax errors**.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 10/10 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All role boundaries and anti-tamper protections passed with **100% SUCCESS**.
+
+---
+
+## 135. Instructor Schedule Lock Feature & Unlock Request Notification Flow
+
+### Problem Addressed
+In academic administration, once an instructor submits their semester teaching schedule and the Administrator verifies the load and section assignments, faculty members should no longer be able to modify, add, or delete their class records without prior administrative clearance. Furthermore, faculty members whose schedules are locked needed a dedicated pop-up modal to inform them that edits are disabled and allow them to submit an unlock request with a note, which must alert the Administrator via the notification bell in the sidebar (`#notifBell` / `#notifBadge`).
+
+### Solution Applied
+1. **Database Schema Enhancements (`models.py`)**:
+   - Added `is_locked` boolean column (`default=False, nullable=False, index=True`) to `models.Enrollment`.
+   - Added schedule lock and unlock request columns to `models.User`:
+     - `is_schedule_locked` (`Boolean`, default=False)
+     - `schedule_locked_at` (`DateTime`, nullable=True)
+     - `schedule_locked_by` (`String(100)`, nullable=True)
+     - `schedule_unlock_requested` (`Boolean`, default=False)
+     - `schedule_unlock_reason` (`Text`, nullable=True)
+     - `schedule_unlock_requested_at` (`DateTime`, nullable=True)
+   - Added schema check and dynamic column auto-migration in `app/main.py` startup event.
+
+2. **Backend API Endpoints & Server-Side Security Enforcement (`app/main.py`)**:
+   - Added `POST /api/enrollments/instructors/{teacher_name}/lock` (Admin only): locks individual instructor schedule across `users` and `enrollments` tables, logging security activity and broadcasting via WebSocket.
+   - Added `POST /api/enrollments/instructors/{teacher_name}/unlock` (Admin only): unlocks individual schedule, resets unlock request flags, and restores edit permissions.
+   - Added `POST /api/enrollments/lock-all` and `POST /api/enrollments/unlock-all` (Admin only): bulk locking and unlocking of all faculty schedules.
+   - Added `POST /api/enrollments/instructors/{teacher_name}/request-unlock` (Viewer / Staff): allows locked instructors to submit an unlock request with an explanation.
+   - Added `GET /api/enrollments/unlock-requests` (Admin only): returns pending unlock requests with timestamps and reasons.
+   - Added server-side mutation guards via `is_teacher_schedule_locked`: blocks non-admin `create_enrollment` (`POST /api/enrollments`), `update_enrollment` (`PUT /api/enrollments/{enr_id}`), `delete_enrollment` (`DELETE /api/enrollments/{enr_id}`), and `faculty_upload_classes` with `HTTP 403 Forbidden` if the instructor's schedule is locked.
+   - Integrated pending unlock requests into `/api/dss/alert` payload (`unlock_requests` and `pending_unlock_count`).
+
+3. **Sidebar Notification Bell & Alert Panel (`templates/sidebar.html`)**:
+   - Updated `applyDSSAlertToUI(data)` to inspect pending unlock requests.
+   - When requests exist for an Admin user:
+     - Lights up `#notifBell` and shows count on `#notifBadge`.
+     - In `#notifPanel`, renders an unlock request card with instructor name, department, reason note, submission timestamp, and a direct jump link: `a href="/enrollments?unlock_teacher=..."`.
+
+4. **Enrollments Masterfile & Faculty Portal UI (`templates/enrollments.html`)**:
+   - **Admin Controls**:
+     - Added bulk action buttons `🔒 Lock All` and `🔓 Unlock All` to `#adminStaffHeaderActions`.
+     - Added `#detailModalLockToggleBtn` in `instructorDetailModal` so Admin can toggle lock status for the viewed instructor.
+     - Added lock status badges (`🔒 Locked`, `🟢 Open`, `⚠️ Unlock Requested`) to directory table rows.
+   - **Faculty / Non-Admin Experience**:
+     - When locked, faculty self-view shows a prominent red banner: `"🔒 Your teaching schedule is locked by the Administrator."` with a `Request Schedule Unlock` button.
+     - Add Class, Upload Schedule, Edit Class, and Delete Class actions are disabled or guarded: clicking them opens `#scheduleLockedModal`.
+     - `#scheduleLockedModal`: dedicated pop-up modal informing the user that schedule editing is disabled by the Administrator, featuring a reason input field and a `Submit Request to Unlock` button.
+     - When URL contains `?unlock_teacher=...`, `checkUrlParamsForUnlock()` automatically opens that instructor's `instructorDetailModal` with an unlock banner and pre-focused lock toggle button for the Admin.
+
+### Verification Results
+1. **End-to-End Test Suite (`scratch/test_schedule_lock_feature.py`)**:
+   - Admin lock and unlock: **PASSED**.
+   - DB flags `User.is_schedule_locked` & `Enrollment.is_locked`: **PASSED**.
+   - Server-side mutation blocks on Add, Update, and Delete: **PASSED (403 Forbidden)**.
+   - Instructor unlock request submission and database persistence: **PASSED**.
+   - Admin pending unlock requests endpoint: **PASSED**.
+   - DSS Alert notification bell integration: **PASSED**.
+   - Bulk Lock-All and Unlock-All: **PASSED**.
+   - All tests exited with **100% SUCCESS**.
+
+---
+
+## 136. Enrollments Custom Dialog Standardization & 100% UI Uniformity Across Templates
+
+### Problem Addressed
+In [`templates/enrollments.html`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/enrollments.html), locking or unlocking instructor schedules, executing bulk locks/unlocks, deleting classes, and archiving semesters previously called the browser's native JavaScript `confirm()` and `alert()` methods. This produced unstyled, browser-generated popups with the header `"localhost:8000 says: Are you sure you want to lock..."`.
+
+### Solution Applied
+1. **100% Match with BookletLog Golden Standard Dialog Specification**:
+   - Audited the dialog markup, classes, and styles across `dashboard.html`, `distribution.html`, `manage_user.html`, `qr_registration.html`, and `history.html`.
+   - Added standard `.app-dialog-card` (Max-width 440px, padding 26px 28px, border-radius 12px, border-top 5px solid dynamic accent, box-shadow 0 16px 40px rgba(0,0,0,0.25), `modalPopIn` keyframe animation) and `.dialog-btn` styles to `<style>`.
+   - Embedded the universal `<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">` markup directly in `enrollments.html`.
+
+2. **Promise-Based `showAppConfirm()` & `showAppAlert()` Controllers**:
+   - Implemented `showAppConfirm(title, message, options)`: supports dynamic top accent borders, contextual icons (`🔒` / `🔓` / `🛑` / `📁` / `🗑️`), custom action button text and background colors, and clean `Escape` key cancelation.
+   - Implemented `showAppAlert(title, message, type, confirmText)`: replaces all remaining native `alert()` calls.
+
+3. **Replaced All Raw Browser Dialogs in Enrollment Actions**:
+   - `toggleCurrentInstructorLock()`: now opens the custom modal card with icon `🔒` (Lock Schedule) or `🔓` (Unlock Schedule).
+   - `promptLockAllSchedules()`: opens warning card with `Lock All Schedules` button (`#b45309`).
+   - `promptUnlockAllSchedules()`: opens info card with `Unlock All Schedules` button (`#059669`).
+   - `deleteClassRecord()`: opens danger card with `🗑️ Remove Class` button (`#ef4444`).
+   - `promptArchiveEnrollments()`: opens warning card with `📁 Archive Rosters` button (`#f59e0b`).
+   - `logout()`: added standardized logout handler aligning sidebar logout with the rest of the application.
+   - `readSpreadsheetFile()`: file format and parsing errors now trigger floating in-app toasts (`showToast`) instead of native browser alerts.
+
+### Verification Results
+1. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+2. **Backend Schedule Lock Suite (`scratch/test_schedule_lock_feature.py`)**: All lock, unlock, bulk, and mutation guards verified with **100% SUCCESS**.
+
+---
+
+## 138. Dynamic Course Specific Paper Sheets Per Booklet in Settings Budget Recommendation
+
+### Problem Addressed
+In the Academic Courses & Section Configuration card within the Settings page, administrators can configure individual paper sheets consumed per booklet (`sheets_per_booklet`) for each course (e.g., Computer Science set to 10 sheets, Information Technology set to 6 sheets). However, the Budget Recommendation card in the Financial & Production Settings card was previously calculating paper ream requirements using only the global fallback input (6 sheets). As a result, Computer Science was calculated using 6 sheets (726 gross sheets, 2 reams) instead of 10 sheets (1,210 gross sheets, 3 reams), yielding a combined total of only 4 reams (₱1,000.00) instead of the true 5 reams (₱1,250.00) correctly reflected in the Sidebar Notification and Dashboard Decision Support System.
+
+### Solution Applied
+1. **Backend Serialization in `app/main.py`**:
+   * In `calculate_course_production_metrics`: Included `sheets_per_booklet` and `yield_per_ream` in each program metric object.
+   * In `get_period_configuration`: Included `sheets_per_booklet` and `yield_per_ream` inside `course_demand_list` so client scripts receive program specific values.
+2. **Client Side Recalculation in `templates/settings.html`**:
+   * In `updateRecommendationBox`: Updated gross paper calculation to resolve `courseSheets` from `c.sheets_per_booklet` with authoritative fallback to `cachedAcademicPrograms` or `window.getAuthoritativeData('academic_programs')`.
+   * Updated the course header display in the recommendation card to reflect each course sheet count (e.g., `CS (10 sh/bk):` and `IT (6 sh/bk):`).
+   * In `loadAcademicPrograms`: Added automatic invocation of `updateRecommendationBox()` whenever academic programs are loaded or updated.
+
+### Verification Results
+1. **Backend Verification (`scratch/test_budget_recommendation_calculation.py`)**:
+   * CS: Target 121 booklets with 10 sheets per booklet yields 1,210 gross sheets and 3 reams.
+   * IT: Target 90 booklets with 6 sheets per booklet yields 540 gross sheets and 2 reams.
+   * Total Reams: Exactly 5 reams (costing ₱1,250.00).
+   * Verified 100% match with the Sidebar notification and Dashboard DSS.
+2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
+---
+
+## 137. Streamlined Schedule Unlock Request & Sidebar Notification Polish
+
+### Problem Addressed
+When an instructor's teaching schedule was locked, the `#scheduleLockedModal` previously forced the user to type an explanation into a `<textarea>` before submitting. This reason string was then rendered in the Admin notification bell dropdown, creating a bloated, multi-line card that cluttered the notification panel.
+
+### Solution Applied
+1. **Streamlined `#scheduleLockedModal` (`templates/enrollments.html`)**:
+   - Removed the `<textarea id="unlockRequestReason">` input field and its label.
+   - Renamed the submission button from `<span>📩</span> Submit Request to Unlock` to plain **`Request to Unlock`** (icon removed).
+   - In `submitScheduleUnlockRequest`, removed reason validation and input checks so the request submits immediately upon clicking.
+   - In `renderFacultySelfView` and `openInstructorDetailModal`, simplified pending request status badges to eliminate reason strings.
+
+2. **Polished Notification Bell Panel (`templates/sidebar.html`)**:
+   - Replaced the multi-line card containing the reason quote with a clean, compact flex row.
+   - Now renders the instructor's name, department badge, timestamp (`Requested unlock • [Time]`), and an immediate one-click **`Unlock ➔`** action link.
+
+### Verification Results
+1. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+2. **Backend Schedule Lock Suite (`scratch/test_schedule_lock_feature.py`)**: All lock, unlock, bulk, and mutation guards verified with **100% SUCCESS**.
+
+---
+
+## 138. Dynamic Course Specific Paper Sheets Per Booklet in Settings Budget Recommendation
+
+### Problem Addressed
+In the Academic Courses & Section Configuration card within the Settings page, administrators can configure individual paper sheets consumed per booklet (`sheets_per_booklet`) for each course (e.g., Computer Science set to 10 sheets, Information Technology set to 6 sheets). However, the Budget Recommendation card in the Financial & Production Settings card was previously calculating paper ream requirements using only the global fallback input (6 sheets). As a result, Computer Science was calculated using 6 sheets (726 gross sheets, 2 reams) instead of 10 sheets (1,210 gross sheets, 3 reams), yielding a combined total of only 4 reams (₱1,000.00) instead of the true 5 reams (₱1,250.00) correctly reflected in the Sidebar Notification and Dashboard Decision Support System.
+
+### Solution Applied
+1. **Backend Serialization in `app/main.py`**:
+   * In `calculate_course_production_metrics`: Included `sheets_per_booklet` and `yield_per_ream` in each program metric object.
+   * In `get_period_configuration`: Included `sheets_per_booklet` and `yield_per_ream` inside `course_demand_list` so client scripts receive program specific values.
+2. **Client Side Recalculation in `templates/settings.html`**:
+   * In `updateRecommendationBox`: Updated gross paper calculation to resolve `courseSheets` from `c.sheets_per_booklet` with authoritative fallback to `cachedAcademicPrograms` or `window.getAuthoritativeData('academic_programs')`.
+   * Updated the course header display in the recommendation card to reflect each course sheet count (e.g., `CS (10 sh/bk):` and `IT (6 sh/bk):`).
+   * In `loadAcademicPrograms`: Added automatic invocation of `updateRecommendationBox()` whenever academic programs are loaded or updated.
+
+### Verification Results
+1. **Backend Verification (`scratch/test_budget_recommendation_calculation.py`)**:
+   * CS: Target 121 booklets with 10 sheets per booklet yields 1,210 gross sheets and 3 reams.
+   * IT: Target 90 booklets with 6 sheets per booklet yields 540 gross sheets and 2 reams.
+   * Total Reams: Exactly 5 reams (costing ₱1,250.00).
+   * Verified 100% match with the Sidebar notification and Dashboard DSS.
+2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
+
+
+
+
+
+---
+
+## 132. 100% Offline Single-Use Temporary Passcode Architecture & Streamlined Modals
+
+### Problem Addressed
+1. **Unconfigured Gmail SMTP Errors**:
+   - When attempting password reset in `adminResetPwModal`, the modal attempted to contact Google SMTP servers (`smtp.gmail.com:587`), resulting in `Email delivery failed: Gmail SMTP credentials are not configured` error feedback.
+2. **User Design Direction**:
+   - In environments without external internet connectivity, email delivery is unnecessary and introduces external failure points. The user explicitly chose to eliminate Gmail account usage and SMTP network dependencies entirely, establishing a **100% air-gapped / offline temporary passcode recovery model**.
+3. **Modal & Table Bloat**:
+   - Unused "Recovery Gmail" inputs, table subtexts, profile card rows, and modals (`#updateEmailModal`) cluttered the UI and hinted at non-existent internet features.
+
+### Solution Applied
+1. **Backend Simplification (`app/main.py` & `app/schemas.py`)**:
+   - Updated `admin_reset_password`: always generates an offline 10-character cryptographically secure temporary passcode (`secrets.token_urlsafe(7)`), sets `must_change_password = True`, invalidates all active sessions, clears lockouts, and immediately returns the temporary password to the Admin for in-person / campus handover without any SMTP attempts.
+   - Updated `user_first_time_setup`: requires only `new_password` (validates length and complexity), updates the bcrypt password hash, and clears `must_change_password`. `email` is purely optional with zero requirements.
+   - Updated `forgot_password_public`: returns an informative on-premises notice directing the user to approach an Administrator to issue an offline single-use temporary password.
+2. **Admin Reset Password Modal (`templates/manage_user.html`)**:
+   - Removed the recipient Gmail input and "Send to Gmail" button.
+   - Provided a single, prominent action button: **"Generate Temporary Password"** (`#btnAdminGenPass`).
+   - Fixed target user role display to translate `Viewer` into `Instructor` (e.g. `Instructor (CS)` instead of `Viewer (CS)`).
+   - Removed dead email methods: `openUpdateEmailModal()`, `closeUpdateEmailModal()`, and `submitUpdateEmail()`, along with `#updateEmailModal` HTML.
+   - Stripped unused `emailSubtext` from the user directory table.
+3. **First-Time Setup Modal (`templates/sidebar.html`)**:
+   - Removed `#setupRecoveryEmail` input and hint from `#firstTimeSetupModal`.
+   - Updated `submitFirstTimeSetup`: submits `{ new_password: newPw }` only, prompts for password confirmation, and saves the user's permanent private password.
+4. **Login Forgot Password Guidance (`templates/login.html`)**:
+   - Replaced `#forgotPasswordModal` with an offline dialog that guides users to visit their administrator or department coordinator for an on-premises temporary password reset.
+   - Removed external fetch submissions from the modal.
+
+### Verification Results
+1. **JavaScript Syntax Verification (`scratch/check_syntax.py`)**:
+   - All 15 templates verified with **0 syntax errors**.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 11/11 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All role boundaries and anti-tamper protections passed with **100% SUCCESS**.
+
+---
+
+## 133. Complete Removal of User Email Column and Dead SMTP Schema
+
+### Problem Addressed
+- While the previous step removed Gmail SMTP features from the user interface, the MySQL `users` database table still had an `email` column, and `system_settings` still had `smtp_sender_email` and `smtp_app_password` columns.
+- The user requested to completely eliminate the email column from the database since the web application operates 100% offline.
+
+### Solution Applied
+1. **Database Schema Migration (`ensure_schema_migrations` in `app/main.py`)**:
+   - Added automatic migration checking if `email` exists in `users` and executes `ALTER TABLE users DROP COLUMN email`.
+   - Added automatic migration checking if `smtp_sender_email` or `smtp_app_password` exists in `system_settings` and executes `ALTER TABLE system_settings DROP COLUMN ...`.
+2. **Model & Schema Updates**:
+   - In [`app/models.py`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/models.py): Removed `email` column from `models.User` and removed `smtp_sender_email` and `smtp_app_password` from `models.SystemSettings`.
+   - In [`app/schemas.py`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/app/schemas.py): Removed `email` from `FirstTimeSetupRequest`, removed `target_email` from `AdminTriggerPasswordResetRequest`, deleted `UpdateRecoveryEmailRequest`, and updated `ForgotPasswordRequest`.
+3. **Dead Code Cleanup (`app/main.py`)**:
+   - Deleted unused `smtplib`, `MIMEMultipart`, and `MIMEText` imports.
+   - Deleted dead `send_temporary_password_email` utility function.
+   - Removed `email` dictionary fields from `/api/login` and `/api/users/list`.
+   - Deleted dead endpoint `/api/users/update-recovery-email`.
+
+### Verification Results
+1. **Database Column Verification (`scratch/verify_drop_email.py`)**:
+   - Verified that `email` is **NOT present** in the MySQL `users` table.
+   - Verified that `smtp_sender_email` and `smtp_app_password` are **NOT present** in `system_settings`.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 10/10 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Security Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All tests passed with **100% SUCCESS**.
+
+---
+
+## 134. First-Time Setup Modal Password Reveal Icon Polish
+
+### Problem Addressed
+- In `#firstTimeSetupModal` (`templates/sidebar.html`), password input fields (`#setupNewPw` and `#setupConfirmPw`) displayed an emoji toggle button (`👁️` / `🙈`) by default even when empty.
+- When typing in Microsoft Edge or Chromium-based browsers, the browser's native `::-ms-reveal` icon appeared alongside the custom button, causing **two eye icons to be visible simultaneously (doubled)**.
+
+### Solution Applied
+1. **Native Reveal Icon Suppression**:
+   - Added CSS in `templates/sidebar.html` to suppress browser-generated reveal buttons:
+     ```css
+     #firstTimeSetupModal input[type="password"]::-ms-reveal,
+     #firstTimeSetupModal input[type="password"]::-ms-clear {
+         display: none !important;
+     }
+     ```
+2. **Vector SVG Icons & Hidden by Default**:
+   - Replaced emoji buttons with `.setup-pw-toggle-btn` containing vector SVG open-eye and slashed-eye icons.
+   - Set `.setup-pw-toggle-btn` to `display: none;` by default.
+3. **Dynamic Visibility on Input**:
+   - Added `handleSetupPwInput(input, toggleBtnId)`: displays the button (`display: flex;`) only when characters are present in the input field, and hides it when empty.
+   - Added modal reset in `checkAndPromptFirstTimeSetup(user)` so inputs start cleared with hidden toggle buttons when the modal opens.
+
+### Verification Results
+1. **JavaScript Syntax Verification (`scratch/check_syntax.py`)**:
+   - All 15 templates verified with **0 syntax errors**.
+2. **User Security & Lockout Test Suite (`scratch/test_user_security_and_lockout.py`)**:
+   - 10/10 tests passed with **100% SUCCESS**.
+3. **RBAC & Anti-Tamper Suites (`scratch/test_rbac.py` & `scratch/test_anti_tamper.py`)**:
+   - All role boundaries and anti-tamper protections passed with **100% SUCCESS**.
+
+---
+
+## 135. Instructor Schedule Lock Feature & Unlock Request Notification Flow
+
+### Problem Addressed
+In academic administration, once an instructor submits their semester teaching schedule and the Administrator verifies the load and section assignments, faculty members should no longer be able to modify, add, or delete their class records without prior administrative clearance. Furthermore, faculty members whose schedules are locked needed a dedicated pop-up modal to inform them that edits are disabled and allow them to submit an unlock request with a note, which must alert the Administrator via the notification bell in the sidebar (`#notifBell` / `#notifBadge`).
+
+### Solution Applied
+1. **Database Schema Enhancements (`models.py`)**:
+   - Added `is_locked` boolean column (`default=False, nullable=False, index=True`) to `models.Enrollment`.
+   - Added schedule lock and unlock request columns to `models.User`:
+     - `is_schedule_locked` (`Boolean`, default=False)
+     - `schedule_locked_at` (`DateTime`, nullable=True)
+     - `schedule_locked_by` (`String(100)`, nullable=True)
+     - `schedule_unlock_requested` (`Boolean`, default=False)
+     - `schedule_unlock_reason` (`Text`, nullable=True)
+     - `schedule_unlock_requested_at` (`DateTime`, nullable=True)
+   - Added schema check and dynamic column auto-migration in `app/main.py` startup event.
+
+2. **Backend API Endpoints & Server-Side Security Enforcement (`app/main.py`)**:
+   - Added `POST /api/enrollments/instructors/{teacher_name}/lock` (Admin only): locks individual instructor schedule across `users` and `enrollments` tables, logging security activity and broadcasting via WebSocket.
+   - Added `POST /api/enrollments/instructors/{teacher_name}/unlock` (Admin only): unlocks individual schedule, resets unlock request flags, and restores edit permissions.
+   - Added `POST /api/enrollments/lock-all` and `POST /api/enrollments/unlock-all` (Admin only): bulk locking and unlocking of all faculty schedules.
+   - Added `POST /api/enrollments/instructors/{teacher_name}/request-unlock` (Viewer / Staff): allows locked instructors to submit an unlock request with an explanation.
+   - Added `GET /api/enrollments/unlock-requests` (Admin only): returns pending unlock requests with timestamps and reasons.
+   - Added server-side mutation guards via `is_teacher_schedule_locked`: blocks non-admin `create_enrollment` (`POST /api/enrollments`), `update_enrollment` (`PUT /api/enrollments/{enr_id}`), `delete_enrollment` (`DELETE /api/enrollments/{enr_id}`), and `faculty_upload_classes` with `HTTP 403 Forbidden` if the instructor's schedule is locked.
+   - Integrated pending unlock requests into `/api/dss/alert` payload (`unlock_requests` and `pending_unlock_count`).
+
+3. **Sidebar Notification Bell & Alert Panel (`templates/sidebar.html`)**:
+   - Updated `applyDSSAlertToUI(data)` to inspect pending unlock requests.
+   - When requests exist for an Admin user:
+     - Lights up `#notifBell` and shows count on `#notifBadge`.
+     - In `#notifPanel`, renders an unlock request card with instructor name, department, reason note, submission timestamp, and a direct jump link: `a href="/enrollments?unlock_teacher=..."`.
+
+4. **Enrollments Masterfile & Faculty Portal UI (`templates/enrollments.html`)**:
+   - **Admin Controls**:
+     - Added bulk action buttons `🔒 Lock All` and `🔓 Unlock All` to `#adminStaffHeaderActions`.
+     - Added `#detailModalLockToggleBtn` in `instructorDetailModal` so Admin can toggle lock status for the viewed instructor.
+     - Added lock status badges (`🔒 Locked`, `🟢 Open`, `⚠️ Unlock Requested`) to directory table rows.
+   - **Faculty / Non-Admin Experience**:
+     - When locked, faculty self-view shows a prominent red banner: `"🔒 Your teaching schedule is locked by the Administrator."` with a `Request Schedule Unlock` button.
+     - Add Class, Upload Schedule, Edit Class, and Delete Class actions are disabled or guarded: clicking them opens `#scheduleLockedModal`.
+     - `#scheduleLockedModal`: dedicated pop-up modal informing the user that schedule editing is disabled by the Administrator, featuring a reason input field and a `Submit Request to Unlock` button.
+     - When URL contains `?unlock_teacher=...`, `checkUrlParamsForUnlock()` automatically opens that instructor's `instructorDetailModal` with an unlock banner and pre-focused lock toggle button for the Admin.
+
+### Verification Results
+1. **End-to-End Test Suite (`scratch/test_schedule_lock_feature.py`)**:
+   - Admin lock and unlock: **PASSED**.
+   - DB flags `User.is_schedule_locked` & `Enrollment.is_locked`: **PASSED**.
+   - Server-side mutation blocks on Add, Update, and Delete: **PASSED (403 Forbidden)**.
+   - Instructor unlock request submission and database persistence: **PASSED**.
+   - Admin pending unlock requests endpoint: **PASSED**.
+   - DSS Alert notification bell integration: **PASSED**.
+   - Bulk Lock-All and Unlock-All: **PASSED**.
+   - All tests exited with **100% SUCCESS**.
+
+---
+
+## 136. Enrollments Custom Dialog Standardization & 100% UI Uniformity Across Templates
+
+### Problem Addressed
+In [`templates/enrollments.html`](file:///c:/Users/Matt/OneDrive/Documents/Thesis%20(Grumaduate%20ka%20na)/Thesis%20Web%20App/templates/enrollments.html), locking or unlocking instructor schedules, executing bulk locks/unlocks, deleting classes, and archiving semesters previously called the browser's native JavaScript `confirm()` and `alert()` methods. This produced unstyled, browser-generated popups with the header `"localhost:8000 says: Are you sure you want to lock..."`.
+
+### Solution Applied
+1. **100% Match with BookletLog Golden Standard Dialog Specification**:
+   - Audited the dialog markup, classes, and styles across `dashboard.html`, `distribution.html`, `manage_user.html`, `qr_registration.html`, and `history.html`.
+   - Added standard `.app-dialog-card` (Max-width 440px, padding 26px 28px, border-radius 12px, border-top 5px solid dynamic accent, box-shadow 0 16px 40px rgba(0,0,0,0.25), `modalPopIn` keyframe animation) and `.dialog-btn` styles to `<style>`.
+   - Embedded the universal `<div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">` markup directly in `enrollments.html`.
+
+2. **Promise-Based `showAppConfirm()` & `showAppAlert()` Controllers**:
+   - Implemented `showAppConfirm(title, message, options)`: supports dynamic top accent borders, contextual icons (`🔒` / `🔓` / `🛑` / `📁` / `🗑️`), custom action button text and background colors, and clean `Escape` key cancelation.
+   - Implemented `showAppAlert(title, message, type, confirmText)`: replaces all remaining native `alert()` calls.
+
+3. **Replaced All Raw Browser Dialogs in Enrollment Actions**:
+   - `toggleCurrentInstructorLock()`: now opens the custom modal card with icon `🔒` (Lock Schedule) or `🔓` (Unlock Schedule).
+   - `promptLockAllSchedules()`: opens warning card with `Lock All Schedules` button (`#b45309`).
+   - `promptUnlockAllSchedules()`: opens info card with `Unlock All Schedules` button (`#059669`).
+   - `deleteClassRecord()`: opens danger card with `🗑️ Remove Class` button (`#ef4444`).
+   - `promptArchiveEnrollments()`: opens warning card with `📁 Archive Rosters` button (`#f59e0b`).
+   - `logout()`: added standardized logout handler aligning sidebar logout with the rest of the application.
+   - `readSpreadsheetFile()`: file format and parsing errors now trigger floating in-app toasts (`showToast`) instead of native browser alerts.
+
+### Verification Results
+1. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+2. **Backend Schedule Lock Suite (`scratch/test_schedule_lock_feature.py`)**: All lock, unlock, bulk, and mutation guards verified with **100% SUCCESS**.
+
+---
+
+## 138. Dynamic Course Specific Paper Sheets Per Booklet in Settings Budget Recommendation
+
+### Problem Addressed
+In the Academic Courses & Section Configuration card within the Settings page, administrators can configure individual paper sheets consumed per booklet (`sheets_per_booklet`) for each course (e.g., Computer Science set to 10 sheets, Information Technology set to 6 sheets). However, the Budget Recommendation card in the Financial & Production Settings card was previously calculating paper ream requirements using only the global fallback input (6 sheets). As a result, Computer Science was calculated using 6 sheets (726 gross sheets, 2 reams) instead of 10 sheets (1,210 gross sheets, 3 reams), yielding a combined total of only 4 reams (₱1,000.00) instead of the true 5 reams (₱1,250.00) correctly reflected in the Sidebar Notification and Dashboard Decision Support System.
+
+### Solution Applied
+1. **Backend Serialization in `app/main.py`**:
+   * In `calculate_course_production_metrics`: Included `sheets_per_booklet` and `yield_per_ream` in each program metric object.
+   * In `get_period_configuration`: Included `sheets_per_booklet` and `yield_per_ream` inside `course_demand_list` so client scripts receive program specific values.
+2. **Client Side Recalculation in `templates/settings.html`**:
+   * In `updateRecommendationBox`: Updated gross paper calculation to resolve `courseSheets` from `c.sheets_per_booklet` with authoritative fallback to `cachedAcademicPrograms` or `window.getAuthoritativeData('academic_programs')`.
+   * Updated the course header display in the recommendation card to reflect each course sheet count (e.g., `CS (10 sh/bk):` and `IT (6 sh/bk):`).
+   * In `loadAcademicPrograms`: Added automatic invocation of `updateRecommendationBox()` whenever academic programs are loaded or updated.
+
+### Verification Results
+1. **Backend Verification (`scratch/test_budget_recommendation_calculation.py`)**:
+   * CS: Target 121 booklets with 10 sheets per booklet yields 1,210 gross sheets and 3 reams.
+   * IT: Target 90 booklets with 6 sheets per booklet yields 540 gross sheets and 2 reams.
+   * Total Reams: Exactly 5 reams (costing ₱1,250.00).
+   * Verified 100% match with the Sidebar notification and Dashboard DSS.
+2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
+---
+
+## 137. Streamlined Schedule Unlock Request & Sidebar Notification Polish
+
+### Problem Addressed
+When an instructor's teaching schedule was locked, the `#scheduleLockedModal` previously forced the user to type an explanation into a `<textarea>` before submitting. This reason string was then rendered in the Admin notification bell dropdown, creating a bloated, multi-line card that cluttered the notification panel.
+
+### Solution Applied
+1. **Streamlined `#scheduleLockedModal` (`templates/enrollments.html`)**:
+   - Removed the `<textarea id="unlockRequestReason">` input field and its label.
+   - Renamed the submission button from `<span>📩</span> Submit Request to Unlock` to plain **`Request to Unlock`** (icon removed).
+   - In `submitScheduleUnlockRequest`, removed reason validation and input checks so the request submits immediately upon clicking.
+   - In `renderFacultySelfView` and `openInstructorDetailModal`, simplified pending request status badges to eliminate reason strings.
+
+2. **Polished Notification Bell Panel (`templates/sidebar.html`)**:
+   - Replaced the multi-line card containing the reason quote with a clean, compact flex row.
+   - Now renders the instructor's name, department badge, timestamp (`Requested unlock • [Time]`), and an immediate one-click **`Unlock ➔`** action link.
+
+### Verification Results
+1. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+2. **Backend Schedule Lock Suite (`scratch/test_schedule_lock_feature.py`)**: All lock, unlock, bulk, and mutation guards verified with **100% SUCCESS**.
+
+---
+
+## 138. Dynamic Course Specific Paper Sheets Per Booklet in Settings Budget Recommendation
+
+### Problem Addressed
+In the Academic Courses & Section Configuration card within the Settings page, administrators can configure individual paper sheets consumed per booklet (`sheets_per_booklet`) for each course (e.g., Computer Science set to 10 sheets, Information Technology set to 6 sheets). However, the Budget Recommendation card in the Financial & Production Settings card was previously calculating paper ream requirements using only the global fallback input (6 sheets). As a result, Computer Science was calculated using 6 sheets (726 gross sheets, 2 reams) instead of 10 sheets (1,210 gross sheets, 3 reams), yielding a combined total of only 4 reams (₱1,000.00) instead of the true 5 reams (₱1,250.00) correctly reflected in the Sidebar Notification and Dashboard Decision Support System.
+
+### Solution Applied
+1. **Backend Serialization in `app/main.py`**:
+   * In `calculate_course_production_metrics`: Included `sheets_per_booklet` and `yield_per_ream` in each program metric object.
+   * In `get_period_configuration`: Included `sheets_per_booklet` and `yield_per_ream` inside `course_demand_list` so client scripts receive program specific values.
+2. **Client Side Recalculation in `templates/settings.html`**:
+   * In `updateRecommendationBox`: Updated gross paper calculation to resolve `courseSheets` from `c.sheets_per_booklet` with authoritative fallback to `cachedAcademicPrograms` or `window.getAuthoritativeData('academic_programs')`.
+   * Updated the course header display in the recommendation card to reflect each course sheet count (e.g., `CS (10 sh/bk):` and `IT (6 sh/bk):`).
+   * In `loadAcademicPrograms`: Added automatic invocation of `updateRecommendationBox()` whenever academic programs are loaded or updated.
+
+### Verification Results
+1. **Backend Verification (`scratch/test_budget_recommendation_calculation.py`)**:
+   * CS: Target 121 booklets with 10 sheets per booklet yields 1,210 gross sheets and 3 reams.
+   * IT: Target 90 booklets with 6 sheets per booklet yields 540 gross sheets and 2 reams.
+   * Total Reams: Exactly 5 reams (costing ₱1,250.00).
+   * Verified 100% match with the Sidebar notification and Dashboard DSS.
+2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
+
+
+
+

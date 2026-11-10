@@ -30,6 +30,107 @@
         .mobile-hide { display: none !important; }
         .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
     }
+
+    /* Prevent Edge and Chromium duplicate native password reveal eye */
+    #firstTimeSetupModal input[type="password"]::-ms-reveal,
+    #firstTimeSetupModal input[type="password"]::-ms-clear {
+        display: none !important;
+    }
+    #firstTimeSetupModal .setup-pw-toggle-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: transparent;
+        color: #64748b;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s, background-color 0.2s;
+    }
+    #firstTimeSetupModal .setup-pw-toggle-btn:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+        color: #1e293b;
+    }
+    #firstTimeSetupModal .setup-pw-toggle-btn:focus {
+        outline: none;
+        color: #2563eb;
+    }
+
+    /* Floating Notification Popover (Above Sidebar & Main View) */
+    .floating-notif-popover {
+        position: fixed;
+        top: 56px;
+        left: 14px;
+        width: 340px;
+        max-width: calc(100vw - 28px);
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-top: 3px solid #3b82f6;
+        border-radius: 10px;
+        box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.55), 0 6px 16px rgba(0, 0, 0, 0.35);
+        z-index: 10050;
+        box-sizing: border-box;
+        animation: notifFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+    }
+
+    @keyframes notifFadeIn {
+        from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .floating-notif-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+    }
+
+    .floating-notif-header-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 0.88rem;
+        color: #f8fafc;
+    }
+
+    .floating-notif-close-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.1rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+
+    .floating-notif-close-btn:hover {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    @media (max-width: 900px) {
+        .floating-notif-popover {
+            top: 58px;
+            left: 12px;
+            right: 12px;
+            width: auto;
+            max-width: 350px;
+            margin: 0 auto;
+        }
+    }
 </style>
 
 <!-- Mobile Navigation Header -->
@@ -69,6 +170,69 @@
     </div>
 </div>
 
+<!-- FIRST-TIME / TEMPORARY PASSWORD SETUP MODAL -->
+<div id="firstTimeSetupModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 9999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 480px; padding: 28px 24px; text-align: left; box-shadow: 0 25px 50px rgba(0,0,0,0.35); border-top: 5px solid #2563eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="text-align: center; margin-bottom: 16px;">
+            <div style="font-size: 2.6rem; margin-bottom: 6px;">🔐</div>
+            <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 700; margin: 0;">Account Security Setup</h3>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 6px 0 0 0; line-height: 1.4;">
+                You are currently logged in with a temporary or initial password. For your security, please create your own confidential private password before accessing the system.
+            </p>
+        </div>
+
+        <form id="firstTimeSetupForm" onsubmit="submitFirstTimeSetup(event)">
+            <div style="margin-bottom: 12px;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 700; color: #475569; margin-bottom: 4px;">New Private Password *</label>
+                <div style="position: relative;">
+                    <input type="password" id="setupNewPw" required style="width: 100%; box-sizing: border-box; padding: 10px 42px 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; outline: none; transition: border-color 0.2s;" placeholder="Min. 8 characters (letters & numbers)" oninput="handleSetupPwInput(this, 'setupNewPwToggleBtn')">
+                    <button type="button" class="setup-pw-toggle-btn" id="setupNewPwToggleBtn" onclick="toggleSetupPwVisibility('setupNewPw', this)" title="Show password" aria-label="Show password">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 18px;">
+                <label style="display: block; font-size: 0.82rem; font-weight: 700; color: #475569; margin-bottom: 4px;">Confirm New Password *</label>
+                <div style="position: relative;">
+                    <input type="password" id="setupConfirmPw" required style="width: 100%; box-sizing: border-box; padding: 10px 42px 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; outline: none; transition: border-color 0.2s;" placeholder="Repeat your new password" oninput="handleSetupPwInput(this, 'setupConfirmPwToggleBtn')">
+                    <button type="button" class="setup-pw-toggle-btn" id="setupConfirmPwToggleBtn" onclick="toggleSetupPwVisibility('setupConfirmPw', this)" title="Show password" aria-label="Show password">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+                <small style="color: #64748b; font-size: 0.76rem; display: block; margin-top: 4px;">Password must be at least 8 characters with at least one letter and one number.</small>
+            </div>
+
+            <div id="setupErrorMsg" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 12px; border-radius: 6px; font-size: 0.84rem; margin-bottom: 14px; line-height: 1.4;"></div>
+
+            <button type="submit" id="setupSubmitBtn" style="width: 100%; background: #2563eb; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 0.98rem; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 6px rgba(37,99,235,0.3);">
+                Save & Continue to Portal ➔
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- FIRST-TIME SETUP SUCCESS CONFIRMATION MODAL -->
+<div id="firstTimeSetupSuccessModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 9999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 440px; padding: 32px 24px; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.35); border-top: 5px solid #10b981; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="width: 64px; height: 64px; border-radius: 50%; background: #dcfce7; color: #16a34a; font-size: 2.2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; font-weight: 800;">
+            ✓
+        </div>
+        <h3 style="color: #1e293b; font-size: 1.3rem; font-weight: 800; margin: 0 0 8px 0;">Security Setup Complete!</h3>
+        <p style="color: #64748b; font-size: 0.92rem; margin: 0 0 24px 0; line-height: 1.5;">
+            Your confidential private password has been saved successfully. You can now access your account securely using your new credentials.
+        </p>
+        <button type="button" onclick="confirmSetupSuccessAndReload()" style="width: 100%; background: #10b981; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 6px rgba(16,185,129,0.3);">
+            OK, Continue to Portal ➔
+        </button>
+    </div>
+</div>
 
 <!-- MOBILE WI-FI ACCESS MODAL -->
 <div id="mobileWifiModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
@@ -114,6 +278,22 @@
     </div>
 </div>
 
+<!-- Floating Notification Popover Overlay (Elevated above Sidebar & Canvas) -->
+<div id="notifPanel" class="floating-notif-popover no-print" style="display: none;">
+    <div class="floating-notif-header">
+        <div class="floating-notif-header-title">
+            <span>Notifications</span>
+            <span id="notifPanelHeaderBadge" style="display: none; background: #3b82f6; color: white; border-radius: 12px; padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">0</span>
+        </div>
+        <button type="button" class="floating-notif-close-btn" onclick="closeNotifPanel(event)" title="Close Notifications" aria-label="Close Notifications">
+            ✕
+        </button>
+    </div>
+    <div id="notifPanelContent" style="padding: 12px; max-height: 380px; overflow-y: auto; font-size: 0.84rem; line-height: 1.45; color: #ecf0f1;">
+        <div style="color: #94a3b8; text-align: center; padding: 12px 0;">Loading alerts...</div>
+    </div>
+</div>
+
 <!-- Main Application Sidebar -->
 <div class="sidebar no-print" id="sidebar">
     <!-- Top Utility Bar: DSS Bell & Settings Gear -->
@@ -122,16 +302,13 @@
             <div id="mobileWifiBtn" onclick="openMobileWifiModal()" class="icon-utility-btn" title="📱 Connect Mobile Devices (Wi-Fi QR Code)" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
                 📱
             </div>
-            <div id="notifBell" onclick="toggleNotifPanel()" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            <div id="notifBell" onclick="toggleNotifPanel(event)" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
                 🔔
                 <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
             </div>
             <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
                 ⚙️
             </a>
-        </div>
-        <div id="notifPanel" style="display: none; background: #1a252f; margin-top: 12px; padding: 12px; border-radius: 6px; border-left: 4px solid #e74c3c; font-size: 0.85rem; color: #ecf0f1; line-height: 1.4; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
-            Loading alerts...
         </div>
     </div>
 
@@ -146,6 +323,7 @@
     <a href="/distribution" class="nav-link staff-op" data-route="/distribution">🛒 Point of Distribution</a>
     <a href="/history" class="nav-link staff-op" data-route="/history">📜 Process Return</a>
     <a href="/payment-tracking" class="nav-link staff-op" data-route="/payment-tracking">💳 Payment Tracking</a>
+    <a href="/activity-log" class="nav-link staff-op" data-route="/activity-log">📋 Activity Log</a>
     <a href="/transaction-profile" class="nav-link viewer-nav" data-route="/transaction-profile">👤 Transaction Profile</a>
     <a href="/receipts" class="nav-link viewer-only" id="navReceipts" data-route="/receipts">🧾 Official Receipts</a>
 
@@ -169,7 +347,8 @@
     }
 
     // Universal Dropdown Panel Toggle
-    function toggleNotifPanel() {
+    function toggleNotifPanel(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
         const panel = document.getElementById('notifPanel');
         if (panel) {
             const isOpening = panel.style.display === 'none' || !panel.style.display;
@@ -179,6 +358,22 @@
             }
         }
     }
+
+    function closeNotifPanel(e) {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        const panel = document.getElementById('notifPanel');
+        if (panel) panel.style.display = 'none';
+    }
+
+    // Dismiss notifications on click outside
+    document.addEventListener('click', function(e) {
+        const panel = document.getElementById('notifPanel');
+        const bell = document.getElementById('notifBell');
+        if (!panel || panel.style.display === 'none') return;
+        if (!panel.contains(e.target) && (!bell || !bell.contains(e.target))) {
+            panel.style.display = 'none';
+        }
+    });
 
     // Universal Decision Support Alert Modal Dismissal
     function dismissDSS() {
@@ -286,9 +481,13 @@
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     };
 
-    // Close modal on Escape key press
+    // Close modal & floating notifications on Escape key press
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
+            const panel = document.getElementById('notifPanel');
+            if (panel && panel.style.display !== 'none') {
+                panel.style.display = 'none';
+            }
             const m = document.getElementById('dssModal');
             if (m) {
                 if (typeof window.dismissDSS === 'function') window.dismissDSS();
@@ -321,7 +520,9 @@
         if (!data) return;
         const badge = document.getElementById('notifBadge');
         const panel = document.getElementById('notifPanel');
+        const content = document.getElementById('notifPanelContent') || panel;
         const bell = document.getElementById('notifBell');
+        const headerBadge = document.getElementById('notifPanelHeaderBadge');
         if (!badge || !panel || !bell) return;
 
         const userStr = localStorage.getItem('bookletlog_user');
@@ -329,14 +530,53 @@
         try { currentUser = JSON.parse(userStr); } catch (e) {}
         const isAdmin = currentUser && currentUser.role === 'Admin';
 
-        if (data.alert) {
+        // Build active notification cards (Shortage Alert & Unlock Requests)
+        const unlockRequests = (isAdmin && Array.isArray(data.unlock_requests)) ? data.unlock_requests : [];
+        const hasAlert = Boolean(data.alert);
+        const hasRequests = unlockRequests.length > 0;
+        const totalCount = (hasAlert ? 1 : 0) + unlockRequests.length;
+
+        if (hasAlert || hasRequests) {
             badge.style.display = 'inline-block';
+            badge.innerText = totalCount > 9 ? '9+' : totalCount;
             bell.style.color = '#ffffff';
-            panel.style.borderLeftColor = '#e74c3c';
-            if (isAdmin) {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><a href="/generator" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Generate ${data.reams_needed} Reams ➔</a>`;
-                if (!sessionStorage.getItem('dss_acknowledged')) {
-                    // Check if an onboarding, provisioning, or blocking operation is currently in progress
+
+            // Top accent border favors alert (red) if present, otherwise unlock request (blue)
+            const topColor = hasAlert ? '#ef4444' : '#3b82f6';
+            panel.style.borderTopColor = topColor;
+            panel.style.borderLeftColor = topColor;
+
+            if (headerBadge) {
+                headerBadge.style.display = 'inline-block';
+                headerBadge.style.background = topColor;
+                headerBadge.innerText = totalCount;
+            }
+
+            let cardsHtml = '';
+
+            // 1. Critical Shortage Card (if active)
+            if (hasAlert) {
+                if (isAdmin) {
+                    cardsHtml += `
+                        <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #ef4444; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: 700; color: #ef4444; font-size: 0.82rem;">Critical Shortage</div>
+                                <div style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px; line-height: 1.35;">${data.message}</div>
+                            </div>
+                            <a href="/generator" onclick="closeNotifPanel()" style="color: #f87171; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(239, 68, 68, 0.12); border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; flex-shrink: 0; transition: background 0.15s;">Generate ➔</a>
+                        </div>
+                    `;
+                } else {
+                    cardsHtml += `
+                        <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #ef4444; display: flex; flex-direction: column; gap: 2px;">
+                            <div style="font-weight: 700; color: #ef4444; font-size: 0.82rem;">Critical Shortage</div>
+                            <div style="font-size: 0.74rem; color: #cbd5e1; line-height: 1.35;">${data.message}</div>
+                            <div style="font-size: 0.72rem; color: #f59e0b; margin-top: 2px; font-style: italic;">Please notify the Administrator to procure more stock.</div>
+                        </div>
+                    `;
+                }
+
+                if (isAdmin && !sessionStorage.getItem('dss_acknowledged')) {
                     const blocker = document.getElementById('provisioningBlockerModal');
                     const bulkModal = document.getElementById('bulkImportModal');
                     const isBusy = window.isProvisioningLocked || 
@@ -348,30 +588,62 @@
                         window.showDSSModal(data);
                     }
                 }
-            } else {
-                panel.innerHTML = `<strong>CRITICAL SHORTAGE:</strong><br>${data.message}<br><br><span style="color: #f59e0b; font-style: italic;">Please notify the Admin to procure more stock.</span>`;
             }
+
+            // 2. Streamlined Unlock Request Cards (Stacked directly, without icons or department/timestamp)
+            if (hasRequests) {
+                cardsHtml += unlockRequests.map(r => `
+                    <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #3b82f6; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 600; color: #f8fafc; font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${r.name}</div>
+                            <div style="font-size: 0.74rem; color: #94a3b8; margin-top: 2px;">Requested unlock</div>
+                        </div>
+                        <a href="/enrollments?unlock_teacher=${encodeURIComponent(r.name)}" onclick="closeNotifPanel()" style="color: #38bdf8; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(56, 189, 248, 0.12); border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25); display: inline-flex; align-items: center; flex-shrink: 0; transition: background 0.15s;">Unlock ➔</a>
+                    </div>
+                `).join('');
+            }
+
+            content.innerHTML = `<div style="display: flex; flex-direction: column; gap: 8px;">${cardsHtml}</div>`;
         } else {
             badge.style.display = 'none';
+            badge.innerText = '!';
             bell.style.color = '#bdc3c7';
+            if (headerBadge) {
+                headerBadge.style.display = 'none';
+            }
 
             if (data.is_configured === false || data.status === 'awaiting_settings') {
+                panel.style.borderTopColor = '#f59e0b';
                 panel.style.borderLeftColor = '#f59e0b';
-                if (isAdmin) {
-                    panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters (academic examination period, booklet specifications, and ream pricing) have not been established yet.<br><br><a href="/settings" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Configure System Settings ➔</a>`;
-                } else {
-                    panel.innerHTML = `⚙️ <strong>Awaiting System Configuration:</strong><br>System parameters have not been established yet. Awaiting Administrator setup in Settings.`;
-                }
+                content.innerHTML = `
+                    <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #f59e0b; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 700; color: #f59e0b; font-size: 0.82rem;">Awaiting Configuration</div>
+                            <div style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px; line-height: 1.35;">Academic parameters have not been established yet.</div>
+                        </div>
+                        ${isAdmin ? `<a href="/settings" onclick="closeNotifPanel()" style="color: #fbbf24; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(245, 158, 11, 0.12); border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.25); display: inline-flex; align-items: center; flex-shrink: 0;">Configure ➔</a>` : ''}
+                    </div>
+                `;
             } else if (data.has_enrollments === false) {
+                panel.style.borderTopColor = '#64748b';
                 panel.style.borderLeftColor = '#64748b';
-                if (isAdmin) {
-                    panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet.<br><br><a href="/enrollments" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Go to Manage Classes ➔</a>`;
-                } else {
-                    panel.innerHTML = `📋 <strong>Awaiting Class Enrollments:</strong><br>No classes have been enrolled for this semester yet. System is awaiting administrator setup.`;
-                }
+                content.innerHTML = `
+                    <div style="background: #1e293b; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #64748b; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 700; color: #94a3b8; font-size: 0.82rem;">Awaiting Class Enrollments</div>
+                            <div style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px; line-height: 1.35;">No classes have been enrolled for this semester yet.</div>
+                        </div>
+                        ${isAdmin ? `<a href="/enrollments" onclick="closeNotifPanel()" style="color: #94a3b8; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(100, 116, 139, 0.12); border-radius: 4px; border: 1px solid rgba(100, 116, 139, 0.25); display: inline-flex; align-items: center; flex-shrink: 0;">Manage ➔</a>` : ''}
+                    </div>
+                `;
             } else {
-                panel.style.borderLeftColor = '#27ae60';
-                panel.innerHTML = '✅ Inventory levels are sufficient. No active alerts.';
+                panel.style.borderTopColor = '#10b981';
+                panel.style.borderLeftColor = '#10b981';
+                content.innerHTML = `
+                    <div style="background: #1e293b; padding: 12px 14px; border-radius: 6px; font-size: 0.82rem; border: 1px solid #334155; border-left: 3px solid #10b981; color: #94a3b8; text-align: center;">
+                        Inventory levels are sufficient. No active alerts.
+                    </div>
+                `;
             }
         }
     }
@@ -525,10 +797,158 @@
                     navEnrollments.innerHTML = '🎓 Manage Classes';
                 }
             }
+
+            if (user && user.must_change_password) {
+                checkAndPromptFirstTimeSetup(user);
+            }
         } catch (e) {
             console.error('Sidebar RBAC error:', e);
         }
     })();
+
+    const SETUP_EYE_OPEN_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    const SETUP_EYE_OFF_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+    function handleSetupPwInput(input, toggleBtnId) {
+        const toggleBtn = document.getElementById(toggleBtnId);
+        if (!toggleBtn) return;
+        if (input.value && input.value.length > 0) {
+            toggleBtn.style.display = 'flex';
+        } else {
+            toggleBtn.style.display = 'none';
+            if (input.type === 'text') {
+                input.type = 'password';
+                toggleBtn.setAttribute('title', 'Show password');
+                toggleBtn.setAttribute('aria-label', 'Show password');
+                toggleBtn.innerHTML = SETUP_EYE_OPEN_SVG;
+            }
+        }
+    }
+
+    function checkAndPromptFirstTimeSetup(user) {
+        const modal = document.getElementById('firstTimeSetupModal');
+        if (!modal) return;
+        const p1 = document.getElementById('setupNewPw');
+        const p2 = document.getElementById('setupConfirmPw');
+        const b1 = document.getElementById('setupNewPwToggleBtn');
+        const b2 = document.getElementById('setupConfirmPwToggleBtn');
+        if (p1) { p1.value = ''; p1.type = 'password'; }
+        if (p2) { p2.value = ''; p2.type = 'password'; }
+        if (b1) { b1.style.display = 'none'; b1.innerHTML = SETUP_EYE_OPEN_SVG; }
+        if (b2) { b2.style.display = 'none'; b2.innerHTML = SETUP_EYE_OPEN_SVG; }
+        modal.style.display = 'flex';
+    }
+
+    function toggleSetupPwVisibility(fieldId, btn) {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+        const isPassword = field.type === 'password';
+        field.type = isPassword ? 'text' : 'password';
+        btn.innerHTML = isPassword ? SETUP_EYE_OFF_SVG : SETUP_EYE_OPEN_SVG;
+        btn.setAttribute('title', isPassword ? 'Hide password' : 'Show password');
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+        field.focus();
+    }
+
+    async function submitFirstTimeSetup(e) {
+        e.preventDefault();
+        const newPw = document.getElementById('setupNewPw').value;
+        const confirmPw = document.getElementById('setupConfirmPw').value;
+        const errEl = document.getElementById('setupErrorMsg');
+        const submitBtn = document.getElementById('setupSubmitBtn');
+
+        if (errEl) errEl.style.display = 'none';
+
+        if (newPw !== confirmPw) {
+            if (errEl) {
+                errEl.innerText = "Passwords do not match. Please re-enter.";
+                errEl.style.display = 'block';
+            }
+            return;
+        }
+
+        if (newPw.length < 8) {
+            if (errEl) {
+                errEl.innerText = "Password must be at least 8 characters long.";
+                errEl.style.display = 'block';
+            }
+            return;
+        }
+
+        const userStr = localStorage.getItem('bookletlog_user');
+        let user = null;
+        try { user = JSON.parse(userStr); } catch(ex) {}
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Saving Password...";
+        }
+
+        try {
+            const res = await fetch('/api/users/first-time-setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Session-Token': user ? (user.session_token || '') : '',
+                    'X-Username': user ? (user.username || '') : ''
+                },
+                body: JSON.stringify({
+                    new_password: newPw
+                })
+            });
+
+            const data = await res.json();
+            if (data.status === 'success') {
+                if (user) {
+                    user.must_change_password = false;
+                    localStorage.setItem('bookletlog_user', JSON.stringify(user));
+                }
+                const modal = document.getElementById('firstTimeSetupModal');
+                if (modal) modal.style.display = 'none';
+
+                // Display custom success confirmation modal instead of browser alert()
+                const successModal = document.getElementById('firstTimeSetupSuccessModal');
+                if (successModal) {
+                    successModal.style.display = 'flex';
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                if (errEl) {
+                    errEl.innerText = data.message || "Failed to update security credentials.";
+                    errEl.style.display = 'block';
+                }
+            }
+        } catch (err) {
+            if (errEl) {
+                errEl.innerText = "Network error connecting to server. Please try again.";
+                errEl.style.display = 'block';
+            }
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Save & Continue to Portal ➔";
+            }
+        }
+    }
+
+    function confirmSetupSuccessAndReload() {
+        const successModal = document.getElementById('firstTimeSetupSuccessModal');
+        if (successModal) successModal.style.display = 'none';
+        window.location.reload();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            const userStr = localStorage.getItem('bookletlog_user');
+            if (userStr) {
+                const user = JSON.parse(userStr);
+                if (user && user.must_change_password) {
+                    checkAndPromptFirstTimeSetup(user);
+                }
+            }
+        } catch (e) {}
+    });
 
     // Fallback universal logout if not defined by the host page
     if (!window.logout) {
@@ -588,7 +1008,7 @@
                 const roleLower = (newRole || '').toLowerCase();
                 const currentPath = window.location.pathname.toLowerCase();
                 const adminOnlyPages = ['/settings'];
-                const staffPages = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template'];
+                const staffPages = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template', '/activity-log'];
 
                 if (roleLower === 'viewer' && (adminOnlyPages.some(p => currentPath.startsWith(p)) || staffPages.some(p => currentPath.startsWith(p)))) {
                     window.location.href = '/transaction-profile?error=unauthorized';

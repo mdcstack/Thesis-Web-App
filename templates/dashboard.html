@@ -80,9 +80,9 @@
         .btn-action:hover { background-color: #2980b9; }
 
         /* Modals */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        .modal-card select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; box-sizing: border-box; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); box-sizing: border-box; max-height: 90vh; max-height: 90dvh; overflow-y: auto; }
+        .modal-card select { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; font-size: 1rem; box-sizing: border-box; }
         
         /* App Custom Dialog Modal */
         @keyframes modalPopIn {
@@ -175,6 +175,8 @@
         @media (max-width: 600px) {
             .kpi-grid { grid-template-columns: 1fr; }
             .visual-card { padding: 16px !important; }
+            .modal-overlay { padding: 12px 8px !important; }
+            .modal-card { padding: 20px 14px !important; width: 95% !important; max-width: 95% !important; }
         }
 
     </style>

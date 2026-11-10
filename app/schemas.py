@@ -1,5 +1,20 @@
-from pydantic import BaseModel
+import re
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
+
+def sanitize_clean_string(value: str, max_len: int = 100) -> str:
+    """Strips dangerous control chars, HTML/script tags, and limits string length."""
+    if value is None:
+        return ""
+    val = str(value).strip()
+    # Strip null bytes and control chars
+    val = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', val)
+    # Strip script and style tags along with inner contents
+    val = re.sub(r'<script\b[^>]*>[\s\S]*?<\/script>', '', val, flags=re.IGNORECASE)
+    val = re.sub(r'<style\b[^>]*>[\s\S]*?<\/style>', '', val, flags=re.IGNORECASE)
+    # Strip remaining HTML tags
+    val = re.sub(r'<[^>]*>', '', val)
+    return val[:max_len].strip()
 
 # Base properties for an enrollment
 class EnrollmentBase(BaseModel):
@@ -8,6 +23,39 @@ class EnrollmentBase(BaseModel):
     subject: str
     student_headcount: int
     department: Optional[str] = None
+
+    @field_validator('teacher_name', mode='before')
+    @classmethod
+    def clean_teacher(cls, v):
+        return sanitize_clean_string(v, max_len=100)
+
+    @field_validator('section', mode='before')
+    @classmethod
+    def clean_section(cls, v):
+        return sanitize_clean_string(v, max_len=30).upper()
+
+    @field_validator('subject', mode='before')
+    @classmethod
+    def clean_subject(cls, v):
+        return sanitize_clean_string(v, max_len=150)
+
+    @field_validator('student_headcount', mode='before')
+    @classmethod
+    def validate_headcount(cls, v):
+        try:
+            cnt = int(v)
+        except (ValueError, TypeError):
+            cnt = 0
+        if cnt < 1 or cnt > 500:
+            raise ValueError("Student headcount must be between 1 and 500.")
+        return cnt
+
+    @field_validator('department', mode='before')
+    @classmethod
+    def clean_dept(cls, v):
+        if not v:
+            return None
+        return sanitize_clean_string(v, max_len=20).upper()
 
 # Schema used when creating a new enrollment
 class EnrollmentCreate(EnrollmentBase):
@@ -141,6 +189,18 @@ class FacultyRosterItem(BaseModel):
     name: str
     department: Optional[str] = "CS"
 
+    @field_validator('name', mode='before')
+    @classmethod
+    def clean_name(cls, v):
+        return sanitize_clean_string(v, max_len=100)
+
+    @field_validator('department', mode='before')
+    @classmethod
+    def clean_dept(cls, v):
+        if not v:
+            return "CS"
+        return sanitize_clean_string(v, max_len=20).upper()
+
 class BulkFacultyImport(BaseModel):
     records: List[FacultyRosterItem]
 
@@ -149,7 +209,50 @@ class FacultyClassItem(BaseModel):
     section: str
     student_headcount: int
 
+    @field_validator('subject', mode='before')
+    @classmethod
+    def clean_subject(cls, v):
+        return sanitize_clean_string(v, max_len=150)
+
+    @field_validator('section', mode='before')
+    @classmethod
+    def clean_section(cls, v):
+        return sanitize_clean_string(v, max_len=30).upper()
+
+    @field_validator('student_headcount', mode='before')
+    @classmethod
+    def validate_headcount(cls, v):
+        try:
+            cnt = int(v)
+        except (ValueError, TypeError):
+            cnt = 0
+        if cnt < 1 or cnt > 500:
+            raise ValueError("Student headcount must be between 1 and 500.")
+        return cnt
+
 class FacultyUploadRequest(BaseModel):
     teacher_name: str
     classes: List[FacultyClassItem]
+
+    @field_validator('teacher_name', mode='before')
+    @classmethod
+    def clean_teacher(cls, v):
+        return sanitize_clean_string(v, max_len=100)
+
+class FirstTimeSetupRequest(BaseModel):
+    new_password: str
+
+class AdminTriggerPasswordResetRequest(BaseModel):
+    manual_only: bool = True
+
+class ForgotPasswordRequest(BaseModel):
+    username: Optional[str] = None
+
+    @field_validator('username', mode='before')
+    @classmethod
+    def clean_id(cls, v):
+        return sanitize_clean_string(v, max_len=100).strip() if v else None
+
+class UnlockScheduleRequest(BaseModel):
+    reason: Optional[str] = "Schedule update requested"
 

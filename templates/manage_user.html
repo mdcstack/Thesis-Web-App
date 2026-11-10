@@ -167,8 +167,8 @@
         .profile-value { color: #1e293b; font-weight: 700; }
         
         /* Modals */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
-        .modal-card { background: white; padding: 26px; border-radius: 8px; max-width: 440px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: modalFadeIn 0.2s ease-out; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; box-sizing: border-box; }
+        .modal-card { background: white; padding: 26px; border-radius: 8px; max-width: 440px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.25); animation: modalFadeIn 0.2s ease-out; box-sizing: border-box; max-height: 90vh; max-height: 90dvh; overflow-y: auto; }
         @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
         .modal-header h3 { margin: 0; font-size: 1.2rem; color: #1e293b; }
@@ -322,6 +322,11 @@
                         <span class="profile-value" style="color: #16a34a;">🟢 Active (Online)</span>
                     </div>
                 </div>
+                <div style="padding: 14px 16px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px;">
+                    <button type="button" class="btn-secondary" onclick="openChangePasswordModal()" style="flex: 1; font-size: 0.88rem; padding: 10px;">
+                        🔑 Change Password
+                    </button>
+                </div>
             </div>
 
             <!-- Inline Change Username Card -->
@@ -448,7 +453,7 @@
                             <option value="ALL">All Roles</option>
                             <option value="Admin">Admin</option>
                             <option value="Staff">Staff</option>
-                            <option value="Viewer">Viewer (Faculty)</option>
+                            <option value="Viewer">Instructor</option>
                         </select>
                         <select id="deptFilter" class="filter-select" onchange="filterUsers()">
                             <option value="ALL">All Departments</option>
@@ -519,7 +524,7 @@
                                 <label>System Role</label>
                                 <select id="newRole" onchange="handleNewRoleChange()">
                                     <option value="Staff">Staff / Clerk</option>
-                                    <option value="Viewer">Viewer (Faculty / Instructor)</option>
+                                    <option value="Viewer">Instructor</option>
                                 </select>
                             </div>
 
@@ -592,7 +597,7 @@
                     <label>Role</label>
                     <select id="editRole" onchange="handleEditRoleChange()">
                         <option value="Staff">Staff / Clerk</option>
-                        <option value="Viewer">Viewer (Faculty / Instructor)</option>
+                        <option value="Viewer">Instructor</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -615,37 +620,51 @@
     <div class="modal-overlay" id="adminResetPwModal">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>🔑 Reset User Password</h3>
+                <h3>🔑 Reset Password &amp; Account Access</h3>
                 <button class="modal-close-btn" onclick="closeAdminResetPwModal()">&times;</button>
             </div>
-            <form onsubmit="submitAdminResetPw(event)">
+            <div>
                 <input type="hidden" id="resetUserId">
-                <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 14px;">
-                    Set a new password for <strong id="resetTargetUsername" style="color: #1e293b;">-</strong>. Their active session will be revoked upon saving.
-                </p>
-                <div class="form-group">
-                    <label>New Password</label>
-                    <div class="password-input-wrapper">
-                        <input type="password" id="adminNewPassword" placeholder="Minimum 8 characters" required minlength="8" maxlength="72" autocomplete="new-password">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminNewPassword', this)" title="Show password" aria-label="Show password">
-                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </button>
+                
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 0.88rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span style="color: #64748b; font-weight: 600;">Target User:</span>
+                        <strong id="resetTargetDisplayName" style="color: #1e293b;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span style="color: #64748b; font-weight: 600;">Username:</span>
+                        <code id="resetTargetUsername" style="color: #2563eb; font-weight: 700;">@-</code>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #64748b; font-weight: 600;">Role &amp; Department:</span>
+                        <span id="resetTargetRoleDept" style="color: #0f172a; font-weight: 600;">-</span>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Confirm New Password</label>
-                    <div class="password-input-wrapper">
-                        <input type="password" id="adminConfirmPassword" placeholder="Repeat new password" required minlength="8" maxlength="72" autocomplete="new-password">
-                        <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('adminConfirmPassword', this)" title="Show password" aria-label="Show password">
-                            <svg class="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+
+                <!-- Result Box for Generated Password & Delivery Status -->
+                <div id="adminResetResultBox" style="display: none; background: #eff6ff; border: 1.5px dashed #3b82f6; border-radius: 8px; padding: 16px; margin-bottom: 14px; text-align: center;">
+                    <div style="font-size: 0.78rem; color: #1d4ed8; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;" id="adminResetResultStatus">
+                        Single-Use Temporary Password
+                    </div>
+                    <div id="adminResetDisplayPassword" style="font-family: monospace; font-size: 1.7rem; font-weight: 800; color: #0f172a; letter-spacing: 2px; margin-bottom: 8px; user-select: all;">
+                        -
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: center;">
+                        <button type="button" onclick="copyAdminGeneratedPassword()" class="btn-secondary" style="padding: 6px 14px; font-size: 0.82rem; border-color: #93c5fd; color: #1d4ed8; font-weight: 600;">
+                            📋 Copy Password
                         </button>
                     </div>
+                    <div style="font-size: 0.78rem; color: #475569; margin-top: 10px; line-height: 1.45;" id="adminResetDeliveryNote">
+                        Provide this temporary passcode to the user. Upon signing in, they will be required to create their own confidential private password.
+                    </div>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" onclick="closeAdminResetPwModal()">Cancel</button>
-                    <button type="submit" class="btn-primary" style="width: auto;" id="btnSubmitAdminReset">Update Password</button>
+
+                <div style="margin-top: 18px;">
+                    <button type="button" class="btn-primary" style="width: 100%; background: #2563eb; padding: 12px; font-weight: 700; font-size: 0.95rem; justify-content: center; text-align: center;" onclick="triggerAdminGeneratePass()" id="btnAdminGenPass">
+                        Generate Temporary Password
+                    </button>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 
@@ -717,8 +736,10 @@
         if (!activeUser) {
             window.location.href = '/login';
         } else {
-            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + (activeUser.department || 'All') + ")";
+            const loggedInUserEl = document.getElementById('loggedInUser');
+            if (loggedInUserEl) loggedInUserEl.innerText = activeUser.username.toUpperCase();
+            const loggedInRoleEl = document.getElementById('loggedInRole');
+            if (loggedInRoleEl) loggedInRoleEl.innerText = activeUser.role + " (" + (activeUser.department || 'All') + ")";
             
             const navLink = document.getElementById('navManageUsers');
             const pageTitle = document.getElementById('pageTitle');
@@ -759,7 +780,7 @@
                 if (staffUserEl) staffUserEl.innerText = activeUser.username;
                 if (staffRoleBadgeEl) {
                     if (activeUser.role === 'Viewer') {
-                        staffRoleBadgeEl.innerHTML = '<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">👤 Faculty (Viewer)</span>';
+                        staffRoleBadgeEl.innerHTML = '<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-weight:600;">Instructor</span>';
                     } else {
                         staffRoleBadgeEl.innerHTML = '<span class="badge badge-staff">👤 Staff Clerk</span>';
                     }
@@ -1098,12 +1119,13 @@
                 const isSelf = (u.username.toLowerCase() === activeUser.username.toLowerCase());
                 const isRootAdmin = (u.username.toLowerCase() === 'admin');
                 const isActive = (u.is_active !== false);
+                const isAdminAccount = (u.role === 'Admin' || isRootAdmin || isSelf);
                 
                 let roleBadge = `<span class="badge badge-staff">👤 Staff</span>`;
                 if (u.role === 'Admin') {
                     roleBadge = `<span class="badge badge-admin">🛡️ Admin</span>`;
                 } else if (u.role === 'Viewer') {
-                    roleBadge = `<span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a;">👁️ Viewer</span>`;
+                    roleBadge = `<span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-weight: 600;">Instructor</span>`;
                 }
 
                 const displayName = (u.full_name && u.full_name.trim()) ? escapeHtml(u.full_name.trim()) : escapeHtml(u.username);
@@ -1125,6 +1147,9 @@
                 let statusBadge = '';
                 if (!isActive) {
                     statusBadge = `<span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">⛔ Deactivated</span>`;
+                } else if (u.is_locked) {
+                    const remMins = Math.max(1, Math.ceil(u.lockout_seconds / 60));
+                    statusBadge = `<span class="badge" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;">🔒 Locked (${remMins}m)</span>`;
                 } else if (u.is_online) {
                     statusBadge = `<span class="badge badge-online">🟢 Online</span>`;
                 } else {
@@ -1146,12 +1171,23 @@
                         <td>${statusBadge}</td>
                         <td style="text-align: right;">
                             <div class="action-btn-group" style="justify-content: flex-end;">
+                                ${u.is_locked ? `
+                                    <button class="action-btn" title="Unlock Account" style="background: #fef3c7; border-color: #fde68a;" onclick="adminUnlockUser(${u.id}, '${escapeHtml(u.username)}')">
+                                        🔓
+                                    </button>
+                                ` : ''}
                                 <button class="action-btn" title="Edit Account" onclick="openEditUserModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name || '')}', '${u.role}', '${u.department}')">
                                     ✏️
                                 </button>
-                                <button class="action-btn" title="Reset Password" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}')">
-                                    🔑
-                                </button>
+                                ${isAdminAccount ? `
+                                    <button class="action-btn" title="Change My Password" onclick="openChangePasswordModal()">
+                                        🔑
+                                    </button>
+                                ` : `
+                                    <button class="action-btn" title="Reset Password &amp; Issue Passcode" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name || '')}', '${u.role}', '${u.department}')">
+                                        🔑
+                                    </button>
+                                `}
                                 ${u.is_online ? `
                                     <button class="action-btn btn-revoke" title="Revoke Session (Force Logout)" onclick="revokeUserSession(${u.id}, '${escapeHtml(u.username)}')">
                                         🚪
@@ -1266,7 +1302,7 @@
             } else {
                 editRoleSelect.innerHTML = `
                     <option value="Staff">Staff / Clerk</option>
-                    <option value="Viewer">Viewer (Faculty / Instructor)</option>
+                    <option value="Viewer">Instructor</option>
                 `;
                 editRoleSelect.disabled = false;
                 editRoleSelect.value = role;
@@ -1349,78 +1385,124 @@
             });
         }
 
-        // --- ADMIN RESET PASSWORD ---
-        function openAdminResetPwModal(id, username) {
+        // --- ADMIN RESET PASSWORD & TEMPORARY PASSCODE ---
+        let currentAdminResetPass = '';
+        function openAdminResetPwModal(id, username, fullName = '', role = '', dept = '') {
+            if (role === 'Admin' || (username && username.toLowerCase() === 'admin') || (activeUser && username && username.toLowerCase() === activeUser.username.toLowerCase())) {
+                openChangePasswordModal();
+                return;
+            }
             document.getElementById('resetUserId').value = id;
-            document.getElementById('resetTargetUsername').innerText = username;
-            const p1 = document.getElementById('adminNewPassword');
-            const p2 = document.getElementById('adminConfirmPassword');
-            if (p1) { p1.value = ''; p1.type = 'password'; }
-            if (p2) { p2.value = ''; p2.type = 'password'; }
-            document.querySelectorAll('#adminResetPwModal .toggle-password-btn').forEach(b => {
-                b.innerHTML = EYE_OPEN_SVG;
-                b.title = 'Show password';
-                b.setAttribute('aria-label', 'Show password');
-            });
+            document.getElementById('resetTargetUsername').innerText = `@${username}`;
+            document.getElementById('resetTargetDisplayName').innerText = fullName || username;
+            const displayRole = (role === 'Viewer') ? 'Instructor' : (role || 'User');
+            document.getElementById('resetTargetRoleDept').innerText = `${displayRole} (${dept || 'All'})`;
+            
+            const resultBox = document.getElementById('adminResetResultBox');
+            if (resultBox) resultBox.style.display = 'none';
+            currentAdminResetPass = '';
+
+            const btn = document.getElementById('btnAdminGenPass');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = "Generate Temporary Password";
+            }
+
             document.getElementById('adminResetPwModal').style.display = 'flex';
         }
 
         function closeAdminResetPwModal() {
             document.getElementById('adminResetPwModal').style.display = 'none';
+            const resultBox = document.getElementById('adminResetResultBox');
+            if (resultBox) resultBox.style.display = 'none';
         }
 
-        function submitAdminResetPw(e) {
-            e.preventDefault();
+        async function triggerAdminGeneratePass() {
             const id = document.getElementById('resetUserId').value;
-            const newPassword = document.getElementById('adminNewPassword').value;
-            const confirmPassword = document.getElementById('adminConfirmPassword').value;
-            const targetUser = document.getElementById('resetTargetUsername').innerText;
-            const btn = document.getElementById('btnSubmitAdminReset');
+            const btn = document.getElementById('btnAdminGenPass');
+            const resultBox = document.getElementById('adminResetResultBox');
+            const passEl = document.getElementById('adminResetDisplayPassword');
+            const noteEl = document.getElementById('adminResetDeliveryNote');
+            const statusEl = document.getElementById('adminResetResultStatus');
 
-            const pwCheck = validatePasswordRequirements(newPassword, confirmPassword, targetUser);
-            if (!pwCheck.hasMinLen) {
-                showToast("New password must be at least 8 characters long.", "warning", "Password Too Short");
-                return;
-            }
-            if (!pwCheck.hasAlphaNum) {
-                showToast("New password must contain at least one letter and one number.", "warning", "Weak Password");
-                return;
-            }
-            if (!pwCheck.notUsername) {
-                showToast("New password cannot be identical to the username.", "warning", "Insecure Password");
-                return;
-            }
-            if (!pwCheck.isMatch) {
-                showToast("Passwords do not match. Please re-enter identical passwords.", "warning", "Password Mismatch");
-                return;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Generating Temporary Password...";
             }
 
-            btn.disabled = true;
-            btn.innerText = "Updating...";
-
-            fetch(`/api/users/${id}/reset-password`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ new_password: newPassword })
-            })
-            .then(res => res.json())
-            .then(data => {
+            try {
+                const sessionToken = localStorage.getItem('bookletlog_token') || '';
+                const currentUsername = activeUser ? activeUser.username : '';
+                const res = await fetch(`/api/users/${id}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Token': sessionToken,
+                        'X-Username': currentUsername
+                    },
+                    body: JSON.stringify({ manual_only: true })
+                });
+                const data = await res.json();
                 if (data.status === 'success') {
-                    showToast(data.message || "Password has been updated!", "success", "Password Reset");
-                    closeAdminResetPwModal();
+                    currentAdminResetPass = data.temp_password || '';
+                    if (passEl) passEl.innerText = currentAdminResetPass;
+                    if (statusEl) {
+                        statusEl.innerText = "Single-Use Temporary Password";
+                        statusEl.style.color = "#1d4ed8";
+                    }
+                    if (noteEl) {
+                        noteEl.innerText = data.delivery_note || data.message || "Provide this temporary passcode to the user. Upon signing in, they will be required to create their own confidential private password.";
+                    }
+                    if (resultBox) resultBox.style.display = 'block';
+                    showToast(data.message, "info", "Temporary Password Generated");
                     fetchUsers();
                 } else {
-                    showToast(data.message || "Failed to reset password.", "error", "Reset Error");
+                    showToast(data.message || "Failed to generate temporary password.", "error", "Reset Error");
                 }
-            })
-            .catch(err => {
-                console.error("Reset password error:", err);
-                showToast("Network error resetting password.", "error", "Network Error");
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.innerText = "Update Password";
+            } catch (err) {
+                console.error("Admin reset error:", err);
+                showToast("A network error occurred while resetting password.", "error", "Network Error");
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "Generate Temporary Password";
+                }
+            }
+        }
+
+        function copyAdminGeneratedPassword() {
+            if (!currentAdminResetPass) return;
+            navigator.clipboard.writeText(currentAdminResetPass).then(() => {
+                showToast("Temporary password copied to clipboard!", "success", "Copied");
+            }).catch(() => {
+                showToast("Could not copy password automatically. Please select and copy manually.", "warning", "Copy Note");
             });
+        }
+
+        async function adminUnlockUser(id, username) {
+            if (!confirm(`Unlock account for '@${username}'? This will reset all failed login attempts and restore access.`)) return;
+            try {
+                const sessionToken = localStorage.getItem('bookletlog_token') || '';
+                const currentUsername = activeUser ? activeUser.username : '';
+                const res = await fetch(`/api/users/${id}/unlock`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-Token': sessionToken,
+                        'X-Username': currentUsername
+                    }
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast(data.message, "success", "Account Unlocked");
+                    fetchUsers();
+                } else {
+                    showToast(data.message || "Failed to unlock account.", "error", "Error");
+                }
+            } catch (err) {
+                console.error("Unlock error:", err);
+                showToast("Network error unlocking account.", "error", "Network Error");
+            }
         }
 
         // --- SELF CHANGE PASSWORD ---

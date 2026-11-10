@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, Float, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, Float, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -25,6 +25,9 @@ class Enrollment(Base):
     is_archived = Column(Boolean, default=False, index=True)
     archived_period = Column(String(100), nullable=True, index=True)
     archived_at = Column(DateTime, nullable=True)
+    
+    # Schedule Lock Governance
+    is_locked = Column(Boolean, default=False, nullable=False, index=True)
     
     # Relationship to track which booklets were given to this class
     distributed_booklets = relationship("Booklet", back_populates="enrollment")
@@ -110,6 +113,20 @@ class User(Base):
     session_token = Column(String(255), nullable=True)
     updated_by = Column(String(50), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Account Security, Password Reset & Progressive Rate Limiting
+    must_change_password = Column(Boolean, default=False, nullable=False)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    lockout_until = Column(DateTime, nullable=True)
+    lockout_tier = Column(Integer, default=0, nullable=False)
+
+    # Schedule Lock & Governance
+    is_schedule_locked = Column(Boolean, default=False, nullable=False, index=True)
+    schedule_locked_at = Column(DateTime, nullable=True)
+    schedule_locked_by = Column(String(50), nullable=True)
+    schedule_unlock_requested = Column(Boolean, default=False, nullable=False, index=True)
+    schedule_unlock_reason = Column(Text, nullable=True)
+    schedule_unlock_requested_at = Column(DateTime, nullable=True)
 
 class SystemSettings(Base):
     __tablename__ = "system_settings"
@@ -231,3 +248,18 @@ class EnrollmentPeriodBilling(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     enrollment = relationship("Enrollment", back_populates="period_billings")
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    timestamp = Column(DateTime, default=datetime.now, index=True)
+    username = Column(String(100), index=True)
+    user_role = Column(String(50), default="Staff")
+    action_type = Column(String(50), index=True)  # DISTRIBUTION, PAYMENT, RETURN, PRODUCTION, SECURITY, ROSTER, SYSTEM
+    action_title = Column(String(255))
+    details = Column(Text)
+    target_ref = Column(String(255), nullable=True, index=True)
+    department = Column(String(50), default="All")  # CS, IT, All
+    academic_period = Column(String(100), nullable=True, index=True)
+    ip_address = Column(String(100), default="127.0.0.1")

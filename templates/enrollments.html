@@ -107,12 +107,40 @@
         .action-btn.btn-danger-action:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
 
         /* Modal Overlay & Cards */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 10000; justify-content: center; align-items: center; padding: 15px; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 10000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
         @keyframes modalPopIn { 0% { transform: scale(0.94); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes blockerSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        .modal-card { background: #ffffff; border-radius: 12px; max-width: 520px; width: 100%; padding: 24px 26px; box-shadow: 0 20px 45px rgba(0,0,0,0.3); animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; overflow-y: auto; }
-        .modal-large-card { background: #ffffff; border-radius: 12px; max-width: 900px; width: 96%; padding: 24px 28px; box-shadow: 0 20px 45px rgba(0,0,0,0.3); animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; display: flex; flex-direction: column; }
+        .modal-card { background: #ffffff; border-radius: 12px; max-width: 520px; width: 100%; padding: 24px 26px; box-shadow: 0 20px 45px rgba(0,0,0,0.3); animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; max-height: 90dvh; overflow-y: auto; box-sizing: border-box; }
+        .modal-large-card { background: #ffffff; border-radius: 12px; max-width: 900px; width: 96%; padding: 24px 28px; box-shadow: 0 20px 45px rgba(0,0,0,0.3); animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1); max-height: 90vh; max-height: 90dvh; display: flex; flex-direction: column; box-sizing: border-box; }
+
+        /* App Custom Dialog Modal (BookletLog Golden Standard) */
+        .app-dialog-card {
+            background: #ffffff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+            border-top: 5px solid #ef4444;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            filter: brightness(0.92);
+            transform: translateY(-1px);
+        }
+        .dialog-btn:active {
+            transform: translateY(0);
+        }
         
         .modal-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e2e8f0; padding-bottom: 14px; margin-bottom: 16px; }
         .modal-header h3 { margin: 0; color: #1e293b; font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
@@ -160,6 +188,9 @@
             .kpi-grid { grid-template-columns: 1fr; }
             .filter-container { flex-direction: column; align-items: stretch; }
             .filter-container > * { width: 100% !important; }
+            .modal-overlay { padding: 12px 8px !important; }
+            .modal-card { padding: 18px 14px !important; width: 95% !important; max-width: 95% !important; }
+            .modal-large-card { padding: 18px 14px !important; width: 96% !important; max-width: 96% !important; }
         }
     </style>
 </head>
@@ -186,6 +217,12 @@
                 <button type="button" class="btn-primary admin-only" id="openImportFacultyBtn" style="background-color: #059669;" onclick="openFacultyImportModal()">
                     <span>📥</span> Import Faculty Roster
                 </button>
+                <button type="button" class="btn-secondary admin-only" id="bulkLockAllBtn" onclick="promptLockAllSchedules()" title="Lock all instructor teaching schedules to prevent edits">
+                    <span>🔒</span> Lock All
+                </button>
+                <button type="button" class="btn-secondary admin-only" id="bulkUnlockAllBtn" onclick="promptUnlockAllSchedules()" title="Unlock all instructor teaching schedules to allow edits">
+                    <span>🔓</span> Unlock All
+                </button>
                 <button type="button" class="btn-secondary" id="viewArchivedBtn" onclick="openArchivedRostersModal()" title="View past rosters by semester">
                     <span>📁</span> Archived Rosters
                 </button>
@@ -194,18 +231,8 @@
                 </button>
             </div>
 
-            <!-- FACULTY (VIEWER) ACTIONS -->
-            <div id="facultyHeaderActions" style="display: none; gap: 10px; flex-wrap: wrap; align-items: center;">
-                <button type="button" class="btn-primary" style="background-color: #059669;" onclick="openFacultyUploadModal()">
-                    <span>📥</span> Upload My Schedule
-                </button>
-                <button type="button" class="btn-primary" style="background-color: #2563eb;" onclick="openAddClassModalForFaculty()">
-                    <span>➕</span> Add Subject &amp; Section
-                </button>
-                <a href="/api/enrollments/faculty-schedule-template?format=xlsx" class="btn-secondary" download="my_class_schedule_template.xlsx">
-                    <span>📊</span> Download Template (.xlsx)
-                </a>
-            </div>
+            <!-- FACULTY (VIEWER) ACTIONS (Consolidated to table-card to eliminate redundant buttons) -->
+            <div id="facultyHeaderActions" style="display: none;"></div>
         </div>
 
         <!-- ============================================================== -->
@@ -333,6 +360,26 @@
                 </div>
             </div>
 
+            <!-- LOCKED SCHEDULE BANNER FOR FACULTY -->
+            <div id="facultyLockedNoticeBanner" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-left: 5px solid #ef4444; border-radius: 8px; padding: 14px 18px; margin-bottom: 4px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                    <div>
+                        <div style="font-weight: 800; color: #991b1b; font-size: 0.95rem; display: flex; align-items: center; gap: 8px;">
+                            <span>🔒</span> Teaching Schedule Locked by Administrator
+                        </div>
+                        <div style="font-size: 0.85rem; color: #64748b; margin-top: 3px;" id="facultyLockedNoticeDetails">
+                            Your official schedule for this semester has been reviewed and locked. Adding, editing, or deleting sections is currently disabled.
+                        </div>
+                        <div id="facultyUnlockRequestedStatus" style="display: none; margin-top: 6px; font-size: 0.82rem; font-weight: 700; color: #b45309;">
+                            ⏳ Unlock Request Pending Admin Review
+                        </div>
+                    </div>
+                    <button type="button" class="btn-secondary" id="btnRequestUnlockFromBanner" onclick="openScheduleLockedModal()" style="border-color: #ef4444; color: #b91c1c; font-weight: 700; background: #ffffff;">
+                        Request to Unlock
+                    </button>
+                </div>
+            </div>
+
             <!-- MY CLASSES TABLE -->
             <div class="table-card">
                 <div style="padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
@@ -340,13 +387,16 @@
                         <h3 style="margin: 0; font-size: 1.1rem; color: #1e293b; font-weight: 800;">My Registered Classes</h3>
                         <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">Review or adjust your handled sections and student enrollments</p>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn-primary" style="background-color: #059669; padding: 7px 14px; font-size: 0.84rem;" onclick="openFacultyUploadModal()">
                             <span>📥</span> Upload Schedule
                         </button>
                         <button type="button" class="btn-primary" style="background-color: #2563eb; padding: 7px 14px; font-size: 0.84rem;" onclick="openAddClassModalForFaculty()">
                             <span>➕</span> Add Class
                         </button>
+                        <a href="/api/enrollments/faculty-schedule-template?format=xlsx" class="btn-secondary" style="padding: 7px 14px; font-size: 0.84rem; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" download="my_class_schedule_template.xlsx" title="Download Excel template">
+                            <span>📊</span> Download Template (.xlsx)
+                        </a>
                     </div>
                 </div>
 
@@ -386,14 +436,25 @@
                     <h3 id="detailModalTeacherName">
                         <span>👨‍🏫</span> Instructor Classes
                     </h3>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.85rem; color: #64748b;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.85rem; color: #64748b; flex-wrap: wrap;">
                         <span id="detailModalDeptBadge" class="badge-dept badge-cs">CS</span>
                         <span id="detailModalUsername" class="username-chip">@username</span>
                         <span>•</span>
                         <span id="detailModalStatsText" style="font-weight: 600; color: #334155;">0 Subjects • 0 Sections • 0 Pax</span>
+                        <span>•</span>
+                        <span id="detailModalLockBadge" class="status-pill status-submitted">🟢 Open</span>
                     </div>
                 </div>
                 <button type="button" class="modal-close-btn" onclick="closeInstructorDetailModal()">&times;</button>
+            </div>
+
+            <!-- UNLOCK REQUEST BANNER (IF PENDING) -->
+            <div id="detailModalUnlockBanner" style="display: none; background: #fffbeb; border: 1px solid #fef3c7; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.85rem; color: #92400e;">
+                <div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+                    <span>⚠️ Instructor Submitted Unlock Request</span>
+                    <span id="detailModalUnlockTime" style="font-size: 0.75rem; font-weight: normal; color: #b45309;"></span>
+                </div>
+                <div id="detailModalUnlockReasonText" style="margin-top: 4px; font-style: italic; color: #4b5563;"></div>
             </div>
 
             <!-- MODAL ACTION SUB-BAR -->
@@ -401,19 +462,22 @@
                 <div style="font-size: 0.84rem; color: #475569; font-weight: 600;">
                     Manage classes handled by this instructor:
                 </div>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <button type="button" class="action-btn btn-primary-action" onclick="openAddClassInsideDetailModal()">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="action-btn admin-only" id="detailModalLockToggleBtn" onclick="toggleCurrentInstructorLock()" style="font-weight: 700;">
+                        <span>🔒</span> Lock Schedule
+                    </button>
+                    <button type="button" class="action-btn btn-primary-action" id="detailModalAddClassBtn" onclick="openAddClassInsideDetailModal()">
                         <span>➕</span> Add Class / Section
                     </button>
-                    <button type="button" class="action-btn" onclick="openUploadInsideDetailModal()">
+                    <button type="button" class="action-btn" id="detailModalUploadBtn" onclick="openUploadInsideDetailModal()">
                         <span>📥</span> Batch Schedule Upload
                     </button>
                 </div>
             </div>
 
             <!-- INSTRUCTOR CLASSES TABLE -->
-            <div style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; min-height: 200px; max-height: 48vh; background: #ffffff;">
-                <table class="directory-table">
+            <div style="flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; border: 1px solid #e2e8f0; border-radius: 8px; min-height: 200px; max-height: 48vh; background: #ffffff;">
+                <table class="directory-table" style="min-width: 520px;">
                     <thead>
                         <tr>
                             <th style="width: 32%;">Subject</th>
@@ -493,21 +557,37 @@
 
             <!-- TABS -->
             <div style="display: flex; gap: 5px; border-bottom: 2px solid #e2e8f0; margin-bottom: 15px;">
-                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('upload')">📁 Upload Excel / CSV File</button>
-                <button type="button" class="bulk-tab-btn" id="tabRosterPasteBtn" onclick="switchFacultyTab('paste')">📋 Paste Names</button>
-                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('legacy')">⚡ Advanced: Full Schedule Import</button>
+                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('roster')">📁 Faculty Roster Import</button>
+                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('schedule')">⚡ Advanced: Full Schedule Import</button>
             </div>
 
-            <!-- TAB 1: FILE UPLOAD (ROSTER) -->
+            <!-- TAB 1: FACULTY ROSTER (FILE UPLOAD & DIRECT PASTE UNIFIED) -->
             <div id="tabRosterUploadContent">
                 <div class="upload-dropzone" id="facultyDropZone" onclick="document.getElementById('facultyCsvInput').click()">
-                    <input type="file" id="facultyCsvInput" accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv" style="display: none;" onchange="handleFacultyFileSelect(event)">
+                    <input type="file" id="facultyCsvInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFacultyFileSelect(event)">
                     <div style="font-size: 2.2rem; margin-bottom: 6px;">📊</div>
                     <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">Click to browse or drag &amp; drop Faculty Excel (.xlsx) / CSV here</div>
-                    <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">Expected columns: <code>Instructor Name, Department</code></div>
+                    <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">Expected format: <code>Instructor Name, Department</code> (e.g. Dr. Maria Santos, CS)</div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+                <!-- Textarea for paste from Excel / Google Sheets / Comma-separated names -->
+                <div style="margin-top: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="font-size: 0.8rem; color: #475569; font-weight: 700;">Or copy &amp; paste faculty names below (comma-separated or per line):</label>
+                        <button type="button" onclick="autoFillSampleRosterPaste()" style="background: none; border: none; color: #2563eb; cursor: pointer; font-size: 0.78rem; font-weight: 700; text-decoration: underline;">
+                            ✨ Paste Sample Names
+                        </button>
+                    </div>
+                    <textarea id="rosterPasteInput" rows="4" placeholder="Dr. Maria Santos, CS, Engr. Mark Bautista, IT, Prof. Juan Reyes, CS" oninput="handleRosterPasteInput()" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 0.82rem;"></textarea>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                        <span id="rosterPasteCounter" style="font-size: 0.78rem; color: #64748b; font-weight: 600;">0 record(s) entered</span>
+                        <button type="button" class="btn-primary" id="parseRosterPasteBtn" onclick="parseRosterPaste()" disabled style="padding: 6px 14px; font-size: 0.82rem;">
+                            🔍 Parse Pasted Names
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; flex-wrap: wrap; gap: 8px;">
                     <span style="font-size: 0.76rem; color: #64748b;">Auto-provisions logins (default password: <code>user12345</code>).</span>
                     <a href="/api/enrollments/faculty-roster-template?format=xlsx" class="action-btn" download="faculty_roster_template.xlsx">
                         📥 Download Sample Template (.xlsx)
@@ -515,29 +595,15 @@
                 </div>
             </div>
 
-            <!-- TAB 2: COPY-PASTE NAMES -->
-            <div id="tabRosterPasteContent" style="display: none;">
-                <div class="form-group">
-                    <label>Paste instructor names below (one per line, or <code>Name [Tab] Department</code>):</label>
-                    <textarea id="rosterPasteInput" rows="6" placeholder="Dr. Maria Santos&#9;CS&#10;Engr. Mark Bautista&#9;IT&#10;Prof. Juan Reyes&#9;CS" oninput="handleRosterPasteInput()"></textarea>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span id="rosterPasteCounter" style="font-size: 0.8rem; color: #64748b; font-weight: 600;">0 line(s) entered</span>
-                    <button type="button" class="btn-primary" id="parseRosterPasteBtn" onclick="parseRosterPaste()" disabled style="padding: 7px 16px; font-size: 0.85rem;">
-                        🔍 Parse Pasted Names
-                    </button>
-                </div>
-            </div>
-
-            <!-- TAB 3: LEGACY FULL SCHEDULE IMPORT -->
+            <!-- TAB 2: ADVANCED FULL SCHEDULE IMPORT -->
             <div id="tabLegacyScheduleContent" style="display: none;">
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; font-size: 0.82rem; color: #475569; line-height: 1.5;">
-                    ℹ️ <strong>Full Schedule Format:</strong> Use this if you have a full registrar spreadsheet containing: <code>Instructor, Section, Subject, Headcount</code>.<br>
+                    ℹ️ <strong>Full Schedule Format:</strong> Use this if you have a registrar schedule containing: <code>Instructor, Section, Subject, Headcount</code>.<br>
                     The system will enroll all class sections into the masterfile and auto-provision faculty accounts simultaneously.
                 </div>
                 
                 <div class="upload-dropzone" id="legacyDropZone" onclick="document.getElementById('legacyCsvInput').click()">
-                    <input type="file" id="legacyCsvInput" accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv" style="display: none;" onchange="handleLegacyFileSelect(event)">
+                    <input type="file" id="legacyCsvInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleLegacyFileSelect(event)">
                     <div style="font-size: 2.2rem; margin-bottom: 6px;">📊</div>
                     <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">Click to browse or drag &amp; drop Full Schedule Excel (.xlsx) / CSV here</div>
                     <div style="color: #64748b; font-size: 0.8rem; margin-top: 4px;">Expected columns: <code>Instructor, Section, Subject, Headcount</code></div>
@@ -546,14 +612,14 @@
                 <!-- Textarea for paste from Excel / Google Sheets -->
                 <div style="margin-top: 14px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <label style="font-size: 0.8rem; color: #475569; font-weight: 700;">Or copy columns from Excel / Sheets and paste here:</label>
+                        <label style="font-size: 0.8rem; color: #475569; font-weight: 700;">Or copy &amp; paste schedule below (comma-separated or per line):</label>
                         <button type="button" onclick="autoFillSampleLegacyPaste()" style="background: none; border: none; color: #2563eb; cursor: pointer; font-size: 0.78rem; font-weight: 700; text-decoration: underline;">
                             ✨ Paste Sample Full Schedule
                         </button>
                     </div>
-                    <textarea id="legacyPasteInput" rows="4" placeholder="Instructor&#9;Section&#9;Subject&#9;Headcount&#10;Dr. Maria Santos&#9;BSCS-1A&#9;Introduction to Computing&#9;37&#10;Engr. Mark Bautista&#9;BSIT-1A&#9;Introduction to Information Technology&#9;44" oninput="handleLegacyPasteInput()" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 0.82rem;"></textarea>
+                    <textarea id="legacyPasteInput" rows="4" placeholder="Dr. Maria Santos, BSCS-1A, Introduction to Computing, 37, Engr. Mark Bautista, BSIT-1A, Introduction to Information Technology, 44" oninput="handleLegacyPasteInput()" style="width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 0.82rem;"></textarea>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-                        <span id="legacyPasteCounter" style="font-size: 0.78rem; color: #64748b; font-weight: 600;">0 line(s) entered</span>
+                        <span id="legacyPasteCounter" style="font-size: 0.78rem; color: #64748b; font-weight: 600;">0 record(s) entered</span>
                         <button type="button" class="btn-primary" id="parseLegacyPasteBtn" onclick="parseLegacyPaste()" disabled style="padding: 6px 14px; font-size: 0.82rem;">
                             🔍 Parse Pasted Schedule
                         </button>
@@ -731,14 +797,84 @@
         </div>
     </div>
 
-    <!-- OPERATION LOCK OVERLAY -->
-    <div id="provisioningBlockerModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.82); backdrop-filter: blur(5px); z-index: 999999; justify-content: center; align-items: center;">
-        <div style="background: white; border-radius: 14px; width: 92%; max-width: 480px; padding: 36px 30px; text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.4); border-top: 6px solid #2563eb;">
-            <div style="width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; margin: 0 auto 16px auto; animation: blockerSpin 0.85s linear infinite;"></div>
-            <h3 id="blockerTitle" style="color: #0f172a; font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">Processing Records...</h3>
-            <p id="blockerSubtitle" style="color: #475569; font-size: 0.9rem; line-height: 1.5; margin-bottom: 14px;">Please wait while the system registers records and synchronizes faculty accounts...</p>
-            <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 12px;">
+    <!-- UPLOAD & PROVISIONING PROGRESS MODAL (Informative Progress Bar inspired by pdf_generator.html) -->
+    <div id="provisioningBlockerModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(5px); z-index: 999999; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box;">
+        <div style="background: white; border-radius: 14px; width: 92%; max-width: 490px; padding: 32px 28px; text-align: center; box-shadow: 0 25px 60px rgba(0,0,0,0.4); border-top: 6px solid #2563eb; box-sizing: border-box;">
+            <!-- Icon -->
+            <div id="uploadProgressIcon" style="font-size: 2.8rem; margin-bottom: 8px; display: inline-block;">📊</div>
+            <h3 id="blockerTitle" style="color: #0f172a; font-size: 1.3rem; font-weight: 800; margin-bottom: 6px;">Importing Class Records...</h3>
+            <p id="blockerSubtitle" style="color: #64748b; font-size: 0.88rem; line-height: 1.45; margin-bottom: 16px;">
+                Registering class sections and student counts into the masterfile ledger.
+            </p>
+
+            <!-- Dynamic Live Phase Status -->
+            <div id="uploadStageText" style="font-weight: 600; color: #2563eb; font-size: 0.92rem; margin-bottom: 10px; min-height: 22px;">
+                Step 1/4: Validating input records...
+            </div>
+
+            <!-- Progress Bar Track & Fill -->
+            <div style="height: 12px; width: 100%; background: #e2e8f0; border-radius: 9999px; overflow: hidden; margin-bottom: 8px;">
+                <div id="uploadProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #2563eb, #3b82f6); border-radius: 9999px; transition: width 0.3s ease;"></div>
+            </div>
+
+            <!-- Percentage & Status Display -->
+            <div style="display: flex; justify-content: space-between; font-size: 0.84rem; margin-bottom: 16px;">
+                <span id="uploadProgressPercent" style="font-weight: 700; color: #1e293b;">0%</span>
+                <span id="uploadProgressEta" style="color: #64748b;">Processing...</span>
+            </div>
+
+            <!-- Safety Notice Badge -->
+            <div style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 14px; border-radius: 12px;">
                 <span>🔒</span> Safe Operation • Do not close or refresh this page
+            </div>
+        </div>
+    </div>
+
+    <!-- SCHEDULE LOCKED & UNLOCK REQUEST MODAL -->
+    <div class="modal-overlay" id="scheduleLockedModal" style="display: none; z-index: 10000;">
+        <div class="modal-card" style="max-width: 480px; text-align: left;">
+            <div class="modal-header" style="border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 38px; height: 38px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">🔒</div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.15rem; color: #1e293b;">Schedule Editing Disabled</h3>
+                        <p style="margin: 0; font-size: 0.8rem; color: #64748b;">Teaching load is locked by Administrator</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeScheduleLockedModal()">&times;</button>
+            </div>
+            <div style="padding: 16px 0; font-size: 0.88rem; color: #475569; line-height: 1.55;">
+                <p style="margin-bottom: 12px;">
+                    This teaching schedule has been verified and <strong>locked by the Administrator</strong> to ensure data integrity during examination preparation.
+                </p>
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                    <div style="font-weight: 700; color: #334155; margin-bottom: 4px;">Need to adjust sections or headcounts?</div>
+                    <div style="font-size: 0.82rem; color: #64748b;">
+                        Submit an unlock request to the Administrator. Once approved, schedule additions and edits will be re-enabled.
+                    </div>
+                </div>
+                <form id="scheduleUnlockRequestForm" onsubmit="submitScheduleUnlockRequest(event)">
+                    <div id="unlockRequestStatusFeedback" style="display: none; margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 0.82rem;"></div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
+                        <button type="button" class="btn-cancel-modal" onclick="closeScheduleLockedModal()">Cancel</button>
+                        <button type="submit" class="btn-primary" id="btnSubmitUnlockRequest" style="background-color: #2563eb;">
+                            Request to Unlock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm - BookletLog Golden Standard) -->
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 10005;">
+        <div class="app-dialog-card">
+            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">🛑</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Confirm Logout</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
+            <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
+                <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
+                <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Confirm</button>
             </div>
         </div>
     </div>
@@ -771,7 +907,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             initRoleBasedUI();
             loadAcademicPrograms();
-            loadRoster();
+            loadRoster().then(() => {
+                checkUrlParamsForUnlock();
+            });
             checkArchiveStatus();
 
             setupDropZone('facultyDropZone', 'facultyCsvInput', handleFacultyFileSelect);
@@ -794,7 +932,7 @@
             if (isViewer) {
                 if (pageTitle) pageTitle.innerText = "My Teaching Load";
                 if (adminStaffActions) adminStaffActions.style.display = 'none';
-                if (facultyActions) facultyActions.style.display = 'flex';
+                if (facultyActions) facultyActions.style.display = 'none';
                 if (adminStaffView) adminStaffView.style.display = 'none';
                 if (facultyView) facultyView.style.display = 'flex';
 
@@ -888,6 +1026,34 @@
                 (i.username || '').trim().toLowerCase() === myName
             );
 
+            // Check lock state
+            const isScheduleLocked = instructor && instructor.is_locked;
+            const banner = document.getElementById('facultyLockedNoticeBanner');
+            const unlockStatusEl = document.getElementById('facultyUnlockRequestedStatus');
+            const btnRequestUnlock = document.getElementById('btnRequestUnlockFromBanner');
+
+            if (isScheduleLocked) {
+                if (banner) banner.style.display = 'block';
+                if (instructor.unlock_requested) {
+                    if (unlockStatusEl) {
+                        unlockStatusEl.style.display = 'block';
+                        unlockStatusEl.innerText = `⏳ Unlock Request Pending (${instructor.unlock_requested_at || 'Recently'})`;
+                    }
+                    if (btnRequestUnlock) {
+                        btnRequestUnlock.innerText = 'Unlock Request Pending';
+                        btnRequestUnlock.style.opacity = '0.75';
+                    }
+                } else {
+                    if (unlockStatusEl) unlockStatusEl.style.display = 'none';
+                    if (btnRequestUnlock) {
+                        btnRequestUnlock.innerText = 'Request to Unlock';
+                        btnRequestUnlock.style.opacity = '1';
+                    }
+                }
+            } else {
+                if (banner) banner.style.display = 'none';
+            }
+
             const classes = instructor ? (instructor.classes || []) : [];
             const secCount = document.getElementById('facultyMySectionsCount');
             const stuCount = document.getElementById('facultyMyStudentsCount');
@@ -901,7 +1067,7 @@
                             <div style="font-size: 2rem; margin-bottom: 8px;">📋</div>
                             <div style="font-weight: 700; color: #1e293b; font-size: 1rem; margin-bottom: 4px;">No Classes Registered Yet</div>
                             <div style="font-size: 0.86rem; color: #64748b; margin-bottom: 14px;">You have not registered any class sections for this semester.</div>
-                            <button type="button" class="btn-primary" style="background-color: #059669; padding: 8px 16px; font-size: 0.85rem;" onclick="openFacultyUploadModal()">📥 Upload My Schedule (.xlsx / .csv)</button>
+                            ${isScheduleLocked ? '<button type="button" class="btn-primary" style="background-color: #64748b; padding: 8px 16px; font-size: 0.85rem;" onclick="openScheduleLockedModal()">🔒 Schedule Locked</button>' : '<button type="button" class="btn-primary" style="background-color: #059669; padding: 8px 16px; font-size: 0.85rem;" onclick="openFacultyUploadModal()">📥 Upload My Schedule (.xlsx / .csv)</button>'}
                         </td>
                     </tr>
                 `;
@@ -915,8 +1081,12 @@
                     <td style="text-align: center;"><span style="background: #e0f2fe; color: #0284c7; padding: 3px 8px; border-radius: 12px; font-weight: 700; font-size: 0.8rem;">${c.student_headcount} Pax</span></td>
                     <td style="text-align: center;"><span class="badge-dept ${c.department === 'IT' ? 'badge-it' : 'badge-cs'}">${escapeHtml(c.department || 'CS')}</span></td>
                     <td style="text-align: right;">
-                        <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️ Edit</button>
-                        <button class="action-btn btn-danger-action" onclick="deleteClassRecord(${c.id}, '${escapeHtml(c.section)}', '${escapeHtml(c.subject)}')" title="Delete Class">🗑️</button>
+                        ${isScheduleLocked ? `
+                            <button class="action-btn" onclick="openScheduleLockedModal()" title="Schedule is locked by Admin" style="font-weight: 600; opacity: 0.85;">🔒 Locked</button>
+                        ` : `
+                            <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️ Edit</button>
+                            <button class="action-btn btn-danger-action" onclick="deleteClassRecord(${c.id}, '${escapeHtml(c.section)}', '${escapeHtml(c.subject)}')" title="Delete Class">🗑️</button>
+                        `}
                     </td>
                 </tr>
             `).join('');
@@ -992,11 +1162,24 @@
                         ? `<span class="status-pill status-submitted">🟢 Submitted (${inst.total_sections} ${inst.total_sections === 1 ? 'class' : 'classes'})</span>`
                         : `<span class="status-pill status-pending">🟡 Pending Schedule</span>`;
 
+                    let lockPillHtml = '';
+                    if (inst.unlock_requested) {
+                        lockPillHtml = `<span class="status-pill" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; margin-top: 4px; display: inline-flex;">⚠️ Unlock Requested</span>`;
+                    } else if (inst.is_locked) {
+                        lockPillHtml = `<span class="status-pill" style="background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; margin-top: 4px; display: inline-flex;">🔒 Locked</span>`;
+                    } else {
+                        lockPillHtml = `<span class="status-pill" style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; margin-top: 4px; display: inline-flex;">🟢 Open</span>`;
+                    }
+
                     const subjectBadges = (inst.subjects_list || []).slice(0, 3).map(s => 
                         `<span class="subject-tag">${escapeHtml(s)}</span>`
                     ).join('');
                     const remainingSubCount = (inst.subjects_list || []).length - 3;
                     const moreSubsHtml = remainingSubCount > 0 ? `<span style="font-size: 0.72rem; color: #64748b; font-weight: bold;">+${remainingSubCount} more</span>` : '';
+
+                    const addBtnHtml = (inst.is_locked && !isAdmin)
+                        ? `<button class="action-btn" onclick="openScheduleLockedModal()" title="Schedule is locked" style="font-weight: 600; opacity: 0.75;">🔒 Locked</button>`
+                        : `<button class="action-btn" onclick="openAddClassModal('${escapeHtml(inst.name)}')" title="Add Class for ${escapeHtml(inst.name)}" style="font-weight: 600;">➕ Add Class</button>`;
 
                     return `
                         <tr onclick="openInstructorDetailModal('${escapeHtml(inst.name)}')" title="Click row to view and edit ${escapeHtml(inst.name)}'s classes">
@@ -1017,11 +1200,12 @@
                             <td style="text-align: center;">
                                 <strong style="color: #0284c7;">${inst.total_headcount.toLocaleString()} Pax</strong>
                             </td>
-                            <td>${statusHtml}</td>
+                            <td>
+                                <div>${statusHtml}</div>
+                                <div>${lockPillHtml}</div>
+                            </td>
                             <td style="text-align: right;" onclick="event.stopPropagation()">
-                                <button class="action-btn" onclick="openAddClassModal('${escapeHtml(inst.name)}')" title="Add Class for ${escapeHtml(inst.name)}" style="font-weight: 600;">
-                                    ➕ Add Class
-                                </button>
+                                ${addBtnHtml}
                             </td>
                         </tr>
                     `;
@@ -1152,6 +1336,87 @@
             if (statsText) statsText.innerText = `${inst.total_subjects} Subject(s) • ${inst.total_sections} Section(s) • ${inst.total_headcount} Pax`;
             if (totalBadge) totalBadge.innerText = `Total Student Demand: ${inst.total_headcount.toLocaleString()} Pax`;
 
+            // Lock Status Badge
+            const lockBadge = document.getElementById('detailModalLockBadge');
+            if (lockBadge) {
+                if (inst.unlock_requested) {
+                    lockBadge.className = 'status-pill';
+                    lockBadge.style.background = '#fef3c7';
+                    lockBadge.style.color = '#b45309';
+                    lockBadge.style.border = '1px solid #fde68a';
+                    lockBadge.innerText = '⚠️ Unlock Requested';
+                } else if (inst.is_locked) {
+                    lockBadge.className = 'status-pill';
+                    lockBadge.style.background = '#fee2e2';
+                    lockBadge.style.color = '#991b1b';
+                    lockBadge.style.border = '1px solid #fca5a5';
+                    lockBadge.innerText = `🔒 Locked (${inst.locked_by || 'Admin'})`;
+                } else {
+                    lockBadge.className = 'status-pill status-submitted';
+                    lockBadge.style.background = '';
+                    lockBadge.style.color = '';
+                    lockBadge.style.border = '';
+                    lockBadge.innerText = '🟢 Open / Editable';
+                }
+            }
+
+            // Unlock Request Alert Banner inside Modal
+            const unlockBanner = document.getElementById('detailModalUnlockBanner');
+            const unlockTimeEl = document.getElementById('detailModalUnlockTime');
+            const unlockReasonEl = document.getElementById('detailModalUnlockReasonText');
+            if (unlockBanner) {
+                if (inst.unlock_requested) {
+                    unlockBanner.style.display = 'block';
+                    if (unlockTimeEl) unlockTimeEl.innerText = inst.unlock_requested_at || 'Recently';
+                    if (unlockReasonEl) unlockReasonEl.innerText = 'Instructor requested schedule access to update class sections.';
+                } else {
+                    unlockBanner.style.display = 'none';
+                }
+            }
+
+            // Admin Lock/Unlock Button
+            const lockToggleBtn = document.getElementById('detailModalLockToggleBtn');
+            if (lockToggleBtn) {
+                if (isAdmin) {
+                    lockToggleBtn.style.display = 'inline-flex';
+                    if (inst.is_locked) {
+                        lockToggleBtn.innerHTML = '<span>🔓</span> Unlock Schedule';
+                        lockToggleBtn.className = 'action-btn btn-primary-action';
+                        lockToggleBtn.title = 'Unlock schedule to allow additions and edits';
+                    } else {
+                        lockToggleBtn.innerHTML = '<span>🔒</span> Lock Schedule';
+                        lockToggleBtn.className = 'action-btn btn-danger-action';
+                        lockToggleBtn.title = 'Lock schedule to prevent additions and edits';
+                    }
+                } else {
+                    lockToggleBtn.style.display = 'none';
+                }
+            }
+
+            // Modal Action Sub-bar Buttons State
+            const modalAddBtn = document.getElementById('detailModalAddClassBtn');
+            const modalUploadBtn = document.getElementById('detailModalUploadBtn');
+            const isInstLocked = Boolean(inst.is_locked);
+            if (isInstLocked && !isAdmin) {
+                if (modalAddBtn) {
+                    modalAddBtn.onclick = openScheduleLockedModal;
+                    modalAddBtn.style.opacity = '0.7';
+                }
+                if (modalUploadBtn) {
+                    modalUploadBtn.onclick = openScheduleLockedModal;
+                    modalUploadBtn.style.opacity = '0.7';
+                }
+            } else {
+                if (modalAddBtn) {
+                    modalAddBtn.onclick = openAddClassInsideDetailModal;
+                    modalAddBtn.style.opacity = '1';
+                }
+                if (modalUploadBtn) {
+                    modalUploadBtn.onclick = openUploadInsideDetailModal;
+                    modalUploadBtn.style.opacity = '1';
+                }
+            }
+
             const classes = inst.classes || [];
             if (tbody) {
                 if (classes.length === 0) {
@@ -1159,7 +1424,9 @@
                         <tr>
                             <td colspan="5" style="text-align: center; padding: 35px; color: #94a3b8;">
                                 No classes registered for ${escapeHtml(inst.name)} yet.<br>
-                                <button type="button" class="btn-primary" style="margin-top: 10px; padding: 7px 15px; font-size: 0.82rem;" onclick="openAddClassInsideDetailModal()">➕ Add Class Now</button>
+                                ${isInstLocked && !isAdmin 
+                                    ? '<span style="color: #94a3b8; font-size: 0.85rem; margin-top: 8px; display: inline-block;">🔒 Schedule is locked by Administrator.</span>'
+                                    : '<button type="button" class="btn-primary" style="margin-top: 10px; padding: 7px 15px; font-size: 0.82rem;" onclick="openAddClassInsideDetailModal()">➕ Add Class Now</button>'}
                             </td>
                         </tr>
                     `;
@@ -1175,8 +1442,12 @@
                                 </span>
                             </td>
                             <td style="text-align: right;">
-                                <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️</button>
-                                <button class="action-btn btn-danger-action" onclick="deleteClassRecord(${c.id}, '${escapeHtml(c.section)}', '${escapeHtml(c.subject)}')" title="Delete Class">🗑️</button>
+                                ${isInstLocked && !isAdmin ? `
+                                    <button class="action-btn" onclick="openScheduleLockedModal()" title="Schedule is locked by Admin" style="font-weight: 600; opacity: 0.8;">🔒 Locked</button>
+                                ` : `
+                                    <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️</button>
+                                    <button class="action-btn btn-danger-action" onclick="deleteClassRecord(${c.id}, '${escapeHtml(c.section)}', '${escapeHtml(c.subject)}')" title="Delete Class">🗑️</button>
+                                `}
                             </td>
                         </tr>
                     `).join('');
@@ -1202,12 +1473,210 @@
 
         function openAddClassInsideDetailModal() {
             if (!activeSelectedInstructorName) return;
+            const inst = allInstructors.find(i => (i.name || '').toLowerCase() === activeSelectedInstructorName.toLowerCase());
+            if (inst && inst.is_locked && !isAdmin) {
+                openScheduleLockedModal();
+                return;
+            }
             openAddClassModal(activeSelectedInstructorName);
         }
 
         function openUploadInsideDetailModal() {
             if (!activeSelectedInstructorName) return;
+            const inst = allInstructors.find(i => (i.name || '').toLowerCase() === activeSelectedInstructorName.toLowerCase());
+            if (inst && inst.is_locked && !isAdmin) {
+                openScheduleLockedModal();
+                return;
+            }
             openFacultyUploadModal(activeSelectedInstructorName);
+        }
+
+        // ==============================================================
+        // SCHEDULE LOCK & UNLOCK WORKFLOW CONTROLLERS
+        // ==============================================================
+        async function toggleCurrentInstructorLock() {
+            if (!activeSelectedInstructorName) return;
+            const inst = allInstructors.find(i => (i.name || '').toLowerCase() === activeSelectedInstructorName.toLowerCase());
+            if (!inst) return;
+
+            const willLock = !inst.is_locked;
+            const actionWord = willLock ? 'Lock' : 'Unlock';
+            const title = willLock ? "Lock Teaching Schedule?" : "Unlock Teaching Schedule?";
+            const confirmMsg = willLock
+                ? `Are you sure you want to LOCK the teaching schedule for ${inst.name}?\n\nThis will prevent the instructor or staff from adding, editing, or deleting any class sections.`
+                : `Are you sure you want to UNLOCK the teaching schedule for ${inst.name}?\n\nThis will re-enable class section additions, edits, and deletions for this instructor.`;
+
+            const confirmed = await showAppConfirm(title, confirmMsg, {
+                type: willLock ? 'warning' : 'info',
+                icon: willLock ? '🔒' : '🔓',
+                confirmText: willLock ? 'Lock Schedule' : 'Unlock Schedule',
+                confirmBg: willLock ? '#64748b' : '#059669'
+            });
+            if (!confirmed) return;
+
+            const endpoint = willLock
+                ? `/api/enrollments/instructors/${encodeURIComponent(inst.name)}/lock`
+                : `/api/enrollments/instructors/${encodeURIComponent(inst.name)}/unlock`;
+
+            try {
+                const res = await fetch(endpoint, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || `Schedule ${actionWord.toLowerCase()}ed successfully!`, "success", `Schedule ${actionWord}ed`);
+                    await loadRoster(false);
+                    refreshOpenDetailModal();
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                } else {
+                    showToast(data.detail || data.message || `Failed to ${actionWord.toLowerCase()} schedule.`, "error", "Error");
+                }
+            } catch (err) {
+                showToast(`Network error attempting to ${actionWord.toLowerCase()} schedule.`, "error", "Network Error");
+            }
+        }
+
+        async function promptLockAllSchedules() {
+            const confirmed = await showAppConfirm(
+                "Lock All Teaching Schedules?",
+                "Are you sure you want to LOCK ALL instructor schedules across the masterfile?\n\nThis will freeze class rosters and prevent all non-admin faculty and staff from modifying their classes.",
+                {
+                    type: 'warning',
+                    icon: '🔒',
+                    confirmText: 'Lock All Schedules',
+                    confirmBg: '#b45309'
+                }
+            );
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch('/api/enrollments/lock-all', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || "All schedules locked.", "success", "Bulk Lock Completed");
+                    loadRoster(false);
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                } else {
+                    showToast(data.detail || data.message || "Failed to lock all schedules.", "error", "Lock Error");
+                }
+            } catch (err) {
+                showToast("Network error locking all schedules.", "error", "Network Error");
+            }
+        }
+
+        async function promptUnlockAllSchedules() {
+            const confirmed = await showAppConfirm(
+                "Unlock All Teaching Schedules?",
+                "Are you sure you want to UNLOCK ALL instructor schedules?\n\nThis will allow faculty members to freely register, edit, and update their semester class sections.",
+                {
+                    type: 'info',
+                    icon: '🔓',
+                    confirmText: 'Unlock All Schedules',
+                    confirmBg: '#059669'
+                }
+            );
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch('/api/enrollments/unlock-all', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message || "All schedules unlocked.", "success", "Bulk Unlock Completed");
+                    loadRoster(false);
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                } else {
+                    showToast(data.detail || data.message || "Failed to unlock all schedules.", "error", "Unlock Error");
+                }
+            } catch (err) {
+                showToast("Network error unlocking all schedules.", "error", "Network Error");
+            }
+        }
+
+        let activeScheduleLockedTeacher = '';
+
+        function openScheduleLockedModal(specificTeacherName = '') {
+            const modal = document.getElementById('scheduleLockedModal');
+            if (!modal) return;
+            if (specificTeacherName) activeScheduleLockedTeacher = specificTeacherName;
+            const feedback = document.getElementById('unlockRequestStatusFeedback');
+            if (feedback) feedback.style.display = 'none';
+            const submitBtn = document.getElementById('btnSubmitUnlockRequest');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Request to Unlock';
+            }
+            modal.style.display = 'flex';
+        }
+
+        function closeScheduleLockedModal() {
+            const modal = document.getElementById('scheduleLockedModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitScheduleUnlockRequest(e) {
+            if (e) e.preventDefault();
+            const feedback = document.getElementById('unlockRequestStatusFeedback');
+            const submitBtn = document.getElementById('btnSubmitUnlockRequest');
+
+            const myName = (activeUser.full_name || activeUser.username || '').trim();
+            const targetName = (isViewer ? myName : (activeScheduleLockedTeacher || activeSelectedInstructorName || myName));
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = 'Requesting...';
+            }
+
+            try {
+                const res = await fetch(`/api/enrollments/instructors/${encodeURIComponent(targetName)}/request-unlock`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: "Schedule unlock requested" })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("Unlock request submitted to Administrator.", "success", "Request Sent");
+                    closeScheduleLockedModal();
+                    loadRoster(false);
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                } else {
+                    if (feedback) {
+                        feedback.style.display = 'block';
+                        feedback.style.background = '#fee2e2';
+                        feedback.style.color = '#991b1b';
+                        feedback.innerText = data.detail || data.message || 'Failed to submit request.';
+                    }
+                }
+            } catch (err) {
+                if (feedback) {
+                    feedback.style.display = 'block';
+                    feedback.style.background = '#fee2e2';
+                    feedback.style.color = '#991b1b';
+                    feedback.innerText = 'Network error submitting unlock request.';
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = 'Request to Unlock';
+                }
+            }
+        }
+
+        function checkUrlParamsForUnlock() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const teacher = params.get('unlock_teacher');
+                if (teacher) {
+                    setTimeout(() => {
+                        openInstructorDetailModal(decodeURIComponent(teacher));
+                    }, 500);
+                }
+            } catch (e) {}
         }
 
         // ==============================================================
@@ -1280,42 +1749,34 @@
             if (modal) modal.style.display = 'none';
         }
 
-        let currentFacultyImportMode = 'roster'; // 'roster' (tabs 1 & 2) or 'schedule' (tab 3)
+        let currentFacultyImportMode = 'roster'; // 'roster' (Tab 1) or 'schedule' (Tab 2)
         let parsedLegacyScheduleRows = [];
 
         function switchFacultyTab(tab) {
-            const tabUpload = document.getElementById('tabRosterUploadBtn');
-            const tabPaste = document.getElementById('tabRosterPasteBtn');
+            const tabRoster = document.getElementById('tabRosterUploadBtn');
             const tabLegacy = document.getElementById('tabLegacyScheduleBtn');
-            const cUpload = document.getElementById('tabRosterUploadContent');
-            const cPaste = document.getElementById('tabRosterPasteContent');
+            const cRoster = document.getElementById('tabRosterUploadContent');
             const cLegacy = document.getElementById('tabLegacyScheduleContent');
             const confirmBtn = document.getElementById('confirmFacultyImportBtn');
 
-            [tabUpload, tabPaste, tabLegacy].forEach(b => b.classList.remove('active'));
-            [cUpload, cPaste, cLegacy].forEach(c => c.style.display = 'none');
+            if (tabRoster) tabRoster.classList.remove('active');
+            if (tabLegacy) tabLegacy.classList.remove('active');
+            if (cRoster) cRoster.style.display = 'none';
+            if (cLegacy) cLegacy.style.display = 'none';
 
-            if (tab === 'upload') {
-                currentFacultyImportMode = 'roster';
-                tabUpload.classList.add('active');
-                cUpload.style.display = 'block';
-                if (confirmBtn) confirmBtn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
-                if (parsedFacultyRows.length > 0) renderFacultyPreview();
-                else hideImportPreview();
-            } else if (tab === 'paste') {
-                currentFacultyImportMode = 'roster';
-                tabPaste.classList.add('active');
-                cPaste.style.display = 'block';
-                if (confirmBtn) confirmBtn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
-                if (parsedFacultyRows.length > 0) renderFacultyPreview();
-                else hideImportPreview();
-                setTimeout(() => document.getElementById('rosterPasteInput').focus(), 60);
-            } else {
+            if (tab === 'schedule' || tab === 'legacy') {
                 currentFacultyImportMode = 'schedule';
-                tabLegacy.classList.add('active');
-                cLegacy.style.display = 'block';
+                if (tabLegacy) tabLegacy.classList.add('active');
+                if (cLegacy) cLegacy.style.display = 'block';
                 if (confirmBtn) confirmBtn.innerText = "🚀 Import Classes into Masterfile & Auto-Provision Accounts";
                 if (parsedLegacyScheduleRows.length > 0) renderScheduleImportPreview();
+                else hideImportPreview();
+            } else {
+                currentFacultyImportMode = 'roster';
+                if (tabRoster) tabRoster.classList.add('active');
+                if (cRoster) cRoster.style.display = 'block';
+                if (confirmBtn) confirmBtn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
+                if (parsedFacultyRows.length > 0) renderFacultyPreview();
                 else hideImportPreview();
             }
             updateConfirmBtnState();
@@ -1336,11 +1797,19 @@
             const pasteInput = document.getElementById('rosterPasteInput');
             const legacyFileInput = document.getElementById('legacyCsvInput');
             const legacyPasteInput = document.getElementById('legacyPasteInput');
+            const rosterCounter = document.getElementById('rosterPasteCounter');
+            const legacyCounter = document.getElementById('legacyPasteCounter');
+            const parseRosterBtn = document.getElementById('parseRosterPasteBtn');
+            const parseLegacyBtn = document.getElementById('parseLegacyPasteBtn');
 
             if (fileInput) fileInput.value = '';
             if (pasteInput) pasteInput.value = '';
             if (legacyFileInput) legacyFileInput.value = '';
             if (legacyPasteInput) legacyPasteInput.value = '';
+            if (rosterCounter) rosterCounter.innerText = '0 record(s) entered';
+            if (legacyCounter) legacyCounter.innerText = '0 record(s) entered';
+            if (parseRosterBtn) parseRosterBtn.disabled = true;
+            if (parseLegacyBtn) parseLegacyBtn.disabled = true;
             if (preview) preview.style.display = 'none';
             if (btn) {
                 btn.disabled = true;
@@ -1349,12 +1818,30 @@
         }
 
         // --- UNIVERSAL SPREADSHEET READER (.XLSX, .XLS, .CSV) ---
-        function readSpreadsheetFile(file, callback) {
+        function readSpreadsheetFile(file, callback, inputEl) {
             if (!file) return;
             const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (ext !== 'xlsx' && ext !== 'xls' && ext !== 'csv') {
+                const errorMsg = `Unsupported file format (.${ext || 'unknown'}). Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file.`;
+                showToast(errorMsg, "error", "Invalid File Format");
+                if (inputEl) {
+                    try {
+                        if (inputEl.inputEl) inputEl.inputEl.value = '';
+                        if ('value' in inputEl) inputEl.value = '';
+                    } catch (_) {}
+                }
+                return;
+            }
+
             if (ext === 'xlsx' || ext === 'xls') {
                 if (typeof XLSX === 'undefined') {
-                    alert('Excel parsing engine is loading. Please try again or upload as CSV.');
+                    showToast('Excel parsing engine is loading. Please try again or upload as CSV.', 'warning', 'Engine Loading');
+                    if (inputEl) {
+                        try {
+                            if (inputEl.inputEl) inputEl.inputEl.value = '';
+                            if ('value' in inputEl) inputEl.value = '';
+                        } catch (_) {}
+                    }
                     return;
                 }
                 const reader = new FileReader();
@@ -1363,7 +1850,13 @@
                         const data = new Uint8Array(e.target.result);
                         const workbook = XLSX.read(data, { type: 'array' });
                         if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
-                            alert('The uploaded Excel spreadsheet contains no sheets.');
+                            showToast('The uploaded Excel spreadsheet contains no sheets.', 'error', 'Empty Spreadsheet');
+                            if (inputEl) {
+                                try {
+                                    if (inputEl.inputEl) inputEl.inputEl.value = '';
+                                    if ('value' in inputEl) inputEl.value = '';
+                                } catch (_) {}
+                            }
                             return;
                         }
                         const firstSheetName = workbook.SheetNames[0];
@@ -1373,12 +1866,18 @@
                         callback(text);
                     } catch (err) {
                         console.error('Error parsing Excel spreadsheet:', err);
-                        alert('Could not parse Excel spreadsheet: ' + (err.message || 'Unknown error'));
+                        showToast('Could not parse Excel spreadsheet: ' + (err.message || 'Unknown error'), 'error', 'Parse Error');
+                        if (inputEl) {
+                            try {
+                                if (inputEl.inputEl) inputEl.inputEl.value = '';
+                                if ('value' in inputEl) inputEl.value = '';
+                            } catch (_) {}
+                        }
                     }
                 };
                 reader.readAsArrayBuffer(file);
             } else {
-                // CSV or plain text fallback
+                // ext === 'csv'
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     callback(e.target.result);
@@ -1408,32 +1907,190 @@
                 zone.style.background = '#f8fafc';
                 zone.style.borderColor = '#3b82f6';
                 if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    handlerFn({ target: { files: e.dataTransfer.files } });
+                    const inputEl = document.getElementById(fileInputId);
+                    handlerFn({ target: { files: e.dataTransfer.files, value: '', inputEl: inputEl } });
                 }
             });
         }
 
-        // --- TAB 1 & 2: ROSTER HANDLERS ---
+        // --- CSV TOKENIZER & RECORD PARSERS ---
+        function tokenizeCsvLine(line) {
+            if (!line) return [];
+            const tokens = [];
+            let current = '';
+            let inQuotes = false;
+            const delimiter = line.includes('\t') ? '\t' : ',';
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"' || char === "'") {
+                    if (inQuotes && line[i + 1] === char) {
+                        current += char;
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (!inQuotes && (char === delimiter)) {
+                    tokens.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            tokens.push(current.trim());
+            return tokens.map(t => t.replace(/^["']|["']$/g, '').trim()).filter((t, idx, arr) => {
+                return t.length > 0 || (idx > 0 && idx < arr.length - 1);
+            });
+        }
+
+        function looksLikeDepartment(val) {
+            if (!val) return false;
+            const clean = val.trim().toUpperCase();
+            if (clean.length <= 6) return true; // e.g. CS, IT, BSCS, BSIT, CBA, COE, CAS, DIT, DCS
+            if (clean.includes('COMPUTER') || clean.includes('SCIENCE') || clean.includes('INFORMATION') || 
+                clean.includes('TECHNOLOGY') || clean.includes('DEPARTMENT') || clean.includes('DEPT') ||
+                clean.includes('COLLEGE') || clean.includes('ENGINEERING')) {
+                return true;
+            }
+            if (/^(dr\.|dr|engr\.|engr|prof\.|prof|mr\.|mr|ms\.|ms|mrs\.|mrs)\b/i.test(val.trim())) {
+                return false;
+            }
+            return false;
+        }
+
+        function parseRosterRecords(text) {
+            if (!text || !text.trim()) return [];
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            const records = [];
+
+            let startIdx = 0;
+            if (lines.length > 0) {
+                const firstTokens = tokenizeCsvLine(lines[0]);
+                if (firstTokens.length > 0) {
+                    const t0 = (firstTokens[0] || '').toLowerCase();
+                    const t1 = (firstTokens[1] || '').toLowerCase();
+                    if ((t0.includes('instructor') || t0.includes('name') || t0.includes('teacher')) &&
+                        (t1.includes('dept') || t1.includes('department') || firstTokens.length === 1)) {
+                        startIdx = 1;
+                    }
+                }
+            }
+
+            for (let lIdx = startIdx; lIdx < lines.length; lIdx++) {
+                const line = lines[lIdx].trim();
+                if (!line) continue;
+                const tokens = tokenizeCsvLine(line);
+                if (tokens.length === 0) continue;
+
+                if (tokens.length === 1) {
+                    records.push({ name: tokens[0], dept: 'CS' });
+                } else if (tokens.length === 2) {
+                    const t0 = tokens[0];
+                    const t1 = tokens[1];
+                    if (looksLikeDepartment(t1)) {
+                        records.push({ name: t0, dept: t1 });
+                    } else {
+                        records.push({ name: t0, dept: 'CS' });
+                        records.push({ name: t1, dept: 'CS' });
+                    }
+                } else {
+                    let i = 0;
+                    while (i < tokens.length) {
+                        const name = tokens[i];
+                        if (!name) { i++; continue; }
+                        const next = (i + 1 < tokens.length) ? tokens[i + 1] : null;
+                        if (next && looksLikeDepartment(next)) {
+                            records.push({ name: name, dept: next });
+                            i += 2;
+                        } else {
+                            records.push({ name: name, dept: 'CS' });
+                            i += 1;
+                        }
+                    }
+                }
+            }
+
+            return records.filter(r => {
+                const n = r.name.toLowerCase();
+                return n !== 'instructor' && n !== 'instructor name' && n !== 'name' && n !== 'faculty' && n.length > 0;
+            });
+        }
+
+        function parseScheduleRecords(text) {
+            if (!text || !text.trim()) return [];
+            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            const records = [];
+
+            for (let lIdx = 0; lIdx < lines.length; lIdx++) {
+                const line = lines[lIdx].trim();
+                if (!line) continue;
+                const tokens = tokenizeCsvLine(line);
+                if (tokens.length === 0) continue;
+
+                if (lIdx === 0 && tokens.length >= 2) {
+                    const t0 = (tokens[0] || '').toLowerCase();
+                    const t1 = (tokens[1] || '').toLowerCase();
+                    if (t0.includes('instructor') || t0.includes('teacher') || t1.includes('section')) {
+                        if (tokens.length <= 4) continue;
+                        tokens.splice(0, 4);
+                    }
+                }
+
+                let i = 0;
+                while (i < tokens.length) {
+                    if (i + 3 < tokens.length) {
+                        const teacher = tokens[i].trim();
+                        const section = tokens[i + 1].trim().toUpperCase();
+                        const subject = tokens[i + 2].trim();
+                        const rawCount = tokens[i + 3].trim();
+                        const count = parseInt(rawCount, 10);
+
+                        if (teacher && section && subject && !isNaN(count) && count > 0) {
+                            records.push({
+                                teacher_name: teacher,
+                                section: section,
+                                subject: subject,
+                                student_headcount: count
+                            });
+                            i += 4;
+                            continue;
+                        }
+                    }
+                    i++;
+                }
+            }
+            return records;
+        }
+
+        // --- TAB 1: ROSTER HANDLERS ---
         function handleFacultyFileSelect(e) {
-            const file = e.target.files[0];
+            const file = e.target.files ? e.target.files[0] : null;
             if (!file) return;
             readSpreadsheetFile(file, (text) => {
                 parseFacultyCsvText(text);
-            });
+            }, e.target);
         }
 
         function handleRosterPasteInput() {
             const val = document.getElementById('rosterPasteInput').value;
-            const lines = val.split('\n').filter(l => l.trim().length > 0);
+            const records = parseRosterRecords(val);
             const counter = document.getElementById('rosterPasteCounter');
             const parseBtn = document.getElementById('parseRosterPasteBtn');
-            if (counter) counter.innerText = `${lines.length} line(s) entered`;
-            if (parseBtn) parseBtn.disabled = lines.length === 0;
+            if (counter) counter.innerText = `${records.length} record(s) detected`;
+            if (parseBtn) parseBtn.disabled = records.length === 0;
         }
 
         function parseRosterPaste() {
             const val = document.getElementById('rosterPasteInput').value;
             parseFacultyCsvText(val);
+        }
+
+        function autoFillSampleRosterPaste() {
+            const pasteArea = document.getElementById('rosterPasteInput');
+            if (!pasteArea) return;
+            pasteArea.value = "Dr. Maria Santos, CS, Engr. Mark Bautista, IT, Prof. Juan Reyes, CS, Engr. Grace Dela Cruz, IT";
+            handleRosterPasteInput();
+            parseRosterPaste();
         }
 
         // --- ACADEMIC PROGRAM & DEPARTMENT DETECTOR ---
@@ -1455,47 +2112,48 @@
         }
 
         function parseFacultyCsvText(text) {
+            if (!text || !text.trim()) return;
+
+            // Smart auto-detection: if the text looks like a 4-column Full Schedule, route to Full Schedule tab
             const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-            if (lines.length === 0) return;
+            if (lines.length > 0) {
+                const firstLine = lines[0].toLowerCase();
+                const firstTokens = tokenizeCsvLine(lines[0]);
+                const looksLikeScheduleHeader = (firstLine.includes('section') && firstLine.includes('subject')) ||
+                                                (firstTokens.length >= 4 && (firstLine.includes('instructor') || firstLine.includes('teacher')));
+                const secondTokens = lines.length > 1 ? tokenizeCsvLine(lines[1]) : [];
+                const looksLikeScheduleData = secondTokens.length >= 4 && secondTokens[1] && /\d/.test(secondTokens[1]);
 
-            // Smart auto-detection: if the file has 4 columns (Instructor, Section, Subject, Headcount), route to Full Schedule tab
-            const firstLine = lines[0].toLowerCase();
-            const firstParts = lines[0].includes('\t') ? lines[0].split('\t') : lines[0].split(',');
-            const looksLikeScheduleHeader = (firstLine.includes('section') && firstLine.includes('subject')) ||
-                                            (firstParts.length >= 4 && (firstLine.includes('instructor') || firstLine.includes('teacher')));
-            const secondParts = lines.length > 1 ? (lines[1].includes('\t') ? lines[1].split('\t') : lines[1].split(',')) : [];
-            const looksLikeScheduleData = secondParts.length >= 4 && secondParts[1] && /\d/.test(secondParts[1]);
+                if (looksLikeScheduleHeader || looksLikeScheduleData) {
+                    switchFacultyTab('schedule');
+                    parseLegacyScheduleCsvText(text);
+                    if (typeof showToast === 'function') {
+                        showToast("Full Schedule spreadsheet detected. Switched to Full Schedule Import mode.", "info", "Format Detected");
+                    }
+                    return;
+                }
+            }
 
-            if (looksLikeScheduleHeader || looksLikeScheduleData) {
-                switchFacultyTab('legacy');
-                parseLegacyScheduleCsvText(text);
+            const records = parseRosterRecords(text);
+            if (records.length === 0) {
                 if (typeof showToast === 'function') {
-                    showToast("Full Schedule spreadsheet detected. Switched to Full Schedule Import mode.", "info", "Format Detected");
+                    showToast("No valid instructor records found. Expected format: Instructor Name, Department.", "warning", "Parse Warning");
                 }
                 return;
             }
 
             parsedFacultyRows = [];
-            lines.forEach((line, idx) => {
-                // Header skip
-                if (idx === 0 && (line.toLowerCase().includes('instructor') || line.toLowerCase().includes('name'))) {
-                    return;
-                }
-                const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-                const name = (parts[0] || '').trim().replace(/^["']|["']$/g, '');
-                let dept = (parts[1] || 'CS').trim().replace(/^["']|["']$/g, '').toUpperCase();
+            records.forEach(r => {
+                let dept = (r.dept || 'CS').trim().toUpperCase();
                 if (!dept || (!dept.includes('CS') && !dept.includes('IT'))) {
-                    dept = detectProgramFromSection(parts[1] || '').code || 'CS';
+                    dept = detectProgramFromSection(r.dept || '').code || 'CS';
                 }
-
-                if (name) {
-                    parsedFacultyRows.push({
-                        name: name,
-                        department: dept,
-                        username: generateCleanUsername(name),
-                        selected: true
-                    });
-                }
+                parsedFacultyRows.push({
+                    name: r.name,
+                    department: dept,
+                    username: generateCleanUsername(r.name),
+                    selected: true
+                });
             });
 
             renderFacultyPreview();
@@ -1554,22 +2212,22 @@
             updateConfirmBtnState();
         }
 
-        // --- TAB 3: ADVANCED FULL SCHEDULE IMPORT HANDLERS ---
+        // --- TAB 2: ADVANCED FULL SCHEDULE IMPORT HANDLERS ---
         function handleLegacyFileSelect(e) {
-            const file = e.target.files[0];
+            const file = e.target.files ? e.target.files[0] : null;
             if (!file) return;
             readSpreadsheetFile(file, (text) => {
                 parseLegacyScheduleCsvText(text);
-            });
+            }, e.target);
         }
 
         function handleLegacyPasteInput() {
             const val = document.getElementById('legacyPasteInput').value;
-            const lines = val.split('\n').filter(l => l.trim().length > 0);
+            const records = parseScheduleRecords(val);
             const counter = document.getElementById('legacyPasteCounter');
             const parseBtn = document.getElementById('parseLegacyPasteBtn');
-            if (counter) counter.innerText = `${lines.length} line(s) entered`;
-            if (parseBtn) parseBtn.disabled = lines.length === 0;
+            if (counter) counter.innerText = `${records.length} record(s) detected`;
+            if (parseBtn) parseBtn.disabled = records.length === 0;
         }
 
         function parseLegacyPaste() {
@@ -1581,63 +2239,55 @@
             const pasteArea = document.getElementById('legacyPasteInput');
             if (!pasteArea) return;
             pasteArea.value = 
-                "Instructor\tSection\tSubject\tHeadcount\n" +
-                "Dr. Maria Santos\tBSCS-1A\tIntroduction to Computing\t37\n" +
-                "Dr. Maria Santos\tBSCS-1B\tComputer Programming 1\t42\n" +
-                "Engr. Mark Bautista\tBSIT-1A\tIntroduction to Information Technology\t44\n" +
-                "Engr. Mark Bautista\tBSIT-1B\tComputer Programming 1\t43\n" +
-                "Prof. Juan Reyes\tBSCS-2A\tData Structures and Algorithms\t38";
+                "Dr. Maria Santos, BSCS-1A, Introduction to Computing, 37, " +
+                "Dr. Maria Santos, BSCS-1B, Computer Programming 1, 42, " +
+                "Engr. Mark Bautista, BSIT-1A, Introduction to Information Technology, 44, " +
+                "Engr. Mark Bautista, BSIT-1B, Computer Programming 1, 43, " +
+                "Prof. Juan Reyes, BSCS-2A, Data Structures and Algorithms, 38";
             handleLegacyPasteInput();
             parseLegacyPaste();
         }
 
         function parseLegacyScheduleCsvText(text) {
+            if (!text || !text.trim()) return;
+
             const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-            if (lines.length === 0) return;
-
-            // Smart auto-detection: if the user uploaded a 2-column Roster file (Instructor, Department) into Tab 3
-            const firstParts = lines[0].includes('\t') ? lines[0].split('\t') : lines[0].split(',');
-            const firstLine = lines[0].toLowerCase();
-            if (firstParts.length <= 2 && !firstLine.includes('section') && !firstLine.includes('subject')) {
-                const secondParts = lines.length > 1 ? (lines[1].includes('\t') ? lines[1].split('\t') : lines[1].split(',')) : [];
-                if (secondParts.length <= 2) {
-                    switchFacultyTab('upload');
-                    parseFacultyCsvText(text);
-                    if (typeof showToast === 'function') {
-                        showToast("Faculty Roster file detected. Switched to Roster Import mode.", "info", "Format Detected");
-                    }
-                    return;
-                }
-            }
-
-            parsedLegacyScheduleRows = [];
-            lines.forEach((line, idx) => {
-                const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-                // Skip header row if detected
-                if (idx === 0) {
-                    const first = String(parts[0] || '').toLowerCase();
-                    const second = String(parts[1] || '').toLowerCase();
-                    if (first.includes('instructor') || first.includes('teacher') || second.includes('section')) {
+            if (lines.length > 0) {
+                // Smart auto-detection: if the user uploaded a 2-column Roster file (Instructor, Department) into Tab 2
+                const firstTokens = tokenizeCsvLine(lines[0]);
+                const firstLine = lines[0].toLowerCase();
+                if (firstTokens.length <= 2 && !firstLine.includes('section') && !firstLine.includes('subject')) {
+                    const secondTokens = lines.length > 1 ? tokenizeCsvLine(lines[1]) : [];
+                    if (secondTokens.length <= 2) {
+                        switchFacultyTab('roster');
+                        parseFacultyCsvText(text);
+                        if (typeof showToast === 'function') {
+                            showToast("Faculty Roster file detected. Switched to Roster Import mode.", "info", "Format Detected");
+                        }
                         return;
                     }
                 }
+            }
 
-                const teacher = String(parts[0] || '').trim().replace(/^["']|["']$/g, '');
-                const section = String(parts[1] || '').trim().replace(/^["']|["']$/g, '').toUpperCase();
-                const subject = String(parts[2] || '').trim().replace(/^["']|["']$/g, '');
-                const count = parseInt(String(parts[3] || '0').trim().replace(/^["']|["']$/g, ''), 10);
-
-                if (teacher && section && subject && count > 0) {
-                    const prog = detectProgramFromSection(section);
-                    parsedLegacyScheduleRows.push({
-                        teacher_name: teacher,
-                        section: section,
-                        subject: subject,
-                        student_headcount: count,
-                        department: prog ? prog.code : (section.includes('IT') ? 'IT' : 'CS'),
-                        selected: true
-                    });
+            const records = parseScheduleRecords(text);
+            if (records.length === 0) {
+                if (typeof showToast === 'function') {
+                    showToast("No valid schedule records found. Expected format: Instructor, Section, Subject, Headcount.", "warning", "Parse Warning");
                 }
+                return;
+            }
+
+            parsedLegacyScheduleRows = [];
+            records.forEach(r => {
+                const prog = detectProgramFromSection(r.section);
+                parsedLegacyScheduleRows.push({
+                    teacher_name: r.teacher_name,
+                    section: r.section,
+                    subject: r.subject,
+                    student_headcount: r.student_headcount,
+                    department: prog ? prog.code : (r.section.includes('IT') ? 'IT' : 'CS'),
+                    selected: true
+                });
             });
 
             renderScheduleImportPreview();
@@ -1716,18 +2366,77 @@
             }
         }
 
-        function showBlockerModal(title, subtitle) {
+        let uploadProgressInterval = null;
+
+        function showBlockerModal(title, subtitle, recordCount = 0) {
             const modal = document.getElementById('provisioningBlockerModal');
             const t = document.getElementById('blockerTitle');
             const s = document.getElementById('blockerSubtitle');
+            const stageText = document.getElementById('uploadStageText');
+            const pBar = document.getElementById('uploadProgressBar');
+            const pPercent = document.getElementById('uploadProgressPercent');
+            const pEta = document.getElementById('uploadProgressEta');
+
             if (t && title) t.innerText = title;
             if (s && subtitle) s.innerText = subtitle;
             if (modal) modal.style.display = 'flex';
+
+            if (pBar) pBar.style.width = '6%';
+            if (pPercent) pPercent.innerText = '6%';
+            if (stageText) stageText.innerText = 'Step 1/4: Validating input records & format...';
+            if (pEta) pEta.innerText = recordCount > 0 ? `Processing ${recordCount} record(s)...` : 'Processing...';
+
+            if (uploadProgressInterval) clearInterval(uploadProgressInterval);
+
+            let currentPct = 6;
+            let currentPhase = 1;
+
+            uploadProgressInterval = setInterval(() => {
+                if (currentPct < 90) {
+                    const step = Math.max(2, Math.floor(Math.random() * 6) + 2);
+                    currentPct = Math.min(90, currentPct + step);
+
+                    if (pBar) pBar.style.width = `${currentPct}%`;
+                    if (pPercent) pPercent.innerText = `${currentPct}%`;
+
+                    if (currentPct >= 28 && currentPhase === 1) {
+                        currentPhase = 2;
+                        if (stageText) stageText.innerText = 'Step 2/4: Parsing schedule rows & headcounts...';
+                        if (pEta) pEta.innerText = 'Estimated ~2s remaining';
+                    } else if (currentPct >= 58 && currentPhase === 2) {
+                        currentPhase = 3;
+                        if (stageText) stageText.innerText = 'Step 3/4: Enrolling records & provisioning logins...';
+                        if (pEta) pEta.innerText = 'Estimated ~1s remaining';
+                    } else if (currentPct >= 82 && currentPhase === 3) {
+                        currentPhase = 4;
+                        if (stageText) stageText.innerText = 'Step 4/4: Finalizing database commit & LAN sync...';
+                        if (pEta) pEta.innerText = 'Almost complete...';
+                    }
+                }
+            }, 160);
         }
 
-        function hideBlockerModal() {
-            const modal = document.getElementById('provisioningBlockerModal');
-            if (modal) modal.style.display = 'none';
+        function hideBlockerModal(onClosed = null) {
+            if (uploadProgressInterval) {
+                clearInterval(uploadProgressInterval);
+                uploadProgressInterval = null;
+            }
+
+            const pBar = document.getElementById('uploadProgressBar');
+            const pPercent = document.getElementById('uploadProgressPercent');
+            const stageText = document.getElementById('uploadStageText');
+
+            if (pBar) pBar.style.width = '100%';
+            if (pPercent) pPercent.innerText = '100%';
+            if (stageText) stageText.innerText = 'Step 4/4: Processing Complete!';
+
+            setTimeout(() => {
+                const modal = document.getElementById('provisioningBlockerModal');
+                if (modal) modal.style.display = 'none';
+                if (pBar) pBar.style.width = '0%';
+                if (pPercent) pPercent.innerText = '0%';
+                if (typeof onClosed === 'function') onClosed();
+            }, 320);
         }
 
         function submitCurrentImport() {
@@ -1747,7 +2456,8 @@
             btn.innerText = "Onboarding Faculty...";
             showBlockerModal(
                 "Onboarding Faculty Roster...",
-                `Provisioning accounts for ${selected.length} faculty member(s) with default credentials (user12345). Please wait...`
+                `Provisioning accounts for ${selected.length} faculty member(s) with default credentials (user12345). Please wait...`,
+                selected.length
             );
 
             try {
@@ -1785,7 +2495,8 @@
             btn.innerText = "Enrolling Classes & Provisioning...";
             showBlockerModal(
                 "Importing Schedule & Auto-Provisioning...",
-                `Enrolling ${selected.length} class section(s) into masterfile and creating faculty logins. Please wait...`
+                `Enrolling ${selected.length} class section(s) into masterfile and creating faculty logins. Please wait...`,
+                selected.length
             );
 
             try {
@@ -1827,6 +2538,20 @@
 
         function openFacultyUploadModal(teacherName = '') {
             targetScheduleTeacher = teacherName || (activeUser.full_name || activeUser.username);
+            
+            // Guard: Schedule locked check for non-admin
+            if (!isAdmin && targetScheduleTeacher) {
+                const checkTeacher = targetScheduleTeacher.trim().toLowerCase();
+                const inst = allInstructors.find(i => 
+                    (i.name || '').trim().toLowerCase() === checkTeacher || 
+                    (i.username || '').trim().toLowerCase() === checkTeacher
+                );
+                if (inst && inst.is_locked) {
+                    openScheduleLockedModal(targetScheduleTeacher);
+                    return;
+                }
+            }
+
             parsedScheduleRows = [];
             const modal = document.getElementById('scheduleUploadModal');
             const title = document.getElementById('scheduleUploadModalTitle');
@@ -1851,11 +2576,11 @@
         }
 
         function handleScheduleFileSelect(e) {
-            const file = e.target.files[0];
+            const file = e.target.files ? e.target.files[0] : null;
             if (!file) return;
             readSpreadsheetFile(file, (text) => {
                 parseScheduleText(text);
-            });
+            }, e.target);
         }
 
         function handleSchedulePasteInput() {
@@ -1863,28 +2588,51 @@
             parseScheduleText(val);
         }
 
-        function parseScheduleText(text) {
+        function parseSingleFacultyScheduleRecords(text) {
+            if (!text || !text.trim()) return [];
             const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-            parsedScheduleRows = [];
+            const records = [];
 
-            lines.forEach((line, idx) => {
-                if (idx === 0 && (line.toLowerCase().includes('subject') || line.toLowerCase().includes('section'))) {
-                    return;
+            for (let lIdx = 0; lIdx < lines.length; lIdx++) {
+                const line = lines[lIdx].trim();
+                if (!line) continue;
+                const tokens = tokenizeCsvLine(line);
+                if (tokens.length === 0) continue;
+
+                if (lIdx === 0 && tokens.length <= 3) {
+                    const t0 = (tokens[0] || '').toLowerCase();
+                    const t1 = (tokens[1] || '').toLowerCase();
+                    if (t0.includes('subject') || t1.includes('section')) {
+                        continue;
+                    }
                 }
-                const parts = line.includes('\t') ? line.split('\t') : line.split(',');
-                const subject = String(parts[0] || '').trim().replace(/^["']|["']$/g, '');
-                const section = String(parts[1] || '').trim().replace(/^["']|["']$/g, '').toUpperCase();
-                const count = parseInt(String(parts[2] || '0').trim().replace(/^["']|["']$/g, ''), 10);
 
-                if (subject && section && count > 0) {
-                    parsedScheduleRows.push({
-                        subject: subject,
-                        section: section,
-                        student_headcount: count
-                    });
+                let i = 0;
+                while (i < tokens.length) {
+                    if (i + 2 < tokens.length) {
+                        const subject = tokens[i].trim();
+                        const section = tokens[i + 1].trim().toUpperCase();
+                        const rawCount = tokens[i + 2].trim();
+                        const count = parseInt(rawCount, 10);
+
+                        if (subject && section && !isNaN(count) && count > 0) {
+                            records.push({
+                                subject: subject,
+                                section: section,
+                                student_headcount: count
+                            });
+                            i += 3;
+                            continue;
+                        }
+                    }
+                    i++;
                 }
-            });
+            }
+            return records;
+        }
 
+        function parseScheduleText(text) {
+            parsedScheduleRows = parseSingleFacultyScheduleRecords(text);
             renderSchedulePreview();
         }
 
@@ -1922,7 +2670,8 @@
             btn.innerText = "Saving Schedule...";
             showBlockerModal(
                 "Saving Class Schedule...",
-                `Registering ${parsedScheduleRows.length} class section(s) for ${targetScheduleTeacher}...`
+                `Registering ${parsedScheduleRows.length} class section(s) for ${targetScheduleTeacher}...`,
+                parsedScheduleRows.length
             );
 
             try {
@@ -1956,6 +2705,21 @@
         // ADD / EDIT SINGLE CLASS MODAL
         // ==============================================================
         function openAddClassModal(teacherName = '') {
+            const isViewer = activeUser && activeUser.role === 'Viewer';
+            const resolvedTeacher = isViewer ? (activeUser.full_name || activeUser.username) : (teacherName || '');
+
+            if (!isAdmin && resolvedTeacher) {
+                const checkTeacher = resolvedTeacher.trim().toLowerCase();
+                const inst = allInstructors.find(i => 
+                    (i.name || '').trim().toLowerCase() === checkTeacher || 
+                    (i.username || '').trim().toLowerCase() === checkTeacher
+                );
+                if (inst && inst.is_locked) {
+                    openScheduleLockedModal(resolvedTeacher);
+                    return;
+                }
+            }
+
             const modal = document.getElementById('addClassModal');
             const title = document.getElementById('classModalTitle');
             const editId = document.getElementById('classEditId');
@@ -1966,7 +2730,19 @@
 
             if (editId) editId.value = '';
             if (title) title.innerHTML = `<span>➕</span> Add Class Enrollment`;
-            if (teacher) teacher.value = teacherName || '';
+
+            if (teacher) {
+                teacher.value = resolvedTeacher;
+                if (isViewer) {
+                    teacher.readOnly = true;
+                    teacher.style.backgroundColor = '#f1f5f9';
+                    teacher.style.cursor = 'not-allowed';
+                } else {
+                    teacher.readOnly = false;
+                    teacher.style.backgroundColor = '';
+                    teacher.style.cursor = '';
+                }
+            }
             if (section) section.value = '';
             if (subject) subject.value = '';
             if (headcount) headcount.value = '';
@@ -1974,7 +2750,7 @@
 
             if (modal) modal.style.display = 'flex';
             setTimeout(() => {
-                if (teacherName && section) section.focus();
+                if (resolvedTeacher && section) section.focus();
                 else if (teacher) teacher.focus();
             }, 60);
         }
@@ -1988,12 +2764,14 @@
             const instructorsList = (window.getAuthoritativeData ? window.getAuthoritativeData('enrollments_roster') : allInstructors) || allInstructors;
             let foundClass = null;
             let foundTeacher = null;
+            let targetInst = null;
             if (instructorsList && Array.isArray(instructorsList)) {
                 for (const inst of instructorsList) {
                     const c = (inst.classes || []).find(cls => cls && cls.id === Number(id));
                     if (c) {
                         foundClass = c;
                         foundTeacher = inst.name;
+                        targetInst = inst;
                         break;
                     }
                 }
@@ -2006,6 +2784,19 @@
                 headcountVal = foundClass.student_headcount;
             }
 
+            // Guard: Schedule locked check for non-admin
+            if (!isAdmin) {
+                const checkTeacher = (teacherName || (targetInst ? targetInst.name : '')).trim().toLowerCase();
+                const inst = targetInst || allInstructors.find(i => 
+                    (i.name || '').trim().toLowerCase() === checkTeacher || 
+                    (i.username || '').trim().toLowerCase() === checkTeacher
+                );
+                if (inst && inst.is_locked) {
+                    openScheduleLockedModal(teacherName || (targetInst ? targetInst.name : ''));
+                    return;
+                }
+            }
+
             const modal = document.getElementById('addClassModal');
             const title = document.getElementById('classModalTitle');
             const editId = document.getElementById('classEditId');
@@ -2016,7 +2807,20 @@
 
             if (editId) editId.value = id;
             if (title) title.innerHTML = `<span>✏️</span> Edit Class Record`;
-            if (teacher) teacher.value = teacherName || '';
+
+            const isViewer = activeUser && activeUser.role === 'Viewer';
+            if (teacher) {
+                teacher.value = teacherName || '';
+                if (isViewer) {
+                    teacher.readOnly = true;
+                    teacher.style.backgroundColor = '#f1f5f9';
+                    teacher.style.cursor = 'not-allowed';
+                } else {
+                    teacher.readOnly = false;
+                    teacher.style.backgroundColor = '';
+                    teacher.style.cursor = '';
+                }
+            }
             if (section) section.value = sectionVal || '';
             if (subject) subject.value = subjectVal || '';
             if (headcount) headcount.value = headcountVal || '';
@@ -2040,6 +2844,23 @@
 
             if (!teacherVal || !sectionVal || !subjectVal || headcountVal < 1) return;
 
+            // Client-Side Duplicate Prevention Check: Check existing active classes
+            const editIdNum = editId ? parseInt(editId, 10) : null;
+            const instructorsList = (window.getAuthoritativeData ? window.getAuthoritativeData('enrollments_roster') : allInstructors) || allInstructors;
+            if (instructorsList && Array.isArray(instructorsList)) {
+                for (const inst of instructorsList) {
+                    for (const cls of (inst.classes || [])) {
+                        if (cls && (!editIdNum || cls.id !== editIdNum)) {
+                            if ((cls.section || '').trim().toUpperCase() === sectionVal && 
+                                (cls.subject || '').trim().toUpperCase() === subjectVal.toUpperCase()) {
+                                showToast(`A class with Section '${sectionVal}' and Subject '${subjectVal}' already exists (assigned to ${inst.name}). Duplicate class sections are not allowed.`, "error", "Duplicate Class");
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
             const btn = document.getElementById('addBtn');
             btn.disabled = true;
 
@@ -2050,28 +2871,34 @@
                 student_headcount: headcountVal
             };
 
+            const authHeaders = {
+                'Content-Type': 'application/json',
+                'X-Session-Token': localStorage.getItem('session_token') || '',
+                'X-Username': localStorage.getItem('username') || ''
+            };
+
             try {
                 let res;
                 if (editId) {
                     res = await fetch(`/api/enrollments/${editId}`, {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: authHeaders,
                         body: JSON.stringify(payload)
                     });
                 } else {
                     res = await fetch('/api/enrollments', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: authHeaders,
                         body: JSON.stringify(payload)
                     });
                 }
                 const data = await res.json();
-                if (data.status === 'success') {
+                if (res.ok && data.status === 'success') {
                     showToast(data.message || "Class saved successfully!", "success", "Saved");
                     closeAddClassModal();
                     loadRoster(false);
                 } else {
-                    showToast(data.message || "Failed to save class.", "error", "Error");
+                    showToast(data.message || data.detail || "Failed to save class.", "error", "Error");
                 }
             } catch (err) {
                 console.error("Save class error:", err);
@@ -2082,16 +2909,51 @@
         }
 
         async function deleteClassRecord(id, section, subject) {
-            if (!confirm(`Are you sure you want to remove section '${section}' (${subject})?`)) return;
+            // Guard: Schedule locked check for non-admin
+            if (!isAdmin) {
+                const instructorsList = (window.getAuthoritativeData ? window.getAuthoritativeData('enrollments_roster') : allInstructors) || allInstructors;
+                let targetInst = null;
+                if (instructorsList && Array.isArray(instructorsList)) {
+                    for (const inst of instructorsList) {
+                        const c = (inst.classes || []).find(cls => cls && cls.id === Number(id));
+                        if (c) {
+                            targetInst = inst;
+                            break;
+                        }
+                    }
+                }
+                if (targetInst && targetInst.is_locked) {
+                    openScheduleLockedModal(targetInst.name);
+                    return;
+                }
+            }
+
+            const confirmed = await showAppConfirm(
+                "Remove Class Section?",
+                `Are you sure you want to remove section '${section}' (${subject}) from active enrollments?`,
+                {
+                    type: 'danger',
+                    icon: '🗑️',
+                    confirmText: 'Remove Class',
+                    confirmBg: '#ef4444'
+                }
+            );
+            if (!confirmed) return;
 
             try {
-                const res = await fetch(`/api/enrollments/${id}`, { method: 'DELETE' });
+                const res = await fetch(`/api/enrollments/${id}`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'X-Session-Token': localStorage.getItem('session_token') || '',
+                        'X-Username': localStorage.getItem('username') || ''
+                    }
+                });
                 const data = await res.json();
-                if (data.status === 'success') {
+                if (res.ok && data.status === 'success') {
                     showToast(data.message || "Class removed.", "success", "Removed");
                     loadRoster(false);
                 } else {
-                    alert(data.message || "Cannot delete class.");
+                    showToast(data.message || data.detail || "Cannot delete class.", "error", "Delete Failed");
                 }
             } catch (err) {
                 console.error("Delete class error:", err);
@@ -2172,7 +3034,18 @@
         }
 
         async function promptArchiveEnrollments() {
-            if (!confirm("Are you sure you want to archive current class enrollments for this semester? This resets active enrollment demand for the next cycle while preserving transaction history.")) return;
+            const confirmed = await showAppConfirm(
+                "Archive Semester Enrollments?",
+                "Are you sure you want to archive current class enrollments for this semester?\n\nThis resets active enrollment demand for the next cycle while preserving transaction history and billing audit trails.",
+                {
+                    type: 'warning',
+                    icon: '📁',
+                    confirmText: 'Archive Rosters',
+                    confirmBg: '#f59e0b'
+                }
+            );
+            if (!confirmed) return;
+
             try {
                 const res = await fetch('/api/enrollments/archive', { method: 'POST' });
                 const data = await res.json();
@@ -2181,10 +3054,11 @@
                     loadRoster(false);
                     checkArchiveStatus();
                 } else {
-                    alert(data.message);
+                    showAppAlert("Archive Notice", data.message || "Failed to archive enrollments.", "warning");
                 }
             } catch (err) {
                 console.error("Archive error:", err);
+                showToast("Network error while archiving enrollments.", "error", "Network Error");
             }
         }
 
@@ -2255,6 +3129,179 @@
                     <td style="text-align: center; color: #64748b; font-size: 0.8rem;">${escapeHtml(c.archived_at || '')}</td>
                 </tr>
             `).join('');
+        }
+
+        // --- IN-APP CONFIRMATION & ALERT DIALOG SYSTEM (BookletLog Golden Standard) ---
+        function showAppConfirm(title, message, options = {}) {
+            return new Promise(resolve => {
+                const {
+                    type = 'warning',
+                    confirmText = 'Confirm',
+                    cancelText = 'Cancel',
+                    confirmBg = null,
+                    icon: customIcon = null
+                } = options;
+
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    resolve(window.confirm(`${title}\n\n${message}`));
+                    return;
+                }
+
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#f59e0b';
+                let icon = '⚠️';
+                let defaultBg = '#3b82f6';
+
+                if (type === 'danger') {
+                    borderCol = '#ef4444';
+                    icon = '🛑';
+                    defaultBg = '#e74c3c';
+                } else if (type === 'info') {
+                    borderCol = '#3b82f6';
+                    icon = 'ℹ️';
+                    defaultBg = '#3b82f6';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    defaultBg = '#10b981';
+                }
+
+                if (customIcon) icon = customIcon;
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) {
+                    msgEl.innerHTML = typeof message === 'string' ? message.replace(/\n/g, '<br>') : String(message);
+                }
+
+                if (confirmBtn) {
+                    confirmBtn.innerText = confirmText;
+                    confirmBtn.style.background = confirmBg || defaultBg;
+                    confirmBtn.style.color = '#ffffff';
+                }
+
+                if (cancelBtn) {
+                    cancelBtn.style.display = 'inline-block';
+                    cancelBtn.innerText = cancelText;
+                }
+
+                function cleanup(result) {
+                    modal.style.display = 'none';
+                    if (confirmBtn) confirmBtn.onclick = null;
+                    if (cancelBtn) cancelBtn.onclick = null;
+                    document.removeEventListener('keydown', handleKey);
+                    resolve(result);
+                }
+
+                function handleKey(e) {
+                    if (e.key === 'Escape') cleanup(false);
+                }
+
+                if (confirmBtn) confirmBtn.onclick = () => cleanup(true);
+                if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
+                document.addEventListener('keydown', handleKey);
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    alert(`${title}\n\n${message}`);
+                    resolve(true);
+                    return;
+                }
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#f59e0b';
+                let icon = '⚠️';
+                let defaultBg = '#3b82f6';
+
+                if (type === 'danger' || type === 'error') {
+                    borderCol = '#ef4444';
+                    icon = '🛑';
+                    defaultBg = '#e74c3c';
+                } else if (type === 'info') {
+                    borderCol = '#3b82f6';
+                    icon = 'ℹ️';
+                    defaultBg = '#3b82f6';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    defaultBg = '#10b981';
+                }
+
+                if (card) card.style.borderTopColor = borderCol;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) msgEl.innerHTML = typeof message === 'string' ? message.replace(/\n/g, '<br>') : String(message);
+
+                if (confirmBtn) {
+                    confirmBtn.innerText = confirmText;
+                    confirmBtn.style.background = defaultBg;
+                    confirmBtn.style.color = '#ffffff';
+                }
+                if (cancelBtn) cancelBtn.style.display = 'none';
+
+                function cleanup() {
+                    modal.style.display = 'none';
+                    if (confirmBtn) confirmBtn.onclick = null;
+                    document.removeEventListener('keydown', handleKey);
+                    resolve(true);
+                }
+
+                function handleKey(e) {
+                    if (e.key === 'Escape' || e.key === 'Enter') cleanup();
+                }
+
+                if (confirmBtn) confirmBtn.onclick = cleanup;
+                document.addEventListener('keydown', handleKey);
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        async function logout() {
+            const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+                type: 'danger',
+                confirmText: 'Log Out',
+                cancelText: 'Cancel',
+                confirmBg: '#e74c3c'
+            });
+            if (!confirmed) return;
+
+            const username = (typeof activeUser !== 'undefined' && activeUser && activeUser.username) ? activeUser.username : '';
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+            } catch (e) {
+                console.error('Logout error:', e);
+            }
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('bookletlog_user');
+            localStorage.removeItem('username');
+            localStorage.removeItem('role');
+            sessionStorage.clear();
+            document.cookie = "bookletlog_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+            window.location.href = '/login';
         }
 
         // --- TOAST NOTIFICATIONS ---

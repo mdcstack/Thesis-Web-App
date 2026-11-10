@@ -14,6 +14,11 @@
         input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
         .password-wrapper { position: relative; width: 100%; margin-bottom: 15px; }
         .password-wrapper input { margin-bottom: 0; padding-right: 44px; }
+        /* Prevent Edge and Chromium duplicate native password reveal eye */
+        input[type="password"]::-ms-reveal,
+        input[type="password"]::-ms-clear {
+            display: none !important;
+        }
         .toggle-password-btn {
             position: absolute;
             right: 4px;
@@ -27,7 +32,7 @@
             border: none !important;
             border-radius: 4px;
             cursor: pointer;
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             transition: color 0.2s, background-color 0.2s;
@@ -61,12 +66,17 @@
         <form id="loginForm" onsubmit="handleLogin(event)">
             <input type="text" id="username" placeholder="Username" required autocomplete="username">
             <div class="password-wrapper">
-                <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
-                <button type="button" class="toggle-password-btn" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="Show Password" aria-label="Show password">
+                <input type="password" id="password" placeholder="Password" required autocomplete="current-password" oninput="handlePasswordInput(this)">
+                <button type="button" class="toggle-password-btn" id="togglePasswordBtn" onclick="togglePasswordVisibility()" title="Show Password" aria-label="Show password" style="display: none;">
                     <svg id="eyeIcon" class="eye-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                         <circle cx="12" cy="12" r="3"></circle>
                     </svg>
+                </button>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: -6px; margin-bottom: 14px;">
+                <button type="button" onclick="openForgotPasswordModal()" style="background: none; border: none; color: #2563eb; font-size: 0.82rem; font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline;">
+                    Forgot Password?
                 </button>
             </div>
             <button type="submit" id="loginBtn" class="btn-submit">Sign In</button>
@@ -123,6 +133,79 @@
     </div>
 </div>
 
+<!-- MODAL: ACCOUNT DEACTIVATED -->
+<div id="accountDeactivatedModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 440px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #ef4444; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="font-size: 2.8rem; margin-bottom: 8px;">🚫</div>
+        <h3 style="color: #991b1b; font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">Account Deactivated</h3>
+        <p style="color: #475569; font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px;">
+            Your account has been deactivated by a System Administrator. You cannot sign in while this account is inactive.
+        </p>
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; text-align: left; font-size: 0.84rem; color: #991b1b; line-height: 1.45;">
+            💡 <strong>What should I do?</strong><br>
+            Please contact or approach an <strong>Administrator</strong> to reactivate your account profile.
+        </div>
+        <button type="button" onclick="closeAccountDeactivatedModal()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; width: 100%;">
+            Understood
+        </button>
+    </div>
+</div>
+
+<!-- MODAL: ACCOUNT LOCKED OUT -->
+<div id="accountLockedModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 450px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #f59e0b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="font-size: 2.8rem; margin-bottom: 8px;">🔒</div>
+        <h3 style="color: #b45309; font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">Account Temporarily Locked</h3>
+        <p style="color: #475569; font-size: 0.9rem; line-height: 1.5; margin-bottom: 14px;">
+            Too many consecutive failed login attempts were detected on this account.
+        </p>
+        
+        <div style="background: #fffbeb; border: 1.5px dashed #f59e0b; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+            <div style="font-size: 0.8rem; color: #92400e; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Time Remaining Before Retry</div>
+            <div id="lockoutCountdownText" style="font-family: monospace; font-size: 2rem; font-weight: 800; color: #b45309; letter-spacing: 2px;">
+                05:00
+            </div>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; text-align: left; font-size: 0.82rem; color: #475569; line-height: 1.45;">
+            🔑 <strong>Forgot your password?</strong><br>
+            You can wait for the timer above to expire, or approach an <strong>Administrator</strong> to issue a single-use temporary password.
+        </div>
+
+        <button type="button" onclick="closeAccountLockedModal()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; width: 100%;">
+            Close
+        </button>
+    </div>
+</div>
+
+<!-- MODAL: FORGOT PASSWORD (OFFLINE GUIDANCE) -->
+<div id="forgotPasswordModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 440px; padding: 26px 22px; text-align: left; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #2563eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="color: #1e293b; font-size: 1.15rem; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>🔑</span> Reset Password
+            </h3>
+            <button onclick="closeForgotPasswordModal()" style="border: none; background: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+        </div>
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+            <div style="font-weight: 700; color: #1e40af; font-size: 0.92rem; margin-bottom: 6px;">
+                🛡️ Offline Account Recovery
+            </div>
+            <p style="color: #1e3a8a; font-size: 0.85rem; line-height: 1.5; margin: 0;">
+                For offline security, password resets are handled on-premises. Please contact an <strong>Administrator</strong> or your department coordinator.
+            </p>
+        </div>
+        <p style="color: #475569; font-size: 0.85rem; line-height: 1.45; margin-bottom: 18px;">
+            The Administrator will generate a <strong>single-use temporary passcode</strong> for your account. Once you log in with that passcode, you will be prompted to create your own confidential private password.
+        </p>
+        <div style="display: flex; justify-content: flex-end;">
+            <button type="button" onclick="closeForgotPasswordModal()" style="background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; font-size: 0.88rem; cursor: pointer; width: 100%;">
+                Understood
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     // Clear any old sessions on the login page
     localStorage.removeItem('bookletlog_user');
@@ -141,6 +224,34 @@
             }
         } catch(e) {}
     })();
+
+    function handlePasswordInput(input) {
+        const toggleBtn = document.getElementById('togglePasswordBtn');
+        if (!toggleBtn) return;
+        if (input.value && input.value.length > 0) {
+            toggleBtn.style.display = 'flex';
+        } else {
+            toggleBtn.style.display = 'none';
+            if (input.type === 'text') {
+                input.type = 'password';
+                toggleBtn.setAttribute('title', 'Show Password');
+                toggleBtn.setAttribute('aria-label', 'Show Password');
+                toggleBtn.innerHTML = `
+                    <svg id="eyeIcon" class="eye-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                `;
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const passInput = document.getElementById('password');
+        if (passInput && passInput.value) {
+            handlePasswordInput(passInput);
+        }
+    });
 
     function togglePasswordVisibility() {
         const passwordInput = document.getElementById('password');
@@ -225,13 +336,76 @@
                 } else {
                     window.location.href = '/transaction-profile';
                 }
+            } else if (data.status === "deactivated") {
+                btn.innerText = "Sign In";
+                btn.disabled = false;
+                openAccountDeactivatedModal();
+            } else if (data.status === "locked") {
+                btn.innerText = "Sign In";
+                startLockoutCountdown(data.lockout_seconds || 300);
+                openAccountLockedModal();
             } else {
-                errorMsg.innerText = data.message;
+                errorMsg.innerText = data.message || "Invalid credentials.";
                 errorMsg.style.display = "block";
                 btn.innerText = "Sign In";
                 btn.disabled = false;
             }
         });
+    }
+
+    function openAccountDeactivatedModal() {
+        const modal = document.getElementById('accountDeactivatedModal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeAccountDeactivatedModal() {
+        const modal = document.getElementById('accountDeactivatedModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    let lockoutTimerInterval = null;
+    function startLockoutCountdown(seconds) {
+        if (lockoutTimerInterval) clearInterval(lockoutTimerInterval);
+        let rem = Math.max(0, parseInt(seconds, 10) || 0);
+        const textEl = document.getElementById('lockoutCountdownText');
+        const btn = document.getElementById('loginBtn');
+        if (btn) btn.disabled = true;
+
+        function updateDisplay() {
+            const m = Math.floor(rem / 60);
+            const s = rem % 60;
+            const str = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            if (textEl) textEl.innerText = str;
+            if (rem <= 0) {
+                clearInterval(lockoutTimerInterval);
+                if (btn) btn.disabled = false;
+                if (textEl) textEl.innerText = "00:00 (Unlocked - Try Again)";
+            }
+            rem--;
+        }
+
+        updateDisplay();
+        lockoutTimerInterval = setInterval(updateDisplay, 1000);
+    }
+
+    function openAccountLockedModal() {
+        const modal = document.getElementById('accountLockedModal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeAccountLockedModal() {
+        const modal = document.getElementById('accountLockedModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function openForgotPasswordModal() {
+        const modal = document.getElementById('forgotPasswordModal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeForgotPasswordModal() {
+        const modal = document.getElementById('forgotPasswordModal');
+        if (modal) modal.style.display = 'none';
     }
 
     let currentNetworkInfo = null;

@@ -97,9 +97,9 @@
 
         /* Modals & Stacking Contexts */
 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; box-sizing: border-box; }
 
-        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; }
+        .modal-card { background: #fff; padding: 30px; border-radius: 8px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); border-top: 6px solid #e74c3c; box-sizing: border-box; max-height: 92dvh; overflow-y: auto; }
 
         /* Selectable Checkbox Grid (Uniform with History return modal) */
         .ref-search { width: 100%; padding: 12px; border: 2px solid #3498db; border-radius: 4px; font-size: 1rem; margin-bottom: 15px; font-family: monospace; outline: none; transition: border-color 0.3s; box-sizing: border-box; }
@@ -785,10 +785,29 @@
 
 
 
+        #modal-receipt-mirror .live-receipt-content,
+        #modal-receipt-mirror > div {
+            box-sizing: border-box !important;
+            max-width: 100% !important;
+        }
+
+        @media (max-width: 650px) {
+            .r-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+        }
+
         @media (max-width: 600px) {
-
             .kpi-grid { grid-template-columns: 1fr; }
+            .modal-overlay { padding: 12px 8px !important; }
+            .modal-card { padding: 18px 14px !important; }
+            .ref-grid { grid-template-columns: repeat(2, 1fr) !important; padding: 10px !important; gap: 8px !important; }
+            #modal-receipt-mirror .live-receipt-content,
+            #modal-receipt-mirror > div {
+                padding: 14px 10px !important;
+            }
+        }
 
+        @media (max-width: 400px) {
+            .ref-grid { grid-template-columns: 1fr !important; }
         }
 
 
@@ -1165,41 +1184,26 @@
 
 
 
-                    <table class="r-table">
-
+                    <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 20px;">
+                    <table class="r-table" style="min-width: 440px; margin-bottom: 0;">
                         <thead>
-
                             <tr>
-
                                 <th>QTY</th>
-
                                 <th style="text-align: center;">ITEM </th>
-
                                 <th style="text-align: center;">UNIT PRICE</th>
-
                                 <th style="text-align: center;">TOTAL (PHP)</th>
-
                             </tr>
-
                         </thead>
-
                         <tbody>
-
                             <tr>
-
                                 <td id="r-qty-table">0</td>
-
                                 <td>Exam Booklets</td>
-
                                 <td style="text-align: right;" id="r-unit-price">₱0.00</td>
-
                                 <td style="text-align: right;" id="r-amount-table">0.00</td>
-
                             </tr>
-
                         </tbody>
-
                     </table>
+                    </div>
 
 
 

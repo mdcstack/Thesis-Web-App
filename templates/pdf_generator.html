@@ -160,7 +160,18 @@
 {% include 'sidebar.html' %}
 
     <div class="main-content">
-
+        <!-- Page Header Toolbar with Storage Locator -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h1 style="font-size: 1.5rem; color: #1e293b; margin: 0 0 4px 0; font-weight: 700;">🖨️ PDF Generator</h1>
+                <p style="margin: 0; color: #64748b; font-size: 0.88rem;">Automated Master Batch Stamping &amp; Sequential Control Numbering</p>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="button" class="btn-storage-loc" onclick="openStorageModal('front_page_pdfs')" style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #334155; border: 1.5px solid #cbd5e1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.86rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#ffffff'">
+                    <span>📁</span> Storage Location
+                </button>
+            </div>
+        </div>
 
         <div class="generator-workspace-grid">
             
@@ -343,6 +354,63 @@
             </div>
 
         </div>
+
+        <!-- GENERATED BATCHES REGISTRY & FILE RECOVERY CARD -->
+        <div class="card" id="batchHistoryCard" style="margin-top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;">
+                <div>
+                    <h3 style="font-size: 1.2rem; color: #1e293b; margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+                        <span>📜</span> Generated Batches Registry &amp; File Recovery
+                        <span id="batchCountBadge" style="font-size: 0.75rem; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 12px; font-weight: 700;">0 Batches</span>
+                    </h3>
+                    <p style="margin: 0; color: #64748b; font-size: 0.84rem;">
+                        Authoritative history of all produced batches. Missing or deleted PDF files can be restored instantly from the database.
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button type="button" onclick="loadBatchHistory(true)" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                        <span>🔄</span> Refresh
+                    </button>
+                    <button type="button" id="btnRegenAllBatches" onclick="regenerateAllMissingBatches()" style="display: none; background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; align-items: center; gap: 6px;">
+                        <span>⚡</span> Restore Missing PDFs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Batches Table Filter Toolbar -->
+            <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+                <input type="text" id="batchSearchInput" placeholder="🔍 Search Batch ID, Control No, or SRN..." oninput="filterBatchesTable()" style="flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none;">
+                <select id="batchCourseFilter" onchange="filterBatchesTable()" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; background: white;">
+                    <option value="ALL">All Courses</option>
+                </select>
+                <select id="batchFileStatusFilter" onchange="filterBatchesTable()" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; background: white;">
+                    <option value="ALL">All File Statuses</option>
+                    <option value="EXISTS">🟢 Available on Disk</option>
+                    <option value="MISSING">🔴 Missing from Disk</option>
+                </select>
+            </div>
+
+            <!-- Batches Table -->
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.88rem; text-align: left;">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0; color: #475569;">
+                            <th style="padding: 10px 12px; font-weight: 700;">Batch Identification</th>
+                            <th style="padding: 10px 12px; font-weight: 700;">Course &amp; Design</th>
+                            <th style="padding: 10px 12px; font-weight: 700;">Yield &amp; Sequences</th>
+                            <th style="padding: 10px 12px; font-weight: 700;">Date Registered</th>
+                            <th style="padding: 10px 12px; font-weight: 700;">Disk Status</th>
+                            <th style="padding: 10px 12px; font-weight: 700; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="batchHistoryTableBody">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">Loading batch records...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- UNCONFIGURED TEMPLATE PROMPT MODAL (DYNAMIC DUAL-COURSE BLOCKER: NO DISMISS) -->
@@ -426,30 +494,30 @@
     <div id="stampingModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 100000; justify-content: center; align-items: center;">
         
         <!-- State 1: Active Stamping In-Progress -->
-        <div id="stampingLoadingCard" style="background: white; border-radius: 12px; width: 90%; max-width: 480px; padding: 35px 30px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 6px solid #3498db;">
-            <div style="font-size: 3.5rem; margin-bottom: 12px; animation: pulsePrint 1.5s infinite ease-in-out; display: inline-block;">🖨️</div>
-            <h2 style="color: #1e293b; font-size: 1.4rem; margin-bottom: 8px;">Stamping Control Numbers...</h2>
-            <p style="color: #64748b; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.5;">
-                Compiling master PDF with sequential barcodes & control numbers.
+        <div id="stampingLoadingCard" style="background: white; border-radius: 14px; width: 90%; max-width: 500px; padding: 32px 28px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 6px solid #2563eb;">
+            <div style="font-size: 3rem; margin-bottom: 8px; animation: pulsePrint 1.5s infinite ease-in-out; display: inline-block;">🖨️</div>
+            <h2 style="color: #1e293b; font-size: 1.35rem; margin-bottom: 6px;">Compiling Master Batch PDF...</h2>
+            <p style="color: #64748b; font-size: 0.88rem; margin-bottom: 16px; line-height: 1.45;">
+                Generating front page covers with sequential barcodes & control numbers.
                 <br>
-                <strong style="color: #e67e22;">⚠️ Please DO NOT navigate away, refresh, or close this window.</strong>
+                <strong style="color: #ea580c;">⚠️ Please DO NOT navigate away, refresh, or close this window.</strong>
             </p>
 
             <!-- Progress Indicator & Batch Metrics -->
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; text-align: left; font-size: 0.9rem; color: #334155;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; text-align: left; font-size: 0.88rem; color: #334155;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                     <span>Course / Program:</span>
                     <strong id="modalDeptName" style="color: #2563eb;">Computer Science (CS)</strong>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                     <span>Design Template:</span>
                     <strong id="modalTemplateName" style="color: #475569;">Template 1</strong>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                     <span>Raw Paper Input:</span>
                     <strong id="modalReamCount">1 Ream(s)</strong>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                     <span>Total Target Yield:</span>
                     <strong id="modalTargetYield" style="color: #27ae60;">-- Booklets</strong>
                 </div>
@@ -459,8 +527,20 @@
                 </div>
             </div>
 
-            <div style="height: 6px; width: 100%; background: #e2e8f0; border-radius: 9999px; overflow: hidden; position: relative;">
-                <div style="height: 100%; width: 45%; background: #3498db; border-radius: 9999px; position: absolute; animation: indeterminateBar 1.6s infinite ease-in-out;"></div>
+            <!-- Dynamic Live Phase Status -->
+            <div id="stampingStageText" style="font-weight: 600; color: #2563eb; font-size: 0.92rem; margin-bottom: 10px; min-height: 22px;">
+                Initializing generation parameters...
+            </div>
+
+            <!-- Progress Bar Track & Fill -->
+            <div style="height: 12px; width: 100%; background: #e2e8f0; border-radius: 9999px; overflow: hidden; margin-bottom: 8px;">
+                <div id="stampingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #2563eb, #3b82f6); border-radius: 9999px; transition: width 0.3s ease;"></div>
+            </div>
+
+            <!-- Percentage & ETA Countdown Display -->
+            <div style="display: flex; justify-content: space-between; font-size: 0.84rem;">
+                <span id="stampingProgressPercent" style="font-weight: 700; color: #1e293b;">0%</span>
+                <span id="stampingProgressEta" style="color: #64748b;">Estimated: ~5s remaining</span>
             </div>
         </div>
 
@@ -493,6 +573,85 @@
                 </a>
                 <button type="button" onclick="closeStampingModal()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background 0.2s;">
                     Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FULL-SCREEN BATCH REGENERATION PROGRESS MODAL -->
+    <div id="regenerationModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 100000; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box;">
+        <div style="background: white; border-radius: 14px; width: 100%; max-width: 500px; padding: 32px 28px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 6px solid #2563eb;">
+            <div style="font-size: 3rem; margin-bottom: 8px; display: inline-block;">⚙️</div>
+            <h3 id="regenModalTitle" style="color: #1e293b; font-size: 1.35rem; margin: 0 0 6px 0;">Reconstructing Master Batch PDF</h3>
+            <p style="color: #64748b; font-size: 0.88rem; margin: 0 0 16px 0; line-height: 1.45;">
+                Re-synthesizing booklet cover pages from database records.
+                <br>
+                <strong style="color: #ea580c;">⚠️ Please DO NOT navigate away, refresh, or close this window.</strong>
+            </p>
+
+            <!-- Batch Info Snapshot -->
+            <div id="regenModalBatchBox" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; text-align: left; font-size: 0.88rem; color: #334155;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>Master Batch ID:</span>
+                    <strong id="regenModalBatchId" style="font-family: monospace; color: #2563eb;">BATCH-XXXX</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>Course / Department:</span>
+                    <strong id="regenModalCourse" style="color: #1e293b;">--</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                    <span>Booklet Volume:</span>
+                    <strong id="regenModalVolume">-- Booklets</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Control Range:</span>
+                    <strong id="regenModalRange" style="font-family: monospace;">-- to --</strong>
+                </div>
+            </div>
+
+            <!-- Live Step Status Description -->
+            <div id="regenModalStatus" style="font-weight: 600; color: #2563eb; font-size: 0.92rem; margin-bottom: 10px; min-height: 22px;">
+                Initializing reconstruction...
+            </div>
+
+            <!-- Progress Bar Track & Fill -->
+            <div style="height: 12px; width: 100%; background: #e2e8f0; border-radius: 9999px; overflow: hidden; margin-bottom: 8px;">
+                <div id="regenProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #2563eb, #3b82f6); border-radius: 9999px; transition: width 0.3s ease;"></div>
+            </div>
+
+            <!-- Percentage & ETA Display -->
+            <div style="display: flex; justify-content: space-between; font-size: 0.84rem;">
+                <span id="regenModalPercent" style="font-weight: 700; color: #1e293b;">0%</span>
+                <span id="regenModalEta" style="color: #64748b;">Estimated: ~4s remaining</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PHYSICAL FILE STORAGE LOCATION MODAL -->
+    <div id="storageLocationModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(5px); z-index: 99999; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box;">
+        <div style="background: white; border-radius: 14px; width: 100%; max-width: 620px; padding: 28px 26px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); border-top: 6px solid #2563eb; font-family: inherit; text-align: left; box-sizing: border-box; max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #1e293b;">Physical File Storage Location</h3>
+                    <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #64748b;">Direct device storage paths for booklet batches and template assets</p>
+                </div>
+                <button type="button" onclick="closeStorageModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; line-height: 1;">&times;</button>
+            </div>
+
+            <!-- Notice / Safe-to-Delete Advisory -->
+            <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; font-size: 0.85rem; color: #1e40af; line-height: 1.45;">
+                <strong>Accidental Deletion Protection:</strong>
+                All booklet control numbers, SRNs, and batch metadata are securely preserved in the database. If files in these folders are deleted, they can be reconstructed instantly at any time using the <em>Restore</em> buttons.
+            </div>
+
+            <!-- Storage Folders Detail Cards -->
+            <div id="storageModalContent" style="display: flex; flex-direction: column; gap: 14px;">
+                <div style="text-align: center; color: #94a3b8; padding: 20px;">Fetching storage paths...</div>
+            </div>
+
+            <div style="margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" onclick="closeStorageModal()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 0.9rem; cursor: pointer;">
+                    Close
                 </button>
             </div>
         </div>
@@ -749,6 +908,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         let currentSheetsPerBooklet = 6;
         let currentYieldPerReam = 83;
         let isStampingInProgress = false;
+        let isRegeneratingInProgress = false;
         let templateStatuses = {};
         let selectedSlot = 1;
         let currentActivePeriod = 'UNSET';
@@ -847,9 +1007,9 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
         // Navigation guard to prevent disrupting in-flight PDF generation
         window.addEventListener('beforeunload', function (e) {
-            if (isStampingInProgress) {
+            if (isStampingInProgress || isRegeneratingInProgress) {
                 e.preventDefault();
-                e.returnValue = "Batch generation is currently in progress. Navigating away now may disrupt control number stamping.";
+                e.returnValue = "Batch generation or regeneration is currently in progress. Navigating away now may disrupt PDF compilation.";
                 return e.returnValue;
             }
         });
@@ -1816,7 +1976,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 await Promise.all([
                     loadAcademicProgramsForGenerator(),
                     fetchGeneratorSettings(),
-                    fetchTemplateStatuses(false)
+                    fetchTemplateStatuses(false),
+                    loadBatchHistory()
                 ]);
                 isPageInitializing = false;
                 updateTemplateGuardUI();
@@ -2074,6 +2235,20 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             document.getElementById('modalReamCount').innerText = `${reamsRequested} Ream(s)`;
             document.getElementById('modalTargetYield').innerText = `${totalYield} Booklets`;
             document.getElementById('modalRateApplied').innerText = `${currentSheetsPerBooklet} sheets/booklet`;
+
+            // Initialize Progress Bar & Live Status
+            const pBar = document.getElementById('stampingProgressBar');
+            const pPercent = document.getElementById('stampingProgressPercent');
+            const pEta = document.getElementById('stampingProgressEta');
+            const pStage = document.getElementById('stampingStageText');
+
+            if (pBar) pBar.style.width = '0%';
+            if (pPercent) pPercent.innerText = '0%';
+            if (pStage) pStage.innerText = 'Step 1/4: Validating target quotas & booklet numbering...';
+
+            const totalDurationSec = Math.max(4, Math.min(14, Math.ceil((totalYield || 83) / 35)));
+            let elapsedSec = 0;
+            if (pEta) pEta.innerText = `Estimated: ~${totalDurationSec}s remaining`;
             
             loadingCard.style.display = 'block';
             successCard.style.display = 'none';
@@ -2084,6 +2259,30 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             msg.style.display = 'block';
             msg.style.color = '#e67e22';
             msg.innerHTML = `⚙️ Stamping ${totalYield} sequential control numbers using ${templateName} (${currentSheetsPerBooklet} sheets/booklet for ${selectedDept}). This may take a moment...`;
+
+            let currentProgress = 0;
+            const progressTimer = setInterval(() => {
+                elapsedSec += 0.2;
+                const remainingSec = Math.max(1, Math.ceil(totalDurationSec - elapsedSec));
+                if (pEta) pEta.innerText = `Estimated: ~${remainingSec}s remaining`;
+
+                const targetPercent = Math.min(92, Math.floor((elapsedSec / totalDurationSec) * 92));
+                if (currentProgress < targetPercent) {
+                    currentProgress += 1;
+                }
+                if (pBar) pBar.style.width = `${currentProgress}%`;
+                if (pPercent) pPercent.innerText = `${currentProgress}%`;
+
+                if (currentProgress < 25) {
+                    if (pStage) pStage.innerText = 'Step 1/4: Validating target quotas & booklet numbering...';
+                } else if (currentProgress < 55) {
+                    if (pStage) pStage.innerText = 'Step 2/4: Synthesizing vector barcodes & sequential security SRNs...';
+                } else if (currentProgress < 80) {
+                    if (pStage) pStage.innerText = 'Step 3/4: Rendering front covers & multi-page booklet layout...';
+                } else {
+                    if (pStage) pStage.innerText = 'Step 4/4: Compiling Master PDF & saving to server storage...';
+                }
+            }, 200);
 
             try {
                 // Send the exact ream count, department, and template_slot to the backend
@@ -2098,8 +2297,15 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 });
                 
                 const data = await response.json();
+                clearInterval(progressTimer);
 
                 if (response.ok) {
+                    if (pBar) pBar.style.width = '100%';
+                    if (pPercent) pPercent.innerText = '100%';
+                    if (pEta) pEta.innerText = 'Complete!';
+                    if (pStage) pStage.innerText = 'Master Batch successfully compiled!';
+                    await new Promise(r => setTimeout(r, 450));
+
                     isStampingInProgress = false;
                     
                     // Transition to Success Card
@@ -2146,6 +2352,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     } catch(e) {}
                     await fetchGeneratorSettings();
                     await fetchTemplateStatuses(false);
+                    await loadBatchHistory();
                 } else {
                     isStampingInProgress = false;
                     modal.style.display = 'none';
@@ -2157,6 +2364,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     msg.style.display = 'none';
                 }
             } catch (error) {
+                if (typeof progressTimer !== 'undefined') clearInterval(progressTimer);
                 isStampingInProgress = false;
                 modal.style.display = 'none';
                 console.error(error);
@@ -2168,6 +2376,12 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         }
 
         window.addEventListener('keydown', function(e) {
+            if (isStampingInProgress || isRegeneratingInProgress) {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                    e.preventDefault();
+                    return false;
+                }
+            }
             if (e.key === 'Escape') {
                 const confirmModal = document.getElementById('batchConfirmModal');
                 if (confirmModal && confirmModal.style.display === 'flex') {
@@ -2179,8 +2393,8 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         // --- REAL-TIME OFFLINE LAN SYNCHRONIZATION ---
         if (window.lanSync) {
             window.lanSync.onUpdate(async () => {
-                // Do not disrupt active generation stamping
-                if (isStampingInProgress) return;
+                // Do not disrupt active generation stamping or regeneration
+                if (isStampingInProgress || isRegeneratingInProgress) return;
                 try {
                     sessionStorage.removeItem('bookletlog_pdfgen_programs');
                     sessionStorage.removeItem('bookletlog_pdfgen_settings');
@@ -2189,6 +2403,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 await fetchGeneratorSettings();
                 updateCourseDemandUI();
                 updateTargetYield();
+                await loadBatchHistory();
                 if (typeof window.refreshSidebarDSSAlert === 'function') {
                     window.refreshSidebarDSSAlert();
                 }
@@ -2198,7 +2413,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
         // --- REAL-TIME TAB FOCUS & VISIBILITY SYNCHRONIZATION ---
         document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible' && !isStampingInProgress) {
+            if (document.visibilityState === 'visible' && !isStampingInProgress && !isRegeneratingInProgress) {
                 try {
                     sessionStorage.removeItem('bookletlog_pdfgen_programs');
                     sessionStorage.removeItem('bookletlog_pdfgen_settings');
@@ -2207,11 +2422,12 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 await fetchGeneratorSettings();
                 updateCourseDemandUI();
                 updateTargetYield();
+                await loadBatchHistory();
             }
         });
 
         window.addEventListener('focus', async () => {
-            if (!isStampingInProgress) {
+            if (!isStampingInProgress && !isRegeneratingInProgress) {
                 try {
                     sessionStorage.removeItem('bookletlog_pdfgen_programs');
                     sessionStorage.removeItem('bookletlog_pdfgen_settings');
@@ -2220,12 +2436,13 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 await fetchGeneratorSettings();
                 updateCourseDemandUI();
                 updateTargetYield();
+                await loadBatchHistory();
             }
         });
 
         // --- CROSS-TAB LOCALSTORAGE BROADCAST LISTENER ---
         window.addEventListener('storage', async (e) => {
-            if ((e.key === 'bookletlog_programs_version' || e.key === 'bookletlog_settings_version') && !isStampingInProgress) {
+            if ((e.key === 'bookletlog_programs_version' || e.key === 'bookletlog_settings_version') && !isStampingInProgress && !isRegeneratingInProgress) {
                 try {
                     sessionStorage.removeItem('bookletlog_pdfgen_programs');
                     sessionStorage.removeItem('bookletlog_pdfgen_settings');
@@ -2234,6 +2451,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 await fetchGeneratorSettings();
                 updateCourseDemandUI();
                 updateTargetYield();
+                await loadBatchHistory();
             }
         });
     
@@ -2262,7 +2480,405 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
 
 <script>
+        // ==========================================
+        // PHYSICAL STORAGE LOCATION & BATCH RECOVERY
+        // ==========================================
+        let _allBatches = [];
 
+        async function openStorageModal() {
+            const modal = document.getElementById('storageLocationModal');
+            const content = document.getElementById('storageModalContent');
+            if (modal) modal.style.display = 'flex';
+            if (content) content.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 25px;">⏳ Reading storage directories and calculating file statistics...</div>';
+
+            try {
+                const res = await fetch('/api/system/storage-info');
+                if (!res.ok) throw new Error("Could not retrieve storage information");
+                const data = await res.json();
+                renderStorageModalContent(data);
+            } catch (err) {
+                if (content) {
+                    content.innerHTML = `<div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px;">Failed to load storage info: ${err.message}</div>`;
+                }
+            }
+        }
+
+        function closeStorageModal() {
+            const modal = document.getElementById('storageLocationModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function renderStorageModalContent(data) {
+            const content = document.getElementById('storageModalContent');
+            if (!content) return;
+
+            const pdfs = data.front_page_pdfs || {};
+            const tmpls = data.templates || {};
+
+            content.innerHTML = `
+                <!-- Master Batch PDFs Storage Card -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">Master Batch Front Page PDFs</span>
+                            <span style="font-size: 0.78rem; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 6px;">Folder: static/front_page_pdfs</span>
+                        </div>
+                        <span style="font-size: 0.82rem; font-weight: 700; color: ${pdfs.missing_files > 0 ? '#dc2626' : '#16a34a'};">
+                            ${pdfs.missing_files > 0 ? `⚠️ ${pdfs.missing_files} Missing` : '✅ All Intact'}
+                        </span>
+                    </div>
+
+                    <div style="background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 0.82rem; color: #334155; word-break: break-all; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <span id="pdfPathText">${pdfs.absolute_path || 'Unavailable'}</span>
+                        <button type="button" onclick="copyStoragePath('${(pdfs.absolute_path || '').replace(/\\/g, '\\\\')}', this)" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; white-space: nowrap;">📋 Copy</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: #64748b;">
+                        <span>Files on disk: <strong>${pdfs.files_on_disk || 0}</strong> | Registered batches: <strong>${pdfs.expected_records || 0}</strong></span>
+                        ${pdfs.missing_files > 0 ? `
+                            <button type="button" onclick="regenerateAllMissingBatches()" style="background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; padding: 4px 10px; border-radius: 4px; font-weight: 600; font-size: 0.78rem; cursor: pointer;">Restore Missing</button>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Booklet Templates Storage Card -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">Master Booklet Cover Design Templates</span>
+                            <span style="font-size: 0.78rem; background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 10px; font-weight: 600; margin-left: 6px;">Folder: static/templates</span>
+                        </div>
+                    </div>
+
+                    <div style="background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 0.82rem; color: #334155; word-break: break-all; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <span>${tmpls.absolute_path || 'Unavailable'}</span>
+                        <button type="button" onclick="copyStoragePath('${(tmpls.absolute_path || '').replace(/\\/g, '\\\\')}', this)" style="background: #f1f5f9; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; white-space: nowrap;">📋 Copy</button>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: #64748b;">
+                        <span>Templates uploaded: <strong>${tmpls.files_on_disk || 0}</strong></span>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function copyStoragePath(pathStr, btn) {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(pathStr);
+                } else {
+                    const tempInput = document.createElement("input");
+                    tempInput.value = pathStr;
+                    document.body.appendChild(tempInput);
+                    tempInput.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(tempInput);
+                }
+                const oldText = btn.innerText;
+                btn.innerText = "Copied!";
+                btn.style.color = "#15803d";
+                setTimeout(() => {
+                    btn.innerText = oldText;
+                    btn.style.color = "";
+                }, 1800);
+            } catch (err) {
+                prompt("Copy folder path manually:", pathStr);
+            }
+        }
+
+        async function loadBatchHistory(force = false) {
+            try {
+                const res = await fetch('/api/batches/history', { cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                _allBatches = data.batches || [];
+
+                // Populate course filter if needed
+                const filterCourse = document.getElementById('batchCourseFilter');
+                if (filterCourse) {
+                    const currentVal = filterCourse.value;
+                    const courses = [...new Set(_allBatches.map(b => b.department).filter(Boolean))].sort();
+                    let html = '<option value="ALL">All Courses</option>';
+                    courses.forEach(c => {
+                        html += `<option value="${c}">${c}</option>`;
+                    });
+                    filterCourse.innerHTML = html;
+                    filterCourse.value = currentVal;
+                }
+
+                // Check for missing PDFs and toggle restore button
+                const missingCount = _allBatches.filter(b => !b.file_exists).length;
+                const regenAllBtn = document.getElementById('btnRegenAllBatches');
+                if (regenAllBtn) {
+                    if (missingCount > 0) {
+                        regenAllBtn.style.display = 'inline-flex';
+                        regenAllBtn.innerHTML = `<span>⚡</span> Restore ${missingCount} Missing PDF${missingCount > 1 ? 's' : ''}`;
+                    } else {
+                        regenAllBtn.style.display = 'none';
+                    }
+                }
+
+                filterBatchesTable();
+            } catch (err) {
+                console.error("Error loading batch history:", err);
+            }
+        }
+
+        function filterBatchesTable() {
+            const tbody = document.getElementById('batchHistoryTableBody');
+            if (!tbody) return;
+
+            const search = (document.getElementById('batchSearchInput')?.value || '').toLowerCase().trim();
+            const course = document.getElementById('batchCourseFilter')?.value || 'ALL';
+            const status = document.getElementById('batchFileStatusFilter')?.value || 'ALL';
+
+            const filtered = _allBatches.filter(b => {
+                if (course !== 'ALL' && b.department !== course) return false;
+                if (status === 'EXISTS' && !b.file_exists) return false;
+                if (status === 'MISSING' && b.file_exists) return false;
+
+                if (search) {
+                    const matchBatch = (b.master_batch_id || '').toLowerCase().includes(search);
+                    const matchDept = (b.department || '').toLowerCase().includes(search);
+                    const matchCtrl = ((b.start_control_num || '') + ' ' + (b.end_control_num || '')).toLowerCase().includes(search);
+                    const matchSrn = ((b.start_srn || '') + ' ' + (b.end_srn || '')).toLowerCase().includes(search);
+                    if (!matchBatch && !matchDept && !matchCtrl && !matchSrn) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 25px;">No batches found matching filter.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(b => {
+                const dateStr = b.created_at ? new Date(b.created_at).toLocaleString() : '--';
+                const fileBadge = b.file_exists
+                    ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600;">🟢 On Disk</span>`
+                    : `<span style="display: inline-flex; align-items: center; gap: 4px; color: #991b1b; background: #fee2e2; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600;">🔴 Missing</span>`;
+
+                return `
+                    <tr style="border-bottom: 1px solid #f1f5f9;">
+                        <td style="padding: 10px 12px;">
+                            <div style="font-weight: 700; color: #1e293b; font-family: monospace;">${b.master_batch_id}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">${b.pdf_filename || ''}</div>
+                        </td>
+                        <td style="padding: 10px 12px;">
+                            <div style="font-weight: 600; color: #2563eb;">${b.department || 'N/A'}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">Slot ${b.template_slot || '1'}</div>
+                        </td>
+                        <td style="padding: 10px 12px;">
+                            <div style="font-weight: 600; color: #1e293b;">${(b.booklets_generated || 0).toLocaleString()} Booklets <span style="font-size: 0.78rem; color: #64748b; font-weight: normal;">(${b.reams_consumed || 0} Ream${b.reams_consumed === 1 ? '' : 's'})</span></div>
+                            <div style="font-family: monospace; font-size: 0.78rem; color: #475569;">${b.start_control_num || '--'} ➔ ${b.end_control_num || '--'}</div>
+                            <div style="font-family: monospace; font-size: 0.75rem; color: #2563eb;">${b.start_srn || '--'} ➔ ${b.end_srn || '--'}</div>
+                        </td>
+                        <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
+                            ${dateStr}
+                        </td>
+                        <td style="padding: 10px 12px;">
+                            ${fileBadge}
+                        </td>
+                        <td style="padding: 10px 12px; text-align: right;">
+                            <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                                <a href="${b.download_url}" target="_blank" style="text-decoration: none; background: #2563eb; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                    📥 Download
+                                </a>
+                                <button type="button" onclick="regenerateBatchPdf('${b.master_batch_id}')" title="Reconstruct PDF from database records" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                    ⚡ Regenerate
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function regenerateBatchPdf(batchId) {
+            if (isRegeneratingInProgress || isStampingInProgress) return;
+            const batch = _allBatches.find(b => b.master_batch_id === batchId) || {};
+
+            const modal = document.getElementById('regenerationModal');
+            const titleEl = document.getElementById('regenModalTitle');
+            const batchBox = document.getElementById('regenModalBatchBox');
+            const batchIdEl = document.getElementById('regenModalBatchId');
+            const courseEl = document.getElementById('regenModalCourse');
+            const volEl = document.getElementById('regenModalVolume');
+            const rangeEl = document.getElementById('regenModalRange');
+            const statusEl = document.getElementById('regenModalStatus');
+            const pBar = document.getElementById('regenProgressBar');
+            const pPercent = document.getElementById('regenModalPercent');
+            const pEta = document.getElementById('regenModalEta');
+
+            if (titleEl) titleEl.innerText = "Reconstructing Master Batch PDF";
+            if (batchBox) batchBox.style.display = 'block';
+            if (batchIdEl) batchIdEl.innerText = batchId;
+            if (courseEl) courseEl.innerText = batch.department || 'All / General';
+            if (volEl) volEl.innerText = `${(batch.booklets_generated || 0).toLocaleString()} Booklets`;
+            if (rangeEl) rangeEl.innerText = `${batch.start_control_num || '--'} to ${batch.end_control_num || '--'}`;
+
+            if (pBar) pBar.style.width = '0%';
+            if (pPercent) pPercent.innerText = '0%';
+            if (statusEl) statusEl.innerText = 'Step 1/4: Querying registered booklet records from database...';
+
+            const estimatedSec = Math.max(3, Math.min(10, Math.ceil((batch.booklets_generated || 83) / 45)));
+            let elapsedSec = 0;
+            if (pEta) pEta.innerText = `Estimated: ~${estimatedSec}s remaining`;
+
+            isRegeneratingInProgress = true;
+            if (modal) modal.style.display = 'flex';
+
+            let currentProgress = 0;
+            const progressTimer = setInterval(() => {
+                elapsedSec += 0.2;
+                const remainingSec = Math.max(1, Math.ceil(estimatedSec - elapsedSec));
+                if (pEta) pEta.innerText = `Estimated: ~${remainingSec}s remaining`;
+
+                const targetPercent = Math.min(92, Math.floor((elapsedSec / estimatedSec) * 92));
+                if (currentProgress < targetPercent) {
+                    currentProgress += 1;
+                }
+                if (pBar) pBar.style.width = `${currentProgress}%`;
+                if (pPercent) pPercent.innerText = `${currentProgress}%`;
+
+                if (currentProgress < 25) {
+                    if (statusEl) statusEl.innerText = 'Step 1/4: Querying registered booklet records from database...';
+                } else if (currentProgress < 55) {
+                    if (statusEl) statusEl.innerText = 'Step 2/4: Re-synthesizing barcode vectors & security SRNs...';
+                } else if (currentProgress < 80) {
+                    if (statusEl) statusEl.innerText = 'Step 3/4: Re-rendering booklet cover sheets & batch manifest...';
+                } else {
+                    if (statusEl) statusEl.innerText = 'Step 4/4: Writing reconstructed Master PDF to local storage...';
+                }
+            }, 200);
+
+            try {
+                const res = await fetch(`/api/batches/${batchId}/regenerate-pdf`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                clearInterval(progressTimer);
+
+                if (res.ok) {
+                    if (pBar) pBar.style.width = '100%';
+                    if (pPercent) pPercent.innerText = '100%';
+                    if (pEta) pEta.innerText = 'Complete!';
+                    if (statusEl) statusEl.innerText = 'Master Batch PDF successfully reconstructed!';
+                    await new Promise(r => setTimeout(r, 450));
+                    if (modal) modal.style.display = 'none';
+                    isRegeneratingInProgress = false;
+
+                    await showAppAlert("PDF Regenerated", `Successfully reconstructed master batch PDF for ${batchId}.\nFile: ${data.filename}`, "success");
+                    await loadBatchHistory();
+                    if (document.getElementById('storageLocationModal')?.style.display === 'flex') {
+                        openStorageModal();
+                    }
+                } else {
+                    if (modal) modal.style.display = 'none';
+                    isRegeneratingInProgress = false;
+                    await showAppAlert("Regeneration Failed", data.detail || "Could not regenerate PDF.", "danger");
+                }
+            } catch (err) {
+                clearInterval(progressTimer);
+                if (modal) modal.style.display = 'none';
+                isRegeneratingInProgress = false;
+                console.error("Regenerate batch error:", err);
+                await showAppAlert("Error", "Network or server error while regenerating PDF.", "danger");
+            }
+        }
+
+        async function regenerateAllMissingBatches() {
+            if (isRegeneratingInProgress || isStampingInProgress) return;
+            const confirmed = await showAppConfirm(
+                "Restore Missing Batch PDFs?",
+                "This will scan the database for any batch PDF files missing from the storage folder and reconstruct them page-by-page from permanent booklet records.",
+                { confirmText: "Restore Missing Files", type: "info" }
+            );
+            if (!confirmed) return;
+
+            const modal = document.getElementById('regenerationModal');
+            const titleEl = document.getElementById('regenModalTitle');
+            const batchBox = document.getElementById('regenModalBatchBox');
+            const statusEl = document.getElementById('regenModalStatus');
+            const pBar = document.getElementById('regenProgressBar');
+            const pPercent = document.getElementById('regenModalPercent');
+            const pEta = document.getElementById('regenModalEta');
+
+            if (titleEl) titleEl.innerText = "Restoring Missing Batch PDFs";
+            if (batchBox) batchBox.style.display = 'none';
+            if (pBar) pBar.style.width = '0%';
+            if (pPercent) pPercent.innerText = '0%';
+            if (statusEl) statusEl.innerText = 'Scanning database and reconstructing missing master batch files...';
+
+            const estimatedSec = 6;
+            let elapsedSec = 0;
+            if (pEta) pEta.innerText = `Estimated: ~${estimatedSec}s remaining`;
+
+            isRegeneratingInProgress = true;
+            if (modal) modal.style.display = 'flex';
+
+            let currentProgress = 0;
+            const progressTimer = setInterval(() => {
+                elapsedSec += 0.2;
+                const remainingSec = Math.max(1, Math.ceil(estimatedSec - elapsedSec));
+                if (pEta) pEta.innerText = `Estimated: ~${remainingSec}s remaining`;
+
+                const targetPercent = Math.min(92, Math.floor((elapsedSec / estimatedSec) * 92));
+                if (currentProgress < targetPercent) {
+                    currentProgress += 1;
+                }
+                if (pBar) pBar.style.width = `${currentProgress}%`;
+                if (pPercent) pPercent.innerText = `${currentProgress}%`;
+
+                if (currentProgress < 30) {
+                    if (statusEl) statusEl.innerText = 'Scanning storage registry and identifying missing batch files...';
+                } else if (currentProgress < 65) {
+                    if (statusEl) statusEl.innerText = 'Rebuilding booklet front page covers & barcodes...';
+                } else {
+                    if (statusEl) statusEl.innerText = 'Compiling and saving reconstructed batch files to disk...';
+                }
+            }, 200);
+
+            try {
+                const res = await fetch('/api/batches/regenerate-all-missing', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                clearInterval(progressTimer);
+
+                if (res.ok) {
+                    if (pBar) pBar.style.width = '100%';
+                    if (pPercent) pPercent.innerText = '100%';
+                    if (pEta) pEta.innerText = 'Complete!';
+                    if (statusEl) statusEl.innerText = 'All missing batches successfully restored!';
+                    await new Promise(r => setTimeout(r, 450));
+                    if (modal) modal.style.display = 'none';
+                    isRegeneratingInProgress = false;
+
+                    await showAppAlert(
+                        "Restoration Complete",
+                        `Restored ${data.restored_count} missing batch PDF(s).\nTotal checked: ${data.total_batches}.`,
+                        "success"
+                    );
+                    await loadBatchHistory();
+                    if (document.getElementById('storageLocationModal')?.style.display === 'flex') {
+                        openStorageModal();
+                    }
+                } else {
+                    if (modal) modal.style.display = 'none';
+                    isRegeneratingInProgress = false;
+                    await showAppAlert("Restoration Failed", data.detail || "Could not restore missing batches.", "danger");
+                }
+            } catch (err) {
+                clearInterval(progressTimer);
+                if (modal) modal.style.display = 'none';
+                isRegeneratingInProgress = false;
+                console.error("Batch restoration error:", err);
+                await showAppAlert("Error", "Network error while restoring batch PDFs.", "danger");
+            }
+        }
 </script>
 
 
