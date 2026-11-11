@@ -174,7 +174,7 @@
         <!-- Main Dynamic Content Container (Rendered Instantly) -->
         <div id="breakdownContent">
             <!-- Summary Metric Cards -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
+            <div id="deptSummaryMetricsContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 25px;">
                 <div class="card" style="border-left-color: #8e44ad;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Gross Sales Revenue</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGrossRevenue">₱0.00</h2>
@@ -197,7 +197,7 @@
             <div id="deptRostersContainer"></div>
 
             <!-- Income Statement Card -->
-            <div class="card" style="border-left-color: #27ae60;">
+            <div class="card" id="deptIncomeStatementCard" style="border-left-color: #27ae60;">
                 <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Income Statement</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
@@ -816,19 +816,16 @@
             });
         }
 
-        // Protect critical breakdown tables against DevTools inspect tampering
+        // Protect critical breakdown tables, metric cards, and income statement against DevTools inspect tampering
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 if (window.protectContainer) {
                     var container = document.getElementById('deptRostersContainer');
-                    if (container) {
-                        window.protectContainer(container, function() {
-                            var auth = window.getAuthoritativeData('department_breakdown');
-                            if (auth && auth.computations_data) {
-                                renderBreakdown(auth.computations_data, auth.active_period, auth.financials);
-                            }
-                        });
-                    }
+                    if (container) window.protectContainer(container);
+                    var metricsContainer = document.getElementById('deptSummaryMetricsContainer');
+                    if (metricsContainer) window.protectContainer(metricsContainer);
+                    var incomeCard = document.getElementById('deptIncomeStatementCard');
+                    if (incomeCard) window.protectContainer(incomeCard);
                 }
             }, 300);
         });

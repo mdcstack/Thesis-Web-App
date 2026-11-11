@@ -910,7 +910,7 @@
         });
     }
 
-    // Protect receipt modal against Inspect Element modification
+    // Protect receipt modal and receipt records table against Inspect Element modification
     document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
             if (window.protectContainer) {
@@ -920,6 +920,12 @@
                         if (currentReceiptIndex !== null && typeof currentReceiptIndex === 'number') {
                             openReceipt(currentReceiptIndex);
                         }
+                    });
+                }
+                var tBody = document.getElementById('tableBody');
+                if (tBody) {
+                    window.protectContainer(tBody, function() {
+                        applyFilters();
                     });
                 }
             }

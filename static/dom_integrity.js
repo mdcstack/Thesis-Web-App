@@ -3,6 +3,7 @@
  * Protects client-side data integrity against DevTools element inspection,
  * unauthorized DOM manipulation, and ensures 100% authoritative server data
  * during print, preview, modal views, and save operations.
+ * Passive, non-pulsating architecture with zero continuous polling reflows.
  */
 
 (function(window) {
@@ -15,13 +16,14 @@
     let toastTimeout = null;
 
     /**
-     * Executes a callback function while flagging system rendering so
-     * MutationObserver knows this is an authorized internal update.
+     * Executes a callback function while flagging system rendering.
      */
     function withSystemRendering(fn) {
         isSystemRendering = true;
         try {
             return fn();
+        } catch (err) {
+            console.error('[Integrity Guard] Internal rendering error:', err);
         } finally {
             setTimeout(function() {
                 isSystemRendering = false;
@@ -71,6 +73,32 @@
     }
 
     /**
+     * Sets authoritative text on an element and marks it with tamper protection.
+     */
+    function lockAuthoritativeElement(target, authoritativeValue) {
+        var el = typeof target === 'string' ? document.querySelector(target) : target;
+        if (!el || authoritativeValue === undefined || authoritativeValue === null) return;
+
+        var strVal = String(authoritativeValue);
+        el.setAttribute('data-tamper-protect', 'true');
+        el.textContent = strVal;
+    }
+
+    /**
+     * Utility to set authoritative text on multiple elements matching a selector.
+     */
+    function lockAuthoritativeGroup(selector, extractorFn) {
+        if (!selector || typeof extractorFn !== 'function') return;
+        var elements = document.querySelectorAll(selector);
+        for (var i = 0; i < elements.length; i++) {
+            var val = extractorFn(elements[i], i);
+            if (val !== undefined && val !== null) {
+                lockAuthoritativeElement(elements[i], val);
+            }
+        }
+    }
+
+    /**
      * Registers a rehydration function that will be executed synchronously
      * right before any print action (button click, window.print(), or Ctrl+P).
      */
@@ -108,43 +136,36 @@
         var toast = document.createElement('div');
         toast.id = 'tamperWarningToast';
         toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999999; background: #991b1b; color: white; padding: 12px 18px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; pointer-events: none; transition: opacity 0.4s ease;';
-        toast.innerHTML = '<span style="font-size: 16px;">🛡️</span><span>' + (customMsg || 'Integrity Guard: Tampered content detected. Restored to verified server data.') + '</span>';
+        toast.innerHTML = '<span style="font-size: 16px;">🛡️</span><span>' + (customMsg || 'Integrity Guard: Inspection disabled on official records.') + '</span>';
         
-        document.body.appendChild(toast);
+        if (document.body && document.body.appendChild) {
+            document.body.appendChild(toast);
+        }
         toastTimeout = setTimeout(function() {
             toast.style.opacity = '0';
             setTimeout(function() {
                 if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
             }, 400);
-        }, 3200);
+        }, 2800);
     }
 
     /**
-     * Attaches an active MutationObserver to a container.
-     * If an external script or DevTools inspection edits child nodes or text,
-     * the observer detects it and automatically executes renderFn to restore server state.
+     * Passive container protection:
+     * Tags the target element with data-tamper-protect="true" to disable right-click inspect.
+     * Optionally registers print rehydration if a re-render function is supplied.
+     * Zero continuous polling or active mutation observers to guarantee zero UI pulsation.
      */
     function protectContainer(target, renderFn) {
         var el = typeof target === 'string' ? document.querySelector(target) : target;
-        if (!el || typeof renderFn !== 'function') return null;
+        if (!el) return null;
 
         el.setAttribute('data-tamper-protect', 'true');
-        var debounceTimer = null;
-
-        var observer = new MutationObserver(function(mutations) {
-            if (isSystemRendering) return;
-
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(function() {
-                if (isSystemRendering) return;
-                console.warn('[Integrity Guard] Unauthorized DOM mutation detected on:', el);
-                showTamperToast();
-                withSystemRendering(renderFn);
-            }, 60);
-        });
-
-        observer.observe(el, { childList: true, subtree: true, characterData: true });
-        return observer;
+        if (typeof renderFn === 'function') {
+            registerPrintRehydrator(renderFn);
+        }
+        return {
+            disconnect: function() {}
+        };
     }
 
     // Intercept native window.print() so all calls re-hydrate first
@@ -171,6 +192,8 @@
     window.registerAuthoritativeData = registerAuthoritativeData;
     window.getAuthoritativeData = getAuthoritativeData;
     window.getAuthoritativeRecord = getAuthoritativeRecord;
+    window.lockAuthoritativeElement = lockAuthoritativeElement;
+    window.lockAuthoritativeGroup = lockAuthoritativeGroup;
     window.registerPrintRehydrator = registerPrintRehydrator;
     window.executePrintRehydration = executePrintRehydration;
     window.withSystemRendering = withSystemRendering;

@@ -304,7 +304,7 @@
     </div>
 
     <!-- Summary Cards -->
-    <div class="summary-grid">
+    <div class="summary-grid" id="paymentSummaryGrid">
         <div class="stat-card expected">
             <p>Total Expected</p>
             <h2 id="totalExpected">₱0.00</h2>
@@ -419,6 +419,10 @@
                 <tr style="border-bottom: 1px solid #f0f2f5;">
                     <td style="padding: 6px 0; color: #7f8c8d;">Distributed Booklets:</td>
                     <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2c3e50;" id="calcDistributed">0</td>
+                </tr>
+                <tr id="calcSupplementaryRow" style="border-bottom: 1px solid #f0f2f5; display: none;">
+                    <td style="padding: 6px 0; color: #16a34a; font-weight: 600;">➕ Supplementary Booklets (Lost Reissue):</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #16a34a;" id="calcSupplementary">+0</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #f0f2f5;">
                     <td style="padding: 6px 0; color: #e74c3c;">Dropped (Loose Returns):</td>
@@ -974,6 +978,7 @@ function _executeRenderTable() {
     document.getElementById('totalExpected').textContent = `₱${tExpected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     document.getElementById('totalCollected').textContent = `₱${tCollected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     document.getElementById('totalOutstanding').textContent = `₱${tOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
     const deptOutEl = document.getElementById('deptOutstanding');
     if (deptOutEl) {
         const entries = Object.entries(deptTotals);
@@ -998,14 +1003,18 @@ if (window.registerPrintRehydrator) {
     });
 }
 
-// Protect payment table against DevTools inspect tampering
+// Protect payment table, summary grid, and calculation breakdown modal against DevTools inspect tampering
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         if (window.protectContainer) {
             var tbody = document.getElementById('paymentTableBody');
-            if (tbody) {
-                window.protectContainer(tbody, function() {
-                    renderTable();
+            if (tbody) window.protectContainer(tbody, renderTable);
+            var summaryGrid = document.getElementById('paymentSummaryGrid') || document.querySelector('.summary-grid');
+            if (summaryGrid) window.protectContainer(summaryGrid, renderTable);
+            var calcModalCard = document.querySelector('#calcBreakdownModal .modal-card');
+            if (calcModalCard) {
+                window.protectContainer(calcModalCard, function() {
+                    if (currentBreakdownData) openBreakdownModal(currentBreakdownData);
                 });
             }
         }
@@ -1063,6 +1072,19 @@ function openBreakdownModal(input) {
     document.getElementById('calcTotal').textContent = `₱${(data.amount_due || 0).toFixed(2)}`;
     if (document.getElementById('calcPaid')) {
         document.getElementById('calcPaid').textContent = `₱${(data.amount_paid || 0).toFixed(2)}`;
+    }
+    
+    const suppRow = document.getElementById('calcSupplementaryRow');
+    const suppEl = document.getElementById('calcSupplementary');
+    const suppCount = (data.supplementary_count && data.supplementary_count > 0) ? data.supplementary_count : 0;
+    if (suppRow && suppEl) {
+        if (suppCount > 0) {
+            suppRow.style.display = '';
+            suppEl.textContent = `+${suppCount}`;
+        } else {
+            suppRow.style.display = 'none';
+            suppEl.textContent = '+0';
+        }
     }
     
     const balance = data.balance != null ? data.balance : Math.max(0, (data.amount_due || 0) - (data.amount_paid || 0));

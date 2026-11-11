@@ -4209,7 +4209,9 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
                     for i in range(1, len(booklets)):
                         prev = booklets[i-1]
                         curr = booklets[i]
-                        if curr.id == prev.id + 1 and getattr(curr, 'master_batch_id', None) == getattr(prev, 'master_batch_id', None):
+                        is_curr_supp = (getattr(curr, 'return_reason', '') == "SUPPLEMENTARY_LOST_REISSUE")
+                        is_prev_supp = (getattr(prev, 'return_reason', '') == "SUPPLEMENTARY_LOST_REISSUE")
+                        if curr.id == prev.id + 1 and getattr(curr, 'master_batch_id', None) == getattr(prev, 'master_batch_id', None) and is_curr_supp == is_prev_supp:
                             current_block.append(curr)
                         else:
                             blocks.append(current_block)
@@ -4221,6 +4223,7 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
                         f_ref = getattr(blk[0], 'control_num', getattr(blk[0], 'reference_number', ''))
                         l_ref = getattr(blk[-1], 'control_num', getattr(blk[-1], 'reference_number', ''))
                         batch_id = getattr(blk[0], 'master_batch_id', None)
+                        is_supp = (getattr(blk[0], 'return_reason', '') == "SUPPLEMENTARY_LOST_REISSUE")
                         
                         trace_str = ""
                         if batch_id:
@@ -4229,10 +4232,18 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
                                 pack_str = f" | Pack: {batch.pack_qr_id}" if batch.pack_qr_id else " | (Loose/Unpacked)"
                                 trace_str = f"<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#7f8c8d; font-size:0.85em;'>[Batch: {batch.qr_code_id}{pack_str}]</span>"
                         
+                        supp_note = ""
+                        if is_supp:
+                            b_date = getattr(blk[0], 'date_distributed', None)
+                            date_display = b_date.strftime("%d-%b-%Y %I:%M %p") if b_date else "Recorded"
+                            supp_note = f"<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style='color: #16a34a; font-weight: 600; font-size: 0.85em;'>➕ [Supplementary Issuance: Lost Reissue • Transacted: {date_display}]</span>"
+
                         if len(blk) > 1: 
-                            log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs){trace_str}")
+                            log_strings.append(f"Ref: #{f_ref} to #{l_ref} ({len(blk)} pcs){trace_str}{supp_note}")
                         else: 
-                            log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}")
+                            log_strings.append(f"Ref: #{f_ref} (1 pc){trace_str}{supp_note}")
+
+                    supplementary_count = sum(1 for b in booklets if getattr(b, 'return_reason', '') == "SUPPLEMENTARY_LOST_REISSUE")
 
                     # Read unit price based on Payment Status Grandfathering Rule
                     is_fully_paid = (enr.payment_status == "Fully Paid" or (enr.amount_due > 0 and enr.amount_paid >= enr.amount_due))
@@ -4285,6 +4296,7 @@ def get_public_receipts(request: Request, db: Session = Depends(get_db)):
                         "balance": round(max(0.0, (enr.amount_due or 0.0) - (enr.amount_paid or 0.0)), 2),
                         "staff": staff_name,
                         "log": log_strings,
+                        "supplementary_count": supplementary_count,
                         "exam_period": period if period else "Legacy (No Period)",
                         "payments": payments_list
                     })
@@ -5326,6 +5338,162 @@ def execute_distribution(req: schemas.DistributionRequest, request: Request, db:
     except Exception as e:
         print(f"CRITICAL ERROR IN EXECUTION: {str(e)}")
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/supplementary-classes-lookup")
+def get_supplementary_classes_lookup(db: Session = Depends(get_db)):
+    programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).order_by(models.AcademicProgram.code).all()
+    enrollments = db.query(models.Enrollment).filter(models.Enrollment.is_archived == False).all()
+    
+    settings = db.query(models.SystemSettings).first()
+    default_price = settings.booklet_price if settings else 2.50
+    prog_price_map = {p.code.upper(): float(p.booklet_price) if p.booklet_price else default_price for p in programs}
+    
+    classes = []
+    for e in enrollments:
+        dept = resolve_enrollment_department(e, db=db) or "CS"
+        unit_p = prog_price_map.get(dept.upper(), default_price)
+        classes.append({
+            "id": e.id,
+            "department": dept,
+            "teacher_name": e.teacher_name,
+            "section": e.section,
+            "subject": e.subject,
+            "student_headcount": e.student_headcount,
+            "unit_price": unit_p
+        })
+    return {
+        "status": "success",
+        "programs": [{"code": p.code, "name": p.name, "booklet_price": prog_price_map.get(p.code.upper(), default_price)} for p in programs],
+        "classes": classes
+    }
+
+@app.post("/api/execute-supplementary-distribution")
+def execute_supplementary_distribution(req: schemas.SupplementaryDistributionRequest, request: Request, db: Session = Depends(get_db)):
+    verify_api_role_access(request, ["Admin", "Staff"], db)
+    active_period = get_active_period(db)
+    if not active_period or active_period == "UNSET":
+        return {"status": "error", "message": "No active examination period configured."}
+    
+    enrollment = db.query(models.Enrollment).filter(models.Enrollment.id == req.enrollment_id).first()
+    if not enrollment:
+        return {"status": "error", "message": "Class section not found."}
+    
+    if not req.scanned_control_nums:
+        return {"status": "error", "message": "No booklet control numbers provided."}
+    
+    clean_controls = [c.strip().upper() for c in req.scanned_control_nums if c and c.strip()]
+    if len(clean_controls) != len(set(clean_controls)):
+        return {"status": "error", "message": "Duplicate booklet control numbers detected in scan list."}
+    
+    enr_dept = (resolve_enrollment_department(enrollment, db=db) or "CS").upper()
+    
+    bks = db.query(models.Booklet).join(models.MasterBatch).filter(
+        func.upper(models.Booklet.control_num).in_(clean_controls)
+    ).all()
+    
+    if len(bks) != len(clean_controls):
+        found_c = set(b.control_num.upper() for b in bks)
+        missing = [c for c in clean_controls if c not in found_c]
+        return {"status": "error", "message": f"Booklet(s) not found in system: {', '.join(missing)}"}
+    
+    for b in bks:
+        b_dept = (b.master_batch.department or "CS").upper() if b.master_batch else "CS"
+        if b_dept != enr_dept:
+            dept_label = get_program_label(b_dept, db)
+            enr_label = get_program_label(enr_dept, db)
+            return {
+                "status": "error",
+                "code": "DEPT_MISMATCH",
+                "message": f"Department Template Mismatch: Booklet '{b.control_num}' is for {dept_label}, but section {enrollment.section} is {enr_label}."
+            }
+        if b.status not in ["available", "loose_stock"]:
+            return {
+                "status": "error",
+                "code": "STOCK_CONFLICT",
+                "message": f"Booklet '{b.control_num}' is not available (Current Status: {b.status})."
+            }
+    
+    settings = db.query(models.SystemSettings).first()
+    booklet_price = settings.booklet_price if settings else 2.50
+    prog = db.query(models.AcademicProgram).filter(
+        func.upper(models.AcademicProgram.code) == enr_dept
+    ).first()
+    course_price = float(prog.booklet_price) if (prog and prog.booklet_price is not None and prog.booklet_price > 0) else float(booklet_price)
+    
+    prior_b = db.query(models.Booklet).filter(
+        models.Booklet.enrollment_id == enrollment.id,
+        models.Booklet.exam_period == active_period,
+        models.Booklet.unit_price.isnot(None)
+    ).first()
+    effective_price = float(prior_b.unit_price) if prior_b else float(course_price)
+    
+    qty = len(bks)
+    supp_total = round(qty * effective_price, 2)
+    now = datetime.now()
+    
+    for b in bks:
+        b.status = "distributed"
+        b.enrollment_id = enrollment.id
+        b.exam_period = active_period
+        b.date_distributed = now
+        b.distributed_by = req.clerk_name or "System Clerk"
+        b.return_reason = "SUPPLEMENTARY_LOST_REISSUE"
+        b.unit_price = effective_price
+    
+    enrollment.amount_due = round((enrollment.amount_due or 0.0) + supp_total, 2)
+    
+    if req.payment_mode == "cash":
+        new_paid = round((enrollment.amount_paid or 0.0) + supp_total, 2)
+        enrollment.amount_paid = new_paid
+        new_bal = max(0.0, round(enrollment.amount_due - enrollment.amount_paid, 2))
+        
+        pr = models.PaymentRecord(
+            enrollment_id=enrollment.id,
+            amount=supp_total,
+            balance_after=new_bal,
+            payment_date=now,
+            payment_period=active_period,
+            collection_period=active_period,
+            recorded_by=req.clerk_name or "System Clerk",
+            notes=f"Supplementary Cash Settlement: {qty} lost booklet reissue(s)"
+        )
+        db.add(pr)
+    
+    reconcile_enrollment_payments(enrollment, db)
+    db.commit()
+    
+    sync_enrollment_period_billings(db)
+    
+    log_system_activity(
+        action_type="DISTRIBUTION",
+        action_title="Supplementary Booklet Reissue",
+        details=f"Issued {qty} supplementary booklet(s) to '{enrollment.teacher_name}' for section '{enrollment.section}' ({enrollment.subject}). Payment: {req.payment_mode.upper()}.",
+        db=db,
+        target_ref=enrollment.section,
+        username=req.clerk_name or "System Clerk",
+        user_role="Staff",
+        department=enr_dept,
+        academic_period=active_period
+    )
+    
+    notify_lan_mutation("DISTRIBUTION_PERFORMED", {
+        "enrollment_id": enrollment.id,
+        "teacher": enrollment.teacher_name,
+        "section": enrollment.section,
+        "subject": enrollment.subject,
+        "supplementary_qty": qty,
+        "controls": [b.control_num for b in bks]
+    }, db=db)
+    
+    return {
+        "status": "success",
+        "message": f"Successfully issued {qty} supplementary booklet(s) for {enrollment.section} ({enrollment.subject}).",
+        "enrollment_id": enrollment.id,
+        "quantity": qty,
+        "unit_price": effective_price,
+        "total_amount": supp_total,
+        "payment_mode": req.payment_mode
+    }
 
 # Update this specific function in main.py
 @app.get("/api/history-data")
@@ -8684,6 +8852,14 @@ def get_payment_tracking(department: Optional[str] = "ALL", period: Optional[str
         active_period = get_active_period(db)
         clerk_map = get_user_display_name_map(db)
 
+        # Cache active programs for course-specific pricing overrides
+        active_programs = db.query(models.AcademicProgram).filter(models.AcademicProgram.is_active == True).all()
+        course_price_map = {
+            p.code.upper(): float(p.booklet_price)
+            for p in active_programs
+            if p.booklet_price is not None and p.booklet_price > 0
+        }
+
         # Get all enrollments that have at least some booklets distributed (or amount_due > 0)
         query = db.query(models.Enrollment).filter(models.Enrollment.amount_due > 0)
         dept_clean = (department or "ALL").strip().upper()
@@ -8731,12 +8907,18 @@ def get_payment_tracking(department: Optional[str] = "ALL", period: Optional[str
                 loose_bks = [b for b in p_booklets if b.status == "loose_stock"]
                 distributed_count = len(dist_bks)
                 loose_returned = len(loose_bks)
+                supplementary_count = sum(1 for b in dist_bks if getattr(b, 'return_reason', '') == "SUPPLEMENTARY_LOST_REISSUE")
 
                 # Determine effective price for this period
+                enr_dept = (resolve_enrollment_department(enr, db=db) or enr.department or "").strip().upper()
+                course_override_price = course_price_map.get(enr_dept)
+
                 if dist_bks and dist_bks[0].unit_price is not None:
                     effective_price = float(dist_bks[0].unit_price)
                 elif p_booklets and any(b.unit_price is not None for b in p_booklets):
                     effective_price = float([b.unit_price for b in p_booklets if b.unit_price is not None][0])
+                elif course_override_price is not None:
+                    effective_price = float(course_override_price)
                 else:
                     effective_price = float(current_price)
 
@@ -8848,6 +9030,7 @@ def get_payment_tracking(department: Optional[str] = "ALL", period: Optional[str
                     "exam_period": resolved_period,
                     "student_headcount": period_headcount,
                     "distributed_count": distributed_count,
+                    "supplementary_count": supplementary_count,
                     "loose_returned": loose_returned,
                     "booklet_price": effective_price,
                     "distribution_timestamp": dist_timestamp_iso,

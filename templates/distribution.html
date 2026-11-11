@@ -814,6 +814,82 @@
 
             @media (max-width: 900px) { .mobile-hide { display: none !important; } }
 
+        /* Supplementary Lost Booklet Modal Responsive Rules */
+        .supplementary-modal-card {
+            max-width: 620px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+            text-align: left;
+            border-top: 5px solid #10b981;
+            padding: 22px;
+        }
+        .supp-dropdown-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .supp-demand-grid {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 12px;
+            align-items: center;
+        }
+        .supp-scan-input-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .supp-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 12px;
+        }
+
+        @media (max-width: 640px) {
+            .supplementary-modal-card {
+                width: 96% !important;
+                max-height: 94vh !important;
+                padding: 14px 12px !important;
+            }
+            .supp-dropdown-grid {
+                gap: 8px !important;
+            }
+            .supp-demand-grid {
+                grid-template-columns: 1fr !important;
+                gap: 10px !important;
+            }
+            .supp-modal-actions {
+                flex-direction: column-reverse;
+                gap: 8px;
+            }
+            .supp-modal-actions button {
+                width: 100% !important;
+                margin: 0 !important;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .supp-scan-input-row #suppManualInput {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+            }
+            .supp-scan-input-row button {
+                flex: 1 !important;
+                justify-content: center;
+            }
+        }
+
     </style>
 
 </head>
@@ -943,6 +1019,21 @@
                     <div id="looseSelectionPreview" style="margin-top: 8px; font-weight: bold; color: #d35400;">
                         0 loose booklets selected.
                     </div>
+                </div>
+
+                <!-- Supplementary Lost Booklet Reissue Quick Action Banner -->
+                <div style="margin: 0 0 20px 0; padding: 12px 14px; background: #ecfdf5; border: 1px solid #a7f3d0; border-left: 4px solid #10b981; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <div style="font-weight: 700; color: #065f46; font-size: 0.92rem; display: flex; align-items: center; gap: 6px;">
+                            <span>🔁</span> <span>Supplementary Booklet (Lost Reissue)</span>
+                        </div>
+                        <div style="font-size: 0.78rem; color: #047857; margin-top: 2px;">
+                            Issue replacement booklets for students who lost their exam booklets.
+                        </div>
+                    </div>
+                    <button type="button" class="btn" onclick="openSupplementaryModal()" id="btnOpenSupplementaryModal" style="margin: 0; padding: 8px 14px; font-size: 0.85rem; font-weight: 700; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; box-shadow: 0 2px 4px rgba(5,150,105,0.2);">
+                        ➕ Issue Supplementary
+                    </button>
                 </div>
 
                 <div id="transaction-form" style="opacity: 0.5; pointer-events: none; transition: opacity 0.3s;">
@@ -2520,6 +2611,7 @@ ${message}`));
                                         opt.dataset.demand = sub.remaining;
                                         opt.dataset.isReplacement = sub.is_replacement ? "true" : "false";
                                         opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
+                                        opt.dataset.unitPrice = (sub.unit_price !== undefined && sub.unit_price !== null) ? sub.unit_price : "";
                                         let badge = "";
                                         if (sub.is_replacement) {
                                             const rCount = sub.replacement_count ? ` (${sub.replacement_count})` : "";
@@ -2779,6 +2871,7 @@ ${message}`));
 
                 opt.dataset.isReplacement = sub.is_replacement ? "true" : "false";
                 opt.dataset.isPrepaid = sub.is_prepaid ? "true" : "false";
+                opt.dataset.unitPrice = (sub.unit_price !== undefined && sub.unit_price !== null) ? sub.unit_price : "";
                 let badge = "";
                 if (sub.is_replacement) {
                     const rCount = sub.replacement_count ? ` (${sub.replacement_count})` : "";
@@ -2806,6 +2899,10 @@ ${message}`));
         }
 
         if (select.value) {
+            const enrollId = parseInt(select.value);
+            window.selectedEnrollmentRecord = (typeof enrollmentsData !== 'undefined' && Array.isArray(enrollmentsData))
+                ? (enrollmentsData.find(i => i.enrollment_id === enrollId) || null)
+                : null;
             currentDemand = parseInt(select.options[select.selectedIndex].dataset.demand);
 
             // Auto-fill booklet tray with control numbers from active Master Pack
@@ -3132,11 +3229,18 @@ ${message}`));
 
         
 
+        const subSelect = document.getElementById('subjectSelect');
+        const selOpt = subSelect && subSelect.selectedIndex >= 0 ? subSelect.options[subSelect.selectedIndex] : null;
+        const optPrice = selOpt && selOpt.dataset.unitPrice ? parseFloat(selOpt.dataset.unitPrice) : null;
+        const recordPrice = (window.selectedEnrollmentRecord && window.selectedEnrollmentRecord.unit_price) ? parseFloat(window.selectedEnrollmentRecord.unit_price) : null;
+
         const effectivePrice = (previewData && previewData.booklet_price !== undefined) 
             ? parseFloat(previewData.booklet_price) 
-            : ((typeof selectedEnrollment !== 'undefined' && selectedEnrollment && (selectedEnrollment.unit_price || selectedEnrollment.booklet_price)) 
-                ? parseFloat(selectedEnrollment.unit_price || selectedEnrollment.booklet_price) 
-                : (typeof globalBookletPrice === 'number' ? globalBookletPrice : 2.50));
+            : (optPrice !== null && !isNaN(optPrice)
+                ? optPrice
+                : (recordPrice !== null && !isNaN(recordPrice)
+                    ? recordPrice
+                    : (typeof globalBookletPrice === 'number' ? globalBookletPrice : 2.50)));
 
         const unitPriceEl = document.getElementById('r-unit-price');
         if (unitPriceEl) unitPriceEl.innerText = `₱${effectivePrice.toFixed(2)}`;
@@ -4040,7 +4144,479 @@ ${message}`));
 
     }
 
+    // --- SUPPLEMENTARY LOST BOOKLET REISSUE STATE & FUNCTIONS ---
+    let supplementaryClassesData = null;
+    let supplementarySelectedClass = null;
+    let supplementaryScannedBooklets = [];
 
+    async function openSupplementaryModal() {
+        const modal = document.getElementById('supplementaryModal');
+        if (!modal) return;
+
+        // Reset state
+        supplementarySelectedClass = null;
+        supplementaryScannedBooklets = [];
+        
+        const demandInput = document.getElementById('suppDemandInput');
+        if (demandInput) demandInput.value = 1;
+        
+        const manualInput = document.getElementById('suppManualInput');
+        if (manualInput) manualInput.value = '';
+        
+        const errEl = document.getElementById('suppErrorMsg');
+        if (errEl) { errEl.style.display = 'none'; errEl.innerText = ''; }
+
+        const deptSelect = document.getElementById('suppDeptSelect');
+        const teacherSelect = document.getElementById('suppTeacherSelect');
+        const sectionSelect = document.getElementById('suppSectionSelect');
+        const subjectSelect = document.getElementById('suppSubjectSelect');
+
+        if (deptSelect) deptSelect.innerHTML = '<option value="">Loading departments...</option>';
+        if (teacherSelect) { teacherSelect.innerHTML = '<option value="">-- Select Instructor --</option>'; teacherSelect.disabled = true; }
+        if (sectionSelect) { sectionSelect.innerHTML = '<option value="">-- Select Section --</option>'; sectionSelect.disabled = true; }
+        if (subjectSelect) { subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>'; subjectSelect.disabled = true; }
+
+        renderSupplementaryTray();
+        updateSupplementarySummary();
+
+        modal.style.display = 'flex';
+
+        try {
+            const res = await fetch('/api/supplementary-classes-lookup');
+            const data = await res.json();
+            if (data.status === 'success') {
+                supplementaryClassesData = data;
+                if (deptSelect) {
+                    deptSelect.innerHTML = '<option value="">-- Select Department --</option>';
+                    data.programs.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.code;
+                        opt.textContent = `${p.name} (${p.code})`;
+                        deptSelect.appendChild(opt);
+                    });
+                    // Everything starts clean and unselected as requested
+                    deptSelect.value = '';
+                }
+            } else {
+                showAppAlert("Lookup Failed", data.message || "Failed to load classes for supplementary reissue.", "danger");
+            }
+        } catch (err) {
+            console.error("Error loading supplementary classes:", err);
+            showAppAlert("Network Error", "Unable to connect to server.", "danger");
+        }
+    }
+
+    function closeSupplementaryModal() {
+        const modal = document.getElementById('supplementaryModal');
+        if (modal) modal.style.display = 'none';
+        supplementaryScannedBooklets = [];
+        supplementarySelectedClass = null;
+    }
+
+    function getSupplementaryDeptPrice(deptCode) {
+        if (!deptCode || !supplementaryClassesData) return null;
+        const prog = (supplementaryClassesData.programs || []).find(p => (p.code || '').toUpperCase() === deptCode.toUpperCase());
+        if (prog && prog.booklet_price !== undefined) return parseFloat(prog.booklet_price);
+        const sampleClass = (supplementaryClassesData.classes || []).find(c => (c.department || '').toUpperCase() === deptCode.toUpperCase());
+        if (sampleClass && sampleClass.unit_price !== undefined) return parseFloat(sampleClass.unit_price);
+        return 2.50;
+    }
+
+    function handleSuppDeptChange() {
+        const dept = document.getElementById('suppDeptSelect').value;
+        const teacherSelect = document.getElementById('suppTeacherSelect');
+        const sectionSelect = document.getElementById('suppSectionSelect');
+        const subjectSelect = document.getElementById('suppSubjectSelect');
+
+        supplementarySelectedClass = null;
+        supplementaryScannedBooklets = [];
+        renderSupplementaryTray();
+
+        if (teacherSelect) {
+            teacherSelect.innerHTML = '<option value="">-- Select Instructor --</option>';
+            teacherSelect.disabled = true;
+        }
+        if (sectionSelect) {
+            sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+            sectionSelect.disabled = true;
+        }
+        if (subjectSelect) {
+            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            subjectSelect.disabled = true;
+        }
+
+        if (!dept || !supplementaryClassesData) {
+            updateSupplementarySummary();
+            return;
+        }
+
+        const deptClasses = supplementaryClassesData.classes.filter(c => (c.department || '').toUpperCase() === dept.toUpperCase());
+        const teachers = Array.from(new Set(deptClasses.map(c => c.teacher_name))).filter(Boolean).sort();
+
+        if (teacherSelect) {
+            teacherSelect.disabled = false;
+            teachers.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t;
+                opt.textContent = t;
+                teacherSelect.appendChild(opt);
+            });
+        }
+
+        updateSupplementarySummary();
+    }
+
+    function handleSuppTeacherChange() {
+        const dept = document.getElementById('suppDeptSelect').value;
+        const teacher = document.getElementById('suppTeacherSelect').value;
+        const sectionSelect = document.getElementById('suppSectionSelect');
+        const subjectSelect = document.getElementById('suppSubjectSelect');
+
+        supplementarySelectedClass = null;
+        supplementaryScannedBooklets = [];
+        renderSupplementaryTray();
+
+        if (sectionSelect) {
+            sectionSelect.innerHTML = '<option value="">-- Select Section --</option>';
+            sectionSelect.disabled = true;
+        }
+        if (subjectSelect) {
+            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            subjectSelect.disabled = true;
+        }
+
+        if (!dept || !teacher || !supplementaryClassesData) {
+            updateSupplementarySummary();
+            return;
+        }
+
+        const filteredClasses = supplementaryClassesData.classes.filter(c => 
+            (c.department || '').toUpperCase() === dept.toUpperCase() && c.teacher_name === teacher
+        );
+
+        const availableSections = Array.from(new Set(filteredClasses.map(c => c.section)))
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+        if (sectionSelect) {
+            sectionSelect.disabled = false;
+            availableSections.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                sectionSelect.appendChild(opt);
+            });
+        }
+
+        updateSupplementarySummary();
+    }
+
+    function handleSuppSectionChange() {
+        const dept = document.getElementById('suppDeptSelect').value;
+        const teacherSelect = document.getElementById('suppTeacherSelect');
+        const teacher = teacherSelect ? teacherSelect.value : '';
+        const section = document.getElementById('suppSectionSelect').value;
+        const subjectSelect = document.getElementById('suppSubjectSelect');
+
+        supplementarySelectedClass = null;
+        supplementaryScannedBooklets = [];
+        renderSupplementaryTray();
+
+        if (subjectSelect) {
+            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            subjectSelect.disabled = true;
+        }
+
+        if (!dept || !teacher || !section || !supplementaryClassesData) {
+            updateSupplementarySummary();
+            return;
+        }
+
+        const candidateClasses = supplementaryClassesData.classes.filter(c => 
+            (c.department || '').toUpperCase() === dept.toUpperCase() && 
+            c.teacher_name === teacher && 
+            c.section === section
+        );
+
+        if (subjectSelect) {
+            subjectSelect.disabled = false;
+            candidateClasses.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.subject;
+                subjectSelect.appendChild(opt);
+            });
+            if (candidateClasses.length === 1) {
+                subjectSelect.value = String(candidateClasses[0].id);
+                supplementarySelectedClass = candidateClasses[0];
+                const input = document.getElementById('suppManualInput');
+                if (input) setTimeout(() => input.focus(), 50);
+            }
+        }
+
+        updateSupplementarySummary();
+    }
+
+    function handleSuppSubjectChange() {
+        const subjectSelect = document.getElementById('suppSubjectSelect');
+        const enrollId = parseInt(subjectSelect ? subjectSelect.value : '');
+
+        if (!enrollId || !supplementaryClassesData) {
+            supplementarySelectedClass = null;
+        } else {
+            supplementarySelectedClass = supplementaryClassesData.classes.find(c => c.id === enrollId) || null;
+        }
+
+        supplementaryScannedBooklets = [];
+        renderSupplementaryTray();
+        updateSupplementarySummary();
+
+        const input = document.getElementById('suppManualInput');
+        if (input && supplementarySelectedClass) {
+            setTimeout(() => input.focus(), 50);
+        }
+    }
+
+    function handleSuppDemandChange() {
+        const demandInput = document.getElementById('suppDemandInput');
+        let demand = parseInt(demandInput ? demandInput.value : 1);
+        if (isNaN(demand) || demand < 1) {
+            demand = 1;
+            if (demandInput) demandInput.value = 1;
+        }
+        updateSupplementarySummary();
+    }
+
+    function updateSupplementarySummary() {
+        const demandInput = document.getElementById('suppDemandInput');
+        const demand = parseInt(demandInput ? demandInput.value : 1) || 1;
+        const priceHint = document.getElementById('suppPriceHint');
+        const badge = document.getElementById('suppScanProgressBadge');
+        const submitBtn = document.getElementById('btnSubmitSupplementary');
+        const deptSelect = document.getElementById('suppDeptSelect');
+        const selectedDept = deptSelect ? deptSelect.value : '';
+
+        let unitPrice = null;
+        if (supplementarySelectedClass && supplementarySelectedClass.unit_price !== undefined) {
+            unitPrice = supplementarySelectedClass.unit_price;
+        } else if (selectedDept) {
+            unitPrice = getSupplementaryDeptPrice(selectedDept);
+        }
+
+        if (priceHint) {
+            if (unitPrice !== null && !isNaN(unitPrice)) {
+                const total = (demand * unitPrice).toFixed(2);
+                priceHint.textContent = `Unit: ₱${unitPrice.toFixed(2)} | Total: ₱${total}`;
+            } else {
+                priceHint.textContent = 'Select a department to view unit pricing';
+            }
+        }
+
+        const scannedCount = supplementaryScannedBooklets.length;
+        if (badge) {
+            badge.textContent = `${scannedCount} of ${demand} Booklets Scanned`;
+            badge.style.background = scannedCount === demand ? '#dcfce7' : (scannedCount > demand ? '#fee2e2' : '#e2e8f0');
+            badge.style.color = scannedCount === demand ? '#15803d' : (scannedCount > demand ? '#b91c1c' : '#334155');
+        }
+
+        if (submitBtn) {
+            const isValid = (supplementarySelectedClass !== null && scannedCount === demand && demand >= 1);
+            submitBtn.disabled = !isValid;
+            submitBtn.innerText = `Confirm & Issue ${scannedCount} Booklet${scannedCount === 1 ? '' : 's'}`;
+        }
+    }
+
+    function addSupplementaryBookletFromInput() {
+        const input = document.getElementById('suppManualInput');
+        if (!input) return;
+        const raw = input.value.trim();
+        if (!raw) return;
+        addSupplementaryBooklet(raw);
+    }
+
+    async function addSupplementaryBooklet(rawText) {
+        const errEl = document.getElementById('suppErrorMsg');
+        if (errEl) { errEl.style.display = 'none'; errEl.innerText = ''; }
+
+        if (!supplementarySelectedClass) {
+            showSuppError("Please select Department, Instructor, Section, and Subject before scanning booklets.");
+            return;
+        }
+
+        const demandInput = document.getElementById('suppDemandInput');
+        const demand = parseInt(demandInput ? demandInput.value : 1) || 1;
+
+        if (supplementaryScannedBooklets.length >= demand) {
+            showSuppError(`All ${demand} required booklet(s) have already been scanned. Increase demand to add more.`);
+            return;
+        }
+
+        const raw = rawText.trim();
+        const expectedDept = (supplementarySelectedClass.department || 'CS').toUpperCase();
+
+        try {
+            const res = await fetch(`/api/booklet-lookup/${encodeURIComponent(raw)}?expected_dept=${encodeURIComponent(expectedDept)}`);
+            const data = await res.json();
+
+            if (data.status === 'success' && data.booklet) {
+                const b = data.booklet;
+
+                if (supplementaryScannedBooklets.some(item => item.control_num.toUpperCase() === b.control_num.toUpperCase())) {
+                    showSuppError(`Booklet '${b.control_num}' is already scanned in the tray.`);
+                    if (window.PosAudio) PosAudio.warning();
+                    return;
+                }
+
+                if (b.status !== 'available' && b.status !== 'loose_stock') {
+                    showSuppError(`Booklet '${b.control_num}' cannot be allocated (Status: ${b.status}).`);
+                    if (window.PosAudio) PosAudio.error();
+                    return;
+                }
+
+                supplementaryScannedBooklets.push({
+                    id: b.id,
+                    control_num: b.control_num,
+                    sort_record_num: b.sort_record_num || 'N/A'
+                });
+
+                if (window.PosAudio) PosAudio.chime();
+                const input = document.getElementById('suppManualInput');
+                if (input) { input.value = ''; input.focus(); }
+
+                renderSupplementaryTray();
+                updateSupplementarySummary();
+            } else {
+                showSuppError(data.message || `Booklet '${raw}' was not found.`);
+                if (window.PosAudio) PosAudio.error();
+            }
+        } catch (err) {
+            console.error("Lookup error:", err);
+            showSuppError("Network error validating booklet.");
+            if (window.PosAudio) PosAudio.error();
+        }
+    }
+
+    function removeSupplementaryBooklet(index) {
+        if (index >= 0 && index < supplementaryScannedBooklets.length) {
+            supplementaryScannedBooklets.splice(index, 1);
+            renderSupplementaryTray();
+            updateSupplementarySummary();
+        }
+    }
+
+    function renderSupplementaryTray() {
+        const tray = document.getElementById('suppScannedTray');
+        if (!tray) return;
+
+        if (supplementaryScannedBooklets.length === 0) {
+            tray.innerHTML = `
+                <div id="suppEmptyTrayMsg" style="color: #94a3b8; text-align: center; padding: 12px; font-style: italic;">
+                    No replacement booklets scanned yet.
+                </div>
+            `;
+            return;
+        }
+
+        tray.innerHTML = supplementaryScannedBooklets.map((b, idx) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 5px 8px; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-weight: 700; color: #059669; font-size: 0.85rem;">#${idx + 1}</span>
+                    <span style="font-family: monospace; font-weight: 700; color: #1e293b;">${escapeHtml(b.control_num)}</span>
+                    <span style="font-size: 0.75rem; color: #64748b;">(${escapeHtml(b.sort_record_num)})</span>
+                </div>
+                <button type="button" onclick="removeSupplementaryBooklet(${idx})" style="background: none; border: none; color: #ef4444; font-size: 1.1rem; cursor: pointer; padding: 0 4px; line-height: 1;" title="Remove Booklet">&times;</button>
+            </div>
+        `).join('');
+    }
+
+    function showSuppError(msg) {
+        const errEl = document.getElementById('suppErrorMsg');
+        if (errEl) {
+            errEl.innerText = msg;
+            errEl.style.display = 'block';
+        }
+    }
+
+    function openSupplementaryCameraScanner() {
+        if (!supplementarySelectedClass) {
+            showSuppError("Please select Department, Instructor, Section, and Subject before scanning booklets.");
+            return;
+        }
+        openBookletCameraScanner('supplementary');
+    }
+
+    async function submitSupplementaryDistribution() {
+        if (!supplementarySelectedClass || supplementaryScannedBooklets.length === 0) return;
+
+        const demandInput = document.getElementById('suppDemandInput');
+        const demand = parseInt(demandInput ? demandInput.value : 1) || 1;
+
+        if (supplementaryScannedBooklets.length !== demand) {
+            showSuppError(`Please scan exactly ${demand} booklet(s) before submitting.`);
+            return;
+        }
+
+        const paymentOption = document.getElementById('suppPaymentOption');
+        const paymentMode = paymentOption ? paymentOption.value : 'account';
+        const unitPrice = supplementarySelectedClass.unit_price || 2.50;
+        const totalAmount = (demand * unitPrice).toFixed(2);
+        const paymentDesc = paymentMode === 'cash' 
+            ? `Paid in Cash at Counter (₱${totalAmount})` 
+            : `Charge to Faculty Account (₱${totalAmount})`;
+
+        const confirmed = await showAppConfirm(
+            "Confirm Supplementary Issuance",
+            `Issue ${demand} supplementary booklet(s) to ${supplementarySelectedClass.teacher_name} for section ${supplementarySelectedClass.section}?\n\nFinancial Settlement: ${paymentDesc}`,
+            {
+                type: 'success',
+                confirmText: "Yes, Issue Booklets",
+                cancelText: "Review",
+                confirmClass: "btn btn-success"
+            }
+        );
+
+        if (!confirmed) return;
+
+        const btn = document.getElementById('btnSubmitSupplementary');
+        if (btn) { btn.disabled = true; btn.innerText = "Processing..."; }
+
+        try {
+            const res = await fetch('/api/execute-supplementary-distribution', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    enrollment_id: supplementarySelectedClass.id,
+                    scanned_control_nums: supplementaryScannedBooklets.map(b => b.control_num),
+                    clerk_name: (activeUser && activeUser.username) ? activeUser.username : 'System Clerk',
+                    payment_mode: paymentMode
+                })
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.status === 'success') {
+                closeSupplementaryModal();
+                showAppAlert(
+                    "Supplementary Booklets Issued!",
+                    `${data.message}\n\nThe transaction has been consolidated into the class receipt and payment ledger.`,
+                    "success"
+                );
+                if (window.PosAudio) PosAudio.chime();
+                if (typeof loadPendingDistributions === 'function') {
+                    loadPendingDistributions();
+                }
+            } else {
+                showSuppError(data.detail || data.message || "Failed to process supplementary distribution.");
+                if (window.PosAudio) PosAudio.error();
+                if (btn) { btn.disabled = false; btn.innerText = `Confirm & Issue ${demand} Booklet(s)`; }
+            }
+        } catch (err) {
+            console.error("Submission error:", err);
+            showSuppError("Network error while submitting transaction.");
+            if (window.PosAudio) PosAudio.error();
+            if (btn) { btn.disabled = false; btn.innerText = `Confirm & Issue ${demand} Booklet(s)`; }
+        }
+    }
 
     function openBookletCameraScanner(subIntent) {
 
@@ -4074,7 +4650,15 @@ ${message}`));
 
         }
 
-        openScannerModal(subIntent === 'swap' ? 'booklet_swap' : 'booklet_manual');
+        if (subIntent === 'supplementary') {
+
+            const suppModal = document.getElementById('supplementaryModal');
+
+            if (suppModal) suppModal.style.display = 'none';
+
+        }
+
+        openScannerModal(subIntent === 'swap' ? 'booklet_swap' : (subIntent === 'supplementary' ? 'booklet_supplementary' : 'booklet_manual'));
 
     }
 
@@ -4689,6 +5273,20 @@ ${message}`));
 
             if (doneBtn) doneBtn.style.display = 'none';
 
+        } else if (intent === 'booklet_supplementary') {
+
+            title.innerText = "➕ Scan Supplementary Booklet";
+
+            title.style.color = "#059669";
+
+            const clsName = supplementarySelectedClass ? `${supplementarySelectedClass.section} (${supplementarySelectedClass.subject})` : 'Class Section';
+
+            msg.innerHTML = `Scanning replacement for: <strong style="color: #059669;">${clsName}</strong><br>Position the booklet QR stamped on the cover inside the frame.`;
+
+            if (hudContainer) hudContainer.style.display = 'none';
+
+            if (doneBtn) doneBtn.style.display = 'none';
+
         }
 
 
@@ -4752,6 +5350,20 @@ ${message}`));
                 document.getElementById('swapBookletModal').style.display = 'flex';
 
                 const input = document.getElementById('swapInputIdentifier');
+
+                if (input) setTimeout(() => input.focus(), 100);
+
+            }
+
+        } else if (prevIntent === 'booklet_supplementary') {
+
+            const suppModal = document.getElementById('supplementaryModal');
+
+            if (suppModal) {
+
+                suppModal.style.display = 'flex';
+
+                const input = document.getElementById('suppManualInput');
 
                 if (input) setTimeout(() => input.focus(), 100);
 
@@ -5022,6 +5634,18 @@ ${message}`));
             if (input) input.value = decodedText;
 
             confirmBookletSwap();
+
+            return;
+
+        }
+
+        if (intent === 'booklet_supplementary') {
+
+            const suppModal = document.getElementById('supplementaryModal');
+
+            if (suppModal) suppModal.style.display = 'flex';
+
+            addSupplementaryBooklet(decodedText);
 
             return;
 
@@ -5782,6 +6406,111 @@ ${message}`));
     </div>
 
 
+
+    <!-- SUPPLEMENTARY LOST BOOKLET REISSUE MODAL -->
+    <div class="modal-overlay" id="supplementaryModal" style="display: none; align-items: center; justify-content: center; z-index: 1050;">
+        <div class="modal-card supplementary-modal-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">
+                <div>
+                    <h3 style="color: #065f46; margin: 0 0 4px 0; font-size: 1.25rem; display: flex; align-items: center; gap: 8px;">
+                        <span>➕</span> <span>Supplementary Booklet (Lost Reissue)</span>
+                    </h3>
+                    <div style="font-size: 0.82rem; color: #64748b;">
+                        Issue replacement booklets for students who lost their exam booklets. Scan-only verification.
+                    </div>
+                </div>
+                <span class="close" style="font-size: 1.6rem; cursor: pointer; color: #94a3b8; line-height: 1;" onclick="closeSupplementaryModal()">&times;</span>
+            </div>
+
+            <!-- Cascading Dropdowns Grid -->
+            <div class="supp-dropdown-grid">
+                <div>
+                    <label style="font-weight: 600; font-size: 0.82rem; color: #334155; display: block; margin-bottom: 4px;">1. Department:</label>
+                    <select id="suppDeptSelect" onchange="handleSuppDeptChange()" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.85rem;">
+                        <option value="">-- Select Department --</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; font-size: 0.82rem; color: #334155; display: block; margin-bottom: 4px;">2. Instructor:</label>
+                    <select id="suppTeacherSelect" onchange="handleSuppTeacherChange()" disabled style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.85rem;">
+                        <option value="">-- Select Instructor --</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; font-size: 0.82rem; color: #334155; display: block; margin-bottom: 4px;">3. Section:</label>
+                    <select id="suppSectionSelect" onchange="handleSuppSectionChange()" disabled style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.85rem;">
+                        <option value="">-- Select Section --</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-weight: 600; font-size: 0.82rem; color: #334155; display: block; margin-bottom: 4px;">4. Subject:</label>
+                    <select id="suppSubjectSelect" onchange="handleSuppSubjectChange()" disabled style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.85rem;">
+                        <option value="">-- Select Subject --</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Demand & Payment Row -->
+            <div class="supp-demand-grid">
+                <div>
+                    <label style="font-weight: 700; font-size: 0.82rem; color: #1e293b; display: block; margin-bottom: 4px;">
+                        Student Headcount Demand:
+                    </label>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <input type="number" id="suppDemandInput" min="1" value="1" oninput="handleSuppDemandChange()" style="width: 90px; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-weight: bold; font-size: 1rem; text-align: center;">
+                        <span style="font-size: 0.82rem; color: #64748b;">pc(s)</span>
+                    </div>
+                    <div id="suppPriceHint" style="font-size: 0.75rem; color: #0284c7; margin-top: 4px; font-weight: 600;">
+                        Select a department to view unit pricing
+                    </div>
+                </div>
+                <div>
+                    <label style="font-weight: 700; font-size: 0.82rem; color: #1e293b; display: block; margin-bottom: 4px;">
+                        Financial Settlement:
+                    </label>
+                    <select id="suppPaymentOption" style="width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 0.85rem; font-weight: 500;">
+                        <option value="account">Bill to Faculty Account (Add to Balance Due)</option>
+                        <option value="cash">Paid in Cash at Counter (Instant Cash Settlement)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Scan-Only Allocation Tray -->
+            <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 700; font-size: 0.85rem; color: #0f172a;">
+                        📦 Scan Physical Replacement Booklet(s)
+                    </span>
+                    <span id="suppScanProgressBadge" class="badge" style="background: #e2e8f0; color: #334155; font-size: 0.78rem; padding: 3px 8px; border-radius: 4px; font-weight: 700;">
+                        0 of 1 Booklets Scanned
+                    </span>
+                </div>
+                <div class="supp-scan-input-row">
+                    <input type="text" id="suppManualInput" placeholder="Scan QR or type Control No / SRN..." onkeydown="if(event.key==='Enter') addSupplementaryBookletFromInput()" style="flex: 1; min-width: 160px; padding: 8px 10px; font-family: monospace; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                    <button type="button" class="btn" onclick="addSupplementaryBookletFromInput()" style="margin: 0; background: #334155; color: white; padding: 8px 14px; font-size: 0.85rem;">Add</button>
+                    <button type="button" class="btn btn-primary" onclick="openSupplementaryCameraScanner()" style="margin: 0; padding: 8px 14px; font-size: 0.85rem; display: inline-flex; align-items: center; justify-content: center; text-align: center; gap: 6px; white-space: nowrap;" title="Camera Scanner">
+                        <span>📷</span> <span>Camera</span>
+                    </button>
+                </div>
+                <div id="suppErrorMsg" style="display: none; color: #dc2626; font-size: 0.80rem; margin-bottom: 8px; font-weight: 500; background: #fef2f2; padding: 6px 10px; border-radius: 4px; border-left: 3px solid #dc2626;"></div>
+                
+                <!-- Scanned tray list -->
+                <div id="suppScannedTray" style="max-height: 120px; overflow-y: auto; border: 1px dashed #cbd5e1; border-radius: 4px; padding: 6px; background: #f8fafc; font-size: 0.82rem;">
+                    <div id="suppEmptyTrayMsg" style="color: #94a3b8; text-align: center; padding: 12px; font-style: italic;">
+                        No replacement booklets scanned yet.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Action Buttons -->
+            <div class="supp-modal-actions">
+                <button type="button" class="btn" onclick="closeSupplementaryModal()" style="margin: 0; background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; padding: 8px 18px; font-weight: 600; cursor: pointer; border-radius: 6px; transition: background 0.15s ease, border-color 0.15s ease;" onmouseover="this.style.background='#e2e8f0'; this.style.borderColor='#94a3b8'" onmouseout="this.style.background='#f1f5f9'; this.style.borderColor='#cbd5e1'">Cancel</button>
+                <button type="button" class="btn btn-success" id="btnSubmitSupplementary" onclick="submitSupplementaryDistribution()" disabled style="margin: 0; padding: 8px 20px; font-weight: 700;">
+                    Confirm &amp; Issue Supplementary Booklet
+                </button>
+            </div>
+        </div>
+    </div>
 
 </body>
 

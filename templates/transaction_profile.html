@@ -959,6 +959,7 @@
 
         filtered.forEach(inst => {
             const tr = document.createElement('tr');
+            tr.setAttribute('data-tamper-protect', 'true');
             tr.innerHTML = `
                 <td>
                     <strong style="color: #0f172a; font-size: 0.98rem; cursor: pointer;" onclick="selectInstructor('${escapeHtml(inst.teacher_name)}')">
@@ -1335,18 +1336,20 @@
         });
     }
 
-    // Protect receipt modal against Inspect Element modification
+    // Protect KPI cards, directory table, instructor statement, and receipt modal against Inspect Element modification
     document.addEventListener('DOMContentLoaded', function() {
         setTimeout(function() {
             if (window.protectContainer) {
                 var receiptArea = document.getElementById('receipt-print-area');
-                if (receiptArea) {
-                    window.protectContainer(receiptArea, function() {
-                        if (currentTxReceiptIndex !== null && typeof currentTxReceiptIndex === 'number') {
-                            openReceiptModalByIndex(currentTxReceiptIndex);
-                        }
-                    });
-                }
+                if (receiptArea) window.protectContainer(receiptArea);
+                var kpiGrid = document.querySelector('.kpi-grid');
+                if (kpiGrid) window.protectContainer(kpiGrid);
+                var dirSection = document.getElementById('directorySection');
+                if (dirSection) window.protectContainer(dirSection);
+                var dirTbody = document.getElementById('directoryTableBody');
+                if (dirTbody) window.protectContainer(dirTbody);
+                var instSection = document.getElementById('instructorDetailSection');
+                if (instSection) window.protectContainer(instSection);
             }
         }, 400);
     });

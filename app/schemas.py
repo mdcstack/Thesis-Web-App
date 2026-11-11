@@ -88,6 +88,12 @@ class DistributionRequest(BaseModel):
     distribution_mode: Optional[str] = "auto"  # "auto", "manual", "hybrid"
     explicit_control_nums: Optional[List[str]] = []
 
+class SupplementaryDistributionRequest(BaseModel):
+    enrollment_id: int
+    scanned_control_nums: List[str]
+    clerk_name: str = "System Clerk"
+    payment_mode: str = "account"  # "account" or "cash"
+
 class VerifySessionRequest(BaseModel):
     username: str
     session_token: str

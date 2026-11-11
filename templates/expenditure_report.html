@@ -187,7 +187,7 @@
         <div id="financialContent">
             
             <!-- Topline KPI & ROI Metrics -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 25px;">
+            <div id="expToplineKpiContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 25px;">
                 <div class="card" style="border-left-color: #3498db;">
                     <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Gross Sales Revenue</span>
                     <h2 style="color: #0f172a; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiGross">₱--</h2>
@@ -207,7 +207,7 @@
             </div>
 
             <!-- Balance Sheet Card -->
-            <div class="card" style="border-left-color: #8e44ad;">
+            <div class="card" id="expBalanceSheetCard" style="border-left-color: #8e44ad;">
                 <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">🏛️ Balance Sheet</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
@@ -271,7 +271,7 @@
             </div>
 
             <!-- Direct Materials & Production Cost Card -->
-            <div class="card" style="border-left-color: #e67e22;">
+            <div class="card" id="expProductionCostCard" style="border-left-color: #e67e22;">
                 <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📦 Direct Materials &amp; Production Cost</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
@@ -326,7 +326,7 @@
             </div>
 
             <!-- Income Statement Card -->
-            <div class="card" style="border-left-color: #27ae60;">
+            <div class="card" id="expIncomeStatementCard" style="border-left-color: #27ae60;">
                 <h3 style="color: #0f172a; margin-bottom: 18px; font-size: 1.25rem;">📊 Income Statement</h3>
                 <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px;">
                     <table style="width: 100%;">
@@ -1090,17 +1090,21 @@
             });
         }
 
-        // Protect critical financial tables against Inspect Element tampering
+        // Protect critical financial tables and cards against Inspect Element tampering
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 if (window.protectContainer) {
-                    var container = document.getElementById('reportDynamicContent');
-                    if (container) {
-                        window.protectContainer(container, function() {
-                            var auth = window.getAuthoritativeData('expenditure_report');
-                            if (auth) renderExpenditureReport(auth);
-                        });
-                    }
+                    const targets = [
+                        '#financialContent',
+                        '#expToplineKpiContainer',
+                        '#expBalanceSheetCard',
+                        '#expProductionCostCard',
+                        '#expIncomeStatementCard'
+                    ];
+                    targets.forEach(function(sel) {
+                        var container = document.querySelector(sel);
+                        if (container) window.protectContainer(container);
+                    });
                 }
             }, 300);
         });

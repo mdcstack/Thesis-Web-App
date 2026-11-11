@@ -1147,7 +1147,7 @@
 
         <div class="audit-scroll-wrapper">
 
-            <div class="card audit-card">
+            <div class="card audit-card" id="periodAuditCard" data-tamper-protect="true">
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
 
@@ -1810,18 +1810,6 @@
                     </label>
 
                     <input type="color" id="editProgColor" style="width: 48px; height: 38px; border: none; border-radius: 6px; cursor: pointer;">
-
-                </div>
-
-                <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
-
-                    <input type="checkbox" id="editProgActive" style="width: 18px; height: 18px; cursor: pointer;">
-
-                    <label for="editProgActive" style="font-weight: 600; font-size: 0.88rem; color: #1e293b; cursor: pointer;">
-
-                        Active Program (Visible in dropdowns, generation, and reports)
-
-                    </label>
 
                 </div>
 
@@ -5454,35 +5442,20 @@
 
 
                 return `
-
-                    <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}">
-
+                    <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}" data-tamper-protect="true">
                         <td><strong>${escapeHtml(item.academic_period)}</strong></td>
-
                         <td><code style="background:#eef2f7; padding:3px 8px; border-radius:4px; font-weight:bold; color:#2563eb; font-family:monospace;">${escapeHtml(item.semester_prefix || '-')}</code></td>
-
                         <td>₱${Number(item.ream_price).toFixed(2)}</td>
-
                         <td>₱${Number(item.booklet_price).toFixed(2)}</td>
-
                         <td>${item.sheets_per_booklet} sheets</td>
-
                         <td>${item.yield_per_ream} pcs/ream</td>
-
                         <td style="color:#059669; font-weight:bold;">₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-
                         <td>${item.reorder_buffer_percent}%</td>
-
                         <td>${escapeHtml(item.configured_by || 'Admin')}</td>
-
                         <td style="color:#64748b; font-size:0.84rem;">${escapeHtml(item.updated_at || '-')}</td>
-
                         <td>${statusBadge}</td>
-
                         <td style="text-align: center;">${actionsHtml}</td>
-
                     </tr>
-
                 `;
 
             }).join('');
@@ -5537,7 +5510,22 @@
 
                     try { sessionStorage.setItem(PERIOD_CONFIGS_CACHE_KEY, JSON.stringify(list)); } catch (e) {}
 
+                    window.cachedPeriodArchiveList = list;
+                    if (window.registerAuthoritativeData) {
+                        window.registerAuthoritativeData('period_archive_history', list);
+                    }
+
                     renderPeriodConfigurationsTable(list);
+
+                    if (window.protectContainer && !window._periodHistoryProtected) {
+                        window._periodHistoryProtected = true;
+                        window.protectContainer(tbody, function() {
+                            const auth = (window.getAuthoritativeData && window.getAuthoritativeData('period_archive_history')) || window.cachedPeriodArchiveList || [];
+                            if (auth && auth.length > 0) {
+                                renderPeriodConfigurationsTable(auth);
+                            }
+                        });
+                    }
 
                 }
 
@@ -6718,8 +6706,6 @@
 
         document.getElementById('editProgColor').value = color || '#3498db';
 
-        document.getElementById('editProgActive').checked = !!isActive;
-
         const editSheetsEl = document.getElementById('editProgSheets');
         if (editSheetsEl) editSheetsEl.value = (sheets !== null && sheets !== undefined && sheets > 0) ? sheets : '';
 
@@ -6756,8 +6742,6 @@
 
         const color_hex = document.getElementById('editProgColor').value.trim();
 
-        const is_active = document.getElementById('editProgActive').checked;
-
         const sheetsVal = document.getElementById('editProgSheets')?.value.trim();
         const priceVal = document.getElementById('editProgPrice')?.value.trim();
 
@@ -6784,7 +6768,6 @@
                     name,
                     section_prefix,
                     color_hex,
-                    is_active,
                     sheets_per_booklet: sheets_per_booklet,
                     booklet_price: booklet_price
                 })

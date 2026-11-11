@@ -2190,6 +2190,40 @@ In the Academic Courses & Section Configuration card within the Settings page, a
    * Verified 100% match with the Sidebar notification and Dashboard DSS.
 2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
 
+---
+
+## 139. Supplementary Booklet (Lost Reissue) Scan-Only Feature & Ledger Integration
+
+### Problem Addressed
+When students lose or damage examination booklets prior to an exam, instructors require additional replacement booklets. Previously, the distribution counter blocked transactions once a class section reached its enrolled headcount, and automatic sequential pack allocation was ill-suited for handing over single replacement copies. Furthermore, creating detached separate receipts for ad-hoc replacements fragmented financial records.
+
+### Solution Applied
+1. **Four Level Cascading Selection & Scan-Only Modal (`templates/distribution.html`)**:
+   * Added a dedicated quick action banner and modal `#supplementaryModal` for Supplementary Booklets.
+   * Implemented cascading dropdowns navigating from Department to Instructor, then Section, and Subject.
+   * Added a flexible numerical demand input with no artificial ceiling (enforcing positive whole numbers $\ge 1$).
+   * Completely bypassed auto allocation in favor of strict scan-only validation: the clerk scans the booklet QR code via camera or types the Control Number or SRN into the manual input.
+2. **Backend API Endpoints (`app/main.py`)**:
+   * `GET /api/supplementary-classes-lookup`: Retrieves all active courses and enrollments so even fulfilled classes can be selected for supplementary reissues.
+   * `POST /api/execute-supplementary-distribution`: Validates booklet availability and department template match, updates booklet status to `distributed` with `return_reason = "SUPPLEMENTARY_LOST_REISSUE"`, increments class `amount_due`, supports immediate cash settlement at the counter, logs system activity, and emits real-time LAN synchronization.
+3. **Consolidated Semester Receipt Presentation (`templates/receipts.html` & `app/main.py`)**:
+   * Appends the additional booklet to the existing class transaction receipt for that semester.
+   * Renders a green highlighted audit addendum: `➕ [Supplementary Issuance: Lost Reissue • Transacted: Date/Time]`.
+4. **Payment Tracking Calculation Breakdown Card (`templates/payment_tracking.html`)**:
+   * Added a dedicated green row `#calcSupplementaryRow` displaying `➕ Supplementary Booklets (Lost Reissue): +N`.
+
+### Verification Results
+1. **Automated Test Suite (`scratch/test_supplementary_distribution.py`)**:
+   * Verified class lookup returns active courses and sections.
+   * Verified Account Mode increments amount due while keeping payment history intact.
+   * Verified Cash Mode creates instant PaymentRecord, balancing remaining balance to zero difference.
+   * Verified Consolidated Receipt renders the green audit addendum.
+   * Verified Payment Tracking calculation breakdown card displays `supplementary_count`.
+   * All test assertions passed with **100% SUCCESS**.
+2. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+3. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
 
 ---
 
@@ -2236,6 +2270,40 @@ In the Academic Courses & Section Configuration card within the Settings page, a
    * Total Reams: Exactly 5 reams (costing ₱1,250.00).
    * Verified 100% match with the Sidebar notification and Dashboard DSS.
 2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+---
+
+## 139. Supplementary Booklet (Lost Reissue) Scan-Only Feature & Ledger Integration
+
+### Problem Addressed
+When students lose or damage examination booklets prior to an exam, instructors require additional replacement booklets. Previously, the distribution counter blocked transactions once a class section reached its enrolled headcount, and automatic sequential pack allocation was ill-suited for handing over single replacement copies. Furthermore, creating detached separate receipts for ad-hoc replacements fragmented financial records.
+
+### Solution Applied
+1. **Four Level Cascading Selection & Scan-Only Modal (`templates/distribution.html`)**:
+   * Added a dedicated quick action banner and modal `#supplementaryModal` for Supplementary Booklets.
+   * Implemented cascading dropdowns navigating from Department to Instructor, then Section, and Subject.
+   * Added a flexible numerical demand input with no artificial ceiling (enforcing positive whole numbers $\ge 1$).
+   * Completely bypassed auto allocation in favor of strict scan-only validation: the clerk scans the booklet QR code via camera or types the Control Number or SRN into the manual input.
+2. **Backend API Endpoints (`app/main.py`)**:
+   * `GET /api/supplementary-classes-lookup`: Retrieves all active courses and enrollments so even fulfilled classes can be selected for supplementary reissues.
+   * `POST /api/execute-supplementary-distribution`: Validates booklet availability and department template match, updates booklet status to `distributed` with `return_reason = "SUPPLEMENTARY_LOST_REISSUE"`, increments class `amount_due`, supports immediate cash settlement at the counter, logs system activity, and emits real-time LAN synchronization.
+3. **Consolidated Semester Receipt Presentation (`templates/receipts.html` & `app/main.py`)**:
+   * Appends the additional booklet to the existing class transaction receipt for that semester.
+   * Renders a green highlighted audit addendum: `➕ [Supplementary Issuance: Lost Reissue • Transacted: Date/Time]`.
+4. **Payment Tracking Calculation Breakdown Card (`templates/payment_tracking.html`)**:
+   * Added a dedicated green row `#calcSupplementaryRow` displaying `➕ Supplementary Booklets (Lost Reissue): +N`.
+
+### Verification Results
+1. **Automated Test Suite (`scratch/test_supplementary_distribution.py`)**:
+   * Verified class lookup returns active courses and sections.
+   * Verified Account Mode increments amount due while keeping payment history intact.
+   * Verified Cash Mode creates instant PaymentRecord, balancing remaining balance to zero difference.
+   * Verified Consolidated Receipt renders the green audit addendum.
+   * Verified Payment Tracking calculation breakdown card displays `supplementary_count`.
+   * All test assertions passed with **100% SUCCESS**.
+2. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+3. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
 
 
 
@@ -2453,6 +2521,40 @@ In the Academic Courses & Section Configuration card within the Settings page, a
    * Verified 100% match with the Sidebar notification and Dashboard DSS.
 2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
 
+---
+
+## 139. Supplementary Booklet (Lost Reissue) Scan-Only Feature & Ledger Integration
+
+### Problem Addressed
+When students lose or damage examination booklets prior to an exam, instructors require additional replacement booklets. Previously, the distribution counter blocked transactions once a class section reached its enrolled headcount, and automatic sequential pack allocation was ill-suited for handing over single replacement copies. Furthermore, creating detached separate receipts for ad-hoc replacements fragmented financial records.
+
+### Solution Applied
+1. **Four Level Cascading Selection & Scan-Only Modal (`templates/distribution.html`)**:
+   * Added a dedicated quick action banner and modal `#supplementaryModal` for Supplementary Booklets.
+   * Implemented cascading dropdowns navigating from Department to Instructor, then Section, and Subject.
+   * Added a flexible numerical demand input with no artificial ceiling (enforcing positive whole numbers $\ge 1$).
+   * Completely bypassed auto allocation in favor of strict scan-only validation: the clerk scans the booklet QR code via camera or types the Control Number or SRN into the manual input.
+2. **Backend API Endpoints (`app/main.py`)**:
+   * `GET /api/supplementary-classes-lookup`: Retrieves all active courses and enrollments so even fulfilled classes can be selected for supplementary reissues.
+   * `POST /api/execute-supplementary-distribution`: Validates booklet availability and department template match, updates booklet status to `distributed` with `return_reason = "SUPPLEMENTARY_LOST_REISSUE"`, increments class `amount_due`, supports immediate cash settlement at the counter, logs system activity, and emits real-time LAN synchronization.
+3. **Consolidated Semester Receipt Presentation (`templates/receipts.html` & `app/main.py`)**:
+   * Appends the additional booklet to the existing class transaction receipt for that semester.
+   * Renders a green highlighted audit addendum: `➕ [Supplementary Issuance: Lost Reissue • Transacted: Date/Time]`.
+4. **Payment Tracking Calculation Breakdown Card (`templates/payment_tracking.html`)**:
+   * Added a dedicated green row `#calcSupplementaryRow` displaying `➕ Supplementary Booklets (Lost Reissue): +N`.
+
+### Verification Results
+1. **Automated Test Suite (`scratch/test_supplementary_distribution.py`)**:
+   * Verified class lookup returns active courses and sections.
+   * Verified Account Mode increments amount due while keeping payment history intact.
+   * Verified Cash Mode creates instant PaymentRecord, balancing remaining balance to zero difference.
+   * Verified Consolidated Receipt renders the green audit addendum.
+   * Verified Payment Tracking calculation breakdown card displays `supplementary_count`.
+   * All test assertions passed with **100% SUCCESS**.
+2. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+3. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+
 
 ---
 
@@ -2499,6 +2601,40 @@ In the Academic Courses & Section Configuration card within the Settings page, a
    * Total Reams: Exactly 5 reams (costing ₱1,250.00).
    * Verified 100% match with the Sidebar notification and Dashboard DSS.
 2. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
+---
+
+## 139. Supplementary Booklet (Lost Reissue) Scan-Only Feature & Ledger Integration
+
+### Problem Addressed
+When students lose or damage examination booklets prior to an exam, instructors require additional replacement booklets. Previously, the distribution counter blocked transactions once a class section reached its enrolled headcount, and automatic sequential pack allocation was ill-suited for handing over single replacement copies. Furthermore, creating detached separate receipts for ad-hoc replacements fragmented financial records.
+
+### Solution Applied
+1. **Four Level Cascading Selection & Scan-Only Modal (`templates/distribution.html`)**:
+   * Added a dedicated quick action banner and modal `#supplementaryModal` for Supplementary Booklets.
+   * Implemented cascading dropdowns navigating from Department to Instructor, then Section, and Subject.
+   * Added a flexible numerical demand input with no artificial ceiling (enforcing positive whole numbers $\ge 1$).
+   * Completely bypassed auto allocation in favor of strict scan-only validation: the clerk scans the booklet QR code via camera or types the Control Number or SRN into the manual input.
+2. **Backend API Endpoints (`app/main.py`)**:
+   * `GET /api/supplementary-classes-lookup`: Retrieves all active courses and enrollments so even fulfilled classes can be selected for supplementary reissues.
+   * `POST /api/execute-supplementary-distribution`: Validates booklet availability and department template match, updates booklet status to `distributed` with `return_reason = "SUPPLEMENTARY_LOST_REISSUE"`, increments class `amount_due`, supports immediate cash settlement at the counter, logs system activity, and emits real-time LAN synchronization.
+3. **Consolidated Semester Receipt Presentation (`templates/receipts.html` & `app/main.py`)**:
+   * Appends the additional booklet to the existing class transaction receipt for that semester.
+   * Renders a green highlighted audit addendum: `➕ [Supplementary Issuance: Lost Reissue • Transacted: Date/Time]`.
+4. **Payment Tracking Calculation Breakdown Card (`templates/payment_tracking.html`)**:
+   * Added a dedicated green row `#calcSupplementaryRow` displaying `➕ Supplementary Booklets (Lost Reissue): +N`.
+
+### Verification Results
+1. **Automated Test Suite (`scratch/test_supplementary_distribution.py`)**:
+   * Verified class lookup returns active courses and sections.
+   * Verified Account Mode increments amount due while keeping payment history intact.
+   * Verified Cash Mode creates instant PaymentRecord, balancing remaining balance to zero difference.
+   * Verified Consolidated Receipt renders the green audit addendum.
+   * Verified Payment Tracking calculation breakdown card displays `supplementary_count`.
+   * All test assertions passed with **100% SUCCESS**.
+2. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All 15 templates verified with **0 errors**.
+3. **Python Syntax Compilation (`py_compile`)**: Clean pass with 0 errors.
+
 
 
 
