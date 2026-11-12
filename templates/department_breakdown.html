@@ -551,7 +551,21 @@
             const dcsNetProfit = combinedGross - totalDeductions;
 
             // Populate Topline Cards
-            document.getElementById('kpiGrossRevenue').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const grossStr = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const displayKpiNet = dcsNetProfit < 0 ? 0 : dcsNetProfit;
+            const netStr = `₱${displayKpiNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const paperStr = `${totalReams} Ream(s) and ${totalLoose} paper sheets`;
+
+            if (window.lockAuthoritativeElement) {
+                window.lockAuthoritativeElement('#kpiGrossRevenue', grossStr);
+                window.lockAuthoritativeElement('#kpiNetProfit', netStr);
+                window.lockAuthoritativeElement('#kpiPaperUsage', paperStr);
+            } else {
+                document.getElementById('kpiGrossRevenue').innerText = grossStr;
+                if (document.getElementById('kpiNetProfit')) document.getElementById('kpiNetProfit').innerText = netStr;
+                document.getElementById('kpiPaperUsage').innerText = paperStr;
+            }
+
             const kpiGrossSub = document.getElementById('kpiGrossSub');
             if (kpiGrossSub) {
                 if (totalPending > 0) {
@@ -565,8 +579,6 @@
             const kpiNetEl = document.getElementById('kpiNetProfit');
             const cardNetEl = document.getElementById('cardNetProfit');
             if (kpiNetEl) {
-                const displayKpiNet = dcsNetProfit < 0 ? 0 : dcsNetProfit;
-                kpiNetEl.innerText = `₱${displayKpiNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                 let profitColor = '#27ae60';
                 if (dcsNetProfit < 0) {
                     profitColor = '#e74c3c';
@@ -580,7 +592,6 @@
                     cardNetEl.style.borderLeftColor = profitColor;
                 }
             }
-            document.getElementById('kpiPaperUsage').innerText = `${totalReams} Ream(s) and ${totalLoose} paper sheets`;
             
             const paperDetailsHtml = programs.map((p, idx) => {
                 const s = deptStats[p.code] || { reams: 0, loose: 0, sheets: 0 };
@@ -591,25 +602,29 @@
             document.getElementById('kpiPaperDetails').innerHTML = paperDetailsHtml;
 
             // Populate Waterfall Ledger
-            document.getElementById('wfGross').innerText = `₱${combinedGross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const uniShareStr = `- ₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const prodCostStr = `- ₱${productionCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const totDedStr = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            if (window.lockAuthoritativeElement) {
+                window.lockAuthoritativeElement('#wfGross', grossStr);
+                if (document.getElementById('wfUniShare')) window.lockAuthoritativeElement('#wfUniShare', uniShareStr);
+                if (document.getElementById('wfProdCost')) window.lockAuthoritativeElement('#wfProdCost', prodCostStr);
+                if (document.getElementById('wfTotalDeductions')) window.lockAuthoritativeElement('#wfTotalDeductions', totDedStr);
+                if (document.getElementById('wfNetProfit')) window.lockAuthoritativeElement('#wfNetProfit', netStr);
+            } else {
+                document.getElementById('wfGross').innerText = grossStr;
+                if (document.getElementById('wfUniShare')) document.getElementById('wfUniShare').innerText = uniShareStr;
+                if (document.getElementById('wfProdCost')) document.getElementById('wfProdCost').innerText = prodCostStr;
+                if (document.getElementById('wfTotalDeductions')) document.getElementById('wfTotalDeductions').innerText = totDedStr;
+                if (document.getElementById('wfNetProfit')) document.getElementById('wfNetProfit').innerText = netStr;
+            }
+
             const wfGrossSub = document.getElementById('wfGrossSub');
             if (wfGrossSub) {
                 const totalPrior = Object.values(computationsPayload.prior_ar_by_dept || {}).reduce((a, b) => a + b, 0);
                 const priorNote = totalPrior > 0 ? ` | Prior Debt: ₱${totalPrior.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '';
                 wfGrossSub.innerText = `Total Billed: ₱${totalBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${priorNote} | Net Pending: ₱${totalPending.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-            if (document.getElementById('wfUniShare')) {
-                document.getElementById('wfUniShare').innerText = `- ₱${universityShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-            if (document.getElementById('wfProdCost')) {
-                document.getElementById('wfProdCost').innerText = `- ₱${productionCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-            if (document.getElementById('wfTotalDeductions')) {
-                document.getElementById('wfTotalDeductions').innerText = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-            if (document.getElementById('wfNetProfit')) {
-                const displayWfNetProfit = dcsNetProfit < 0 ? 0 : dcsNetProfit;
-                document.getElementById('wfNetProfit').innerText = `₱${displayWfNetProfit.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             }
 
             // Render dynamic program deductions in the waterfall ledger (3 columns)

@@ -1,9 +1,9 @@
 /**
  * Bookledger DOM Integrity & Anti-Tamper Security Module
  * Protects client-side data integrity against DevTools element inspection,
- * unauthorized DOM manipulation, and ensures 100% authoritative server data
- * during print, preview, modal views, and save operations.
- * Passive, non-pulsating architecture with zero continuous polling reflows.
+ * unauthorized DOM manipulation, and ensures 100% authoritative server data.
+ * Features discrete in-place value restoration with zero full-table re-renders,
+ * guaranteed zero UI pulsation, and continuous database value reflection.
  */
 
 (function(window) {
@@ -11,8 +11,11 @@
 
     // Store deep-frozen authoritative server datasets by namespace
     const authoritativeStore = new Map();
+    // In-memory authoritative registry mapping HTMLElement -> expected string value
+    const elementAuthoritativeMap = new Map();
     const printRehydrators = [];
     let isSystemRendering = false;
+    let isSystemUpdating = false;
     let toastTimeout = null;
 
     /**
@@ -73,15 +76,23 @@
     }
 
     /**
-     * Sets authoritative text on an element and marks it with tamper protection.
+     * Sets authoritative text on an element, tags it with data-auth-val and data-tamper-protect,
+     * and registers it in the in-memory authoritative map.
      */
     function lockAuthoritativeElement(target, authoritativeValue) {
         var el = typeof target === 'string' ? document.querySelector(target) : target;
         if (!el || authoritativeValue === undefined || authoritativeValue === null) return;
 
-        var strVal = String(authoritativeValue);
+        var strVal = String(authoritativeValue).trim();
+        elementAuthoritativeMap.set(el, strVal);
+
+        isSystemUpdating = true;
+        el.setAttribute('data-auth-val', strVal);
         el.setAttribute('data-tamper-protect', 'true');
-        el.textContent = strVal;
+        if (el.textContent.trim() !== strVal) {
+            el.textContent = strVal;
+        }
+        isSystemUpdating = false;
     }
 
     /**
@@ -136,7 +147,7 @@
         var toast = document.createElement('div');
         toast.id = 'tamperWarningToast';
         toast.style.cssText = 'position: fixed; bottom: 24px; right: 24px; z-index: 9999999; background: #991b1b; color: white; padding: 12px 18px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px; pointer-events: none; transition: opacity 0.4s ease;';
-        toast.innerHTML = '<span style="font-size: 16px;">🛡️</span><span>' + (customMsg || 'Integrity Guard: Inspection disabled on official records.') + '</span>';
+        toast.innerHTML = '<span style="font-size: 16px;">🛡️</span><span>' + (customMsg || 'Integrity Guard: Unauthorized edit reverted to database value.') + '</span>';
         
         if (document.body && document.body.appendChild) {
             document.body.appendChild(toast);
@@ -153,7 +164,6 @@
      * Passive container protection:
      * Tags the target element with data-tamper-protect="true" to disable right-click inspect.
      * Optionally registers print rehydration if a re-render function is supplied.
-     * Zero continuous polling or active mutation observers to guarantee zero UI pulsation.
      */
     function protectContainer(target, renderFn) {
         var el = typeof target === 'string' ? document.querySelector(target) : target;
@@ -167,6 +177,74 @@
             disconnect: function() {}
         };
     }
+
+    /**
+     * Targeted MutationObserver for discrete in-place value restoration.
+     * Intercepts manual edits in DevTools instantly with zero whole-table re-rendering.
+     */
+    const integrityObserver = new MutationObserver(function(mutations) {
+        if (isSystemUpdating || isSystemRendering) return;
+
+        for (var i = 0; i < mutations.length; i++) {
+            var mut = mutations[i];
+            var target = mut.target;
+            if (!target) continue;
+
+            var el = target.nodeType === 3 ? target.parentElement : target; // Node.TEXT_NODE === 3
+            if (!el) continue;
+
+            var authEl = el.closest ? el.closest('[data-auth-val]') : null;
+            if (!authEl && elementAuthoritativeMap.has(el)) {
+                authEl = el;
+            }
+
+            if (authEl) {
+                var expected = elementAuthoritativeMap.get(authEl) || authEl.getAttribute('data-auth-val');
+                if (expected && authEl.textContent.trim() !== expected.trim()) {
+                    isSystemUpdating = true;
+                    authEl.textContent = expected;
+                    isSystemUpdating = false;
+                    showTamperToast('Unauthorized edit reverted to database value.');
+                }
+            }
+        }
+    });
+
+    function initObserver() {
+        if (document.body) {
+            integrityObserver.observe(document.body, { childList: true, characterData: true, subtree: true });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initObserver);
+    } else {
+        initObserver();
+    }
+
+    /**
+     * Continuous Silent Heartbeat (every 1000ms):
+     * Sweeps registered authoritative elements. If a value was altered,
+     * immediately restores only that single element.
+     * When numbers match (normal viewing), performs ZERO DOM writes, zero reflows, and zero pulsation.
+     */
+    setInterval(function() {
+        if (isSystemUpdating || isSystemRendering) return;
+        if (elementAuthoritativeMap.size === 0) return;
+
+        elementAuthoritativeMap.forEach(function(expected, el) {
+            if (!el || !el.isConnected) {
+                elementAuthoritativeMap.delete(el);
+                return;
+            }
+            if (el.textContent.trim() !== expected.trim()) {
+                isSystemUpdating = true;
+                el.textContent = expected;
+                isSystemUpdating = false;
+                showTamperToast('Tampered value restored from database.');
+            }
+        });
+    }, 1000);
 
     // Intercept native window.print() so all calls re-hydrate first
     var originalPrint = window.print;

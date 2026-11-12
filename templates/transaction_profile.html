@@ -931,19 +931,29 @@
         });
 
         document.getElementById('kpiTitle1').innerText = "Total Booklets Issued";
-        document.getElementById('kpiBooklets').innerText = `${totBooklets.toLocaleString()} pcs`;
+        const bookStr = `${totBooklets.toLocaleString()} pcs`;
+        const billedStr = `₱${totBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const paidStr = `₱${totPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const balStr = `₱${totBal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        if (window.lockAuthoritativeElement) {
+            window.lockAuthoritativeElement('#kpiBooklets', bookStr);
+            window.lockAuthoritativeElement('#kpiBilled', billedStr);
+            window.lockAuthoritativeElement('#kpiPaid', paidStr);
+            window.lockAuthoritativeElement('#kpiBalance', balStr);
+        } else {
+            document.getElementById('kpiBooklets').innerText = bookStr;
+            document.getElementById('kpiBilled').innerText = billedStr;
+            document.getElementById('kpiPaid').innerText = paidStr;
+            document.getElementById('kpiBalance').innerText = balStr;
+        }
+
         document.getElementById('kpiBookletsSub').innerText = `Across ${filtered.length} faculty members`;
-
         document.getElementById('kpiTitle2').innerText = "Total Department Billed";
-        document.getElementById('kpiBilled').innerText = `₱${totBilled.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiBilledSub').innerText = "Gross booklet charges";
-
         document.getElementById('kpiTitle3').innerText = "Total Department Collected";
-        document.getElementById('kpiPaid').innerText = `₱${totPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiPaidSub').innerText = "Remitted payments to date";
-
         document.getElementById('kpiTitle4').innerText = "Net Outstanding Receivables";
-        document.getElementById('kpiBalance').innerText = `₱${totBal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiBalance').style.color = totBilled === 0 ? '#64748b' : (totBal <= 0 ? '#16a34a' : '#dc2626');
         document.getElementById('kpiBalanceSub').innerText = totBilled === 0 ? "No department transactions recorded" : (totBal <= 0 ? "All faculty accounts cleared" : "Total pending collection");
 
@@ -960,6 +970,10 @@
         filtered.forEach(inst => {
             const tr = document.createElement('tr');
             tr.setAttribute('data-tamper-protect', 'true');
+            const rowDueStr = `₱${(inst.total_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const rowPaidStr = `₱${(inst.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const rowBalStr = `₱${(inst.total_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
             tr.innerHTML = `
                 <td>
                     <strong style="color: #0f172a; font-size: 0.98rem; cursor: pointer;" onclick="selectInstructor('${escapeHtml(inst.teacher_name)}')">
@@ -968,11 +982,11 @@
                 </td>
                 <td>${getCourseBadge(inst.department || 'CS')}</td>
                 <td style="text-align: center;">${inst.classes ? inst.classes.length : 0}</td>
-                <td style="text-align: center; font-weight: 600;">${inst.total_qty || 0} pcs</td>
-                <td style="text-align: right; font-weight: 600;">₱${(inst.total_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td style="text-align: right; font-weight: 600; color: #16a34a;">₱${(inst.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td style="text-align: right; font-weight: 800; color: ${(inst.total_balance || 0) <= 0 ? '#16a34a' : '#dc2626'};">
-                    ₱${(inst.total_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                <td style="text-align: center; font-weight: 600;" data-auth-val="${inst.total_qty || 0} pcs">${inst.total_qty || 0} pcs</td>
+                <td style="text-align: right; font-weight: 600;" data-auth-val="${rowDueStr}">${rowDueStr}</td>
+                <td style="text-align: right; font-weight: 600; color: #16a34a;" data-auth-val="${rowPaidStr}">${rowPaidStr}</td>
+                <td style="text-align: right; font-weight: 800; color: ${(inst.total_balance || 0) <= 0 ? '#16a34a' : '#dc2626'};" data-auth-val="${rowBalStr}">
+                    ${rowBalStr}
                 </td>
                 <td style="text-align: center;">${getStatusBadge(inst.overall_status, inst.total_balance, inst.total_due, inst.total_qty)}</td>
                 <td style="text-align: center;" class="no-print">
@@ -983,6 +997,12 @@
             `;
             tbody.appendChild(tr);
         });
+
+        if (window.lockAuthoritativeElement) {
+            tbody.querySelectorAll('[data-auth-val]').forEach(el => {
+                window.lockAuthoritativeElement(el, el.getAttribute('data-auth-val'));
+            });
+        }
     }
 
     // -------------------------------------------------------------
@@ -1024,19 +1044,29 @@
         document.getElementById('heroStatusBadge').innerHTML = getStatusBadge(inst.overall_status, inst.total_balance, inst.total_due, inst.total_qty);
 
         document.getElementById('kpiTitle1').innerText = "Total Booklets Received";
-        document.getElementById('kpiBooklets').innerText = `${inst.total_qty || 0} pcs`;
+        const instBookStr = `${inst.total_qty || 0} pcs`;
+        const instBilledStr = `₱${(inst.total_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const instPaidStr = `₱${(inst.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const instBalStr = `₱${(inst.total_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        if (window.lockAuthoritativeElement) {
+            window.lockAuthoritativeElement('#kpiBooklets', instBookStr);
+            window.lockAuthoritativeElement('#kpiBilled', instBilledStr);
+            window.lockAuthoritativeElement('#kpiPaid', instPaidStr);
+            window.lockAuthoritativeElement('#kpiBalance', instBalStr);
+        } else {
+            document.getElementById('kpiBooklets').innerText = instBookStr;
+            document.getElementById('kpiBilled').innerText = instBilledStr;
+            document.getElementById('kpiPaid').innerText = instPaidStr;
+            document.getElementById('kpiBalance').innerText = instBalStr;
+        }
+
         document.getElementById('kpiBookletsSub').innerText = `Across ${inst.classes ? inst.classes.length : 0} enrolled classes`;
-
         document.getElementById('kpiTitle2').innerText = "Total Amount Billed";
-        document.getElementById('kpiBilled').innerText = `₱${(inst.total_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiBilledSub').innerText = "Grand total for this semester";
-
         document.getElementById('kpiTitle3').innerText = "Total Amount Paid";
-        document.getElementById('kpiPaid').innerText = `₱${(inst.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiPaidSub').innerText = "Total remitted to cashier";
-
         document.getElementById('kpiTitle4').innerText = "Net Balance Remaining";
-        document.getElementById('kpiBalance').innerText = `₱${(inst.total_balance || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('kpiBalance').style.color = (inst.total_due || 0) === 0 ? '#64748b' : ((inst.total_balance || 0) <= 0 ? '#16a34a' : '#dc2626');
         if ((inst.total_due || 0) === 0 && (inst.total_qty || 0) === 0) {
             document.getElementById('kpiBalanceSub').innerText = "No booklet transactions on record";
@@ -1247,11 +1277,20 @@
         document.getElementById('r-staff').innerText = (data.staff || "System Admin").toUpperCase();
 
         const unitPrice = data.unit_price !== undefined ? parseFloat(data.unit_price) : (data.qty > 0 ? (data.amount / data.qty) : 2.50);
-        const unitPriceEl = document.getElementById('r-unit-price-table');
-        if (unitPriceEl) unitPriceEl.innerText = `₱${unitPrice.toFixed(2)}`;
+        const unitPriceStr = `₱${unitPrice.toFixed(2)}`;
+        const qtyStr = String(data.qty || 0);
+        const amountTableStr = (data.amount || 0).toFixed(2);
 
-        document.getElementById('r-qty-table').innerText = data.qty;
-        document.getElementById('r-amount-table').innerText = (data.amount || 0).toFixed(2);
+        if (window.lockAuthoritativeElement) {
+            window.lockAuthoritativeElement('#r-qty-table', qtyStr);
+            window.lockAuthoritativeElement('#r-amount-table', amountTableStr);
+            window.lockAuthoritativeElement('#r-unit-price-table', unitPriceStr);
+        } else {
+            const unitPriceEl = document.getElementById('r-unit-price-table');
+            if (unitPriceEl) unitPriceEl.innerText = unitPriceStr;
+            document.getElementById('r-qty-table').innerText = qtyStr;
+            document.getElementById('r-amount-table').innerText = amountTableStr;
+        }
         document.getElementById('r-total-issued').innerText = data.qty;
 
         // Financial Breakdown: Due, Paid, Remaining Balance
@@ -1259,15 +1298,25 @@
         const paid = data.amount_paid !== undefined ? parseFloat(data.amount_paid) : 0.0;
         const balance = data.balance !== undefined ? parseFloat(data.balance) : Math.max(0.0, due - paid); 
 
-        const dueEl = document.getElementById('r-amount-due-box');
-        if (dueEl) dueEl.innerText = `₱${due.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const dueStr = `₱${due.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const paidStr = `₱${paid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const balStr = `₱${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
-        const paidEl = document.getElementById('r-amount-paid-box');
-        if (paidEl) paidEl.innerText = `₱${paid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        if (window.lockAuthoritativeElement) {
+            window.lockAuthoritativeElement('#r-amount-due-box', dueStr);
+            window.lockAuthoritativeElement('#r-amount-paid-box', paidStr);
+            window.lockAuthoritativeElement('#r-balance-box', balStr);
+        } else {
+            const dueEl = document.getElementById('r-amount-due-box');
+            if (dueEl) dueEl.innerText = dueStr;
+            const paidEl = document.getElementById('r-amount-paid-box');
+            if (paidEl) paidEl.innerText = paidStr;
+            const balEl = document.getElementById('r-balance-box');
+            if (balEl) balEl.innerText = balStr;
+        }
 
         const balEl = document.getElementById('r-balance-box');
         if (balEl) {
-            balEl.innerText = `₱${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             balEl.style.color = balance <= 0 ? '#27ae60' : '#e74c3c';
         }
 

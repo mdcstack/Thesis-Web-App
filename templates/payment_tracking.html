@@ -956,12 +956,12 @@ function _executeRenderTable() {
                         ${escapeHtml(enr.date_display || 'N/A')}
                     </td>
                     <td style="font-weight: bold; color: #2c3e50;">
-                        ₱${enr.amount_due.toFixed(2)}
+                        <span data-auth-val="₱${enr.amount_due.toFixed(2)}">₱${enr.amount_due.toFixed(2)}</span>
                         <span style="cursor:pointer; font-size:1.1rem; color: #3498db; margin-left: 8px; opacity: 0.85; transition: opacity 0.2s;" onclick="openBreakdownModal('${escapeHtml(enr.receipt_key || enr.id)}')" title="View Calculation Breakdown">ℹ️</span>
                     </td>
-                    <td style="font-weight: bold; color: #2c3e50;">₱${enr.amount_paid.toFixed(2)}</td>
-                    <td style="font-weight: bold; color: #e74c3c;">₱${enr.balance.toFixed(2)}</td>
-                    <td><span class="badge" style="background-color: ${badgeBg}; color: ${badgeText};">${enr.payment_status}</span></td>
+                    <td style="font-weight: bold; color: #2c3e50;" data-auth-val="₱${enr.amount_paid.toFixed(2)}">₱${enr.amount_paid.toFixed(2)}</td>
+                    <td style="font-weight: bold; color: #e74c3c;" data-auth-val="₱${enr.balance.toFixed(2)}">₱${enr.balance.toFixed(2)}</td>
+                    <td data-auth-val="${enr.payment_status}"><span class="badge" style="background-color: ${badgeBg}; color: ${badgeText};">${enr.payment_status}</span></td>
                     <td>
                         <button class="btn-action" 
                             onclick="openPaymentModal(${enr.id}, '${escapeHtml(enr.teacher_name).replace("'", "\\'")}', ${enr.balance}, '${escapeHtml(enr.exam_period || '').replace("'", "\\'")}', ${enr.amount_due}, ${enr.amount_paid})"
@@ -973,21 +973,38 @@ function _executeRenderTable() {
             `;
             tbody.insertAdjacentHTML('beforeend', row);
         });
+
+        if (window.lockAuthoritativeElement) {
+            tbody.querySelectorAll('[data-auth-val]').forEach(el => {
+                window.lockAuthoritativeElement(el, el.getAttribute('data-auth-val'));
+            });
+        }
     }
     
-    document.getElementById('totalExpected').textContent = `₱${tExpected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    document.getElementById('totalCollected').textContent = `₱${tCollected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    document.getElementById('totalOutstanding').textContent = `₱${tOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const expStr = `₱${tExpected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const colStr = `₱${tCollected.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const outStr = `₱${tOutstanding.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    if (window.lockAuthoritativeElement) {
+        window.lockAuthoritativeElement('#totalExpected', expStr);
+        window.lockAuthoritativeElement('#totalCollected', colStr);
+        window.lockAuthoritativeElement('#totalOutstanding', outStr);
+    } else {
+        document.getElementById('totalExpected').textContent = expStr;
+        document.getElementById('totalCollected').textContent = colStr;
+        document.getElementById('totalOutstanding').textContent = outStr;
+    }
 
     const deptOutEl = document.getElementById('deptOutstanding');
     if (deptOutEl) {
         const entries = Object.entries(deptTotals);
-        if (entries.length === 0) {
-            deptOutEl.textContent = 'No outstanding balances';
+        const deptText = entries.length === 0 
+            ? 'No outstanding balances' 
+            : entries.map(([dept, bal]) => `${dept}: ₱${bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`).join(' | ');
+        if (window.lockAuthoritativeElement) {
+            window.lockAuthoritativeElement(deptOutEl, deptText);
         } else {
-            deptOutEl.textContent = entries.map(([dept, bal]) => 
-                `${dept}: ₱${bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`
-            ).join(' | ');
+            deptOutEl.textContent = deptText;
         }
     }
 }
@@ -1050,8 +1067,42 @@ function openBreakdownModal(input) {
     currentBreakdownData = data;
 
     // Header context
-    document.getElementById('calcInstructorName').textContent = data.teacher_name || 'Instructor';
-    document.getElementById('calcSectionSubject').textContent = `${data.section || 'N/A'} - ${data.subject || 'N/A'}`;
+    const instructorName = data.teacher_name || 'Instructor';
+    const sectionSubject = `${data.section || 'N/A'} - ${data.subject || 'N/A'}`;
+    const headcountVal = String(data.student_headcount != null ? data.student_headcount : 0);
+    const distributedVal = String(data.distributed_count != null ? data.distributed_count : 0);
+    const droppedVal = String(data.loose_returned != null ? data.loose_returned : 0);
+    const billable = data.distributed_count != null ? data.distributed_count : 0;
+    const billableVal = String(billable);
+    const priceVal = `₱${(data.booklet_price || 0).toFixed(2)}`;
+    const totalVal = `₱${(data.amount_due || 0).toFixed(2)}`;
+    const paidVal = `₱${(data.amount_paid || 0).toFixed(2)}`;
+
+    if (window.lockAuthoritativeElement) {
+        window.lockAuthoritativeElement('#calcInstructorName', instructorName);
+        window.lockAuthoritativeElement('#calcSectionSubject', sectionSubject);
+        window.lockAuthoritativeElement('#calcHeadcount', headcountVal);
+        window.lockAuthoritativeElement('#calcDistributed', distributedVal);
+        window.lockAuthoritativeElement('#calcDropped', droppedVal);
+        window.lockAuthoritativeElement('#calcBillable', billableVal);
+        window.lockAuthoritativeElement('#calcPrice', priceVal);
+        window.lockAuthoritativeElement('#calcTotal', totalVal);
+        if (document.getElementById('calcPaid')) {
+            window.lockAuthoritativeElement('#calcPaid', paidVal);
+        }
+    } else {
+        document.getElementById('calcInstructorName').textContent = instructorName;
+        document.getElementById('calcSectionSubject').textContent = sectionSubject;
+        document.getElementById('calcHeadcount').textContent = headcountVal;
+        document.getElementById('calcDistributed').textContent = distributedVal;
+        document.getElementById('calcDropped').textContent = droppedVal;
+        document.getElementById('calcBillable').textContent = billableVal;
+        document.getElementById('calcPrice').textContent = priceVal;
+        document.getElementById('calcTotal').textContent = totalVal;
+        if (document.getElementById('calcPaid')) {
+            document.getElementById('calcPaid').textContent = paidVal;
+        }
+    }
     const deptBadge = document.getElementById('calcDeptBadge');
     if (deptBadge) {
         deptBadge.textContent = data.department || 'CS';
@@ -1059,19 +1110,6 @@ function openBreakdownModal(input) {
     const periodBadge = document.getElementById('calcPeriodBadge');
     if (periodBadge) {
         periodBadge.textContent = `[${data.exam_period || activeExamPeriod || 'Unknown Period'}]`;
-    }
-
-    // Formula table
-    document.getElementById('calcHeadcount').textContent = data.student_headcount != null ? data.student_headcount : 0;
-    document.getElementById('calcDistributed').textContent = data.distributed_count != null ? data.distributed_count : 0;
-    document.getElementById('calcDropped').textContent = data.loose_returned != null ? data.loose_returned : 0;
-    
-    const billable = data.distributed_count != null ? data.distributed_count : 0;
-    document.getElementById('calcBillable').textContent = billable;
-    document.getElementById('calcPrice').textContent = `₱${(data.booklet_price || 0).toFixed(2)}`;
-    document.getElementById('calcTotal').textContent = `₱${(data.amount_due || 0).toFixed(2)}`;
-    if (document.getElementById('calcPaid')) {
-        document.getElementById('calcPaid').textContent = `₱${(data.amount_paid || 0).toFixed(2)}`;
     }
     
     const suppRow = document.getElementById('calcSupplementaryRow');

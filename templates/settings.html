@@ -5441,17 +5441,25 @@
 
 
 
+                const reamPriceStr = `₱${Number(item.ream_price).toFixed(2)}`;
+                const bookletPriceStr = `₱${Number(item.booklet_price).toFixed(2)}`;
+                const sheetsStr = `${item.sheets_per_booklet} sheets`;
+                const yieldStr = `${item.yield_per_ream} pcs/ream`;
+                const budgetStr = `₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                const bufferStr = `${item.reorder_buffer_percent}%`;
+                const configByStr = escapeHtml(item.configured_by || 'Admin');
+
                 return `
                     <tr style="${isActive ? 'background-color: #f0fdf4; font-weight: 500;' : ''}" data-tamper-protect="true">
-                        <td><strong>${escapeHtml(item.academic_period)}</strong></td>
+                        <td data-auth-val="${escapeHtml(item.academic_period)}"><strong>${escapeHtml(item.academic_period)}</strong></td>
                         <td><code style="background:#eef2f7; padding:3px 8px; border-radius:4px; font-weight:bold; color:#2563eb; font-family:monospace;">${escapeHtml(item.semester_prefix || '-')}</code></td>
-                        <td>₱${Number(item.ream_price).toFixed(2)}</td>
-                        <td>₱${Number(item.booklet_price).toFixed(2)}</td>
-                        <td>${item.sheets_per_booklet} sheets</td>
-                        <td>${item.yield_per_ream} pcs/ream</td>
-                        <td style="color:#059669; font-weight:bold;">₱${Number(item.department_ream_budget).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                        <td>${item.reorder_buffer_percent}%</td>
-                        <td>${escapeHtml(item.configured_by || 'Admin')}</td>
+                        <td data-auth-val="${reamPriceStr}">${reamPriceStr}</td>
+                        <td data-auth-val="${bookletPriceStr}">${bookletPriceStr}</td>
+                        <td data-auth-val="${sheetsStr}">${sheetsStr}</td>
+                        <td data-auth-val="${yieldStr}">${yieldStr}</td>
+                        <td style="color:#059669; font-weight:bold;" data-auth-val="${budgetStr}">${budgetStr}</td>
+                        <td data-auth-val="${bufferStr}">${bufferStr}</td>
+                        <td data-auth-val="${configByStr}">${configByStr}</td>
                         <td style="color:#64748b; font-size:0.84rem;">${escapeHtml(item.updated_at || '-')}</td>
                         <td>${statusBadge}</td>
                         <td style="text-align: center;">${actionsHtml}</td>
@@ -5459,6 +5467,12 @@
                 `;
 
             }).join('');
+
+            if (window.lockAuthoritativeElement) {
+                tbody.querySelectorAll('[data-auth-val]').forEach(el => {
+                    window.lockAuthoritativeElement(el, el.getAttribute('data-auth-val'));
+                });
+            }
 
         }
 
