@@ -165,6 +165,19 @@
             <div>
                 <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">💰 Expenditure Report</h2>
                 <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap;">
+                    <div id="exp_ay_input_group" style="display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; gap: 4px; box-sizing: border-box; height: 32px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <span style="font-weight: 700; color: #64748b; font-size: 0.8rem; letter-spacing: 0.5px;">AY</span>
+                        <input type="number" id="exp_ay_start_year" min="2000" max="2099" placeholder="YYYY"
+                               style="width: 52px; border: none; outline: none; padding: 2px 2px; font-size: 0.85rem; font-weight: 600; text-align: center; color: #1e293b; background: transparent;"
+                               oninput="onExpAyStartYearInput(this)"
+                               title="Filter exam periods by 4-digit academic start year">
+                        <span style="font-weight: 700; color: #94a3b8; font-size: 0.85rem;">–</span>
+                        <input type="text" id="exp_ay_end_year" placeholder="YYYY" readonly
+                               style="width: 52px; border: none; outline: none; padding: 2px 2px; font-size: 0.85rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px;"
+                               title="Automatically calculated as Start Year + 1">
+                        <button type="button" onclick="clearExpYearFilter()" style="background: none; border: none; color: #94a3b8; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px;" title="Show all academic years">×</button>
+                    </div>
+
                     <span style="color: #64748b; font-size: 0.95rem; font-weight: 600;">Exam Period:</span>
                     <select id="periodFilterSelect" onchange="onPeriodFilterChange(this.value)" style="padding: 5px 12px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.9rem; font-weight: 600; color: #1e293b; background: #ffffff; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                         <option value="">Loading periods...</option>
@@ -203,7 +216,19 @@
                     <h2 style="color: #27ae60; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiNetIncome">₱--</h2>
                     <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiNetIncomeSub">Net operating surplus retained</p>
                 </div>
+                <div class="card" id="cardExpectedIncome" style="border-left-color: #8b5cf6;">
+                    <span style="color: #64748b; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">Expected Income</span>
+                    <h2 style="color: #8b5cf6; margin-top: 8px; font-size: 1.8rem; font-weight: 800;" id="kpiExpectedIncome">₱--</h2>
+                    <p style="color: #64748b; font-size: 0.85rem; margin-top: 4px;" id="kpiExpectedIncomeSub">Projected Net Surplus (DCS)</p>
+                </div>
                 
+            </div>
+
+            <!-- Empty State Card (Toggled when examination period has no records) -->
+            <div id="expEmptyStateCard" class="card" style="border-left-color: #94a3b8; text-align: center; padding: 40px 20px; margin-bottom: 24px; display: none;">
+                <div style="font-size: 2.2rem; margin-bottom: 10px;">📋</div>
+                <h3 style="color: #475569; margin: 0 0 8px 0; font-size: 1.2rem;">No Records Found</h3>
+                <p id="expEmptyStateMessage" style="color: #94a3b8; margin: 0; font-size: 0.95rem;">No examination periods found for Academic Year</p>
             </div>
 
             <!-- Balance Sheet Card -->
@@ -315,6 +340,9 @@
                                 <td style="text-align: center;" id="prodBookletsYield">0 pcs</td>
                                 <td style="text-align: right; color: #64748b;" id="prodBookletsNote">(500 sheets ÷ 6 sheets per booklet)</td>
                             </tr>
+                        </tbody>
+                        <!-- DYNAMIC PER-COURSE OR STANDARD UNIT SALES PRICE ROWS -->
+                        <tbody id="prodUnitSalesPriceContainer">
                             <tr style="background-color: #f8fafc;">
                                 <td style="font-weight: 600;">Unit Sales Price</td>
                                 <td style="text-align: center; font-weight: bold; color: #27ae60;" id="prodBookletPrice">₱2.50 / pc</td>
@@ -357,6 +385,11 @@
                             <tr>
                                 <td style="padding: 12px 18px; color: #334155;">Less: Cost of Direct Materials (Paper &amp; Staples)</td>
                                 <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600; width: 140px; white-space: nowrap;" id="isProdCost">- ₱0.00</td>
+                                <td style="padding: 12px 18px; width: 160px;"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px 18px; color: #334155;">Net Loss</td>
+                                <td style="padding: 12px 18px; text-align: right; color: #e74c3c; font-weight: 600; width: 140px; white-space: nowrap;" id="isNetLoss">- ₱0.00</td>
                                 <td style="padding: 12px 18px; width: 160px;"></td>
                             </tr>
                             <tr style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-weight: bold;">
@@ -418,12 +451,23 @@
                     window.location.href = '/login';
                 }
             });
-            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
-            document.getElementById('signClerkName').innerText = activeUser.username.toUpperCase();
+            if (window.updateSidebarUser) {
+                window.updateSidebarUser(activeUser);
+            } else {
+                const uEl = document.getElementById('loggedInUser');
+                if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+                const rEl = document.getElementById('loggedInRole');
+                if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+            }
+            const signClerkEl = document.getElementById('signClerkName');
+            if (signClerkEl) signClerkEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
             if (activeUser.role !== 'Admin') {
                 document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
-        const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
+                const navUsers = document.getElementById('navManageUsers');
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                    navUsers.title = 'My Account';
+                }
             }
         }
 
@@ -455,32 +499,136 @@
             return false;
         }
 
+        window.allAvailablePeriodConfigs = [];
+
+        function extractAcademicYearFromPeriod(periodStr) {
+            if (!periodStr || typeof periodStr !== 'string') return null;
+            const match = periodStr.match(/(\d{4})[-–](\d{4})/);
+            if (match) {
+                return { startYear: parseInt(match[1]), endYear: parseInt(match[2]) };
+            }
+            const singleMatch = periodStr.match(/\b(20\d{2})\b/);
+            if (singleMatch) {
+                const y = parseInt(singleMatch[1]);
+                return { startYear: y, endYear: y + 1 };
+            }
+            return null;
+        }
+
+        function syncExpYearInputsWithPeriod(periodStr) {
+            const sYearEl = document.getElementById('exp_ay_start_year');
+            const eYearEl = document.getElementById('exp_ay_end_year');
+            if (!sYearEl || !eYearEl) return;
+            const parsed = extractAcademicYearFromPeriod(periodStr);
+            if (parsed) {
+                sYearEl.value = parsed.startYear;
+                eYearEl.value = parsed.endYear;
+            }
+        }
+
+        function renderExpPeriodSelectOptions(targetYearStr = null) {
+            const sel = document.getElementById('periodFilterSelect');
+            if (!sel || !Array.isArray(window.allAvailablePeriodConfigs)) return;
+
+            let filtered = window.allAvailablePeriodConfigs;
+            if (targetYearStr && targetYearStr.length === 4) {
+                const sYear = parseInt(targetYearStr);
+                const targetCycle = `${sYear}-${sYear + 1}`;
+                filtered = window.allAvailablePeriodConfigs.filter(cfg => {
+                    const pName = cfg.academic_period || cfg.exam_period || '';
+                    return pName.includes(targetCycle) || pName.includes(targetYearStr);
+                });
+            }
+
+            sel.innerHTML = '';
+            if (filtered.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = `No periods for ${targetYearStr}`;
+                sel.appendChild(opt);
+                selectedPeriod = "";
+                updatePeriodStatusBadge();
+                renderEmptyExpenditureReport(`No examination periods found for Academic Year ${targetYearStr}`);
+                return;
+            }
+
+            let hasSelected = false;
+            filtered.forEach(cfg => {
+                const periodName = cfg.academic_period || cfg.exam_period;
+                if (!periodName) return;
+
+                const isActive = Boolean(cfg.is_active || (currentSystemActivePeriod && periodName === currentSystemActivePeriod));
+                const opt = document.createElement('option');
+                opt.value = periodName;
+                opt.textContent = periodName;
+                if (selectedPeriod && periodName === selectedPeriod) {
+                    opt.selected = true;
+                    hasSelected = true;
+                } else if (!selectedPeriod && isActive && !hasSelected) {
+                    opt.selected = true;
+                    hasSelected = true;
+                }
+                sel.appendChild(opt);
+            });
+
+            if (!hasSelected && filtered.length > 0) {
+                sel.selectedIndex = 0;
+                if (targetYearStr && sel.value !== selectedPeriod) {
+                    onPeriodFilterChange(sel.value);
+                }
+            }
+        }
+
+        function onExpAyStartYearInput(input) {
+            if (!input) return;
+            if (input.value.length > 4) {
+                input.value = input.value.slice(0, 4);
+            }
+            const endYearEl = document.getElementById('exp_ay_end_year');
+            const startVal = input.value.trim();
+            if (startVal.length === 4) {
+                const sYear = parseInt(startVal);
+                if (!isNaN(sYear)) {
+                    if (endYearEl) endYearEl.value = sYear + 1;
+                    renderExpPeriodSelectOptions(startVal);
+                }
+            } else {
+                if (endYearEl) endYearEl.value = '';
+                if (startVal === '') {
+                    renderExpPeriodSelectOptions(null);
+                }
+            }
+        }
+
+        function clearExpYearFilter() {
+            const sYearEl = document.getElementById('exp_ay_start_year');
+            const eYearEl = document.getElementById('exp_ay_end_year');
+            if (sYearEl) sYearEl.value = '';
+            if (eYearEl) eYearEl.value = '';
+            renderExpPeriodSelectOptions(null);
+        }
+
         async function populatePeriodFilter() {
             try {
                 const res = await fetch('/api/period-configurations');
                 const list = await res.json();
-                const sel = document.getElementById('periodFilterSelect');
-                if (!sel || !Array.isArray(list)) return;
+                if (!Array.isArray(list)) return;
+                window.allAvailablePeriodConfigs = list;
 
-                sel.innerHTML = '';
                 list.forEach(cfg => {
                     const periodName = cfg.academic_period || cfg.exam_period;
+                    if (!periodName) return;
                     if (cfg.is_active) {
                         currentSystemActivePeriod = periodName;
                     }
-                    const opt = document.createElement('option');
-                    opt.value = periodName;
-                    opt.textContent = cfg.is_active 
-                        ? `${periodName} (Current Active)` 
-                        : `${periodName} (Archived)`;
-                    if (selectedPeriod && periodName === selectedPeriod) {
-                        opt.selected = true;
-                    } else if (!selectedPeriod && cfg.is_active) {
-                        opt.selected = true;
-                    }
-                    sel.appendChild(opt);
                 });
 
+                const activeTarget = selectedPeriod || currentSystemActivePeriod;
+                if (activeTarget) {
+                    syncExpYearInputsWithPeriod(activeTarget);
+                }
+
+                renderExpPeriodSelectOptions(null);
                 updatePeriodStatusBadge();
             } catch (e) {
                 console.warn("Could not load period configurations:", e);
@@ -490,18 +638,102 @@
         function updatePeriodStatusBadge() {
             const badge = document.getElementById('periodStatusBadge');
             if (!badge) return;
-            const isHistorical = selectedPeriod && currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
+            if (!selectedPeriod) {
+                badge.style.backgroundColor = '#94a3b8';
+                badge.innerText = 'NO RECORDS';
+                return;
+            }
+            const isHistorical = currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
             if (isHistorical) {
                 badge.style.backgroundColor = '#64748b';
-                badge.innerText = 'ARCHIVED / HISTORICAL';
+                badge.innerText = 'ARCHIVED';
             } else {
                 badge.style.backgroundColor = '#27ae60';
                 badge.innerText = 'ACTIVE SEMESTER';
             }
         }
 
+        function renderEmptyExpenditureReport(emptyMessage) {
+            const zeroCurrency = "₱0.00";
+
+            // 1. Display the prominent No Records Found Card and update message
+            const emptyCard = document.getElementById('expEmptyStateCard');
+            const emptyMsgEl = document.getElementById('expEmptyStateMessage');
+            if (emptyCard) emptyCard.style.display = 'block';
+            if (emptyMsgEl) emptyMsgEl.innerText = emptyMessage || 'No examination records found for this selection.';
+
+            // 2. Hide Balance Sheet, Production Cost, and Income Statement cards completely
+            const bsCard = document.getElementById('expBalanceSheetCard');
+            if (bsCard) bsCard.style.display = 'none';
+            const prodCard = document.getElementById('expProductionCostCard');
+            if (prodCard) prodCard.style.display = 'none';
+            const incCard = document.getElementById('expIncomeStatementCard');
+            if (incCard) incCard.style.display = 'none';
+
+            // 3. Reset Topline KPIs and Income Statement to baseline zeroes
+            if (window.lockAuthoritativeElement) {
+                window.lockAuthoritativeElement('#kpiGross', zeroCurrency);
+                window.lockAuthoritativeElement('#kpiProductionCost', zeroCurrency);
+                window.lockAuthoritativeElement('#kpiNetIncome', zeroCurrency);
+                if (document.getElementById('kpiExpectedIncome')) window.lockAuthoritativeElement('#kpiExpectedIncome', zeroCurrency);
+                if (document.getElementById('isGross')) window.lockAuthoritativeElement('#isGross', zeroCurrency);
+                if (document.getElementById('isUniShare')) window.lockAuthoritativeElement('#isUniShare', '- ₱0.00');
+                if (document.getElementById('isProdCost')) window.lockAuthoritativeElement('#isProdCost', '- ₱0.00');
+                if (document.getElementById('isNetLoss')) window.lockAuthoritativeElement('#isNetLoss', '- ₱0.00');
+                if (document.getElementById('isTotalDeductions')) window.lockAuthoritativeElement('#isTotalDeductions', '- ₱0.00');
+                if (document.getElementById('isNetIncome')) window.lockAuthoritativeElement('#isNetIncome', zeroCurrency);
+            } else {
+                const elGross = document.getElementById('kpiGross');
+                if (elGross) elGross.innerText = zeroCurrency;
+                const elCost = document.getElementById('kpiProductionCost');
+                if (elCost) elCost.innerText = zeroCurrency;
+                const elNet = document.getElementById('kpiNetIncome');
+                if (elNet) elNet.innerText = zeroCurrency;
+                const elExp = document.getElementById('kpiExpectedIncome');
+                if (elExp) elExp.innerText = zeroCurrency;
+                const elIsGross = document.getElementById('isGross');
+                if (elIsGross) elIsGross.innerText = zeroCurrency;
+                const elIsUni = document.getElementById('isUniShare');
+                if (elIsUni) elIsUni.innerText = '- ₱0.00';
+                const elIsProd = document.getElementById('isProdCost');
+                if (elIsProd) elIsProd.innerText = '- ₱0.00';
+                const elIsLoss = document.getElementById('isNetLoss');
+                if (elIsLoss) elIsLoss.innerText = '- ₱0.00';
+                const elIsTot = document.getElementById('isTotalDeductions');
+                if (elIsTot) elIsTot.innerText = '- ₱0.00';
+                const elIsNet = document.getElementById('isNetIncome');
+                if (elIsNet) elIsNet.innerText = zeroCurrency;
+            }
+
+            const kpiGrossSub = document.getElementById('kpiGrossSub');
+            if (kpiGrossSub) kpiGrossSub.innerText = 'Realized Cash Collections';
+            const kpiNetSub = document.getElementById('kpiNetIncomeSub');
+            if (kpiNetSub) kpiNetSub.innerText = 'Net operating surplus retained';
+            const kpiExpSub = document.getElementById('kpiExpectedIncomeSub');
+            if (kpiExpSub) kpiExpSub.innerText = 'Projected Net Surplus (DCS)';
+            const kpiProdCostSub = document.getElementById('kpiProductionCostSub');
+            if (kpiProdCostSub) kpiProdCostSub.innerText = 'Direct material expense';
+            const isGrossSub = document.getElementById('isGrossSub');
+            if (isGrossSub) isGrossSub.innerText = 'Total Billed: ₱0.00 | Net Pending: ₱0.00';
+
+            const isProgramAllocationRows = document.getElementById('isProgramAllocationRowsContainer');
+            if (isProgramAllocationRows) {
+                isProgramAllocationRows.innerHTML = `<tr><td colspan="3" style="padding: 12px 18px; color: #94a3b8; text-align: center; font-style: italic;">No program allocations for this selection.</td></tr>`;
+            }
+
+            document.querySelectorAll('.activePeriodText').forEach(el => {
+                el.innerText = emptyMessage || 'No Examination Period Selected';
+            });
+        }
+
         function onPeriodFilterChange(val) {
             selectedPeriod = val;
+            if (!val) {
+                updatePeriodStatusBadge();
+                renderEmptyExpenditureReport("No examination period selected.");
+                return;
+            }
+            syncExpYearInputsWithPeriod(val);
             const url = new URL(window.location.href);
             if (val && currentSystemActivePeriod && val !== currentSystemActivePeriod) {
                 url.searchParams.set('period', val);
@@ -546,6 +778,7 @@
                                 if (sel && (!selectedPeriod || selectedPeriod === activePeriod)) {
                                     sel.value = activePeriod;
                                 }
+                                syncExpYearInputsWithPeriod(activePeriod);
                             }
                             updatePeriodStatusBadge();
                         }
@@ -558,8 +791,11 @@
                             window.registerAuthoritativeData('expenditure_report', data);
                         }
                         renderExpenditureReport(data);
-                    } else if (!isBackground) {
-                        alert("Could not load financial data: " + (data.message || 'Unknown server response'));
+                    } else {
+                        renderEmptyExpenditureReport("No financial records found for " + (period || "selected period"));
+                        if (!isBackground) {
+                            alert("Could not load financial data: " + (data.message || 'Unknown server response'));
+                        }
                     }
                 })
                 .catch(err => {
@@ -582,6 +818,11 @@
         function _executeRenderExpenditureReport(data) {
             const fin = data.financials;
             const kpi = data.kpi || {};
+            const cpMetrics = data.course_production || {};
+            const progs = data.programs || [
+                { code: 'CS', name: 'Computer Science', color: '#3498db' },
+                { code: 'IT', name: 'Information Technology', color: '#e67e22' }
+            ];
 
             const gross = fin.gross_revenue || 0;
             const ar = fin.accounts_receivable || 0;
@@ -599,6 +840,17 @@
 
             // Distributed Booklets and Actual Materials Consumed
             const distributedBooklets = (kpi.issued !== undefined ? kpi.issued : (fin.distributed_booklets || 0));
+
+            // Unhide cards and hide empty state
+            const emptyCard = document.getElementById('expEmptyStateCard');
+            if (emptyCard) emptyCard.style.display = 'none';
+            const bsCard = document.getElementById('expBalanceSheetCard');
+            if (bsCard) bsCard.style.display = '';
+            const prodCard = document.getElementById('expProductionCostCard');
+            if (prodCard) prodCard.style.display = '';
+            const incCard = document.getElementById('expIncomeStatementCard');
+            if (incCard) incCard.style.display = '';
+
             const sheetsPerBooklet = data.sheets_per_booklet || fin.sheets_per_booklet || 6;
             const actualSheetsConsumed = distributedBooklets * sheetsPerBooklet;
             const actualReamsPart = Math.floor(actualSheetsConsumed / 500);
@@ -627,32 +879,62 @@
             const computedStaplesCost = wholeBoxesToBuy * staplesBoxPrice;
             let computedProdCost = paperCost + computedStaplesCost;
             
-            // Recompute dynamic Net Income using the overridden computedProdCost
-            let computedNetIncome = subtotal - uniShare - computedProdCost;
+            const netLoss = (fin.net_loss !== undefined) ? Number(fin.net_loss || 0) : 0;
+            // Recompute dynamic Net Income using the overridden computedProdCost and Net Loss
+            let computedNetIncome = subtotal - uniShare - computedProdCost - netLoss;
+            let displayNetIncome = computedNetIncome < 0 ? 0 : computedNetIncome;
 
             // ROI & Margin calculation based on recomputed logic
             let roiPct = 0;
             if (computedProdCost > 0) {
-                roiPct = ((computedNetIncome / computedProdCost) * 100);
+                roiPct = ((displayNetIncome / computedProdCost) * 100);
             }
             let marginPct = 0;
             if (gross > 0) {
-                marginPct = ((computedNetIncome / gross) * 100);
+                marginPct = ((displayNetIncome / gross) * 100);
             }
+
+            // Expected Income (Projected DCS Net Operating Surplus assuming:
+            // 1. 100% of all instructor section transactions in this semester are distributed & paid
+            // 2. Carried-over accounts receivable / prior semester debts are fully settled
+            // 3. 1% academic program allocations are deducted
+            // 4. 20% Campus IGP Remittance is deducted
+            // 5. Direct materials required to suffice total semester demand are deducted)
+            const expectedGross = (fin.expected_gross !== undefined) ? fin.expected_gross : (totalBilled + (fin.prior_rollover || 0));
+            let expectedNetIncome = fin.expected_net_income;
+            if (expectedNetIncome === undefined || expectedNetIncome === null) {
+                const expSub = expectedGross * 0.99;
+                const expIgp = expSub * 0.20;
+                expectedNetIncome = expSub - expIgp - computedProdCost;
+            }
+            let displayExpectedNet = expectedNetIncome < 0 ? 0 : expectedNetIncome;
+            const expectedNetStr = `₱${displayExpectedNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
             // 1. Topline Cards
             const grossStr = `₱${gross.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const prodCostStr = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            const netIncomeStr = `₱${computedNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            const netIncomeStr = `₱${displayNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
             if (window.lockAuthoritativeElement) {
                 window.lockAuthoritativeElement('#kpiGross', grossStr);
                 window.lockAuthoritativeElement('#kpiProductionCost', prodCostStr);
                 window.lockAuthoritativeElement('#kpiNetIncome', netIncomeStr);
+                window.lockAuthoritativeElement('#kpiExpectedIncome', expectedNetStr);
             } else {
                 document.getElementById('kpiGross').innerText = grossStr;
                 document.getElementById('kpiProductionCost').innerText = prodCostStr;
                 document.getElementById('kpiNetIncome').innerText = netIncomeStr;
+                if (document.getElementById('kpiExpectedIncome')) {
+                    document.getElementById('kpiExpectedIncome').innerText = expectedNetStr;
+                }
+            }
+            const kpiExpectedSub = document.getElementById('kpiExpectedIncomeSub');
+            if (kpiExpectedSub) {
+                if (ar === 0 && (cpMetrics.total_target_production || 0) === 0) {
+                    kpiExpectedSub.innerText = `100% Settled & Demand Met (₱${displayExpectedNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                } else {
+                    kpiExpectedSub.innerText = `Projected at 100% collection & demand fulfillment`;
+                }
             }
             const kpiGrossSub = document.getElementById('kpiGrossSub');
             if (kpiGrossSub) {
@@ -711,11 +993,6 @@
             }
 
             // Dynamic AR rows across all active academic programs
-            const progs = data.programs || [
-                { code: 'CS', name: 'Computer Science', color: '#3498db' },
-                { code: 'IT', name: 'Information Technology', color: '#e67e22' }
-            ];
-
             const bsARContainer = document.getElementById('bsARRowsContainer');
             if (bsARContainer) {
                 if (progs.length === 0) {
@@ -801,7 +1078,6 @@
             const totalTargetBooklets = (fin.total_target_booklets !== undefined) ? fin.total_target_booklets : (data.kpi ? data.kpi.total_target_booklets : 0);
 
             // Dynamic Per-Course Actual & Converted Paper Breakdown Rows and Exact Whole Reams Summation
-            const cpMetrics = data.course_production || {};
             const coursesMap = cpMetrics.courses || (data.course_breakdown || {});
             const actualPaperMap = fin.course_actual_paper || (data.kpi ? data.kpi.course_actual_paper : null);
 
@@ -910,16 +1186,19 @@
 
             // Unify overall production cost & net income with the course reams sum
             computedProdCost = finalPaperCost + computedStaplesCost;
-            computedNetIncome = subtotal - uniShare - computedProdCost;
+            computedNetIncome = subtotal - uniShare - computedProdCost - netLoss;
             document.getElementById('kpiProductionCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            const displayNetIncome = computedNetIncome < 0 ? 0 : computedNetIncome;
-            document.getElementById('kpiNetIncome').innerText = `₱${displayNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            displayNetIncome = computedNetIncome < 0 ? 0 : computedNetIncome;
+            document.getElementById('kpiNetIncome').innerText = `₱${displayNetIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            if (document.getElementById('kpiExpectedIncome')) {
+                document.getElementById('kpiExpectedIncome').innerText = `₱${displayExpectedNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
             document.getElementById('bsProdCost').innerText = `₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             if (computedProdCost > 0 && kpiRoiEl) {
-                kpiRoiEl.innerText = `${((computedNetIncome / computedProdCost) * 100).toFixed(1)}%`;
+                kpiRoiEl.innerText = `${((displayNetIncome / computedProdCost) * 100).toFixed(1)}%`;
             }
             if (gross > 0 && kpiMarginEl) {
-                kpiMarginEl.innerText = `Profit Margin: ${((computedNetIncome / gross) * 100).toFixed(1)}%`;
+                kpiMarginEl.innerText = `Profit Margin: ${((displayNetIncome / gross) * 100).toFixed(1)}%`;
             }
 
             // Dynamic KPI Alert 1: Net Operating Income
@@ -1014,16 +1293,48 @@
             }
 
             document.getElementById('prodBookletsYield').innerText = `${totalGenerated.toLocaleString()} pcs`;
-            if (fin.course_prices && Object.keys(fin.course_prices).length > 0) {
-                const uniquePrices = new Set(Object.values(fin.course_prices).map(v => Number(v).toFixed(2)));
-                if (uniquePrices.size > 1) {
-                    const priceBreakdown = Object.entries(fin.course_prices).map(([c, pr]) => `${c}: ₱${Number(pr).toFixed(2)}`).join(' | ');
-                    document.getElementById('prodBookletPrice').innerText = priceBreakdown;
+
+            const unitPriceContainer = document.getElementById('prodUnitSalesPriceContainer');
+            const activeProgramsList = (data.programs && data.programs.length > 0)
+                ? data.programs
+                : ((data.computations_data && data.computations_data.programs && data.computations_data.programs.length > 0)
+                    ? data.computations_data.programs
+                    : progs);
+
+            const coursePrices = fin.course_prices || {};
+            // Determine if the administrator has established specific prices for courses
+            const hasCustomCoursePrices = activeProgramsList.some(p => p.booklet_price !== null && p.booklet_price !== undefined && Number(p.booklet_price) > 0)
+                || (Object.keys(coursePrices).length > 0 && new Set(Object.values(coursePrices).map(v => Number(v).toFixed(2))).size > 1);
+
+            if (unitPriceContainer) {
+                if (hasCustomCoursePrices && activeProgramsList.length > 0) {
+                    unitPriceContainer.innerHTML = activeProgramsList.map(p => {
+                        const price = (coursePrices[p.code] !== undefined)
+                            ? Number(coursePrices[p.code])
+                            : (p.booklet_price !== null && p.booklet_price !== undefined ? Number(p.booklet_price) : Number(bookletPrice));
+                        const isCustom = Boolean(p.booklet_price !== null && p.booklet_price !== undefined && Number(p.booklet_price) > 0);
+                        return `
+                            <tr style="background-color: #f8fafc; border-top: 1px solid #f1f5f9;">
+                                <td style="font-weight: 600; color: #1e293b;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${p.color || '#3498db'}; margin-right: 6px;"></span>
+                                    Unit Sales Price (${escapeHtml(p.code)})
+                                </td>
+                                <td style="text-align: center; font-weight: bold; color: #27ae60;">₱${price.toFixed(2)} / pc</td>
+                                <td style="text-align: right; color: #64748b;">${isCustom ? `Course-specific unit price (${escapeHtml(p.name)})` : 'Standard examination unit price'}</td>
+                            </tr>
+                        `;
+                    }).join('');
                 } else {
-                    document.getElementById('prodBookletPrice').innerText = `₱${bookletPrice.toFixed(2)} / pc`;
+                    unitPriceContainer.innerHTML = `
+                        <tr style="background-color: #f8fafc;">
+                            <td style="font-weight: 600;">Unit Sales Price</td>
+                            <td style="text-align: center; font-weight: bold; color: #27ae60;" id="prodBookletPrice">₱${Number(bookletPrice).toFixed(2)} / pc</td>
+                            <td style="text-align: right; color: #64748b;">Standard examination unit price</td>
+                        </tr>
+                    `;
                 }
-            } else {
-                document.getElementById('prodBookletPrice').innerText = `₱${bookletPrice.toFixed(2)} / pc`;
+            } else if (document.getElementById('prodBookletPrice')) {
+                document.getElementById('prodBookletPrice').innerText = `₱${Number(bookletPrice).toFixed(2)} / pc`;
             }
 
             // 4. Income Statement Waterfall - Dynamic Per-Course Program Allocations (1%)
@@ -1077,7 +1388,8 @@
             const subtotalStr = `₱${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const uniShareStr = `- ₱${uniShare.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const isProdCostStr = `- ₱${computedProdCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            const totalDeductions = totalProgramShares + uniShare + computedProdCost;
+            const isNetLossStr = `- ₱${netLoss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            const totalDeductions = totalProgramShares + uniShare + computedProdCost + netLoss;
             const isTotDedStr = `- ₱${totalDeductions.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             const displayIsNet = computedNetIncome < 0 ? 0 : computedNetIncome;
             const isNetIncomeStr = `₱${displayIsNet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -1086,12 +1398,14 @@
                 if (document.getElementById('isSubtotal')) window.lockAuthoritativeElement('#isSubtotal', subtotalStr);
                 window.lockAuthoritativeElement('#isUniShare', uniShareStr);
                 window.lockAuthoritativeElement('#isProdCost', isProdCostStr);
+                if (document.getElementById('isNetLoss')) window.lockAuthoritativeElement('#isNetLoss', isNetLossStr);
                 if (document.getElementById('isTotalDeductions')) window.lockAuthoritativeElement('#isTotalDeductions', isTotDedStr);
                 window.lockAuthoritativeElement('#isNetIncome', isNetIncomeStr);
             } else {
                 if (document.getElementById('isSubtotal')) document.getElementById('isSubtotal').innerText = subtotalStr;
                 document.getElementById('isUniShare').innerText = uniShareStr;
                 document.getElementById('isProdCost').innerText = isProdCostStr;
+                if (document.getElementById('isNetLoss')) document.getElementById('isNetLoss').innerText = isNetLossStr;
                 if (document.getElementById('isTotalDeductions')) document.getElementById('isTotalDeductions').innerText = isTotDedStr;
                 document.getElementById('isNetIncome').innerText = isNetIncomeStr;
             }

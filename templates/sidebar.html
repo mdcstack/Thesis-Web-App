@@ -7,28 +7,347 @@
 
 <!-- Dedicated Sidebar Stylesheet (Encapsulated) -->
 <style>
-    .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; font-family: Arial, sans-serif; }
-    .sidebar-header { padding: 20px; background-color: #1a252f; text-align: center; font-weight: bold; font-size: 1.2rem; border-bottom: 1px solid #34495e; font-family: Arial, sans-serif; }
-    .nav-link { display: block; padding: 15px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.3s; font-family: Arial, sans-serif; font-size: 0.95rem; }
-    .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
-    .icon-utility-btn { transition: background-color 0.2s ease, transform 0.15s ease, color 0.2s ease; }
-    .icon-utility-btn:hover { background-color: #34495e; color: #ffffff !important; transform: scale(1.08); }
-    .icon-utility-btn.active { background-color: #3498db; color: #ffffff !important; }
-    
-    .sidebar-logout-btn:hover { background-color: #c0392b !important; transform: translateY(-1px); }
-    .sidebar-logout-btn:active { transform: translateY(0); }
+    :root {
+        --sidebar-width: 250px;
+        --header-height: 56px;
+    }
 
-    .mobile-header { display: none; background: #2c3e50; color: white; padding: 15px 20px; align-items: center; justify-content: flex-start; font-weight: bold; font-size: 1.2rem; font-family: Arial, sans-serif; }
-    .hamburger { font-size: 1.5rem; cursor: pointer; margin-right: 15px; }
-    .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1999; }
-    .sidebar-overlay.active { display: block; }
+    body.sidebar-collapsed {
+        --sidebar-width: 68px;
+    }
+
+    /* Desktop Global Layout: Sidebar & White Header on the same layer */
+    @media (min-width: 901px) {
+        body {
+            display: flex !important;
+            flex-direction: row !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            width: var(--sidebar-width) !important;
+            height: 100vh !important;
+            z-index: 1000 !important;
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+
+        .mobile-header, .app-header {
+            position: fixed !important;
+            top: 0 !important;
+            left: var(--sidebar-width) !important;
+            right: 0 !important;
+            height: var(--header-height) !important;
+            z-index: 990 !important;
+            transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-sizing: border-box !important;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width) !important;
+            margin-top: var(--header-height) !important;
+            height: calc(100vh - var(--header-height)) !important;
+            width: calc(100vw - var(--sidebar-width)) !important;
+            transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            box-sizing: border-box !important;
+            flex: 1 !important;
+            overflow-y: auto !important;
+        }
+
+        /* Strictly suppress mobile drawer backdrop overlay on desktop */
+        .sidebar-overlay,
+        .sidebar-overlay.active {
+            display: none !important;
+            pointer-events: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+    }
+
+    /* Universal Top Header (Crisp White Bar) */
+    .mobile-header, .app-header {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+        padding: 0 18px !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        font-family: Arial, sans-serif !important;
+        box-sizing: border-box !important;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .hamburger {
+        font-size: 1.35rem !important;
+        cursor: pointer !important;
+        color: #334155 !important;
+        margin-right: 0 !important;
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 6px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: background-color 0.15s ease, color 0.15s ease !important;
+        user-select: none !important;
+    }
+
+    .hamburger:hover {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+
+    .header-utility-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .header-utility-bar .icon-utility-btn {
+        color: #64748b !important;
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 6px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 1.2rem !important;
+        cursor: pointer !important;
+        text-decoration: none !important;
+        position: relative !important;
+        transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease !important;
+    }
+
+    .header-utility-bar .icon-utility-btn:hover {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        transform: scale(1.06) !important;
+    }
+
+    .header-utility-bar .icon-utility-btn.active {
+        background-color: #e2e8f0 !important;
+        color: #2563eb !important;
+    }
+
+    /* Universal Header Right Section (Utility + Logout) */
+    .header-right {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+
+    .header-logout-btn {
+        background-color: #dc2626 !important;
+        color: #ffffff !important;
+        border: none !important;
+        padding: 6px 14px !important;
+        border-radius: 6px !important;
+        font-weight: 700 !important;
+        font-size: 0.85rem !important;
+        cursor: pointer !important;
+        white-space: nowrap !important;
+        line-height: 1.2 !important;
+        transition: background-color 0.15s ease, transform 0.1s ease !important;
+        text-decoration: none !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .header-logout-btn:hover {
+        background-color: #b91c1c !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .header-logout-btn:active {
+        transform: translateY(0) !important;
+    }
+
+    @media (max-width: 600px) {
+        .header-right {
+            gap: 8px !important;
+        }
+        .header-logout-btn {
+            padding: 5px 10px !important;
+            font-size: 0.8rem !important;
+        }
+    }
+
+    .sidebar { width: 250px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; font-family: Arial, sans-serif; }
+    .sidebar-header { display: none !important; }
+
+    .nav-link { display: flex; align-items: center; gap: 12px; padding: 14px 20px; color: #bdc3c7; text-decoration: none; border-bottom: 1px solid #34495e; transition: background 0.25s, color 0.25s, padding 0.25s; font-family: Arial, sans-serif; font-size: 0.95rem; white-space: nowrap; }
+    .nav-link:hover, .nav-link.active { background-color: #34495e; color: white; border-left: 4px solid #3498db; }
+
+    .nav-icon { font-size: 1.15rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 24px; text-align: center; }
+    .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity 0.15s ease; }
+
+    /* Restored Sidebar User Profile Card (Name & Role Only) */
+    .sidebar-user-card {
+        margin-top: auto;
+        padding: 16px 18px;
+        background-color: #1a252f;
+        border-top: 1px solid #34495e;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        transition: padding 0.25s ease;
+        box-sizing: border-box;
+    }
+    .sidebar-user-info {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
+    }
+    .sidebar-user-name {
+        color: #f8fafc;
+        font-weight: 700;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3;
+    }
+    .sidebar-user-role {
+        color: #94a3b8;
+        font-size: 0.76rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 2px;
+        line-height: 1.2;
+    }
+
+    /* Strict Role-Based Visibility Engine (Guarantees Isolation across All Viewport & Collapsed States) */
+    body.role-viewer .staff-op,
+    body.role-viewer .admin-only,
+    body.role-viewer #notifBell,
+    body.role-viewer #sidebarSettingsBtn {
+        display: none !important;
+    }
+
+    body.role-staff .admin-only,
+    body.role-staff .viewer-only,
+    body.role-staff #sidebarSettingsBtn {
+        display: none !important;
+    }
+
+    body.role-admin .viewer-only {
+        display: none !important;
+    }
+
+    /* Desktop Collapsed Mini-Sidebar State & Hover Expansion */
+    @media (min-width: 901px) {
+        .sidebar.collapsed { width: 68px !important; }
+        .sidebar.collapsed .nav-label { display: none !important; }
+        .sidebar.collapsed .nav-link {
+            justify-content: center !important;
+            align-items: center !important;
+            text-align: center !important;
+            padding: 14px 0 !important;
+            border-left: 4px solid transparent;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .sidebar.collapsed .nav-link:not([style*="display: none"]) {
+            display: flex !important;
+        }
+        .sidebar.collapsed .nav-link[style*="display: none"] {
+            display: none !important;
+        }
+        .sidebar.collapsed .nav-link.active { border-left: 4px solid #3498db !important; background-color: #34495e !important; }
+        .sidebar.collapsed .nav-icon {
+            font-size: 1.25rem !important;
+            width: 100% !important;
+            margin: 0 auto !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            text-align: center !important;
+        }
+
+        .sidebar.collapsed .sidebar-user-card {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .sidebar:hover {
+            width: 250px !important;
+            box-shadow: 6px 0 25px rgba(0, 0, 0, 0.45) !important;
+            z-index: 1050 !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .nav-label {
+            display: inline !important;
+            opacity: 1 !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .nav-link:not([style*="display: none"]) {
+            display: flex !important;
+            justify-content: flex-start !important;
+            padding: 14px 20px !important;
+            text-align: left !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .nav-link[style*="display: none"] {
+            display: none !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .nav-icon {
+            width: 24px !important;
+            margin: 0 !important;
+            font-size: 1.15rem !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .sidebar-user-card {
+            display: flex !important;
+            padding: 16px 18px !important;
+        }
+        body.sidebar-collapsed .sidebar:hover .sidebar-user-info {
+            display: flex !important;
+            opacity: 1 !important;
+        }
+    }
+
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0,0,0,0.5);
+        z-index: 1999;
+    }
 
     @media (max-width: 900px) {
-        .mobile-header { display: flex; flex-shrink: 0; }
-        .sidebar { position: fixed; left: -250px; top: 0; height: 100vh; height: 100dvh; max-height: 100dvh; z-index: 2000; transition: left 0.3s ease; box-shadow: 2px 0 10px rgba(0,0,0,0.5); overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; }
-        .sidebar.active { left: 0; }
+        .mobile-header, .app-header { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; height: 56px !important; z-index: 1000 !important; }
+        body { padding-top: 56px !important; box-sizing: border-box !important; }
+        .sidebar, .sidebar.collapsed { position: fixed !important; left: -250px !important; top: 0 !important; bottom: 0 !important; width: 250px !important; height: 100vh !important; height: 100dvh !important; max-height: 100dvh !important; z-index: 2000 !important; transition: left 0.3s ease !important; box-shadow: 2px 0 10px rgba(0,0,0,0.5) !important; display: flex !important; flex-direction: column !important; }
+        .sidebar.active, .sidebar.collapsed.active { left: 0 !important; width: 250px !important; }
+        .sidebar .nav-label, .sidebar.collapsed .nav-label { display: inline-block !important; opacity: 1 !important; }
+        .sidebar .sidebar-user-card, .sidebar.collapsed .sidebar-user-card { display: flex !important; }
+        .sidebar .nav-link, .sidebar.collapsed .nav-link { display: flex !important; justify-content: flex-start !important; padding: 14px 20px !important; text-align: left !important; width: 100% !important; }
+        .sidebar .nav-icon, .sidebar.collapsed .nav-icon { width: 24px !important; margin: 0 !important; font-size: 1.15rem !important; }
+        .sidebar-overlay { z-index: 1999 !important; }
+        .sidebar-overlay.active { display: block !important; pointer-events: auto !important; visibility: visible !important; opacity: 1 !important; }
+        .main-content { margin-left: 0 !important; margin-top: 0 !important; width: 100% !important; }
         .mobile-hide { display: none !important; }
-        .user-profile { margin-top: auto; flex-shrink: 0; padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px)) !important; }
+    }
+
+    @media print {
+        body { padding-top: 0 !important; }
+        .mobile-header, .app-header, .sidebar, .sidebar-overlay, .floating-notif-popover { display: none !important; }
+        .main-content { margin-left: 0 !important; margin-top: 0 !important; width: 100% !important; height: auto !important; }
     }
 
     /* Prevent Edge and Chromium duplicate native password reveal eye */
@@ -63,27 +382,27 @@
         color: #2563eb;
     }
 
-    /* Floating Notification Popover (Above Sidebar & Main View) */
+    /* Floating Notification Popover (Positioned below Header Bell) */
     .floating-notif-popover {
-        position: fixed;
-        top: 56px;
-        left: 14px;
-        width: 340px;
-        max-width: calc(100vw - 28px);
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-top: 3px solid #3b82f6;
-        border-radius: 10px;
-        box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.55), 0 6px 16px rgba(0, 0, 0, 0.35);
-        z-index: 10050;
-        box-sizing: border-box;
-        animation: notifFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-        overflow: hidden;
+        position: fixed !important;
+        top: calc(var(--header-height) + 6px) !important;
+        right: 75px !important;
+        width: 360px !important;
+        max-width: calc(100vw - 24px) !important;
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-top: 4px solid #3b82f6 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35) !important;
+        z-index: 2500 !important;
+        overflow: hidden !important;
     }
 
-    @keyframes notifFadeIn {
-        from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
+    @media (max-width: 600px) {
+        .floating-notif-popover {
+            right: 12px !important;
+            width: calc(100vw - 24px) !important;
+        }
     }
 
     .floating-notif-header {
@@ -120,27 +439,32 @@
         color: #ffffff;
         background: rgba(255, 255, 255, 0.1);
     }
-
-    @media (max-width: 900px) {
-        .floating-notif-popover {
-            top: 58px;
-            left: 12px;
-            right: 12px;
-            width: auto;
-            max-width: 350px;
-            margin: 0 auto;
-        }
-    }
 </style>
 
-<!-- Mobile Navigation Header -->
-<div class="mobile-header no-print">
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="mobile-title">BOOKLEDGER</div>
+<!-- Universal Top Navigation Header (Crisp White Bar) -->
+<div class="mobile-header app-header no-print">
+    <div class="header-left">
+        <div class="hamburger" onclick="toggleSidebar()" title="Toggle Sidebar Navigation" aria-label="Toggle Sidebar Navigation">☰</div>
+    </div>
+    <div class="header-right">
+        <div class="header-utility-bar">
+            <div id="mobileWifiBtn" onclick="openMobileWifiModal()" class="icon-utility-btn" title="Connect Mobile Devices (Wi-Fi QR Scanner)">
+                📱
+            </div>
+            <div id="notifBell" onclick="toggleNotifPanel(event)" class="icon-utility-btn" title="Alerts &amp; System Notifications">
+                🔔
+                <span id="notifBadge" style="display: none; position: absolute; top: 2px; right: 2px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #ffffff; box-sizing: content-box;">!</span>
+            </div>
+            <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings">
+                ⚙️
+            </a>
+        </div>
+        <button type="button" onclick="logout()" class="header-logout-btn" id="logoutBtn" title="Sign Out">Logout</button>
+    </div>
 </div>
 
 <!-- Drawer Backdrop Overlay -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
 
 <!-- ACCOUNT UPDATED NOTIFICATION MODAL -->
 <div id="accountUpdatedModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
@@ -296,55 +620,140 @@
 
 <!-- Main Application Sidebar -->
 <div class="sidebar no-print" id="sidebar">
-    <!-- Top Utility Bar: DSS Bell & Settings Gear -->
-    <div id="sidebarTopUtilityBar" style="padding: 12px 18px; border-bottom: 1px solid #34495e; position: relative;">
-        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-            <div id="mobileWifiBtn" onclick="openMobileWifiModal()" class="icon-utility-btn" title="📱 Connect Mobile Devices (Wi-Fi QR Code)" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                📱
-            </div>
-            <div id="notifBell" onclick="toggleNotifPanel(event)" class="icon-utility-btn" title="Alerts & Notifications" style="position: relative; cursor: pointer; color: #bdc3c7; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-                🔔
-                <span id="notifBadge" style="display: none; position: absolute; top: 1px; right: 1px; background: #e74c3c; color: white; border-radius: 50%; width: 14px; height: 14px; font-size: 0.7rem; font-weight: 900; line-height: 14px; text-align: center; border: 2px solid #2c3e50; box-sizing: content-box;">!</span>
-            </div>
-            <a href="/settings" class="admin-only icon-utility-btn" id="sidebarSettingsBtn" title="System Settings" style="color: #bdc3c7; text-decoration: none; font-size: 1.25rem; width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;">
-                ⚙️
-            </a>
+    <a href="/dashboard" class="nav-link staff-op" data-route="/dashboard" title="Dashboard">
+        <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+    </a>
+    <a href="/enrollments" class="nav-link" id="navEnrollments" data-route="/enrollments" title="Manage Classes">
+        <span class="nav-icon">🎓</span><span class="nav-label">Manage Classes</span>
+    </a>
+    <a href="/manage_users" class="nav-link" id="navManageUsers" data-route="/manage_users" title="Manage Users">
+        <span class="nav-icon">👥</span><span class="nav-label">Manage Users</span>
+    </a>
+    <a href="/booklet-template" class="nav-link staff-op mobile-hide" data-route="/booklet-template" title="Booklet Template">
+        <span class="nav-icon">📄</span><span class="nav-label">Booklet Template</span>
+    </a>
+    <a href="/generator" class="nav-link staff-op mobile-hide" data-route="/generator" title="PDF Generator">
+        <span class="nav-icon">🖨️</span><span class="nav-label">PDF Generator</span>
+    </a> 
+    <a href="/qr-registration" class="nav-link staff-op mobile-hide" data-route="/qr-registration" title="QR Registration">
+        <span class="nav-icon">📥</span><span class="nav-label">QR Registration</span>
+    </a>
+    <a href="/material-spoilage" class="nav-link staff-op" id="navMaterialSpoilage" data-route="/material-spoilage" title="Material Spoilage">
+        <span class="nav-icon">📉</span><span class="nav-label">Material Spoilage</span>
+    </a>
+    <a href="/distribution" class="nav-link staff-op" data-route="/distribution" title="Point of Distribution">
+        <span class="nav-icon">🛒</span><span class="nav-label">Point of Distribution</span>
+    </a>
+    <a href="/history" class="nav-link staff-op" data-route="/history" title="Process Return">
+        <span class="nav-icon">📜</span><span class="nav-label">Process Return</span>
+    </a>
+    <a href="/payment-tracking" class="nav-link staff-op" data-route="/payment-tracking" title="Payment Tracking">
+        <span class="nav-icon">💳</span><span class="nav-label">Payment Tracking</span>
+    </a>
+    <a href="/activity-log" class="nav-link staff-op" data-route="/activity-log" title="Activity Log">
+        <span class="nav-icon">📋</span><span class="nav-label">Activity Log</span>
+    </a>
+    <a href="/transaction-profile" class="nav-link viewer-nav" data-route="/transaction-profile" title="Transaction Profile">
+        <span class="nav-icon">👤</span><span class="nav-label">Transaction Profile</span>
+    </a>
+    <a href="/receipts" class="nav-link viewer-only" id="navReceipts" data-route="/receipts" title="Official Receipts">
+        <span class="nav-icon">🧾</span><span class="nav-label">Official Receipts</span>
+    </a>
+
+    <!-- Restored Sidebar User Profile Card (Name & Role Only) -->
+    <div class="sidebar-user-card" id="sidebarUserCard" title="User Profile">
+        <div class="sidebar-user-info">
+            <div id="loggedInUser" class="sidebar-user-name">Loading...</div>
+            <div id="loggedInRole" class="sidebar-user-role">User</div>
         </div>
-    </div>
-
-    <!-- Navigation Directory -->
-    <div class="sidebar-header" id="sidebarHeaderTitle">Bookledger</div>
-    <a href="/dashboard" class="nav-link staff-op" data-route="/dashboard">📊 Dashboard</a>
-    <a href="/enrollments" class="nav-link" id="navEnrollments" data-route="/enrollments">🎓 Manage Classes</a>
-    <a href="/manage_users" class="nav-link" id="navManageUsers" data-route="/manage_users">👥 Manage Users</a>
-    <a href="/booklet-template" class="nav-link staff-op mobile-hide" data-route="/booklet-template">📄 Booklet Template</a>
-    <a href="/generator" class="nav-link staff-op mobile-hide" data-route="/generator">🖨️ PDF Generator</a> 
-    <a href="/qr-registration" class="nav-link staff-op mobile-hide" data-route="/qr-registration">📥 QR Registration</a>
-    <a href="/distribution" class="nav-link staff-op" data-route="/distribution">🛒 Point of Distribution</a>
-    <a href="/history" class="nav-link staff-op" data-route="/history">📜 Process Return</a>
-    <a href="/payment-tracking" class="nav-link staff-op" data-route="/payment-tracking">💳 Payment Tracking</a>
-    <a href="/activity-log" class="nav-link staff-op" data-route="/activity-log">📋 Activity Log</a>
-    <a href="/transaction-profile" class="nav-link viewer-nav" data-route="/transaction-profile">👤 Transaction Profile</a>
-    <a href="/receipts" class="nav-link viewer-only" id="navReceipts" data-route="/receipts">🧾 Official Receipts</a>
-
-    <!-- User Profile & Unified Logout -->
-    <div class="user-profile" style="margin-top: auto; padding: 20px; background-color: #1a252f; border-top: 1px solid #34495e; text-align: center;">
-        <p id="loggedInUser" style="color: white; font-weight: bold; margin-bottom: 2px;">Loading...</p>
-        <p id="loggedInRole" style="color: #bdc3c7; font-size: 0.8rem; margin-bottom: 15px;">...</p>
-        <button onclick="logout()" class="sidebar-logout-btn" style="background-color: #e74c3c; color: white; border: none; padding: 9px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s ease, transform 0.1s ease;">
-            <span style="font-size: 1rem;">🚪</span> Log Out
-        </button>
     </div>
 </div>
 
 <script>
-    // Universal Mobile Toggle (Satisfies both ID and Class lookups)
-    function toggleSidebar() {
+    // Dedicated Mobile Drawer Dismissal
+    function closeMobileSidebar() {
         const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
         const ov = document.getElementById('sidebarOverlay') || document.querySelector('.sidebar-overlay');
-        if (sb) sb.classList.toggle('active');
-        if (ov) ov.classList.toggle('active');
+        if (sb) sb.classList.remove('active');
+        if (ov) ov.classList.remove('active');
     }
+
+    // Universal Toggle (Desktop Collapsible Mini-Sidebar & Mobile Drawer)
+    function toggleSidebar() {
+        const isMobile = window.innerWidth <= 900;
+        const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        const ov = document.getElementById('sidebarOverlay') || document.querySelector('.sidebar-overlay');
+
+        if (isMobile) {
+            if (sb) {
+                sb.classList.remove('collapsed');
+                document.body.classList.remove('sidebar-collapsed');
+                sb.classList.toggle('active');
+            }
+            if (ov) ov.classList.toggle('active');
+        } else {
+            // Strictly clear mobile drawer and backdrop classes on desktop
+            if (ov) ov.classList.remove('active');
+            if (sb) {
+                sb.classList.remove('active');
+                sb.classList.toggle('collapsed');
+                const isCollapsed = sb.classList.contains('collapsed');
+                document.body.classList.toggle('sidebar-collapsed', isCollapsed);
+                try {
+                    localStorage.setItem('bookletlog_sidebar_collapsed', isCollapsed ? 'true' : 'false');
+                } catch (e) {}
+            }
+        }
+    }
+
+    // Reconcile mobile drawer & desktop collapsed states dynamically on window resize
+    function handleSidebarViewportResize() {
+        const isDesktop = window.innerWidth > 900;
+        const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+        const ov = document.getElementById('sidebarOverlay') || document.querySelector('.sidebar-overlay');
+
+        if (isDesktop) {
+            if (sb && sb.classList.contains('active')) sb.classList.remove('active');
+            if (ov && ov.classList.contains('active')) ov.classList.remove('active');
+
+            try {
+                const saved = localStorage.getItem('bookletlog_sidebar_collapsed');
+                if (saved === 'true') {
+                    if (sb) sb.classList.add('collapsed');
+                    document.body.classList.add('sidebar-collapsed');
+                } else {
+                    if (sb) sb.classList.remove('collapsed');
+                    document.body.classList.remove('sidebar-collapsed');
+                }
+            } catch (e) {}
+        } else {
+            // When on mobile screens, strip desktop collapsed state so drawer is always full width with text
+            if (sb) sb.classList.remove('collapsed');
+            document.body.classList.remove('sidebar-collapsed');
+            if (ov && ov.classList.contains('active') && sb && !sb.classList.contains('active')) {
+                ov.classList.remove('active');
+            }
+        }
+    }
+    window.addEventListener('resize', handleSidebarViewportResize);
+
+    // Initialize saved sidebar collapsed state on page load
+    (function initSavedSidebarState() {
+        try {
+            if (window.innerWidth > 900) {
+                const saved = localStorage.getItem('bookletlog_sidebar_collapsed');
+                if (saved === 'true') {
+                    const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+                    if (sb) sb.classList.add('collapsed');
+                    document.body.classList.add('sidebar-collapsed');
+                }
+            } else {
+                const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
+                if (sb) sb.classList.remove('collapsed');
+                document.body.classList.remove('sidebar-collapsed');
+            }
+        } catch (e) {}
+    })();
 
     // Universal Dropdown Panel Toggle
     function toggleNotifPanel(e) {
@@ -444,7 +853,6 @@
         const modalHtml = `
             <div id="dssModal" onclick="if(event.target === this) window.dismissDSS();" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box;">
                 <div style="background: white; padding: 32px 28px; border-radius: 12px; max-width: 490px; width: 100%; text-align: center; border-top: 6px solid #e74c3c; box-shadow: 0 16px 36px rgba(0,0,0,0.35); font-family: inherit;">
-                    <div style="font-size: 2.6rem; line-height: 1; margin-bottom: 10px;">⚠️</div>
                     <h2 style="color: #e74c3c; margin: 0 0 6px 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px;">Decision Support Alert</h2>
                     <p style="color: #1e293b; font-size: 0.98rem; font-weight: 700; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.5px;">Critical Stock Deficit</p>
                     
@@ -729,6 +1137,75 @@
         }
     })();
 
+    // Authoritative Real Name Hydration Helper
+    window.updateSidebarUser = function(user) {
+        if (!user) {
+            try {
+                const uStr = localStorage.getItem('bookletlog_user');
+                if (uStr) user = JSON.parse(uStr);
+            } catch (e) {}
+        }
+        if (!user) return;
+        const userEl = document.getElementById('loggedInUser');
+        const roleEl = document.getElementById('loggedInRole');
+
+        let displayName = '';
+        if (user.full_name && user.full_name.trim()) {
+            displayName = user.full_name.trim();
+        } else if (user.name && user.name.trim()) {
+            displayName = user.name.trim();
+        } else if (user.username && user.username.toLowerCase() === 'admin') {
+            displayName = 'System Administrator';
+        } else if (user.username) {
+            displayName = user.username;
+        } else {
+            displayName = 'User';
+        }
+
+        if (userEl) {
+            userEl.innerText = displayName;
+            userEl.setAttribute('data-authoritative-name', displayName);
+            if (user.username && user.username !== displayName) {
+                userEl.title = `${displayName} (@${user.username})`;
+            } else {
+                userEl.title = displayName;
+            }
+        }
+
+        if (roleEl) {
+            const role = user.role || 'User';
+            if (role === 'Viewer') {
+                roleEl.innerText = 'Faculty (Viewer)';
+            } else if (role === 'Staff') {
+                const dept = user.department ? ' (' + user.department + ')' : '';
+                roleEl.innerText = 'Staff Clerk' + dept;
+            } else {
+                const dept = user.department ? ' (' + user.department + ')' : '';
+                roleEl.innerText = 'Administrator' + dept;
+            }
+        }
+    };
+
+    // Guard #loggedInUser so external scripts or residual page code cannot overwrite real name with username
+    (function protectSidebarUserName() {
+        const userEl = document.getElementById('loggedInUser');
+        if (!userEl || userEl.__guardAttached) return;
+        userEl.__guardAttached = true;
+
+        const observer = new MutationObserver(() => {
+            const authName = userEl.getAttribute('data-authoritative-name');
+            if (authName && userEl.innerText !== authName) {
+                const currentText = (userEl.innerText || '').trim();
+                let userObj = null;
+                try { userObj = JSON.parse(localStorage.getItem('bookletlog_user')); } catch (e) {}
+                if (userObj && (currentText === (userObj.username || '').toUpperCase() || currentText === userObj.username)) {
+                    userEl.innerText = authName;
+                }
+            }
+        });
+        observer.observe(userEl, { childList: true, characterData: true, subtree: true });
+    })();
+
     // Role-Based UI Guard & Sidebar Personalization
     (function initSidebarRBAC() {
         try {
@@ -736,67 +1213,97 @@
             if (!userStr) return;
             const user = JSON.parse(userStr);
 
+            // Authoritative Body Role Tagging (Guarantees CSS specificity across pinned, collapsed, and hovered states)
+            document.body.classList.remove('role-admin', 'role-staff', 'role-viewer');
+            document.body.classList.add('role-' + (user.role ? user.role.toLowerCase() : 'viewer'));
+
             // Synchronous 0ms user profile hydration
-            const userEl = document.getElementById('loggedInUser');
-            const roleEl = document.getElementById('loggedInRole');
-
-            if (userEl && user) {
-                if (user.full_name) {
-                    userEl.innerText = user.full_name;
-                } else if (user.username) {
-                    userEl.innerText = user.username.toUpperCase();
-                }
+            if (window.updateSidebarUser) {
+                window.updateSidebarUser(user);
             }
 
-            if (roleEl && user) {
-                const role = user.role || 'User';
-                if (role === 'Viewer') {
-                    roleEl.innerText = 'Faculty (Viewer)';
-                } else {
-                    const dept = user.department ? ' (' + user.department + ')' : '';
-                    roleEl.innerText = (role === 'Admin' ? 'Administrator' : 'Staff Clerk') + dept;
-                }
-            }
-
-            const headerTitle = document.getElementById('sidebarHeaderTitle');
-            const topUtility = document.getElementById('sidebarTopUtilityBar');
+            const wifiBtn = document.getElementById('mobileWifiBtn');
+            const notifBell = document.getElementById('notifBell');
+            const settingsBtn = document.getElementById('sidebarSettingsBtn');
             const navUsers = document.getElementById('navManageUsers');
             const navEnrollments = document.getElementById('navEnrollments');
 
+            const showElement = (el) => {
+                if (el) el.style.setProperty('display', el.classList.contains('icon-utility-btn') ? 'inline-flex' : 'flex', 'important');
+            };
+
             if (user && user.role === 'Viewer') {
-                if (headerTitle) headerTitle.innerText = 'Faculty Portal';
-                if (topUtility) topUtility.style.display = 'none';
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-                document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'none');
-                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'block');
-                if (navUsers) navUsers.innerHTML = '👤 My Account & Security';
+                if (wifiBtn) wifiBtn.style.setProperty('display', 'inline-flex', 'important');
+                if (notifBell) notifBell.style.setProperty('display', 'none', 'important');
+                if (settingsBtn) settingsBtn.style.setProperty('display', 'none', 'important');
+                document.querySelectorAll('.admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                document.querySelectorAll('.staff-op').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                document.querySelectorAll('.viewer-only').forEach(showElement);
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">🔐</span><span class="nav-label">My Account & Security</span>';
+                    navUsers.title = 'My Account & Security';
+                }
                 if (navEnrollments) {
-                    navEnrollments.style.display = 'block';
-                    navEnrollments.innerHTML = '🎓 My Teaching Load';
+                    showElement(navEnrollments);
+                    navEnrollments.innerHTML = '<span class="nav-icon">🎓</span><span class="nav-label">My Teaching Load</span>';
+                    navEnrollments.title = 'My Teaching Load';
                 }
             } else if (user && user.role === 'Staff') {
-                if (headerTitle) headerTitle.innerText = 'Staff Portal';
-                if (topUtility) topUtility.style.display = 'block';
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
-                document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
-                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
-                if (navUsers) navUsers.innerHTML = '👤 My Account';
+                if (wifiBtn) wifiBtn.style.setProperty('display', 'inline-flex', 'important');
+                if (notifBell) notifBell.style.setProperty('display', 'inline-flex', 'important');
+                if (settingsBtn) settingsBtn.style.setProperty('display', 'none', 'important');
+                document.querySelectorAll('.admin-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                document.querySelectorAll('.staff-op').forEach(showElement);
+                document.querySelectorAll('.viewer-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                    navUsers.title = 'My Account';
+                }
                 if (navEnrollments) {
-                    navEnrollments.style.display = 'block';
-                    navEnrollments.innerHTML = '🎓 Manage Classes';
+                    showElement(navEnrollments);
+                    navEnrollments.innerHTML = '<span class="nav-icon">🎓</span><span class="nav-label">Manage Classes</span>';
+                    navEnrollments.title = 'Manage Classes';
                 }
             } else {
-                if (headerTitle) headerTitle.innerText = 'Bookledger';
-                if (topUtility) topUtility.style.display = 'block';
-                document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
-                document.querySelectorAll('.staff-op').forEach(el => el.style.display = 'block');
-                document.querySelectorAll('.viewer-only').forEach(el => el.style.display = 'none');
-                if (navUsers) navUsers.innerHTML = '👥 Manage Users';
+                if (wifiBtn) wifiBtn.style.setProperty('display', 'inline-flex', 'important');
+                if (notifBell) notifBell.style.setProperty('display', 'inline-flex', 'important');
+                if (settingsBtn) settingsBtn.style.setProperty('display', 'inline-flex', 'important');
+                document.querySelectorAll('.admin-only').forEach(showElement);
+                document.querySelectorAll('.staff-op').forEach(showElement);
+                document.querySelectorAll('.viewer-only').forEach(el => el.style.setProperty('display', 'none', 'important'));
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">👥</span><span class="nav-label">Manage Users</span>';
+                    navUsers.title = 'Manage Users';
+                }
                 if (navEnrollments) {
-                    navEnrollments.style.display = 'block';
-                    navEnrollments.innerHTML = '🎓 Manage Classes';
+                    showElement(navEnrollments);
+                    navEnrollments.innerHTML = '<span class="nav-icon">🎓</span><span class="nav-label">Manage Classes</span>';
+                    navEnrollments.title = 'Manage Classes';
                 }
             }
+
+            // Self-healing observer: automatically normalizes any raw innerHTML string from parent pages into .nav-icon and .nav-label spans
+            const normalizeNavMarkup = (el) => {
+                if (!el || el._isNormalizing) return;
+                const text = el.innerText ? el.innerText.trim() : '';
+                if (!el.querySelector('.nav-label') && text) {
+                    el._isNormalizing = true;
+                    const match = text.match(/^([\p{Extended_Pictographic}\uD800-\uDFFF\u2600-\u27BF]+)\s*(.*)$/u);
+                    if (match) {
+                        const icon = match[1];
+                        const label = match[2];
+                        el.innerHTML = `<span class="nav-icon">${icon}</span><span class="nav-label">${label}</span>`;
+                    }
+                    el._isNormalizing = false;
+                }
+            };
+
+            [navUsers, navEnrollments].forEach(target => {
+                if (target && window.MutationObserver) {
+                    const observer = new MutationObserver(() => normalizeNavMarkup(target));
+                    observer.observe(target, { childList: true, characterData: true, subtree: false });
+                }
+            });
 
             if (user && user.must_change_password) {
                 checkAndPromptFirstTimeSetup(user);
@@ -1008,7 +1515,7 @@
                 const roleLower = (newRole || '').toLowerCase();
                 const currentPath = window.location.pathname.toLowerCase();
                 const adminOnlyPages = ['/settings'];
-                const staffPages = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template', '/activity-log'];
+                const staffPages = ['/dashboard', '/department-breakdown', '/expenditure-report', '/payment-tracking', '/distribution', '/history', '/generator', '/qr-registration', '/booklet-template', '/activity-log', '/material-spoilage', '/material-loss'];
 
                 if (roleLower === 'viewer' && (adminOnlyPages.some(p => currentPath.startsWith(p)) || staffPages.some(p => currentPath.startsWith(p)))) {
                     window.location.href = '/transaction-profile?error=unauthorized';
@@ -1070,6 +1577,13 @@
                     localStorage.removeItem('bookletlog_user');
                     window.location.href = '/login';
                     return;
+                }
+
+                // Sync updated full_name if returned from server
+                if (data.full_name && data.full_name !== currentUser.full_name) {
+                    currentUser.full_name = data.full_name;
+                    localStorage.setItem('bookletlog_user', JSON.stringify(currentUser));
+                    if (window.updateSidebarUser) window.updateSidebarUser(currentUser);
                 }
 
                 // Detect Role or Department update made by Administrator

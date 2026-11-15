@@ -2641,3 +2641,128 @@ When students lose or damage examination booklets prior to an exam, instructors 
 
 
 
+
+---
+
+## 178. Material Spoilage Table Dynamic Population, Period Filter Binding, and Expenditure Clean-up
+
+### Problem Addressed
+1. In `templates/material_spoilage.html`, the Spoilage & Waste Incident History table displayed `No material spoilage incidents found matching the selected filters` even after logging 3 incidents that successfully updated Net Loss to ₱22.80 in `templates/expenditure_report.html`.
+2. The term "Loose Paper Sheets" remained visible in several places across the UI.
+3. In `templates/expenditure_report.html`, the `[View Spoilage ➔]` navigation button was still present in the Income Statement row.
+
+### Root Cause
+1. **Raw JSON Array Parsing in `loadPeriods()`**: `/api/period-configurations` returns a raw JSON array of configuration objects. `templates/material_spoilage.html` checked `data.status === 'success' && data.configurations`, which evaluated to `undefined`. This triggered a fallback to `'1st Sem 2026-2027'`, querying `/api/material-loss?period=1st%20Sem%202026-2027`. The logged incidents were stored under the active configuration `'1st Sem - Final Exam | AY 2026-2027'`, so the API returned an empty list.
+2. **Missing Period Filter Re-fetch**: The `#periodFilter` dropdown invoked `applyFilters()`, which only filtered the local in-memory array rather than issuing a network re-fetch for the selected academic period.
+3. **Button and Label Removal in Expenditure Report**: The anchor tag `<a href="/material-spoilage">View Spoilage ➔</a>` was located in the third column of the Net Loss row, and JavaScript updated `#isNetLossSubtitle` dynamically.
+
+### Solution Applied
+1. **Resilient Array Parsing in `loadPeriods()` (`templates/material_spoilage.html`)**:
+   * Updated `loadPeriods()` to inspect `Array.isArray(raw)` directly.
+   * Finds the configuration where `cfg.is_active` is true and sets `activePeriod` to its exact period string (`1st Sem - Final Exam | AY 2026-2027`).
+   * Marks the active item with `(Active)` in the dropdown and selects it as default.
+2. **Network Re-fetch on Period Selection (`templates/material_spoilage.html`)**:
+   * Added `onPeriodChange()` that updates `activePeriod` and invokes `fetchSpoilageData(false)`.
+   * Bound `<select id="periodFilter" onchange="onPeriodChange()">`.
+3. **Comprehensive Terminology Renaming (`templates/material_spoilage.html`)**:
+   * Replaced all occurrences of `Loose Paper Sheets` with `Loss Paper Sheets` in the Category filter, Modal loss category dropdown, and table row badges.
+4. **Income Statement Clean-up (`templates/expenditure_report.html`)**:
+   * Removed `<a href="/material-spoilage">View Spoilage ➔</a>` from column 3 of the Net Loss row, leaving column 3 empty to align with the table format.
+   * Named the row strictly `Net Loss`.
+   * Removed JavaScript code updating `#isNetLossSubtitle`.
+
+### Verification Results
+1. **Template AST Syntax Verification (`scratch/check_syntax.py`)**: All templates compiled cleanly with 0 errors.
+2. **Database Query Verification**: Confirmed that all 3 spoilage records (45 sheets, ₱22.80 total loss) under `'1st Sem - Final Exam | AY 2026-2027'` are correctly retrieved and rendered.
+
+---
+
+## 179. Manage Users Status Filter for Online and Offline Status
+
+### Problem Addressed
+In `templates/manage_user.html`, the Accounts Directory table features a dedicated **Status** column displaying badges for `🟢 Online`, `⚪ Offline`, `⛔ Deactivated`, or `🔒 Locked`.
+However, the filter dropdown `#statusFilter` previously only contained `All Statuses`, `Active Accounts`, and `Deactivated Accounts`, preventing administrators from filtering users based on their active online presence.
+
+### Solution Applied
+1. **Dropdown Markup Update (`templates/manage_user.html`)**:
+   * Updated `#statusFilter` options:
+     * `All Statuses` (`ALL`)
+     * `Online` (`ONLINE`)
+     * `Offline` (`OFFLINE`)
+     * `Deactivated` (`DEACTIVATED`)
+2. **Filter Matching Logic (`templates/manage_user.html`)**:
+   * Updated `filterUsers()` to evaluate the selected status value:
+     * `ONLINE`: matches users where `u.is_online === true` and `u.is_active !== false`.
+     * `OFFLINE`: matches users where `!u.is_online` and `u.is_active !== false`.
+     * `DEACTIVATED`: matches users where `u.is_active === false`.
+     * `ALL`: matches all accounts.
+
+### Verification Results
+1. **Template AST Syntax Verification**: Verified `templates/manage_user.html` with Jinja2 compilation check (0 errors).
+2. **Logic Unit Tests**: Validated filtering behavior across Online, Offline, Deactivated, and All Statuses with 100% test pass.
+
+---
+
+## 180. PDF Generation Connection Error and File Lock Resolution
+
+### Problem Addressed
+When clicking the button to register and generate a batch in `templates/pdf_generator.html`, an alert dialog (`#appDialogModal`) popped up stating:
+`Connection Error: A network error occurred while reaching the offline server.`
+
+### Root Cause
+1. **Windows File Lock by WPS PDF (PID 5448)**:
+   * The file `static/front_page_pdfs/BATCH-20261115000001.pdf` was actively opened in WPS PDF on the operator's computer.
+   * On Windows, opening a PDF in a desktop viewer places a mandatory file sharing lock on it.
+   * When `generate_batch_pdf()` attempted to open the file with `open(output_path, "wb")`, Python threw `PermissionError: [Errno 13] Permission denied: 'static/front_page_pdfs/BATCH-20261115000001.pdf'`.
+2. **Premature Commit and Unhandled 500**:
+   * In `app/main.py`, `register_ream` committed the new batch and 125 booklets to the database before generating the PDF. When `generate_batch_pdf` crashed, the database was left in an inconsistent state and FastAPI aborted with an unhandled HTTP 500 plain text response (`"Internal Server Error"`).
+3. **Frontend JSON Parsing Crash**:
+   * In `templates/pdf_generator.html`, `await response.json()` attempted to parse the plain text response as JSON, raising a JavaScript `SyntaxError`. The generic catch block caught this syntax error and presented the misleading "Connection Error" modal.
+
+### Solution Applied
+1. **Human-Readable Permission Exception (`app/utils.py`)**:
+   * Wrapped file writing in `generate_batch_pdf()` in a `try...except PermissionError` block to raise a clear notice instructing the operator to close the file in their PDF viewer.
+2. **Disk-Aware Batch Numbering & Database Rollback (`app/main.py`)**:
+   * Updated `register_ream` to inspect both the database and existing files matching `static/front_page_pdfs/BATCH-YYYYMMDD*.pdf` so newly created batches never collide with existing or locked files on disk.
+   * Wrapped `generate_batch_pdf()` in a try/except block. If file writing fails, newly created booklets and batch records are rolled back from the database and a clean HTTP 409 exception is returned with the file lock message.
+3. **Safe Response Parsing (`templates/pdf_generator.html`)**:
+   * Updated `executeBatchRegistration()` and `regenerateBatchPdf()` to safely handle both JSON and non-JSON server error responses.
+   * Errors now display the server's descriptive error message via `showAppAlert("Batch Production Error", ...)` rather than jumping to false connection failure alerts.
+
+### Verification Results
+1. **Syntax Checks**: Verified `app/main.py`, `app/utils.py`, and `templates/pdf_generator.html` (0 errors).
+2. **Next Batch Sequencing**: Confirmed that the batch sequencer detects the existing `BATCH-20261115000001` on disk and properly generates `BATCH-20261115000002` for subsequent runs.
+
+---
+
+## 181. Automatic Synchronization of Defective Booklet Returns into Material Spoilage and Net Loss
+
+### Problem Addressed
+When processing a faculty return for misprinted or defective booklets in `templates/history.html`, those booklets represent unrecoverable wasted materials with 0 ROI.
+However, after submitting the return, the incident history table in `templates/material_spoilage.html` did not display these defective booklets, and the Net Loss row in `templates/expenditure_report.html` remained at ₱0.00.
+
+### Root Cause
+1. **Missing Spoilage Entry in `process_return` (`POST /api/process-return`)**:
+   * `process_return()` updated booklet statuses to `"voided"` and set `return_reason = "Misprint / Defect"`, but contained no logic to insert records into the `material_losses` table.
+   * As a consequence, voided booklets were never recorded as material losses, leaving Net Loss at ₱0.00.
+2. **Attribute Errors in Manual Sync Endpoint (`/api/material-loss/sync-returns`)**:
+   * `sync_defective_returns_to_spoilage()` accessed `b.control_number`, `b.srn`, and `b.returned_to`.
+   * The `Booklet` model defines `control_num` and `sort_record_num`, and has no `returned_to` attribute.
+   * Calling the endpoint or clicking "Sync Faculty Returns" in `material_spoilage.html` crashed with `AttributeError: 'Booklet' object has no attribute 'control_number'`.
+
+### Solution Applied
+1. **Automatic Material Loss Logging in `process_return` (`app/main.py`)**:
+   * When `is_defective` is True, `process_return()` calculates direct material costs based on departmental sheets per booklet, ream price, and staple costs.
+   * Creates a `whole_booklet` entry in `models.MaterialLoss` for each returned booklet with `source = "faculty_return"`.
+   * Broadcasts `notify_lan_mutation("MATERIAL_SPOILAGE_MUTATED", {"period": b_period, "department": enr_dept}, db=db)` so `material_spoilage.html` and `expenditure_report.html` update in real time without manual refreshes.
+2. **Fixed Manual Sync Endpoint & Self-Healing Backfill (`app/main.py`)**:
+   * Corrected field lookups to use `b.control_num`, `b.sort_record_num`, and `b.distributed_by`.
+   * Added startup self-healing in `startup_event()` to automatically backfill historical voided defective returns into `material_losses`.
+   * Synchronized existing voided booklets `1ST26-CS-0003` and `1ST26-CS-0006` into `material_losses`.
+
+### Verification Results
+1. **Model & Endpoint Verification**:
+   * Confirmed that `GET /api/material-loss` returns both defective booklets (12 sheets wasted, 2 booklets, ₱6.16 total Net Loss).
+   * Confirmed that `GET /api/dashboard-stats` accurately accounts for ₱6.16 under `net_loss` and deducts it from Net Operating Surplus.
+2. **Syntax Compilation**:
+   * Verified `app/main.py` using `py_compile` with 0 errors.

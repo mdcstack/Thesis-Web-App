@@ -463,8 +463,9 @@
                         </select>
                         <select id="statusFilter" class="filter-select" onchange="filterUsers()">
                             <option value="ALL">All Statuses</option>
-                            <option value="ACTIVE">Active Accounts</option>
-                            <option value="DEACTIVATED">Deactivated Accounts</option>
+                            <option value="ONLINE">Online</option>
+                            <option value="OFFLINE">Offline</option>
+                            <option value="DEACTIVATED">Deactivated</option>
                         </select>
                     </div>
 
@@ -736,10 +737,14 @@
         if (!activeUser) {
             window.location.href = '/login';
         } else {
-            const loggedInUserEl = document.getElementById('loggedInUser');
-            if (loggedInUserEl) loggedInUserEl.innerText = activeUser.username.toUpperCase();
-            const loggedInRoleEl = document.getElementById('loggedInRole');
-            if (loggedInRoleEl) loggedInRoleEl.innerText = activeUser.role + " (" + (activeUser.department || 'All') + ")";
+            if (window.updateSidebarUser) {
+                window.updateSidebarUser(activeUser);
+            } else {
+                const loggedInUserEl = document.getElementById('loggedInUser');
+                if (loggedInUserEl) loggedInUserEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+                const loggedInRoleEl = document.getElementById('loggedInRole');
+                if (loggedInRoleEl) loggedInRoleEl.innerText = activeUser.role + " (" + (activeUser.department || 'All') + ")";
+            }
             
             const navLink = document.getElementById('navManageUsers');
             const pageTitle = document.getElementById('pageTitle');
@@ -751,7 +756,12 @@
             // RBAC View Enforcement
             if (activeUser.role !== 'Admin') {
                 // Staff / Viewer Portal Mode
-                if (navLink) navLink.innerHTML = activeUser.role === 'Viewer' ? '👤 My Account & Security' : '👤 My Account';
+                if (navLink) {
+                    navLink.innerHTML = activeUser.role === 'Viewer' 
+                        ? '<span class="nav-icon">🔐</span><span class="nav-label">My Account & Security</span>' 
+                        : '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                    navLink.title = activeUser.role === 'Viewer' ? 'My Account & Security' : 'My Account';
+                }
                 if (pageTitle) pageTitle.innerHTML = activeUser.role === 'Viewer' ? '👤 Faculty Account & Security Profile' : '👤 My Account & Security Profile';
                 if (pageSubtitle) pageSubtitle.innerText = 'Manage your account credentials, view assigned departmental scope, and update your username or password.';
                 
@@ -788,7 +798,10 @@
                 if (staffDeptEl) staffDeptEl.innerText = activeUser.department ? `${activeUser.department} Department` : 'All Departments';
             } else {
                 // Admin Portal Mode
-                if (navLink) navLink.innerHTML = '👥 Manage Users';
+                if (navLink) {
+                    navLink.innerHTML = '<span class="nav-icon">👥</span><span class="nav-label">Manage Users</span>';
+                    navLink.title = 'Manage Users';
+                }
                 if (staffPortalView) staffPortalView.style.display = 'none';
                 if (adminPortalView) adminPortalView.style.display = 'block';
                 if (topChangePwBtn) topChangePwBtn.style.display = 'flex';
@@ -1091,9 +1104,14 @@
                 const matchesSearch = u.username.toLowerCase().includes(searchVal) || fullName.includes(searchVal);
                 const matchesRole = (roleVal === 'ALL') || (u.role === roleVal);
                 const matchesDept = (deptVal === 'ALL') || (u.department === deptVal);
-                const matchesStatus = (statusVal === 'ALL') || 
-                                      (statusVal === 'ACTIVE' && u.is_active !== false) || 
-                                      (statusVal === 'DEACTIVATED' && u.is_active === false);
+                let matchesStatus = true;
+                if (statusVal === 'ONLINE') {
+                    matchesStatus = Boolean(u.is_online && u.is_active !== false);
+                } else if (statusVal === 'OFFLINE') {
+                    matchesStatus = Boolean(!u.is_online && u.is_active !== false);
+                } else if (statusVal === 'DEACTIVATED') {
+                    matchesStatus = (u.is_active === false);
+                }
                 return matchesSearch && matchesRole && matchesDept && matchesStatus;
             });
 
@@ -1129,7 +1147,7 @@
                 }
 
                 const displayName = (u.full_name && u.full_name.trim()) ? escapeHtml(u.full_name.trim()) : escapeHtml(u.username);
-                const usernameSubtext = `<div style="font-size: 0.8rem; color: #64748b; font-weight: normal; margin-top: 2px;">@${escapeHtml(u.username)}</div>`;
+                const usernameSubtext = `<div style="font-size: 0.8rem; color: #64748b; font-weight: normal; margin-top: 2px;">${escapeHtml(u.username)}</div>`;
                 
                 let deptBadge = `<span class="badge badge-dept-all">All</span>`;
                 const matchedProg = (systemPrograms || []).find(p => p.code === u.department);
@@ -1393,7 +1411,7 @@
                 return;
             }
             document.getElementById('resetUserId').value = id;
-            document.getElementById('resetTargetUsername').innerText = `@${username}`;
+            document.getElementById('resetTargetUsername').innerText = `${username}`;
             document.getElementById('resetTargetDisplayName').innerText = fullName || username;
             const displayRole = (role === 'Viewer') ? 'Instructor' : (role || 'User');
             document.getElementById('resetTargetRoleDept').innerText = `${displayRole} (${dept || 'All'})`;
@@ -1480,7 +1498,7 @@
         }
 
         async function adminUnlockUser(id, username) {
-            if (!confirm(`Unlock account for '@${username}'? This will reset all failed login attempts and restore access.`)) return;
+            if (!confirm(`Unlock account for '${username}'? This will reset all failed login attempts and restore access.`)) return;
             try {
                 const sessionToken = localStorage.getItem('bookletlog_token') || '';
                 const currentUsername = activeUser ? activeUser.username : '';
@@ -1692,13 +1710,16 @@
                     const staffUserEl = document.getElementById('staffUsername');
                     if (staffUserEl) staffUserEl.innerText = activeUser.username;
 
-                    const loggedInUserEl = document.getElementById('loggedInUser');
-                    const loggedInSubEl = document.getElementById('loggedInUsernameSub');
-                    if (loggedInUserEl && !activeUser.full_name) {
-                        loggedInUserEl.innerText = activeUser.username.toUpperCase();
+                    if (window.updateSidebarUser) {
+                        window.updateSidebarUser(activeUser);
+                    } else {
+                        const loggedInUserEl = document.getElementById('loggedInUser');
+                        if (loggedInUserEl && !activeUser.full_name) {
+                            loggedInUserEl.innerText = activeUser.username;
+                        }
                     }
                     if (loggedInSubEl) {
-                        loggedInSubEl.innerText = '@' + activeUser.username;
+                        loggedInSubEl.innerText = '' + activeUser.username;
                         loggedInSubEl.style.display = 'block';
                     }
 

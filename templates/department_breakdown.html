@@ -153,6 +153,19 @@
             <div>
                 <h2 style="color: #2c3e50; margin: 0; font-size: 1.6rem;">📑 Departmental Revenue &amp; Cost Allocation Statement</h2>
                 <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap;">
+                    <div id="dept_ay_input_group" style="display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; gap: 4px; box-sizing: border-box; height: 32px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                        <span style="font-weight: 700; color: #64748b; font-size: 0.8rem; letter-spacing: 0.5px;">AY</span>
+                        <input type="number" id="dept_ay_start_year" min="2000" max="2099" placeholder="YYYY"
+                               style="width: 52px; border: none; outline: none; padding: 2px 2px; font-size: 0.85rem; font-weight: 600; text-align: center; color: #1e293b; background: transparent;"
+                               oninput="onDeptAyStartYearInput(this)"
+                               title="Filter exam periods by 4-digit academic start year">
+                        <span style="font-weight: 700; color: #94a3b8; font-size: 0.85rem;">–</span>
+                        <input type="text" id="dept_ay_end_year" placeholder="YYYY" readonly
+                               style="width: 52px; border: none; outline: none; padding: 2px 2px; font-size: 0.85rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px;"
+                               title="Automatically calculated as Start Year + 1">
+                        <button type="button" onclick="clearDeptYearFilter()" style="background: none; border: none; color: #94a3b8; font-size: 1.1rem; line-height: 1; cursor: pointer; padding: 0 2px;" title="Show all academic years">×</button>
+                    </div>
+
                     <span style="color: #64748b; font-size: 0.95rem; font-weight: 600;">Exam Period:</span>
                     <select id="periodFilterSelect" onchange="onPeriodFilterChange(this.value)" style="padding: 5px 12px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.9rem; font-weight: 600; color: #1e293b; background: #ffffff; cursor: pointer; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
                         <option value="">Loading periods...</option>
@@ -285,12 +298,23 @@
                     window.location.href = '/login';
                 }
             });
-            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
-            document.getElementById('signClerkName').innerText = activeUser.username.toUpperCase();
+            if (window.updateSidebarUser) {
+                window.updateSidebarUser(activeUser);
+            } else {
+                const uEl = document.getElementById('loggedInUser');
+                if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+                const rEl = document.getElementById('loggedInRole');
+                if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+            }
+            const signClerkEl = document.getElementById('signClerkName');
+            if (signClerkEl) signClerkEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
             if (activeUser.role !== 'Admin') {
                 document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
-        const navUsers = document.getElementById('navManageUsers'); if (navUsers) navUsers.innerHTML = '👤 My Account';
+                const navUsers = document.getElementById('navManageUsers');
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                    navUsers.title = 'My Account';
+                }
             }
         }
 
@@ -321,14 +345,122 @@
             return false;
         }
 
+        window.allAvailablePeriodConfigs = [];
+
+        function extractAcademicYearFromPeriod(periodStr) {
+            if (!periodStr || typeof periodStr !== 'string') return null;
+            const match = periodStr.match(/(\d{4})[-–](\d{4})/);
+            if (match) {
+                return { startYear: parseInt(match[1]), endYear: parseInt(match[2]) };
+            }
+            const singleMatch = periodStr.match(/\b(20\d{2})\b/);
+            if (singleMatch) {
+                const y = parseInt(singleMatch[1]);
+                return { startYear: y, endYear: y + 1 };
+            }
+            return null;
+        }
+
+        function syncDeptYearInputsWithPeriod(periodStr) {
+            const sYearEl = document.getElementById('dept_ay_start_year');
+            const eYearEl = document.getElementById('dept_ay_end_year');
+            if (!sYearEl || !eYearEl) return;
+            const parsed = extractAcademicYearFromPeriod(periodStr);
+            if (parsed) {
+                sYearEl.value = parsed.startYear;
+                eYearEl.value = parsed.endYear;
+            }
+        }
+
+        function renderDeptPeriodSelectOptions(targetYearStr = null) {
+            const sel = document.getElementById('periodFilterSelect');
+            if (!sel || !Array.isArray(window.allAvailablePeriodConfigs)) return;
+
+            let filtered = window.allAvailablePeriodConfigs;
+            if (targetYearStr && targetYearStr.length === 4) {
+                const sYear = parseInt(targetYearStr);
+                const targetCycle = `${sYear}-${sYear + 1}`;
+                filtered = window.allAvailablePeriodConfigs.filter(cfg => {
+                    const pName = cfg.academic_period || cfg.exam_period || '';
+                    return pName.includes(targetCycle) || pName.includes(targetYearStr);
+                });
+            }
+
+            sel.innerHTML = '';
+            if (filtered.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = "";
+                opt.textContent = `No periods for ${targetYearStr}`;
+                sel.appendChild(opt);
+                selectedPeriod = "";
+                updatePeriodStatusBadge();
+                renderEmptyDepartmentBreakdown(`No examination periods found for Academic Year ${targetYearStr}`);
+                return;
+            }
+
+            let hasSelected = false;
+            filtered.forEach(cfg => {
+                const periodName = cfg.academic_period || cfg.exam_period || '';
+                if (!periodName) return;
+
+                const isActive = Boolean(cfg.is_active || (currentSystemActivePeriod && periodName === currentSystemActivePeriod));
+                const opt = document.createElement('option');
+                opt.value = periodName;
+                opt.textContent = periodName;
+                if (selectedPeriod && periodName === selectedPeriod) {
+                    opt.selected = true;
+                    hasSelected = true;
+                } else if (!selectedPeriod && isActive && !hasSelected) {
+                    opt.selected = true;
+                    hasSelected = true;
+                }
+                sel.appendChild(opt);
+            });
+
+            if (!hasSelected && filtered.length > 0) {
+                sel.selectedIndex = 0;
+                if (targetYearStr && sel.value !== selectedPeriod) {
+                    onPeriodFilterChange(sel.value);
+                }
+            }
+        }
+
+        function onDeptAyStartYearInput(input) {
+            if (!input) return;
+            if (input.value.length > 4) {
+                input.value = input.value.slice(0, 4);
+            }
+            const endYearEl = document.getElementById('dept_ay_end_year');
+            const startVal = input.value.trim();
+            if (startVal.length === 4) {
+                const sYear = parseInt(startVal);
+                if (!isNaN(sYear)) {
+                    if (endYearEl) endYearEl.value = sYear + 1;
+                    renderDeptPeriodSelectOptions(startVal);
+                }
+            } else {
+                if (endYearEl) endYearEl.value = '';
+                if (startVal === '') {
+                    renderDeptPeriodSelectOptions(null);
+                }
+            }
+        }
+
+        function clearDeptYearFilter() {
+            const sYearEl = document.getElementById('dept_ay_start_year');
+            const eYearEl = document.getElementById('dept_ay_end_year');
+            if (sYearEl) sYearEl.value = '';
+            if (eYearEl) eYearEl.value = '';
+            renderDeptPeriodSelectOptions(null);
+        }
+
         async function populatePeriodFilter() {
             try {
                 const res = await fetch('/api/period-configurations');
                 const list = await res.json();
-                const sel = document.getElementById('periodFilterSelect');
-                if (!sel || !Array.isArray(list)) return;
+                if (!Array.isArray(list)) return;
+                window.allAvailablePeriodConfigs = list;
 
-                sel.innerHTML = '';
                 list.forEach(cfg => {
                     const periodName = cfg.academic_period || cfg.exam_period || '';
                     if (!periodName) return;
@@ -337,19 +469,14 @@
                     if (isActive && !currentSystemActivePeriod) {
                         currentSystemActivePeriod = periodName;
                     }
-                    const opt = document.createElement('option');
-                    opt.value = periodName;
-                    opt.textContent = isActive 
-                        ? `${periodName} (Current Active)` 
-                        : `${periodName} (Archived)`;
-                    if (selectedPeriod && periodName === selectedPeriod) {
-                        opt.selected = true;
-                    } else if (!selectedPeriod && isActive) {
-                        opt.selected = true;
-                    }
-                    sel.appendChild(opt);
                 });
 
+                const activeTarget = selectedPeriod || currentSystemActivePeriod;
+                if (activeTarget) {
+                    syncDeptYearInputsWithPeriod(activeTarget);
+                }
+
+                renderDeptPeriodSelectOptions(null);
                 updatePeriodStatusBadge();
             } catch (e) {
                 console.warn("Could not load period configurations:", e);
@@ -359,18 +486,91 @@
         function updatePeriodStatusBadge() {
             const badge = document.getElementById('periodStatusBadge');
             if (!badge) return;
-            const isHistorical = selectedPeriod && currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
+            if (!selectedPeriod) {
+                badge.style.backgroundColor = '#94a3b8';
+                badge.innerText = 'NO RECORDS';
+                return;
+            }
+            const isHistorical = currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
             if (isHistorical) {
                 badge.style.backgroundColor = '#64748b';
-                badge.innerText = 'ARCHIVED / HISTORICAL';
+                badge.innerText = 'ARCHIVED';
             } else {
                 badge.style.backgroundColor = '#27ae60';
                 badge.innerText = 'ACTIVE SEMESTER';
             }
         }
 
+        function renderEmptyDepartmentBreakdown(emptyMessage) {
+            const zeroCurrency = "₱0.00";
+            if (window.lockAuthoritativeElement) {
+                window.lockAuthoritativeElement('#kpiGrossRevenue', zeroCurrency);
+                window.lockAuthoritativeElement('#kpiNetProfit', zeroCurrency);
+                window.lockAuthoritativeElement('#kpiPaperUsage', '0 Reams + 0 Sheets');
+                window.lockAuthoritativeElement('#wfGross', zeroCurrency);
+                if (document.getElementById('wfUniShare')) window.lockAuthoritativeElement('#wfUniShare', '- ₱0.00');
+                if (document.getElementById('wfProdCost')) window.lockAuthoritativeElement('#wfProdCost', '- ₱0.00');
+                if (document.getElementById('wfTotalDeductions')) window.lockAuthoritativeElement('#wfTotalDeductions', '- ₱0.00');
+                if (document.getElementById('wfNetProfit')) window.lockAuthoritativeElement('#wfNetProfit', zeroCurrency);
+            } else {
+                const elGross = document.getElementById('kpiGrossRevenue');
+                if (elGross) elGross.innerText = zeroCurrency;
+                const elNet = document.getElementById('kpiNetProfit');
+                if (elNet) elNet.innerText = zeroCurrency;
+                const elPaper = document.getElementById('kpiPaperUsage');
+                if (elPaper) elPaper.innerText = '0 Reams + 0 Sheets';
+                const elWfGross = document.getElementById('wfGross');
+                if (elWfGross) elWfGross.innerText = zeroCurrency;
+                const elUni = document.getElementById('wfUniShare');
+                if (elUni) elUni.innerText = '- ₱0.00';
+                const elProd = document.getElementById('wfProdCost');
+                if (elProd) elProd.innerText = '- ₱0.00';
+                const elTot = document.getElementById('wfTotalDeductions');
+                if (elTot) elTot.innerText = '- ₱0.00';
+                const elWfNet = document.getElementById('wfNetProfit');
+                if (elWfNet) elWfNet.innerText = zeroCurrency;
+            }
+
+            const kpiGrossSub = document.getElementById('kpiGrossSub');
+            if (kpiGrossSub) kpiGrossSub.innerText = 'Realized Cash Collections';
+            const kpiNetEl = document.getElementById('kpiNetProfit');
+            if (kpiNetEl) kpiNetEl.style.color = '#27ae60';
+            const cardNetEl = document.getElementById('cardNetProfit');
+            if (cardNetEl) cardNetEl.style.borderLeftColor = '#27ae60';
+            const kpiPaperDetails = document.getElementById('kpiPaperDetails');
+            if (kpiPaperDetails) kpiPaperDetails.innerHTML = '<span style="color: #94a3b8; font-style: italic;">No booklet usage recorded for this selection.</span>';
+
+            const wfGrossSub = document.getElementById('wfGrossSub');
+            if (wfGrossSub) wfGrossSub.innerText = 'Total Billed: ₱0.00 | Net Pending: ₱0.00';
+            const wfDeductionsEl = document.getElementById('wfDynamicDeductions');
+            if (wfDeductionsEl) {
+                wfDeductionsEl.innerHTML = `<tr><td colspan="3" style="padding: 12px 18px; color: #94a3b8; text-align: center; font-style: italic;">${escapeHtml(emptyMessage || 'No program allocations for this selection.')}</td></tr>`;
+            }
+
+            const rostersContainer = document.getElementById('deptRostersContainer');
+            if (rostersContainer) {
+                rostersContainer.innerHTML = `
+                    <div class="card" style="border-left-color: #94a3b8; text-align: center; padding: 40px 20px; margin-bottom: 24px;">
+                        <div style="font-size: 2.2rem; margin-bottom: 10px;">📋</div>
+                        <h3 style="color: #475569; margin: 0 0 8px 0; font-size: 1.2rem;">No Records Found</h3>
+                        <p style="color: #94a3b8; margin: 0; font-size: 0.95rem;">${escapeHtml(emptyMessage || 'No distribution or examination records found for the selected filter.')}</p>
+                    </div>
+                `;
+            }
+
+            document.querySelectorAll('.activePeriodText').forEach(el => {
+                el.innerText = emptyMessage || 'No Examination Period Selected';
+            });
+        }
+
         function onPeriodFilterChange(val) {
             selectedPeriod = val;
+            if (!val) {
+                updatePeriodStatusBadge();
+                renderEmptyDepartmentBreakdown("No examination period selected.");
+                return;
+            }
+            syncDeptYearInputsWithPeriod(val);
             const url = new URL(window.location.href);
             if (val && currentSystemActivePeriod && val !== currentSystemActivePeriod) {
                 url.searchParams.set('period', val);
@@ -417,6 +617,7 @@
                                 if (sel && (!selectedPeriod || selectedPeriod === activePeriod)) {
                                     sel.value = activePeriod;
                                 }
+                                syncDeptYearInputsWithPeriod(activePeriod);
                             }
                             updatePeriodStatusBadge();
                         }
@@ -439,8 +640,11 @@
                             });
                         }
                         renderBreakdown(data.computations_data, activePeriod, data.financials);
-                    } else if (!isBackground) {
-                        alert("Could not load computation data: " + (data.message || "Unknown error"));
+                    } else {
+                        renderEmptyDepartmentBreakdown("No records found for " + (period || "selected period"));
+                        if (!isBackground) {
+                            alert("Could not load computation data: " + (data.message || "Unknown error"));
+                        }
                     }
                 })
                 .catch(err => {
@@ -712,99 +916,155 @@
                                     <table>
                                         <thead>
                                             <tr>
-                                                <th>Faculty In-Charge</th>
+                                                <th>Instructor</th>
                                                 <th>Course Code / Subject</th>
                                                 <th>Class Section</th>
                                                 <th style="text-align: center;">Booklet Units Issued</th>
-                                                <th style="text-align: center;">Raw Material Consumption</th>
                                                 <th style="text-align: right;">Realized Payment (PHP)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                             `;
+                            // Group rows by instructor under this year level
+                            const teacherGroups = {};
                             rows.forEach(r => {
-                                const sUsed = (r.sheets_used !== undefined) ? r.sheets_used : (r.headcount * progSheets);
-                                const rowReams = Math.floor(sUsed / 500);
-                                const rowLoose = sUsed % 500;
-                                const rowReamsDisplay = rowReams > 0 ? `${rowReams} Ream(s) + ${rowLoose} sheets` : `0 Reams + ${rowLoose} sheets`;
-                                const paidVal = (r.amount_paid !== undefined) ? r.amount_paid : (r.amount || 0);
+                                const tName = (r.teacher && r.teacher.trim()) ? r.teacher.trim() : 'Unassigned Faculty';
+                                if (!teacherGroups[tName]) teacherGroups[tName] = [];
+                                teacherGroups[tName].push(r);
+                            });
 
-                                const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * progPrice);
-                                const initialPriorDebt = (r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
-                                const remainingPriorDebt = (r.remaining_prior_debt !== undefined) ? r.remaining_prior_debt : initialPriorDebt;
-                                const dueVal = (r.amount_due !== undefined) ? r.amount_due : (currBilled + initialPriorDebt);
-                                const currentPaid = (r.current_paid !== undefined) ? r.current_paid : 0;
-                                const priorPaid = (r.prior_paid !== undefined) ? r.prior_paid : 0;
-                                const currentPending = (r.current_pending !== undefined) ? r.current_pending : Math.max(0, currBilled - currentPaid);
-                                const totalPending = (r.pending_balance !== undefined) ? r.pending_balance : Math.max(0, dueVal - paidVal);
+                            // Sort instructors alphabetically
+                            const sortedTeachers = Object.keys(teacherGroups).sort((a, b) => a.localeCompare(b));
 
-                                // Line 1: Paid Transaction (Actual Realized Cash Received)
-                                const paidLineHtml = `<div style="color: ${paidVal > 0 ? '#166534' : '#64748b'}; font-size: 0.95rem; font-weight: 700;">₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+                            sortedTeachers.forEach(teacher => {
+                                const tRows = teacherGroups[teacher];
+                                // Sort sections within this instructor
+                                tRows.sort((a, b) => (a.section || '').localeCompare(b.section || '') || (a.subject || '').localeCompare(b.subject || ''));
+                                const teacherTotalHeadcount = tRows.reduce((acc, row) => acc + (row.headcount || 0), 0);
+                                const teacherTotalPaid = tRows.reduce((acc, row) => acc + ((row.amount_paid !== undefined) ? row.amount_paid : (row.amount || 0)), 0);
+                                const teacherTotalPending = tRows.reduce((acc, row) => acc + ((row.pending_balance !== undefined) ? row.pending_balance : Math.max(0, (row.amount_due || 0) - (row.amount_paid || 0))), 0);
 
-                                // Line 2: Pending Status Badge (strictly reflecting the current billed transaction)
-                                let pendingBadgeHtml = '';
-                                if (totalPending === 0 && dueVal > 0) {
-                                    // Both prior debt and current semester issuance are fully settled
-                                    pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Paid in Full</span>`;
-                                } else if (currBilled > 0) {
-                                    // Active booklet issuance occurred in the current semester
-                                    if (currentPending === 0) {
-                                        // Current period's issuance is satisfied, but prior debt remains
-                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">✅ Current Paid in Full</span>`;
+                                const hasSubtotalRow = tRows.length > 1;
+                                const instructorRowSpan = hasSubtotalRow ? (tRows.length + 1) : 1;
+
+                                tRows.forEach((r, rIdx) => {
+                                    const isFirstRow = (rIdx === 0);
+                                    const isLastSectionRow = (rIdx === tRows.length - 1);
+                                    const rowDivider = (!hasSubtotalRow && isLastSectionRow)
+                                        ? 'border-bottom: 2px solid #cbd5e1;'
+                                        : 'border-bottom: 1px dashed #e2e8f0;';
+
+                                    const paidVal = (r.amount_paid !== undefined) ? r.amount_paid : (r.amount || 0);
+
+                                    const currBilled = (r.current_billed !== undefined) ? r.current_billed : (r.headcount * progPrice);
+                                    const initialPriorDebt = (r.prior_unpaid && r.prior_unpaid > 0) ? r.prior_unpaid : 0;
+                                    const remainingPriorDebt = (r.remaining_prior_debt !== undefined) ? r.remaining_prior_debt : initialPriorDebt;
+                                    const dueVal = (r.amount_due !== undefined) ? r.amount_due : (currBilled + initialPriorDebt);
+                                    const currentPaid = (r.current_paid !== undefined) ? r.current_paid : 0;
+                                    const priorPaid = (r.prior_paid !== undefined) ? r.prior_paid : 0;
+                                    const currentPending = (r.current_pending !== undefined) ? r.current_pending : Math.max(0, currBilled - currentPaid);
+                                    const totalPending = (r.pending_balance !== undefined) ? r.pending_balance : Math.max(0, dueVal - paidVal);
+
+                                    // Line 1: Paid Transaction (Actual Realized Cash Received)
+                                    const paidLineHtml = `<div style="color: ${paidVal > 0 ? '#166534' : '#64748b'}; font-size: 0.95rem; font-weight: 700;">₱${paidVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>`;
+
+                                    // Line 2: Pending Status Badge (strictly reflecting the current billed transaction)
+                                    let pendingBadgeHtml = '';
+                                    if (totalPending === 0 && dueVal > 0) {
+                                        pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">Paid in Full</span>`;
+                                    } else if (currBilled > 0) {
+                                        if (currentPending === 0) {
+                                            pendingBadgeHtml = `<span style="color: #166534; font-size: 0.75rem; font-weight: 600;">Current Paid in Full</span>`;
+                                        } else {
+                                            const badgeColor = currentPaid > 0 ? '#d97706' : '#dc2626';
+                                            pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">₱${currentPending.toFixed(2)} Pending</span>`;
+                                        }
                                     } else {
-                                        const badgeColor = currentPaid > 0 ? '#d97706' : '#dc2626';
-                                        pendingBadgeHtml = `<span style="color: ${badgeColor}; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${currentPending.toFixed(2)} Pending</span>`;
+                                        if (remainingPriorDebt > 0) {
+                                            pendingBadgeHtml = `<span style="color: #d97706; font-size: 0.75rem; font-weight: 600;">₱${remainingPriorDebt.toFixed(2)} Pending</span>`;
+                                        } else {
+                                            pendingBadgeHtml = `<span style="color: #64748b; font-size: 0.75rem; font-weight: 500;">No Balance Due</span>`;
+                                        }
                                     }
-                                } else {
-                                    // currBilled === 0: No booklet issuance this period; only prior debt exists
+
+                                    // Line 3: Prior Debt (reflecting remaining prior debt after prior payments)
+                                    let priorDebtLineHtml = '';
                                     if (remainingPriorDebt > 0) {
-                                        pendingBadgeHtml = `<span style="color: #d97706; font-size: 0.75rem; font-weight: 600;">⚠️ ₱${remainingPriorDebt.toFixed(2)} Pending</span>`;
-                                    } else {
-                                        pendingBadgeHtml = `<span style="color: #64748b; font-size: 0.75rem; font-weight: 500;">No Balance Due</span>`;
+                                        priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${remainingPriorDebt.toFixed(2)} prior debt</div>`;
                                     }
-                                }
 
-                                // Line 3: Prior Debt (reflecting remaining prior debt after prior payments)
-                                let priorDebtLineHtml = '';
-                                if (remainingPriorDebt > 0) {
-                                    priorDebtLineHtml = `<div style="font-size: 0.75rem; color: #b45309; margin-top: 2px; font-weight: 600;">₱${remainingPriorDebt.toFixed(2)} prior debt</div>`;
-                                }
-
-                                // Line 4 (or Line 3 if no prior debt): Billed / Due Amount / Total
-                                let billedLineHtml = '';
-                                if (dueVal > 0) {
-                                    if (totalPending === 0) {
-                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total: ₱${dueVal.toFixed(2)})</div>`;
-                                    } else if (initialPriorDebt > 0) {
-                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total Due: ₱${dueVal.toFixed(2)})</div>`;
-                                    } else {
-                                        billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
+                                    // Line 4 (or Line 3 if no prior debt): Billed / Due Amount / Total
+                                    let billedLineHtml = '';
+                                    if (dueVal > 0) {
+                                        if (totalPending === 0) {
+                                            billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total: ₱${dueVal.toFixed(2)})</div>`;
+                                        } else if (initialPriorDebt > 0) {
+                                            billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Total Due: ₱${dueVal.toFixed(2)})</div>`;
+                                        } else {
+                                            billedLineHtml = `<div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">(Billed: ₱${dueVal.toFixed(2)})</div>`;
+                                        }
                                     }
+
+                                    const bookletUnitsDisplay = (r.headcount > 0)
+                                        ? `<div style="font-weight: bold; color: #0f172a;">${r.headcount} pcs</div>`
+                                        : `<div style="font-weight: 600; color: #64748b;">0 pcs</div><div style="font-size: 0.72rem; color: #94a3b8; font-weight: normal;">(No issuance this period)</div>`;
+
+                                    rostersHtml += `
+                                    <tr style="${rowDivider}">
+                                    `;
+
+                                    if (isFirstRow) {
+                                        rostersHtml += `
+                                            <td rowspan="${instructorRowSpan}" style="vertical-align: top; font-weight: 600; color: #0f172a; background: #f8fafc; border-right: 1px solid #e2e8f0; border-bottom: 2px solid #cbd5e1; padding: 12px 14px;">
+                                                <div style="font-weight: 700; color: #0f172a; font-size: 0.95rem;">${escapeHtml(teacher)}</div>
+                                                ${hasSubtotalRow ? `
+                                                    <div style="margin-top: 6px; display: flex; flex-direction: column; gap: 3px;">
+                                                        <span style="display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; width: fit-content; border: 1px solid #bae6fd;">
+                                                            ${tRows.length} Sections
+                                                        </span>
+                                                        <span style="font-size: 0.75rem; color: #64748b; font-weight: 600;">
+                                                            Units: ${teacherTotalHeadcount.toLocaleString()} pcs
+                                                        </span>
+                                                        <span style="font-size: 0.75rem; color: #166534; font-weight: 600;">
+                                                            Paid: ₱${teacherTotalPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                                        </span>
+                                                    </div>
+                                                ` : ''}
+                                            </td>
+                                        `;
+                                    }
+
+                                    rostersHtml += `
+                                        <td>${escapeHtml(r.subject)}</td>
+                                        <td><strong style="color: #2563eb;">${escapeHtml(r.section)}</strong></td>
+                                        <td style="text-align: center;">${bookletUnitsDisplay}</td>
+                                        <td style="text-align: right; font-weight: 600;">
+                                            ${paidLineHtml}
+                                            ${pendingBadgeHtml ? `<div style="margin-top: 2px;">${pendingBadgeHtml}</div>` : ''}
+                                            ${priorDebtLineHtml}
+                                            ${billedLineHtml}
+                                        </td>
+                                    </tr>
+                                    `;
+                                });
+
+                                // Append Instructor Total Row when instructor has multiple sections
+                                if (hasSubtotalRow) {
+                                    rostersHtml += `
+                                    <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                                        <td colspan="2" style="text-align: right; font-weight: 700; font-size: 0.8rem; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; border-top: 1px solid #e2e8f0;">
+                                            Instructor Total:
+                                        </td>
+                                        <td style="text-align: center; font-weight: 800; color: #0284c7; font-size: 0.95rem; padding: 10px 14px; border-top: 1px solid #e2e8f0;">
+                                            ${teacherTotalHeadcount.toLocaleString()} pcs
+                                        </td>
+                                        <td style="text-align: right; font-weight: 800; color: #166534; font-size: 0.95rem; padding: 10px 14px; border-top: 1px solid #e2e8f0;">
+                                            <div>₱${teacherTotalPaid.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                                            ${teacherTotalPending > 0 ? `<div style="font-size: 0.72rem; color: #dc2626; font-weight: 600; margin-top: 2px;">(₱${teacherTotalPending.toFixed(2)} Pending)</div>` : ''}
+                                        </td>
+                                    </tr>
+                                    `;
                                 }
-
-                                const bookletUnitsDisplay = (r.headcount > 0)
-                                    ? `<div style="font-weight: bold; color: #0f172a;">${r.headcount} pcs</div>`
-                                    : `<div style="font-weight: 600; color: #64748b;">0 pcs</div><div style="font-size: 0.72rem; color: #94a3b8; font-weight: normal;">(No issuance this period)</div>`;
-
-                                const materialUsageDisplay = (r.headcount > 0)
-                                    ? `<div>${rowReamsDisplay}</div><div style="font-size: 0.75rem; color: #64748b; font-weight: normal;">(${sUsed.toLocaleString()} sheets)</div>`
-                                    : `<div style="color: #94a3b8; font-size: 0.85rem;">—</div>`;
-
-                                rostersHtml += `
-                                <tr>
-                                    <td style="font-weight: 600; color: #0f172a;">${escapeHtml(r.teacher)}</td>
-                                    <td>${escapeHtml(r.subject)}</td>
-                                    <td><strong style="color: #2563eb;">${escapeHtml(r.section)}</strong></td>
-                                    <td style="text-align: center;">${bookletUnitsDisplay}</td>
-                                    <td style="text-align: center; color: #2c3e50; font-weight: 600;">${materialUsageDisplay}</td>
-                                    <td style="text-align: right; font-weight: 600;">
-                                        ${paidLineHtml}
-                                        ${pendingBadgeHtml ? `<div style="margin-top: 2px;">${pendingBadgeHtml}</div>` : ''}
-                                        ${priorDebtLineHtml}
-                                        ${billedLineHtml}
-                                    </td>
-                                </tr>
-                                `;
                             });
                             rostersHtml += `
                                         </tbody>

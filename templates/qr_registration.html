@@ -281,6 +281,12 @@
         .dialog-btn:active {
             transform: translateY(0);
         }
+
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -454,6 +460,20 @@
                     <option value="EXISTS">🟢 Available on Disk</option>
                     <option value="MISSING">🔴 Missing from Disk</option>
                 </select>
+                <select id="packPageSize" onchange="changePackPageSize(this.value)" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; background: white; cursor: pointer;" title="Packs per page">
+                    <option value="10" selected>10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
+                </select>
+            </div>
+
+            <!-- TOP PACKS PAGINATION CONTROLS -->
+            <div id="packTopPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div id="packTopPaginationSummary" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                    Showing 0 of 0 packs
+                </div>
+                <div id="packTopPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
             </div>
 
             <!-- Packs Table -->
@@ -476,6 +496,14 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- BOTTOM PACKS PAGINATION CONTROLS -->
+            <div id="packBottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px; padding: 10px 4px 4px 4px; border-top: 1px solid #e2e8f0;">
+                <div id="packBottomPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 packs
+                </div>
+                <div id="packBottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
         </div>
         </div> <!-- /max-width 1280px wrapper -->
     </div> <!-- /main-content -->
@@ -487,14 +515,23 @@
         if (!activeUser) {
             window.location.href = '/login';
         } else {
-            document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-            document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+            if (window.updateSidebarUser) {
+                window.updateSidebarUser(activeUser);
+            } else {
+                const uEl = document.getElementById('loggedInUser');
+                if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+                const rEl = document.getElementById('loggedInRole');
+                if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+            }
             
             if (activeUser.role !== 'Admin') {
                 const adminLinks = document.querySelectorAll('.admin-only');
                 adminLinks.forEach(link => link.style.display = 'none');
                 const navUsers = document.getElementById('navManageUsers');
-                if (navUsers) navUsers.innerHTML = '👤 My Account';
+                if (navUsers) {
+                    navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                    navUsers.title = 'My Account';
+                }
             }
         }
 
@@ -1526,6 +1563,14 @@
         // PHYSICAL STORAGE LOCATION & PACK RECOVERY
         // ==========================================
         let _allPacks = [];
+        let packCurrentPage = 1;
+        let packPageSize = 10;
+        let currentFilteredPacks = [];
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
 
         async function openStorageModal() {
             const modal = document.getElementById('storageLocationModal');
@@ -1669,9 +1714,13 @@
             }
         }
 
-        function filterPacksTable() {
+        function filterPacksTable(keepPage = false) {
             const tbody = document.getElementById('packHistoryTableBody');
             if (!tbody) return;
+
+            if (!keepPage) {
+                packCurrentPage = 1;
+            }
 
             const search = (document.getElementById('packSearchInput')?.value || '').toLowerCase().trim();
             const course = document.getElementById('packCourseFilter')?.value || 'ALL';
@@ -1693,49 +1742,75 @@
                 return true;
             });
 
-            if (filtered.length === 0) {
+            currentFilteredPacks = filtered;
+            const total = filtered.length;
+
+            const totalBadge = document.getElementById('packHistoryTotalBadge');
+            if (totalBadge) {
+                totalBadge.innerText = `${total} Pack${total === 1 ? '' : 's'}`;
+            }
+
+            const totalPages = (packPageSize >= 999999) ? 1 : (Math.ceil(total / packPageSize) || 1);
+            if (packCurrentPage > totalPages) packCurrentPage = totalPages;
+            if (packCurrentPage < 1) packCurrentPage = 1;
+
+            const startIdx = (packPageSize >= 999999) ? 0 : (packCurrentPage - 1) * packPageSize;
+            const endIdx = (packPageSize >= 999999) ? total : Math.min(startIdx + packPageSize, total);
+            const pagedPacks = (packPageSize >= 999999) ? filtered : filtered.slice(startIdx, endIdx);
+
+            const summaryStr = (packPageSize >= 999999)
+                ? `Showing all ${total} packs`
+                : (total === 0 ? 'Showing 0 of 0 packs' : `Showing ${startIdx + 1}–${endIdx} of ${total} packs`);
+
+            const topSummary = document.getElementById('packTopPaginationSummary');
+            if (topSummary) topSummary.innerText = summaryStr;
+            const botSummary = document.getElementById('packBottomPaginationSummary');
+            if (botSummary) botSummary.innerText = summaryStr;
+
+            if (total === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 25px;">No activated packs found matching filter.</td></tr>`;
+                renderPackPagination(0);
                 return;
             }
 
-            tbody.innerHTML = filtered.map(p => {
+            tbody.innerHTML = pagedPacks.map(p => {
                 const dateStr = p.created_at ? new Date(p.created_at).toLocaleString() : '--';
                 const fileBadge = p.file_exists
                     ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600;">🟢 On Disk</span>`
                     : `<span style="display: inline-flex; align-items: center; gap: 4px; color: #991b1b; background: #fee2e2; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600;">🔴 Missing</span>`;
 
                 const batchesText = (p.batches_included && p.batches_included.length > 0)
-                    ? `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Batches: ${p.batches_included.join(', ')}</div>`
+                    ? `<div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Batches: ${escapeHtml(p.batches_included.join(', '))}</div>`
                     : '';
 
                 return `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
                         <td style="padding: 10px 12px;">
-                            <div style="font-weight: 700; color: #166534; font-family: monospace;">${p.pack_id}</div>
-                            <div style="font-size: 0.78rem; color: #64748b;">${p.file_filename || ''}</div>
+                            <div style="font-weight: 700; color: #166534; font-family: monospace;">${escapeHtml(p.pack_id)}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">${escapeHtml(p.file_filename || '')}</div>
                         </td>
                         <td style="padding: 10px 12px;">
-                            <div style="font-weight: 600; color: #2563eb;">${p.department || 'N/A'}</div>
-                            <div style="font-size: 0.78rem; color: #64748b;">${p.template_name || 'Template'}</div>
+                            <div style="font-weight: 600; color: #2563eb;">${escapeHtml(p.department || 'N/A')}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">${escapeHtml(p.template_name || 'Template')}</div>
                         </td>
                         <td style="padding: 10px 12px;">
                             <div style="font-weight: 600; color: #1e293b;">${(p.booklet_count || 0).toLocaleString()} Booklets</div>
-                            <div style="font-family: monospace; font-size: 0.78rem; color: #475569;">${p.start_control_num || '--'} ➔ ${p.end_control_num || '--'}</div>
-                            <div style="font-family: monospace; font-size: 0.75rem; color: #2563eb;">${p.start_srn || '--'} ➔ ${p.end_srn || '--'}</div>
+                            <div style="font-family: monospace; font-size: 0.78rem; color: #475569;">${escapeHtml(p.start_control_num || '--')} ➔ ${escapeHtml(p.end_control_num || '--')}</div>
+                            <div style="font-family: monospace; font-size: 0.75rem; color: #2563eb;">${escapeHtml(p.start_srn || '--')} ➔ ${escapeHtml(p.end_srn || '--')}</div>
                             ${batchesText}
                         </td>
                         <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
-                            ${dateStr}
+                            ${escapeHtml(dateStr)}
                         </td>
                         <td style="padding: 10px 12px;">
                             ${fileBadge}
                         </td>
                         <td style="padding: 10px 12px; text-align: right;">
                             <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                                <a href="${p.download_url}" target="_blank" download="${p.file_filename || p.pack_id + '_LABEL.png'}" style="text-decoration: none; background: #2563eb; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                <a href="${escapeHtml(p.download_url)}" target="_blank" download="${escapeHtml(p.file_filename || p.pack_id + '_LABEL.png')}" style="text-decoration: none; background: #2563eb; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
                                     📥 Download
                                 </a>
-                                <button type="button" onclick="regeneratePackQr('${p.pack_id}')" title="Reconstruct physical QR sticker file from database" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                <button type="button" onclick="regeneratePackQr('${escapeHtml(p.pack_id)}')" title="Reconstruct physical QR sticker file from database" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                                     ⚡ Regenerate
                                 </button>
                             </div>
@@ -1743,6 +1818,57 @@
                     </tr>
                 `;
             }).join('');
+
+            renderPackPagination(totalPages);
+        }
+
+        function renderPackPagination(totalPages) {
+            const topPills = document.getElementById('packTopPaginationPills');
+            const botBtns = document.getElementById('packBottomPaginationButtons');
+
+            if (totalPages <= 1) {
+                if (topPills) topPills.innerHTML = '';
+                if (botBtns) botBtns.innerHTML = '';
+                return;
+            }
+
+            if (topPills) {
+                topPills.innerHTML = `
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPackPage(${packCurrentPage - 1})" ${packCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                    <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px; color: #475569;">Page ${packCurrentPage} of ${totalPages}</span>
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPackPage(${packCurrentPage + 1})" ${packCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+                `;
+            }
+
+            if (botBtns) {
+                let html = `<button type="button" class="pagination-btn" onclick="goToPackPage(1)" ${packCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToPackPage(${packCurrentPage - 1})" ${packCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+                const maxP = 5;
+                let startP = Math.max(1, packCurrentPage - 2);
+                let endP = Math.min(totalPages, startP + maxP - 1);
+                if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+                for (let p = startP; p <= endP; p++) {
+                    const isActive = p === packCurrentPage ? 'active' : '';
+                    html += `<button type="button" class="pagination-btn ${isActive}" onclick="goToPackPage(${p})">${p}</button>`;
+                }
+
+                html += `<button type="button" class="pagination-btn" onclick="goToPackPage(${packCurrentPage + 1})" ${packCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToPackPage(${totalPages})" ${packCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+                botBtns.innerHTML = html;
+            }
+        }
+
+        function goToPackPage(p) {
+            packCurrentPage = p;
+            filterPacksTable(true);
+        }
+
+        function changePackPageSize(val) {
+            packPageSize = (val === 'all') ? 999999 : (parseInt(val, 10) || 10);
+            packCurrentPage = 1;
+            filterPacksTable(true);
         }
 
         function viewPackLabelInPreview(packId) {

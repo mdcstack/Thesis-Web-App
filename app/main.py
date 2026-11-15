@@ -418,6 +418,24 @@ def ensure_schema_migrations():
             models.ActivityLog.__table__.create(bind=engine, checkfirst=True)
             tables.append('activity_logs')
 
+        # 0.2 material_losses table creation
+        if 'material_losses' not in tables:
+            models.MaterialLoss.__table__.create(bind=engine, checkfirst=True)
+            tables.append('material_losses')
+
+        # 0.21 Migrate any fallback period material losses to the system active period
+        try:
+            db_ml_mig = SessionLocal()
+            settings_active = get_active_period(db_ml_mig)
+            if settings_active:
+                db_ml_mig.query(models.MaterialLoss).filter(
+                    models.MaterialLoss.academic_period == '1st Sem 2026-2027'
+                ).update({"academic_period": settings_active}, synchronize_session=False)
+                db_ml_mig.commit()
+            db_ml_mig.close()
+        except Exception as e:
+            print(f"[Self-Healing] MaterialLoss migration note: {e}")
+
         db_act_seed = SessionLocal()
         try:
             if db_act_seed.query(models.ActivityLog).count() == 0:
@@ -836,6 +854,15 @@ async def startup_event():
         if repaired > 0:
             init_db.commit()
             print(f"[Self-Healing] Repaired {repaired} enrollment department mismatch(es) on server startup.")
+        
+        # Self-healing synchronization of any unrecorded voided defective returns into material_losses
+        try:
+            sync_res = sync_defective_returns_to_spoilage(db=init_db)
+            if sync_res.get("synced_count", 0) > 0:
+                print(f"[Self-Healing] Synchronized {sync_res['synced_count']} defective return(s) into Material Loss ledger.")
+        except Exception as sync_err:
+            print(f"[Self-Healing] Material Loss return sync note: {sync_err}")
+            
         init_db.close()
     except Exception as e:
         print(f"[Self-Healing] Startup audit note: {e}")
@@ -1333,6 +1360,16 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
         suffix = b.qr_code_id.replace(batch_prefix, "")
         if len(suffix) == 6 and suffix.isdigit() and int(suffix) < 10000:
             max_batch_seq = max(max_batch_seq, int(suffix))
+
+    # Also inspect static/front_page_pdfs to avoid colliding with any orphaned or locked files on disk
+    import glob
+    for filepath in glob.glob(f"static/front_page_pdfs/{batch_prefix}*.pdf"):
+        filename = os.path.basename(filepath)
+        raw_name = os.path.splitext(filename)[0]
+        suffix = raw_name.replace(batch_prefix, "")
+        if len(suffix) == 6 and suffix.isdigit() and int(suffix) < 10000:
+            max_batch_seq = max(max_batch_seq, int(suffix))
+
     next_batch_num = max_batch_seq + 1
     batch_id = f"{batch_prefix}{next_batch_num:06d}"
     
@@ -1395,20 +1432,37 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     warning_page_number = None
     recommended_print_range = f"2-{total_yield + 1}"
 
-    pdf_path = generate_batch_pdf(
-        start_num,
-        total_yield,
-        batch_id,
-        prefix,
-        start_srn_num=start_srn_num,
-        department=department,
-        slot=template_slot,
-        db=db,
-        target_needed=target_needed,
-        academic_period=current_period,
-        buffer_pct=buffer_pct,
-        ream_count=ream_count
-    )
+    try:
+        pdf_path = generate_batch_pdf(
+            start_num,
+            total_yield,
+            batch_id,
+            prefix,
+            start_srn_num=start_srn_num,
+            department=department,
+            slot=template_slot,
+            db=db,
+            target_needed=target_needed,
+            academic_period=current_period,
+            buffer_pct=buffer_pct,
+            ream_count=ream_count
+        )
+    except PermissionError as pe:
+        db.query(models.Booklet).filter_by(master_batch_id=new_batch.id).delete()
+        db.delete(new_batch)
+        db.commit()
+        raise HTTPException(
+            status_code=409,
+            detail=f"File Lock Error: {str(pe)}"
+        )
+    except Exception as e:
+        db.query(models.Booklet).filter_by(master_batch_id=new_batch.id).delete()
+        db.delete(new_batch)
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch PDF Generation Error: {str(e)}"
+        )
     
     batch_msg = f"{ream_count} Reams successfully converted for {department} using {template_config.template_name or f'Template {template_slot}'}." if ream_count > 0 else f"{total_yield} Booklets successfully converted from residual excess reserve for {department} using {template_config.template_name or f'Template {template_slot}'}."
     log_system_activity(
@@ -2692,7 +2746,7 @@ def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_
         "user": {
             "id": user.id,
             "username": user.username,
-            "full_name": user.full_name or user.username,
+            "full_name": (user.full_name.strip() if user.full_name and user.full_name.strip() else ("System Administrator" if user.username.lower() == "admin" else user.username)),
             "role": user.role,
             "department": user.department,
             "session_token": new_token,
@@ -2735,7 +2789,7 @@ def verify_session(req: schemas.VerifySessionRequest, response: Response, db: Se
             "status": "valid",
             "id": user.id,
             "username": user.username,
-            "full_name": user.full_name or user.username,
+            "full_name": (user.full_name.strip() if user.full_name and user.full_name.strip() else ("System Administrator" if user.username.lower() == "admin" else user.username)),
             "role": user.role,
             "department": user.department,
             "updated_by": getattr(user, "updated_by", None) or "Administrator"
@@ -4682,9 +4736,57 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                 b.status = "loose_stock"
                 b.date_distributed = None
                 b.distributed_by = None
+
+        enr_dept = resolve_enrollment_department(enrollment, db=db) if enrollment else "GENERAL"
+
+        # Record defective / misprinted returned booklets as unrecoverable Material Loss (Net Loss)
+        if is_defective and booklets:
+            settings_rec = db.query(models.SystemSettings).first()
+            period_cfg = db.query(models.PeriodConfiguration).filter(
+                models.PeriodConfiguration.academic_period == b_period
+            ).first() if b_period else None
+
+            ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings_rec.ream_price if settings_rec else 250.0))
+            unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
+            staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings_rec.staples_box_price if settings_rec else 50.0))
+            staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings_rec.staples_per_box if settings_rec else 5000))
+            unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
+
+            prog = db.query(models.AcademicProgram).filter(models.AcademicProgram.code == enr_dept).first() if enr_dept != "GENERAL" else None
+            sheets_per_b = int(prog.sheets_per_booklet) if prog and prog.sheets_per_booklet else (
+                int(period_cfg.sheets_per_booklet) if period_cfg and period_cfg.sheets_per_booklet else (
+                    int(settings_rec.sheets_per_booklet) if settings_rec and settings_rec.sheets_per_booklet else 6
+                )
+            )
+            staples_per_b = int(period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else (settings_rec.staples_per_booklet if settings_rec else 2))
+            total_loss_cost = round((sheets_per_b * unit_paper_cost) + (staples_per_b * unit_staple_cost), 2)
+            t_name = (enrollment.teacher_name or "Faculty").strip() if enrollment else "Faculty"
+
+            for b in booklets:
+                ctrl = b.control_num or b.sort_record_num or str(b.id)
+                existing_loss = db.query(models.MaterialLoss).filter(
+                    models.MaterialLoss.booklet_control_num == ctrl,
+                    models.MaterialLoss.academic_period == b_period
+                ).first()
+                if not existing_loss:
+                    loss_entry = models.MaterialLoss(
+                        academic_period=b_period,
+                        department=enr_dept,
+                        loss_type="whole_booklet",
+                        quantity=1,
+                        sheets_wasted=sheets_per_b,
+                        staples_wasted=staples_per_b,
+                        unit_paper_cost=unit_paper_cost,
+                        unit_staple_cost=unit_staple_cost,
+                        total_loss_cost=total_loss_cost,
+                        reason=f"Misprint / Defect: Returned by {t_name}",
+                        booklet_control_num=ctrl,
+                        source="faculty_return",
+                        recorded_by=req.clerk_name or "Staff"
+                    )
+                    db.add(loss_entry)
             
         db.commit()
-        enr_dept = resolve_enrollment_department(enrollment, db=db) if enrollment else ""
         notify_lan_mutation("RETURN_PROCESSED", {
             "enrollment_id": req.enrollment_id,
             "reason": req.reason,
@@ -4696,6 +4798,8 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
             "section": enrollment.section if enrollment else "",
             "department": enr_dept
         }, db=db)
+        if is_defective:
+            notify_lan_mutation("MATERIAL_SPOILAGE_MUTATED", {"period": b_period, "department": enr_dept}, db=db)
 
         sec_label = enrollment.section if enrollment else f"Class #{req.enrollment_id}"
         subj_label = enrollment.subject if enrollment else ""
@@ -6764,7 +6868,16 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         whole_boxes_to_buy = math.ceil(net_staples_needed / staples_per_box) if net_staples_needed > 0 and staples_per_box > 0 else 0
         staples_cost = whole_boxes_to_buy * staples_box_price
         production_cost = paper_cost + staples_cost
-        net_income = combined_subtotal - igp_share - production_cost
+
+        # Material Spoilage / Net Loss calculation for the active period
+        period_material_losses = db.query(models.MaterialLoss).filter(
+            models.MaterialLoss.academic_period == active_period
+        ).all()
+        total_net_loss_cost = round(sum(m.total_loss_cost for m in period_material_losses), 2)
+        total_spoilage_sheets = sum(m.sheets_wasted for m in period_material_losses)
+        total_spoilage_booklets = sum(m.quantity for m in period_material_losses if m.loss_type == "whole_booklet")
+
+        net_income = combined_subtotal - igp_share - production_cost - total_net_loss_cost
 
         procured_staples = whole_boxes_to_buy * staples_per_box
         residual_excess_staples = max(0, (procured_staples + prev_excess_staples) - staples_needed)
@@ -6816,7 +6929,49 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         prior_rollover = float(prev_summary.get("total_carryover_available", 0.0)) if has_prior_period else 0.0
         institutional_subsidy = max(0.0, round(beginning_balance - prior_rollover, 2)) if has_prior_period and beginning_balance > prior_rollover else 0.0
 
+        # Expected Income Calculation: Projecting Net Operating Surplus (DCS) assuming:
+        # 1. 100% of all class section transactions across instructors are distributed & fully paid
+        # 2. Carried-over accounts receivable (prior semester debts) are 100% settled
+        # 3. Deductions per course (1% academic program allocation) are deducted
+        # 4. Campus IGP Remittance (20%) is deducted
+        # 5. Direct materials (paper & staples) required to suffice the total semester demand are deducted
+        expected_dept_billed = {code: 0.0 for code in prog_codes}
+        for enr in enrollments:
+            dept = resolve_enrollment_department(enr, db)
+            enr_price = course_price_map.get(dept, float(booklet_price))
+            enr_dist_bks = sum(1 for b in issued_booklets if b.enrollment_id == enr.id)
+            enr_effective_units = max(enr.student_headcount or 0, enr_dist_bks)
+            expected_dept_billed[dept] = round(expected_dept_billed.get(dept, 0.0) + (enr_effective_units * enr_price), 2)
+
+        expected_dept_gross = {
+            code: round(expected_dept_billed.get(code, 0.0) + prior_ar_by_dept.get(code, 0.0), 2)
+            for code in prog_codes
+        }
+        expected_gross = round(sum(expected_dept_gross.values()), 2)
+        expected_dept_shares = {code: round(expected_dept_gross[code] * 0.01, 2) for code in prog_codes}
+        total_expected_dept_shares = round(sum(expected_dept_shares.values()), 2)
+        expected_subtotal = round(expected_gross - total_expected_dept_shares, 2)
+        expected_igp_share = round(expected_subtotal * 0.20, 2)
+
+        # Direct materials required to suffice total semester demand
+        planned_reams_sum = course_metrics.get("sum_course_planned_reams", 0) or 0
+        effective_demand_reams = max(effective_reams, planned_reams_sum)
+        expected_paper_cost = round(effective_demand_reams * ream_price, 2)
+        expected_materials_cost = round(expected_paper_cost + staples_cost, 2)
+
+        expected_net_income = round(expected_subtotal - expected_igp_share - expected_materials_cost, 2)
+
         financials = {
+            "expected_gross": expected_gross,
+            "expected_dept_gross": expected_dept_gross,
+            "expected_dept_billed": expected_dept_billed,
+            "expected_dept_shares": expected_dept_shares,
+            "total_expected_dept_shares": total_expected_dept_shares,
+            "expected_subtotal": expected_subtotal,
+            "expected_igp_share": expected_igp_share,
+            "expected_paper_cost": expected_paper_cost,
+            "expected_materials_cost": expected_materials_cost,
+            "expected_net_income": expected_net_income,
             "beginning_balance": beginning_balance,
             "has_prior_period": has_prior_period,
             "prior_rollover": prior_rollover,
@@ -6872,6 +7027,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "it_share": it_share,
             "combined_subtotal": combined_subtotal,
             "igp_share": igp_share,
+            "net_loss": total_net_loss_cost,
+            "total_spoilage_sheets": total_spoilage_sheets,
+            "total_spoilage_booklets": total_spoilage_booklets,
             "net_income": net_income,
             "booklet_price": booklet_price,
             "course_prices": course_price_map,
@@ -6962,6 +7120,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 "trend": {"labels": trend_labels, "data": trend_data}
             },
             "year_level_sales": year_level_sales,
+            "programs": programs_meta,
             "computations_data": {
                 "programs": programs_meta,
                 "records": comp_records,
@@ -8651,8 +8810,11 @@ def get_activity_logs(
     total_count = query.count()
 
     # Pagination calculation
-    actual_limit = limit if (limit is not None and limit > 0) else page_size
-    actual_limit = max(10, min(actual_limit, 200))
+    if page_size >= 999999 or page_size == -1 or limit == -1:
+        actual_limit = total_count if total_count > 0 else 1000
+    else:
+        actual_limit = limit if (limit is not None and limit > 0) else page_size
+        actual_limit = max(10, min(actual_limit, 200))
     safe_page = max(1, page)
     total_pages = max(1, math.ceil(total_count / actual_limit))
     if safe_page > total_pages and total_count > 0:
@@ -8838,6 +9000,321 @@ def expenditure_report_page(request: Request, db: Session = Depends(get_db)):
     if guard:
         return guard
     return templates.TemplateResponse("expenditure_report.html", {"request": request})
+
+@app.get("/material-spoilage", response_class=HTMLResponse)
+def material_spoilage_page(request: Request, db: Session = Depends(get_db)):
+    guard = verify_page_role_access(request, ["Admin", "Staff"], db)
+    if guard:
+        return guard
+    return templates.TemplateResponse("material_spoilage.html", {"request": request})
+
+@app.get("/material-loss", response_class=HTMLResponse)
+def material_loss_redirect():
+    return RedirectResponse(url="/material-spoilage", status_code=302)
+
+class MaterialLossCreateRequest(BaseModel):
+    academic_period: Optional[str] = None
+    department: str = "GENERAL"
+    loss_type: str = "paper_sheet"  # "paper_sheet" or "whole_booklet"
+    quantity: int = 1
+    reason: str
+    booklet_control_num: Optional[str] = None
+    notes: Optional[str] = None
+    source: Optional[str] = "manual"
+    recorded_by: Optional[str] = "Staff"
+
+@app.get("/api/material-loss")
+def get_material_losses(
+    period: Optional[str] = None,
+    department: Optional[str] = "ALL",
+    db: Session = Depends(get_db)
+):
+    try:
+        active_period = period or get_active_period(db)
+        query = db.query(models.MaterialLoss)
+        if active_period:
+            query = query.filter(models.MaterialLoss.academic_period == active_period)
+        
+        dept_clean = (department or "ALL").strip().upper()
+        if dept_clean not in ["ALL", "ADMIN"]:
+            query = query.filter(models.MaterialLoss.department == dept_clean)
+            
+        records = query.order_by(models.MaterialLoss.recorded_at.desc(), models.MaterialLoss.id.desc()).all()
+        
+        total_sheets = sum(r.sheets_wasted for r in records)
+        total_booklets = sum(r.quantity for r in records if r.loss_type == "whole_booklet")
+        total_cost = round(sum(r.total_loss_cost for r in records), 2)
+        total_reams_equiv = round(total_sheets / 500.0, 2)
+        
+        # Calculate total production materials consumed in active_period to determine spoilage rate %
+        period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == active_period).all()
+        total_prod_sheets = sum(b.total_yield * (b.sheets_per_booklet or 6) for b in period_batches)
+        spoilage_rate_pct = round((total_sheets / total_prod_sheets * 100), 2) if total_prod_sheets > 0 else 0.0
+
+        data = []
+        for r in records:
+            data.append({
+                "id": r.id,
+                "academic_period": r.academic_period,
+                "department": r.department,
+                "loss_type": r.loss_type,
+                "quantity": r.quantity,
+                "sheets_wasted": r.sheets_wasted,
+                "staples_wasted": r.staples_wasted,
+                "unit_paper_cost": r.unit_paper_cost,
+                "unit_staple_cost": r.unit_staple_cost,
+                "total_loss_cost": r.total_loss_cost,
+                "reason": r.reason,
+                "booklet_control_num": r.booklet_control_num,
+                "source": r.source,
+                "recorded_by": r.recorded_by,
+                "recorded_at": r.recorded_at.strftime("%Y-%m-%d %H:%M:%S") if r.recorded_at else "",
+                "notes": r.notes or ""
+            })
+            
+        return {
+            "status": "success",
+            "period": active_period,
+            "department": dept_clean,
+            "total_sheets": total_sheets,
+            "total_booklets": total_booklets,
+            "total_cost": total_cost,
+            "reams_equivalent": total_reams_equiv,
+            "spoilage_rate_pct": spoilage_rate_pct,
+            "count": len(data),
+            "records": data
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/material-loss")
+def create_material_loss(
+    req: MaterialLossCreateRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        user = get_portal_authenticated_user(request, db)
+        username = user.username if user else (req.recorded_by or "Staff")
+        
+        active_period = (req.academic_period or "").strip()
+        if not active_period:
+            active_period = get_active_period(db)
+        else:
+            cfg_check = db.query(models.PeriodConfiguration).filter(
+                models.PeriodConfiguration.academic_period == active_period
+            ).first()
+            if not cfg_check:
+                active_period = get_active_period(db)
+        settings = db.query(models.SystemSettings).first()
+        period_cfg = db.query(models.PeriodConfiguration).filter(
+            models.PeriodConfiguration.academic_period == active_period
+        ).first() if active_period else None
+
+        ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings.ream_price if settings else 250.0))
+        unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
+        
+        staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings.staples_box_price if settings else 50.0))
+        staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings.staples_per_box if settings else 5000))
+        unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
+
+        dept_clean = (req.department or "GENERAL").strip().upper()
+        prog = db.query(models.AcademicProgram).filter(models.AcademicProgram.code == dept_clean).first() if dept_clean != "GENERAL" else None
+        
+        if prog and prog.sheets_per_booklet:
+            sheets_per_b = int(prog.sheets_per_booklet)
+        elif period_cfg and period_cfg.sheets_per_booklet:
+            sheets_per_b = int(period_cfg.sheets_per_booklet)
+        else:
+            sheets_per_b = int(settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6)
+
+        staples_per_b = int(period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else (settings.staples_per_booklet if settings else 2))
+
+        qty = max(1, int(req.quantity))
+        
+        if req.loss_type == "whole_booklet":
+            sheets_wasted = qty * sheets_per_b
+            staples_wasted = qty * staples_per_b
+            total_cost = round((sheets_wasted * unit_paper_cost) + (staples_wasted * unit_staple_cost), 2)
+        else:
+            sheets_wasted = qty
+            staples_wasted = 0
+            total_cost = round(sheets_wasted * unit_paper_cost, 2)
+
+        ctrl_num = (req.booklet_control_num or "").strip()
+        if ctrl_num:
+            target_booklet = db.query(models.Booklet).filter(
+                or_(models.Booklet.control_number == ctrl_num, models.Booklet.srn == ctrl_num)
+            ).first()
+            if target_booklet:
+                target_booklet.status = "voided"
+                target_booklet.return_reason = f"Scrapped Spoilage: {req.reason}"
+
+        loss_entry = models.MaterialLoss(
+            academic_period=active_period,
+            department=dept_clean,
+            loss_type=req.loss_type,
+            quantity=qty,
+            sheets_wasted=sheets_wasted,
+            staples_wasted=staples_wasted,
+            unit_paper_cost=unit_paper_cost,
+            unit_staple_cost=unit_staple_cost,
+            total_loss_cost=total_cost,
+            reason=req.reason.strip(),
+            booklet_control_num=ctrl_num or None,
+            source=req.source or "manual",
+            recorded_by=username,
+            notes=req.notes
+        )
+        db.add(loss_entry)
+        
+        log_type_label = "Paper Sheets" if req.loss_type == "paper_sheet" else "Whole Booklets"
+        db.add(models.ActivityLog(
+            username=username,
+            user_role="Staff",
+            action_type="PRODUCTION",
+            action_title="Material Spoilage Logged",
+            details=f"Recorded {qty} {log_type_label} ({sheets_wasted} sheets wasted, ₱{total_cost:.2f} Net Loss). Reason: {req.reason.strip()}",
+            target_ref=ctrl_num or f"{dept_clean} {log_type_label}",
+            department=dept_clean if dept_clean != "GENERAL" else "All",
+            academic_period=active_period,
+            ip_address=request.client.host if request.client else "127.0.0.1"
+        ))
+        
+        db.commit()
+        db.refresh(loss_entry)
+        
+        notify_lan_mutation("MATERIAL_SPOILAGE_MUTATED", {"id": loss_entry.id, "period": active_period}, db)
+        
+        return {
+            "status": "success",
+            "message": "Material spoilage successfully recorded as net loss.",
+            "loss_id": loss_entry.id,
+            "total_loss_cost": total_cost,
+            "sheets_wasted": sheets_wasted
+        }
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
+@app.delete("/api/material-loss/{loss_id}")
+def delete_material_loss(
+    loss_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        user = get_portal_authenticated_user(request, db)
+        if not user or user.role != "Admin":
+            raise HTTPException(status_code=403, detail="Only Admins can remove spoilage records.")
+            
+        entry = db.query(models.MaterialLoss).filter(models.MaterialLoss.id == loss_id).first()
+        if not entry:
+            raise HTTPException(status_code=404, detail="Spoilage record not found.")
+            
+        details_txt = f"Deleted spoilage entry #{entry.id} ({entry.quantity} {entry.loss_type}, ₱{entry.total_loss_cost:.2f} loss)."
+        db.delete(entry)
+        
+        db.add(models.ActivityLog(
+            username=user.username,
+            user_role="Admin",
+            action_type="SYSTEM",
+            action_title="Material Spoilage Record Deleted",
+            details=details_txt,
+            target_ref=f"Spoilage #{loss_id}",
+            department=entry.department if entry.department != "GENERAL" else "All",
+            academic_period=entry.academic_period,
+            ip_address=request.client.host if request.client else "127.0.0.1"
+        ))
+        
+        db.commit()
+        notify_lan_mutation("MATERIAL_SPOILAGE_MUTATED", {"id": loss_id, "deleted": True}, db)
+        return {"status": "success", "message": "Spoilage record deleted successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/material-loss/sync-returns")
+def sync_defective_returns_to_spoilage(
+    period: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    try:
+        active_period = period or get_active_period(db)
+        settings = db.query(models.SystemSettings).first()
+        period_cfg = db.query(models.PeriodConfiguration).filter(
+            models.PeriodConfiguration.academic_period == active_period
+        ).first() if active_period else None
+
+        ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings.ream_price if settings else 250.0))
+        unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
+        
+        staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings.staples_box_price if settings else 50.0))
+        staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings.staples_per_box if settings else 5000))
+        unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
+
+        defective_booklets = db.query(models.Booklet).filter(
+            models.Booklet.status == "voided",
+            models.Booklet.return_reason.like("Misprint / Defect%")
+        )
+        if active_period:
+            defective_booklets = defective_booklets.filter(
+                (models.Booklet.exam_period == active_period) | (models.Booklet.exam_period.is_(None))
+            )
+        defective_booklets = defective_booklets.all()
+
+        synced_count = 0
+        for b in defective_booklets:
+            ctrl = b.control_num or b.sort_record_num or str(b.id)
+            existing = db.query(models.MaterialLoss).filter(
+                models.MaterialLoss.booklet_control_num == ctrl,
+                models.MaterialLoss.academic_period == active_period
+            ).first()
+            if not existing:
+                dept = "GENERAL"
+                if b.enrollment_id:
+                    enr = db.query(models.Enrollment).filter(models.Enrollment.id == b.enrollment_id).first()
+                    if enr:
+                        dept = resolve_enrollment_department(enr, db)
+                
+                prog = db.query(models.AcademicProgram).filter(models.AcademicProgram.code == dept).first() if dept != "GENERAL" else None
+                sheets_per_b = int(prog.sheets_per_booklet) if prog and prog.sheets_per_booklet else (
+                    int(period_cfg.sheets_per_booklet) if period_cfg and period_cfg.sheets_per_booklet else (
+                        int(settings.sheets_per_booklet) if settings and settings.sheets_per_booklet else 6
+                    )
+                )
+                staples_per_b = int(period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else (settings.staples_per_booklet if settings else 2))
+                
+                total_cost = round((sheets_per_b * unit_paper_cost) + (staples_per_b * unit_staple_cost), 2)
+                
+                loss_entry = models.MaterialLoss(
+                    academic_period=active_period,
+                    department=dept,
+                    loss_type="whole_booklet",
+                    quantity=1,
+                    sheets_wasted=sheets_per_b,
+                    staples_wasted=staples_per_b,
+                    unit_paper_cost=unit_paper_cost,
+                    unit_staple_cost=unit_staple_cost,
+                    total_loss_cost=total_cost,
+                    reason=b.return_reason or "Misprint / Defect (Instructor Return)",
+                    booklet_control_num=ctrl,
+                    source="faculty_return",
+                    recorded_by=b.distributed_by or "Faculty Return"
+                )
+                db.add(loss_entry)
+                synced_count += 1
+                
+        if synced_count > 0:
+            db.commit()
+            notify_lan_mutation("MATERIAL_SPOILAGE_MUTATED", {"period": active_period, "synced": synced_count}, db)
+
+        return {"status": "success", "synced_count": synced_count}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
 
 
 @app.get("/api/payment-tracking")

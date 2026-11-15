@@ -100,7 +100,7 @@
 
         
 
-        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); max-width: 600px; margin-bottom: 20px; border-left: 5px solid #e74c3c; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 100%; max-width: 100%; margin-bottom: 20px; border-left: 5px solid #e74c3c; }
 
         .card h2 { margin-bottom: 20px; color: #2c3e50; }
 
@@ -111,6 +111,29 @@
         .form-group label { display: block; font-weight: bold; color: #34495e; margin-bottom: 8px; }
 
         .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #bdc3c7; border-radius: 4px; font-size: 1rem; transition: border-color 0.2s, box-shadow 0.2s; }
+
+        .currency-input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .currency-prefix {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-weight: 700;
+            color: #64748b;
+            pointer-events: none;
+            user-select: none;
+            z-index: 2;
+            font-size: 0.95rem;
+            line-height: 1;
+        }
+
+        .currency-input-wrapper input {
+            padding-left: 28px !important;
+        }
 
         .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
 
@@ -268,9 +291,44 @@
 
         .alert.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
 
+        /* Settings Responsive Grid & Form Layout */
+        .settings-top-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .period-ay-flex-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+        .period-select-col {
+            flex: 1.2;
+            min-width: 200px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .ay-input-col {
+            flex: 1;
+            min-width: 170px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .settings-params-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
 
-
-
+        /* Pagination Buttons (Standardized from enrollments.html) */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .pagination-btn.active { background: #2563eb; color: #ffffff; border-color: #2563eb; font-weight: 700; box-shadow: 0 1px 3px rgba(37,99,235,0.3); }
 
         /* Responsive Mobile Layout Fixes */
 
@@ -280,10 +338,25 @@
 
             body { flex-direction: column; overflow: hidden; }
 
-.main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px; }
+            .main-content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 15px; }
 
-            .card { max-width: 100%; }
+            .card { max-width: 100%; padding: 20px 16px; box-sizing: border-box; }
 
+            .settings-top-grid { grid-template-columns: 1fr; gap: 16px; }
+
+        }
+
+        @media (max-width: 600px) {
+            .period-select-col,
+            .ay-input-col {
+                flex: 1 1 100%;
+                min-width: 100%;
+                width: 100%;
+            }
+            .settings-params-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
         }
 
         #addProgramModal > div, 
@@ -471,7 +544,7 @@
 
         <div class="header-bar">
 
-            <h1>Global Semester Settings</h1>
+            <h1>System Settings</h1>
 
             <p style="color: #7f8c8d; margin-top: 5px;">Configure the current semester parameters. Only Administrators can modify these values.</p>
 
@@ -487,131 +560,99 @@
 
             <h2>Financial & Production Settings</h2>
 
-            <div class="form-group">
-
-                <label>Generated Control Number Prefix</label>
-
-                <div id="generated_prefix_badge" style="padding: 12px; background: #ecf0f1; border-left: 4px solid #3498db; font-family: monospace; font-weight: bold; font-size: 1.2rem; color: #94a3b8;">
-
-                    --
-
-                </div>
-
-            </div>
-
-            
-
-            <div class="form-group">
-
-                <label>Active Examination Period & Academic Year</label>
-
-                <div style="display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
-
-                    <div style="flex: 1.2; min-width: 220px;">
-
-                        <select id="active_period" style="width: 100%; box-sizing: border-box;" onchange="clearFieldError('active_period'); onPeriodChange();">
-
-                            <option value="" disabled selected>-- Select Examination Period --</option>
-
-                            <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
-
-                            <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
-
-                            <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
-
-                            <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
-
-                            <option value="Midyear - Exam">Midyear - Exam</option>
-
-                        </select>
-
-                        <div class="field-error" id="error_active_period">⚠️ Please select an examination period.</div>
-
-                    </div>
-
-                    
-
-                    <div style="flex: 1; min-width: 210px;">
-
-                        <div id="ay_input_group" style="display: flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 10px; gap: 8px; box-sizing: border-box; min-height: 45px; transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;">
-
-                            <span style="font-weight: 700; color: #475569; font-size: 0.9rem; letter-spacing: 0.5px;">AY</span>
-
-                            <input type="number" id="ay_start_year" min="2000" max="2099" placeholder="2026"
-
-                                   style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; color: #1e293b; width: 60px; background: transparent;"
-
-                                   oninput="clearFieldError('ay_start_year'); onAyStartYearInput();"
-
-                                   onchange="onPeriodChange();">
-
-                            <span style="font-weight: 700; color: #94a3b8;">–</span>
-
-                            <input type="text" id="ay_end_year" placeholder="2027" readonly
-
-                                   style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px; width: 60px;"
-
-                                   title="Automatically calculated as Start Year + 1">
-
+            <div class="settings-top-grid">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Active Examination Period & Academic Year</label>
+                    <div class="period-ay-flex-row">
+                        <div class="period-select-col">
+                            <select id="active_period" style="width: 100%; box-sizing: border-box;" onchange="clearFieldError('active_period'); onPeriodChange();">
+                                <option value="" disabled selected>-- Select Examination Period --</option>
+                                <option value="1st Sem - Midterm Exam">1st Sem - Midterm Exam</option>
+                                <option value="1st Sem - Final Exam">1st Sem - Final Exam</option>
+                                <option value="2nd Sem - Midterm Exam">2nd Sem - Midterm Exam</option>
+                                <option value="2nd Sem - Final Exam">2nd Sem - Final Exam</option>
+                                <option value="Midyear - Exam">Midyear - Exam</option>
+                            </select>
+                            <div class="field-error" id="error_active_period">⚠️ Please select an examination period.</div>
                         </div>
-
-                        <div class="field-error" id="error_ay_start_year">⚠️ Please enter a valid 4-digit academic start year (e.g., 2026).</div>
-
+                        
+                        <div class="ay-input-col">
+                            <div id="ay_input_group" style="display: flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 10px; gap: 8px; box-sizing: border-box; min-height: 45px; width: 100%; max-width: 100%; overflow: hidden; transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;">
+                                <span style="font-weight: 700; color: #475569; font-size: 0.9rem; letter-spacing: 0.5px;">AY</span>
+                                <input type="number" id="ay_start_year" min="2000" max="2099" placeholder="2026"
+                                       style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; color: #1e293b; min-width: 0; width: 100%; background: transparent;"
+                                       oninput="clearFieldError('ay_start_year'); onAyStartYearInput();"
+                                       onchange="onPeriodChange();">
+                                <span style="font-weight: 700; color: #94a3b8;">–</span>
+                                <input type="text" id="ay_end_year" placeholder="2027" readonly
+                                       style="flex: 1; border: none; outline: none; padding: 8px 4px; font-size: 0.95rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px; min-width: 0; width: 100%;"
+                                       title="Automatically calculated as Start Year + 1">
+                            </div>
+                            <div class="field-error" id="error_ay_start_year">⚠️ Please enter a valid 4-digit academic start year (e.g., 2026).</div>
+                        </div>
                     </div>
 
+                    <!-- Inline Period Status Indicator Pill -->
+                    <div id="period_status_pill_container" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                        <div id="period_status_pill" style="display: none; padding: 5px 12px; border-radius: 6px; font-size: 0.80rem; font-weight: 600; transition: all 0.2s ease;"></div>
+                    </div>
                 </div>
 
-                <!-- Inline Period Status Indicator Pill -->
-                <div id="period_status_pill_container" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
-                    <div id="period_status_pill" style="display: none; padding: 5px 12px; border-radius: 6px; font-size: 0.80rem; font-weight: 600; transition: all 0.2s ease;"></div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Generated Control Number Prefix</label>
+                    <div id="generated_prefix_badge" style="padding: 12px; background: #ecf0f1; border-left: 4px solid #3498db; font-family: monospace; font-weight: bold; font-size: clamp(0.92rem, 3.5vw, 1.15rem); color: #94a3b8; border-radius: 4px; min-height: 45px; display: flex; align-items: center; box-sizing: border-box; word-break: break-all; overflow-wrap: anywhere; max-width: 100%;">
+                        --
+                    </div>
+                    <p style="font-size: 0.78rem; color: #64748b; margin-top: 6px; margin-bottom: 0;">Automatically generated sequence identifier derived from the examination period and academic year.</p>
                 </div>
-
             </div>
-
-
-
-            
-
-
 
             <!-- Downstream Dependent Parameters Section -->
-
             <div id="dependent_settings_section" style="transition: opacity 0.25s ease;">
 
-                <div class="form-group">
-
-                    <label>Default Bond Paper Sheets Consumed Per Booklet</label>
-
-                    <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="enforceNumericInputLimits(this); clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
-
-                    <div class="field-error" id="error_sheets_per_booklet">⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).</div>
-
-                    <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Institutional default rate applied to any course without custom page overrides in the Academic Courses table below.</p>
-
-                    <div id="yield_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #3498db; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
-
-                        ⚡ <strong>Production Rate:</strong> 1 Ream (500 sheets) ÷ <span id="preview_sheets" style="font-weight:bold;">6</span> sheets = <strong id="preview_yield" style="color:#27ae60;">83</strong> booklets/ream (<span id="preview_leftover">2</span> leftover sheets).
-
+                <!-- Core Production & Pricing Parameters Grid -->
+                <div class="settings-params-grid">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Default Paper Sheets Per Booklet</label>
+                        <input type="number" id="sheets_per_booklet" min="1" max="50" placeholder="e.g., 6" required oninput="enforceNumericInputLimits(this); clearFieldError('sheets_per_booklet'); updateYieldPreview(); updateRecommendationBox();">
+                        <div class="field-error" id="error_sheets_per_booklet">⚠️ This field cannot be empty or zero. Please enter bond paper sheets (1 to 50).</div>
+                       
+                        <div id="yield_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #3498db; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
+                             <strong>Production Rate:</strong> 1 Ream (500 sheets) ÷ <span id="preview_sheets" style="font-weight:bold;">6</span> sheets = <strong id="preview_yield" style="color:#27ae60;">83</strong> booklets/ream (<span id="preview_leftover">2</span> leftover sheets).
+                        </div>
                     </div>
 
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Price per Raw Bond Paper Ream</label>
+                        <div class="currency-input-wrapper">
+                            <span class="currency-prefix">₱</span>
+                            <input type="number" id="ream_price" step="0.01" min="1" placeholder="e.g., 250.00" required oninput="enforceNumericInputLimits(this); clearFieldError('ream_price'); updateRecommendationBox();">
+                        </div>
+                        <div class="field-error" id="error_ream_price">⚠️ This field cannot be empty or zero. Please enter a valid ream price.</div>
+                        <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Cost per ream of 500 sheets used for direct material expenditure calculations.</p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Default Selling Price per Booklet</label>
+                        <div class="currency-input-wrapper">
+                            <span class="currency-prefix">₱</span>
+                            <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="enforceNumericInputLimits(this); clearFieldError('booklet_price');">
+                        </div>
+                        <div class="field-error" id="error_booklet_price">⚠️ This field cannot be empty or zero. Please enter booklet selling price.</div>
+                        <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Institutional default fee applied to any course without custom price overrides in the Academic Courses table below.</p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Reorder Buffer Safety Margin (%)</label>
+                        <input type="number" id="reorder_buffer_percent" min="0" max="50" step="any" placeholder="e.g., 15" required oninput="enforceNumericInputLimits(this); clearFieldError('reorder_buffer_percent'); updateBufferPreview(); updateRecommendationBox();">
+                        <div class="field-error" id="error_reorder_buffer_percent">⚠️ This field cannot be empty. Please enter a buffer margin between 0% and 50%.</div>
+                        <div id="buffer_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #8e44ad; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
+                             <strong> Buffer:</strong> Applies a <strong id="preview_buffer_pct" style="color:#8e44ad;">15%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.
+                        </div>
+                    </div>
                 </div>
-
-
-
-                <div class="form-group">
-
-                    <label>Price per Raw Bond Paper Ream (₱)</label>
-
-                    <input type="number" id="ream_price" step="0.01" min="1" placeholder="e.g., 250.00" required oninput="enforceNumericInputLimits(this); clearFieldError('ream_price'); updateRecommendationBox();">
-
-                    <div class="field-error" id="error_ream_price">⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).</div>
-
-                </div>
-
-
 
                 <!-- Direct Materials: Staples Expense Configuration -->
-
                 <div style="margin-top: 18px; margin-bottom: 18px; padding: 16px 18px; background: #fdfbf7; border: 1px solid #fde68a; border-left: 5px solid #d97706; border-radius: 8px;">
 
                     <div style="font-weight: 700; color: #92400e; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
@@ -632,15 +673,16 @@
 
                         <div>
 
-                            <label style="font-size: 0.85rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 5px;">Price per Box of Staples (₱)</label>
+                            <label style="font-size: 0.85rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 5px;">Price per Box of Staples</label>
 
-                            <input type="number" id="staples_box_price" step="0.01" min="1" placeholder="e.g., 50.00" required
+                            <div class="currency-input-wrapper">
+                                <span class="currency-prefix">₱</span>
+                                <input type="number" id="staples_box_price" step="0.01" min="1" placeholder="e.g., 50.00" required
+                                       style="width: 100%; padding: 9px 12px 9px 28px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
+                                       oninput="enforceNumericInputLimits(this); clearFieldError('staples_box_price'); updateStaplesPreview(); updateRecommendationBox();">
+                            </div>
 
-                                   style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; box-sizing: border-box;"
-
-                                   oninput="enforceNumericInputLimits(this); clearFieldError('staples_box_price'); updateStaplesPreview(); updateRecommendationBox();">
-
-                            <div class="field-error" id="error_staples_box_price">⚠️ Please enter a valid staple box price (₱).</div>
+                            <div class="field-error" id="error_staples_box_price">⚠️ Please enter a valid staple box price.</div>
 
                         </div>
 
@@ -688,43 +730,13 @@
 
                 </div>
 
-
-
-                <div class="form-group">
-
-                    <label>Default Selling Price per Booklet (₱)</label>
-
-                    <input type="number" id="booklet_price" step="0.01" min="0.01" placeholder="e.g., 10" required oninput="enforceNumericInputLimits(this); clearFieldError('booklet_price');">
-
-                    <div class="field-error" id="error_booklet_price">⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).</div>
-
-                    <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px; margin-bottom: 0;">Institutional default fee applied to any course without custom price overrides in the Academic Courses table below.</p>
-
-                </div>
-
-                <div class="form-group">
-
-                    <label>Reorder Buffer Safety Margin (%)</label>
-
-                    <input type="number" id="reorder_buffer_percent" min="0" max="50" step="any" placeholder="e.g., 15" required oninput="enforceNumericInputLimits(this); clearFieldError('reorder_buffer_percent'); updateBufferPreview(); updateRecommendationBox();">
-
-                    <div class="field-error" id="error_reorder_buffer_percent">⚠️ This field cannot be empty. Please enter a buffer margin between 0% and 50%.</div>
-
-                    <div id="buffer_preview_badge" style="display: none; margin-top: 8px; padding: 8px 12px; background: #eef2f7; border-left: 4px solid #8e44ad; border-radius: 4px; font-size: 0.88rem; color: #2c3e50;">
-
-                        🛡️ <strong>Heuristic Buffer:</strong> Applies a <strong id="preview_buffer_pct" style="color:#8e44ad;">15%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.
-
-                    </div>
-
-                </div>
-
-
-
                 <div class="form-group" id="budget_form_group">
 
-                    <label>Department Material Budget (Cash Allocation in ₱)</label>
+                    <label>Department Material Budget (Cash Allocation)</label>
 
-                    <div style="position: relative;">
+                    <div class="currency-input-wrapper" style="position: relative;">
+
+                        <span class="currency-prefix">₱</span>
 
                         <input type="number" id="department_ream_budget" step="0.01" min="0.01" placeholder="e.g., 5000.00" required oninput="enforceNumericInputLimits(this); clearFieldError('department_ream_budget'); onBudgetManualInput();">
 
@@ -734,7 +746,7 @@
 
                     <div id="budget_lock_badge" style="display: none; margin-top: 6px; font-size: 0.8rem; line-height: 1.4; padding: 6px 10px; border-radius: 6px;"></div>
 
-                    <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).</div>
+                    <div class="field-error" id="error_department_ream_budget">⚠️ This field cannot be empty. Please enter your departmental material budget allocation.</div>
 
                     
 
@@ -968,7 +980,7 @@
 
                             <p style="margin: 0 0 8px 0; color: #64748b; font-size: 0.85rem; line-height: 1.5;">
 
-                                The system has recognized class enrollments for this academic period. Please input <strong>Bond Paper Sheets Consumed Per Booklet</strong>, <strong>Price per Raw Bond Paper Ream (₱)</strong>, <strong>Staples Binding Parameters</strong>, and <strong>Reorder Buffer Safety Margin (%)</strong> above to automatically calculate your required direct materials and recommended cash allocation.
+                                The system has recognized class enrollments for this academic period. Please input <strong>Bond Paper Sheets Consumed Per Booklet</strong>, <strong>Price per Raw Bond Paper Ream</strong>, <strong>Staples Binding Parameters</strong>, and <strong>Reorder Buffer Safety Margin (%)</strong> above to automatically calculate your required direct materials and recommended cash allocation.
 
                             </p>
 
@@ -1171,7 +1183,30 @@
 
             </div>
 
-            
+            <!-- FILTER TOOLBAR & TOP PAGINATION (Mirrored from enrollments.html) -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 12px; background: #f8fafc; padding: 10px 14px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <label for="history_ay_start_year" style="font-weight: 700; font-size: 0.85rem; color: #475569;">Filter Academic Year:</label>
+                    <div id="history_ay_input_group" style="display: inline-flex; align-items: center; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 2px 10px; gap: 6px; box-sizing: border-box; height: 38px; min-width: 175px; transition: border-color 0.2s, box-shadow 0.2s;">
+                        <span style="font-weight: 700; color: #475569; font-size: 0.85rem; letter-spacing: 0.5px;">AY</span>
+                        <input type="number" id="history_ay_start_year" min="2000" max="2099" placeholder="YYYY"
+                               style="width: 58px; border: none; outline: none; padding: 4px 2px; font-size: 0.9rem; font-weight: 600; text-align: center; color: #1e293b; background: transparent;"
+                               oninput="onHistoryAyStartYearInput(this)"
+                               title="Enter 4-digit academic start year (e.g., 2026)">
+                        <span style="font-weight: 700; color: #94a3b8;">–</span>
+                        <input type="text" id="history_ay_end_year" placeholder="YYYY" readonly
+                               style="width: 58px; border: none; outline: none; padding: 4px 2px; font-size: 0.9rem; font-weight: 600; text-align: center; background: #f8fafc; color: #64748b; border-radius: 3px;"
+                               title="Automatically calculated as Start Year + 1">
+                        <button type="button" onclick="clearHistoryYearFilter()" style="background: none; border: none; color: #94a3b8; font-size: 1.15rem; line-height: 1; cursor: pointer; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; transition: color 0.15s;" title="Clear Academic Year Filter" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">×</button>
+                    </div>
+                    <span id="periodHistoryCountBadge" style="font-size: 0.8rem; font-weight: 700; color: #2563eb; background: #eff6ff; border: 1px solid #bfdbfe; padding: 4px 9px; border-radius: 4px;">0 records</span>
+                </div>
+                
+                <div id="periodHistoryTopPagination" style="display: flex; align-items: center; gap: 8px;">
+                    <div id="periodHistoryTopSummary" style="font-size: 0.84rem; font-weight: 600; color: #64748b;">Loading...</div>
+                    <div id="periodHistoryTopPills" style="display: flex; gap: 4px; align-items: center;"></div>
+                </div>
+            </div>
 
             <table class="audit-table">
 
@@ -1214,6 +1249,14 @@
                 </tbody>
 
             </table>
+
+            <!-- BOTTOM PAGINATION (Mirrored from enrollments.html) -->
+            <div id="periodHistoryBottomPagination" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #ffffff; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 14px; flex-wrap: wrap; gap: 12px;">
+                <div id="periodHistoryBottomSummary" style="font-size: 0.85rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 records
+                </div>
+                <div id="periodHistoryBottomButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
 
         </div>
 
@@ -1641,11 +1684,14 @@
 
                         <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
 
-                            Selling Price (₱) <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+                            Selling Price <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
 
                         </label>
 
-                        <input type="number" id="newProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;">
+                        <div class="currency-input-wrapper">
+                            <span class="currency-prefix">₱</span>
+                            <input type="number" id="newProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px 10px 28px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; box-sizing: border-box;">
+                        </div>
 
                         <div style="margin-top: 4px; font-size: 0.74rem; color: #64748b;">Leave blank for default.</div>
 
@@ -1789,11 +1835,14 @@
 
                         <label style="display: block; font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 6px;">
 
-                            Selling Price (₱) <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+                            Selling Price <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
 
                         </label>
 
-                        <input type="number" id="editProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;">
+                        <div class="currency-input-wrapper">
+                            <span class="currency-prefix">₱</span>
+                            <input type="number" id="editProgPrice" min="0.01" step="0.01" placeholder="Default (e.g. 2.50)" style="width: 100%; padding: 10px 12px 10px 28px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; box-sizing: border-box;">
+                        </div>
 
                         <div style="margin-top: 4px; font-size: 0.74rem; color: #64748b;">Leave blank for default.</div>
 
@@ -1964,13 +2013,13 @@
 
                 <label style="display: block; font-weight: 600; font-size: 0.88rem; color: #1e293b; margin-bottom: 6px;">
 
-                    Current Semester Allocation to Add (₱)
+                    Current Semester Allocation to Add
 
                 </label>
 
-                <div style="position: relative;">
+                <div class="currency-input-wrapper" style="position: relative;">
 
-                    <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-weight: 700; color: #64748b;">₱</span>
+                    <span class="currency-prefix">₱</span>
 
                     <input type="number" id="modal_topup_input" step="0.01" min="0.00" placeholder="e.g. 153.32"
 
@@ -2081,11 +2130,14 @@
                 window.location.href = '/dashboard';
 
             } else {
-
-                document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-
-                document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
-
+                if (window.updateSidebarUser) {
+                    window.updateSidebarUser(activeUser);
+                } else {
+                    const uEl = document.getElementById('loggedInUser');
+                    if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+                    const rEl = document.getElementById('loggedInRole');
+                    if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+                }
             }
 
         }
@@ -2685,7 +2737,7 @@
 
             if (reamVal === "" || isNaN(reamPrice) || reamPrice <= 0) {
 
-                showFieldError('ream_price', '⚠️ This field cannot be empty or zero. Please enter a valid ream price (₱).');
+                showFieldError('ream_price', '⚠️ This field cannot be empty or zero. Please enter a valid ream price.');
 
                 isValid = false;
 
@@ -2709,7 +2761,7 @@
 
             if (bookletVal === "" || isNaN(bookletPrice) || bookletPrice <= 0) {
 
-                showFieldError('booklet_price', '⚠️ This field cannot be empty or zero. Please enter booklet selling price (₱).');
+                showFieldError('booklet_price', '⚠️ This field cannot be empty or zero. Please enter booklet selling price.');
 
                 isValid = false;
 
@@ -2738,7 +2790,7 @@
                 const budget = parseFloat(budgetVal);
 
                 if (budgetVal === "" || isNaN(budget) || budget <= 0) {
-                    showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental material budget allocation (₱).');
+                    showFieldError('department_ream_budget', '⚠️ This field cannot be empty. Please enter your departmental material budget allocation.');
                     isValid = false;
                     if (!firstInvalidEl) firstInvalidEl = budgetInput;
                 } else if (computedRecommendedBudget > 0 && budget < computedRecommendedBudget) {
@@ -2791,7 +2843,7 @@
 
             if (stapleBoxVal === "" || isNaN(stapleBox) || stapleBox <= 0) {
 
-                showFieldError('staples_box_price', '⚠️ Please enter a valid staple box price (₱).');
+                showFieldError('staples_box_price', '⚠️ Please enter a valid staple box price.');
 
                 isValid = false;
 
@@ -4955,7 +5007,7 @@
 
                     badge.style.color = '#2c3e50';
 
-                    badge.innerHTML = `🛡️ <strong>Heuristic Buffer:</strong> Applies a <strong style="color:#8e44ad;">${num}%</strong> safety margin during examination peak periods to prevent stockouts from late enrollees or misprints.`;
+                    badge.innerHTML = ` <strong>Buffer:</strong> Applies a <strong style="color:#8e44ad;">${num}%</strong> safety margin to prevent stockouts.`;
 
                 }
 
@@ -5396,38 +5448,151 @@
 
 
 
-        function renderPeriodConfigurationsTable(list) {
+        let periodHistoryRawList = [];
+        let periodHistoryFilteredList = [];
+        let periodHistoryCurrentPage = 1;
+        const PERIOD_HISTORY_PAGE_SIZE = 8;
 
+        function onHistoryAyStartYearInput(input) {
+            if (!input) return;
+            if (input.value.length > 4) {
+                input.value = input.value.slice(0, 4);
+            }
+            const endYearEl = document.getElementById('history_ay_end_year');
+            const startVal = input.value.trim();
+            if (startVal.length === 4) {
+                const sYear = parseInt(startVal);
+                if (!isNaN(sYear)) {
+                    if (endYearEl) endYearEl.value = sYear + 1;
+                } else if (endYearEl) {
+                    endYearEl.value = '';
+                }
+            } else if (endYearEl) {
+                endYearEl.value = '';
+            }
+            periodHistoryCurrentPage = 1;
+            filterAndRenderPeriodHistory();
+        }
+
+        function clearHistoryYearFilter() {
+            const startYearEl = document.getElementById('history_ay_start_year');
+            const endYearEl = document.getElementById('history_ay_end_year');
+            if (startYearEl) startYearEl.value = '';
+            if (endYearEl) endYearEl.value = '';
+            periodHistoryCurrentPage = 1;
+            filterAndRenderPeriodHistory();
+        }
+
+        function goToPeriodHistoryPage(page) {
+            const total = periodHistoryFilteredList.length;
+            const totalPages = Math.ceil(total / PERIOD_HISTORY_PAGE_SIZE) || 1;
+            if (page < 1) page = 1;
+            if (page > totalPages) page = totalPages;
+            periodHistoryCurrentPage = page;
+            renderPeriodHistoryPage();
+        }
+
+        function filterAndRenderPeriodHistory() {
+            const startYearEl = document.getElementById('history_ay_start_year');
+            const startVal = startYearEl ? startYearEl.value.trim() : '';
+            if (startVal.length === 4) {
+                const sYear = parseInt(startVal);
+                const targetCycle = `${sYear}-${sYear + 1}`;
+                periodHistoryFilteredList = periodHistoryRawList.filter(item => {
+                    if (!item || !item.academic_period) return false;
+                    const periodStr = String(item.academic_period);
+                    return periodStr.includes(targetCycle) || periodStr.includes(String(sYear));
+                });
+            } else {
+                periodHistoryFilteredList = [...periodHistoryRawList];
+            }
+            const totalPages = Math.ceil(periodHistoryFilteredList.length / PERIOD_HISTORY_PAGE_SIZE) || 1;
+            if (periodHistoryCurrentPage > totalPages) {
+                periodHistoryCurrentPage = totalPages;
+            }
+            if (periodHistoryCurrentPage < 1) {
+                periodHistoryCurrentPage = 1;
+            }
+            renderPeriodHistoryPage();
+        }
+
+        function renderPeriodHistoryPage() {
             const tbody = document.getElementById('periodArchiveTableBody');
-
             if (!tbody) return;
 
+            const total = periodHistoryFilteredList.length;
+            const totalPages = Math.ceil(total / PERIOD_HISTORY_PAGE_SIZE) || 1;
+            if (periodHistoryCurrentPage < 1) periodHistoryCurrentPage = 1;
+            if (periodHistoryCurrentPage > totalPages) periodHistoryCurrentPage = totalPages;
 
+            const startIdx = (periodHistoryCurrentPage - 1) * PERIOD_HISTORY_PAGE_SIZE;
+            const endIdx = Math.min(startIdx + PERIOD_HISTORY_PAGE_SIZE, total);
+            const pageItems = periodHistoryFilteredList.slice(startIdx, endIdx);
 
-            if (!list || list.length === 0) {
-
-                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 24px;">No archived period configurations found.</td></tr>';
-
-                return;
-
+            // Update count badge
+            const badgeEl = document.getElementById('periodHistoryCountBadge');
+            if (badgeEl) {
+                badgeEl.innerText = `${total} record${total === 1 ? '' : 's'}`;
             }
 
+            // Update summary texts
+            const summaryStr = total === 0 ? "Showing 0 records" : `Showing ${startIdx + 1}–${endIdx} of ${total} record${total === 1 ? '' : 's'}`;
+            const topSum = document.getElementById('periodHistoryTopSummary');
+            const botSum = document.getElementById('periodHistoryBottomSummary');
+            if (topSum) topSum.innerText = summaryStr;
+            if (botSum) botSum.innerText = summaryStr;
 
+            // Render top pills
+            const topPills = document.getElementById('periodHistoryTopPills');
+            if (topPills) {
+                if (totalPages <= 1) {
+                    topPills.innerHTML = '';
+                } else {
+                    topPills.innerHTML = `
+                        <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPeriodHistoryPage(${periodHistoryCurrentPage - 1})" ${periodHistoryCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                        <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px; color: #475569;">Page ${periodHistoryCurrentPage} of ${totalPages}</span>
+                        <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPeriodHistoryPage(${periodHistoryCurrentPage + 1})" ${periodHistoryCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+                    `;
+                }
+            }
+
+            // Render bottom buttons
+            const botBtns = document.getElementById('periodHistoryBottomButtons');
+            if (botBtns) {
+                if (totalPages <= 1) {
+                    botBtns.innerHTML = '';
+                } else {
+                    let html = `<button type="button" class="pagination-btn" onclick="goToPeriodHistoryPage(1)" ${periodHistoryCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+                    html += `<button type="button" class="pagination-btn" onclick="goToPeriodHistoryPage(${periodHistoryCurrentPage - 1})" ${periodHistoryCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+                    const maxP = 5;
+                    let startP = Math.max(1, periodHistoryCurrentPage - 2);
+                    let endP = Math.min(totalPages, startP + maxP - 1);
+                    if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+                    for (let p = startP; p <= endP; p++) {
+                        html += `<button type="button" class="pagination-btn ${p === periodHistoryCurrentPage ? 'active' : ''}" onclick="goToPeriodHistoryPage(${p})">${p}</button>`;
+                    }
+
+                    html += `<button type="button" class="pagination-btn" onclick="goToPeriodHistoryPage(${periodHistoryCurrentPage + 1})" ${periodHistoryCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+                    html += `<button type="button" class="pagination-btn" onclick="goToPeriodHistoryPage(${totalPages})" ${periodHistoryCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+                    botBtns.innerHTML = html;
+                }
+            }
+
+            // Render table rows
+            if (total === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; color: #94a3b8; padding: 24px;">No archived period configurations found.</td></tr>';
+                return;
+            }
 
             const activePeriod = getFullAcademicPeriod();
 
-
-
-            tbody.innerHTML = list.map(item => {
-
+            tbody.innerHTML = pageItems.map(item => {
                 const isActive = item.academic_period === activePeriod;
-
                 const statusBadge = isActive
-
                     ? '<span class="badge-active">ACTIVE</span>'
-
                     : '<span class="badge-archived">ARCHIVED</span>';
-
                 const actionsHtml = isActive
                     ? '<span style="font-size: 0.8rem; font-weight: 600; color: #16a34a; background: #dcfce7; padding: 4px 10px; border-radius: 6px; display: inline-block;">Current Live</span>'
                     : `<div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
@@ -5438,8 +5603,6 @@
                             💰 Expenditure
                         </a>
                        </div>`;
-
-
 
                 const reamPriceStr = `₱${Number(item.ream_price).toFixed(2)}`;
                 const bookletPriceStr = `₱${Number(item.booklet_price).toFixed(2)}`;
@@ -5465,7 +5628,6 @@
                         <td style="text-align: center;">${actionsHtml}</td>
                     </tr>
                 `;
-
             }).join('');
 
             if (window.lockAuthoritativeElement) {
@@ -5473,7 +5635,13 @@
                     window.lockAuthoritativeElement(el, el.getAttribute('data-auth-val'));
                 });
             }
+        }
 
+        function renderPeriodConfigurationsTable(list) {
+            if (Array.isArray(list)) {
+                periodHistoryRawList = list;
+            }
+            filterAndRenderPeriodHistory();
         }
 
 

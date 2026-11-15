@@ -285,6 +285,12 @@
                 gap: 10px !important;
             }
         }
+
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -330,6 +336,13 @@
                 
                 <select id="filterSection" onchange="applyFilters()">
                     <option value="">-- All Sections --</option>
+                </select>
+
+                <select id="directoryPageSize" onchange="changeDirectoryPageSize(this.value)" style="min-width: 140px; height: 42px; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 10px; font-size: 0.9rem; background: #fff; color: #1e293b;">
+                    <option value="10">10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
                 </select>
 
                 <button class="btn-refresh-icon" onclick="refreshData()" title="Clear filters & Refresh">🔄</button>
@@ -382,6 +395,17 @@
                     <span>📋 Faculty Directory &amp; Outstanding Balances</span>
                     <span style="font-size: 0.85rem; font-weight: normal; color: #64748b;" id="directoryCountText">Showing 0 instructors</span>
                 </h3>
+
+                <!-- TOP DIRECTORY PAGINATION CONTROLS -->
+                <div id="directoryTopPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div id="directoryTopPaginationSummary" style="font-size: 0.85rem; color: #64748b;">
+                        Showing 0 to 0 of 0 faculty
+                    </div>
+                    <div id="directoryTopPaginationPills" style="display: flex; gap: 6px; align-items: center;">
+                        <!-- Stepper pills -->
+                    </div>
+                </div>
+
                 <div class="table-responsive">
                     <table id="directoryTable">
                         <thead>
@@ -401,6 +425,16 @@
                             <tr><td colspan="9" style="text-align: center; color: #7f8c8d; padding: 20px;">Loading faculty directory...</td></tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- BOTTOM DIRECTORY PAGINATION CONTROLS -->
+                <div id="directoryBottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px;">
+                    <div id="directoryBottomPaginationSummary" style="font-size: 0.85rem; color: #64748b;">
+                        Page 1 of 1 (0 total faculty)
+                    </div>
+                    <div id="directoryBottomPaginationButtons" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        <!-- Numbered page buttons -->
+                    </div>
                 </div>
             </div>
 
@@ -459,7 +493,24 @@
                         <option value="">-- All Subjects --</option>
                     </select>
 
+                    <select id="paymentFilterPageSize" onchange="changePaymentsPageSize(this.value)" style="flex: 1 1 130px; height: 40px; padding: 0 10px; font-size: 0.88rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; color: #1e293b;">
+                        <option value="10">10 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="all">Show All</option>
+                    </select>
+
                     <button type="button" class="btn-refresh-icon" onclick="clearPaymentFilters()" title="Reset payment filters" style="width: 40px; height: 40px; border-radius: 6px; background: #334155; color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">🔄</button>
+                </div>
+
+                <!-- TOP PAYMENTS PAGINATION CONTROLS -->
+                <div id="paymentsTopPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                    <div id="paymentsTopPaginationSummary" style="font-size: 0.85rem; color: #64748b;">
+                        Showing 0 to 0 of 0 payments
+                    </div>
+                    <div id="paymentsTopPaginationPills" style="display: flex; gap: 6px; align-items: center;">
+                        <!-- Stepper pills -->
+                    </div>
                 </div>
 
                 <div class="table-responsive">
@@ -478,6 +529,16 @@
                             <tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 15px;">No installment records</td></tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- BOTTOM PAYMENTS PAGINATION CONTROLS -->
+                <div id="paymentsBottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px;">
+                    <div id="paymentsBottomPaginationSummary" style="font-size: 0.85rem; color: #64748b;">
+                        Page 1 of 1 (0 total payments)
+                    </div>
+                    <div id="paymentsBottomPaginationButtons" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        <!-- Numbered page buttons -->
+                    </div>
                 </div>
 
                 <!-- Official Printable Signature Blocks -->
@@ -633,6 +694,14 @@
     let globalRawReceipts = [];
     let selectedTeacherName = null;
     let currentInstructorPayments = [];
+
+    let directoryCurrentPage = 1;
+    let directoryPageSize = 10;
+    let currentFilteredDirectory = [];
+
+    let paymentsCurrentPage = 1;
+    let paymentsPageSize = 10;
+    let currentFilteredPayments = [];
 
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user') || 'null');
     if (!activeUser || !activeUser.session_token) {
@@ -790,6 +859,8 @@
 
     function onInstructorChange() {
         selectedTeacherName = document.getElementById('selectInstructor').value || null;
+        paymentsCurrentPage = 1;
+        directoryCurrentPage = 1;
         const url = new URL(window.location);
         if (selectedTeacherName) {
             url.searchParams.set('instructor', selectedTeacherName);
@@ -815,6 +886,7 @@
 
     function clearFilters() {
         selectedTeacherName = null;
+        directoryCurrentPage = 1;
         document.getElementById('selectInstructor').value = "";
         document.getElementById('filterDept').value = "";
         if (document.getElementById('filterSection')) document.getElementById('filterSection').value = "";
@@ -832,7 +904,10 @@
         fetchProfileData();
     }
 
-    function applyFilters() {
+    function applyFilters(keepPage = false) {
+        if (!keepPage) {
+            directoryCurrentPage = 1;
+        }
         renderCurrentView();
     }
 
@@ -957,17 +1032,37 @@
         document.getElementById('kpiBalance').style.color = totBilled === 0 ? '#64748b' : (totBal <= 0 ? '#16a34a' : '#dc2626');
         document.getElementById('kpiBalanceSub').innerText = totBilled === 0 ? "No department transactions recorded" : (totBal <= 0 ? "All faculty accounts cleared" : "Total pending collection");
 
+        // Pagination calculations for Directory Table
+        currentFilteredDirectory = filtered;
+        const totalFaculty = filtered.length;
+        const totalPages = (directoryPageSize === 'all' || totalFaculty === 0) ? 1 : Math.ceil(totalFaculty / directoryPageSize);
+        if (directoryCurrentPage > totalPages) directoryCurrentPage = totalPages;
+        if (directoryCurrentPage < 1) directoryCurrentPage = 1;
+
+        const startIdx = (directoryPageSize === 'all') ? 0 : (directoryCurrentPage - 1) * directoryPageSize;
+        const endIdx = (directoryPageSize === 'all') ? totalFaculty : Math.min(startIdx + directoryPageSize, totalFaculty);
+        const pagedInstructors = (directoryPageSize === 'all') ? filtered : filtered.slice(startIdx, endIdx);
+
         // Render Directory Table Body
         const tbody = document.getElementById('directoryTableBody');
         tbody.innerHTML = '';
         document.getElementById('directoryCountText').innerText = `Showing ${filtered.length} of ${globalInstructors.length} faculty`;
 
-        if (filtered.length === 0) {
+        const summaryStr = (directoryPageSize === 'all')
+            ? `Showing all ${totalFaculty} faculty`
+            : (totalFaculty === 0 ? 'Showing 0 of 0 faculty' : `Showing ${startIdx + 1}–${endIdx} of ${totalFaculty} faculty`);
+        const topSummary = document.getElementById('directoryTopPaginationSummary');
+        if (topSummary) topSummary.innerText = summaryStr;
+        const botSummary = document.getElementById('directoryBottomPaginationSummary');
+        if (botSummary) botSummary.innerText = summaryStr;
+
+        if (totalFaculty === 0) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #7f8c8d; padding: 25px;">No instructors match your filters.</td></tr>';
+            renderDirectoryPagination(0);
             return;
         }
 
-        filtered.forEach(inst => {
+        pagedInstructors.forEach(inst => {
             const tr = document.createElement('tr');
             tr.setAttribute('data-tamper-protect', 'true');
             const rowDueStr = `₱${(inst.total_due || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -991,7 +1086,7 @@
                 <td style="text-align: center;">${getStatusBadge(inst.overall_status, inst.total_balance, inst.total_due, inst.total_qty)}</td>
                 <td style="text-align: center;" class="no-print">
                     <button class="btn-select-instructor" onclick="selectInstructor('${escapeHtml(inst.teacher_name)}')" title="View detailed ledger and statement">
-                        View Statement ➡️
+                        View
                     </button>
                 </td>
             `;
@@ -1003,6 +1098,56 @@
                 window.lockAuthoritativeElement(el, el.getAttribute('data-auth-val'));
             });
         }
+
+        renderDirectoryPagination(totalPages);
+    }
+
+    function renderDirectoryPagination(totalPages) {
+        const topPills = document.getElementById('directoryTopPaginationPills');
+        const botBtns = document.getElementById('directoryBottomPaginationButtons');
+
+        if (totalPages <= 1) {
+            if (topPills) topPills.innerHTML = '';
+            if (botBtns) botBtns.innerHTML = '';
+            return;
+        }
+
+        if (topPills) {
+            topPills.innerHTML = `
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToDirectoryPage(${directoryCurrentPage - 1})" ${directoryCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px;">Page ${directoryCurrentPage} of ${totalPages}</span>
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToDirectoryPage(${directoryCurrentPage + 1})" ${directoryCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+            `;
+        }
+
+        if (botBtns) {
+            let html = `<button type="button" class="pagination-btn" onclick="goToDirectoryPage(1)" ${directoryCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToDirectoryPage(${directoryCurrentPage - 1})" ${directoryCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+            const maxP = 5;
+            let startP = Math.max(1, directoryCurrentPage - 2);
+            let endP = Math.min(totalPages, startP + maxP - 1);
+            if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+            for (let p = startP; p <= endP; p++) {
+                html += `<button type="button" class="pagination-btn ${p === directoryCurrentPage ? 'active' : ''}" onclick="goToDirectoryPage(${p})">${p}</button>`;
+            }
+
+            html += `<button type="button" class="pagination-btn" onclick="goToDirectoryPage(${directoryCurrentPage + 1})" ${directoryCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToDirectoryPage(${totalPages})" ${directoryCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+            botBtns.innerHTML = html;
+        }
+    }
+
+    function goToDirectoryPage(p) {
+        directoryCurrentPage = p;
+        renderDirectoryView();
+    }
+
+    function changeDirectoryPageSize(val) {
+        directoryPageSize = (val === 'all') ? 'all' : (parseInt(val, 10) || 10);
+        directoryCurrentPage = 1;
+        renderDirectoryView();
     }
 
     // -------------------------------------------------------------
@@ -1117,6 +1262,10 @@
             return (b.id || 0) - (a.id || 0);
         });
 
+        paymentsCurrentPage = 1;
+        const pps = document.getElementById('paymentFilterPageSize');
+        if (pps) pps.value = paymentsPageSize === 'all' ? 'all' : paymentsPageSize.toString();
+
         populatePaymentFilters(currentInstructorPayments);
         renderPaymentsTable();
     }
@@ -1181,7 +1330,10 @@
         }
     }
 
-    function applyPaymentFilters() {
+    function applyPaymentFilters(keepPage = false) {
+        if (!keepPage) {
+            paymentsCurrentPage = 1;
+        }
         renderPaymentsTable();
     }
 
@@ -1190,6 +1342,10 @@
         if (document.getElementById('paymentFilterDept')) document.getElementById('paymentFilterDept').value = "";
         if (document.getElementById('paymentFilterSection')) document.getElementById('paymentFilterSection').value = "";
         if (document.getElementById('paymentFilterSubject')) document.getElementById('paymentFilterSubject').value = "";
+        paymentsCurrentPage = 1;
+        paymentsPageSize = 10;
+        const sizeSelect = document.getElementById('paymentFilterPageSize');
+        if (sizeSelect) sizeSelect.value = "10";
         renderPaymentsTable();
     }
 
@@ -1217,20 +1373,39 @@
             filtered = filtered.filter(p => (p.subject || '') === subjVal);
         }
 
+        currentFilteredPayments = filtered;
+        const totalPayments = filtered.length;
+        const totalPages = (paymentsPageSize === 'all' || totalPayments === 0) ? 1 : Math.ceil(totalPayments / paymentsPageSize);
+        if (paymentsCurrentPage > totalPages) paymentsCurrentPage = totalPages;
+        if (paymentsCurrentPage < 1) paymentsCurrentPage = 1;
+
+        const startIdx = (paymentsPageSize === 'all') ? 0 : (paymentsCurrentPage - 1) * paymentsPageSize;
+        const endIdx = (paymentsPageSize === 'all') ? totalPayments : Math.min(startIdx + paymentsPageSize, totalPayments);
+        const pagedPayments = (paymentsPageSize === 'all') ? filtered : filtered.slice(startIdx, endIdx);
+
         const countBadge = document.getElementById('paymentCountBadge');
         if (countBadge) {
             countBadge.innerText = `${filtered.length} of ${currentInstructorPayments.length} Records`;
         }
 
-        if (filtered.length === 0) {
+        const summaryStr = (paymentsPageSize === 'all')
+            ? `Showing all ${totalPayments} payments`
+            : (totalPayments === 0 ? 'Showing 0 of 0 payments' : `Showing ${startIdx + 1}–${endIdx} of ${totalPayments} payments`);
+        const topSummary = document.getElementById('paymentsTopPaginationSummary');
+        if (topSummary) topSummary.innerText = summaryStr;
+        const botSummary = document.getElementById('paymentsBottomPaginationSummary');
+        if (botSummary) botSummary.innerText = summaryStr;
+
+        if (totalPayments === 0) {
             const msg = currentInstructorPayments.length === 0
                 ? "No installment payments recorded yet. Total balance remains outstanding."
                 : "No payment records match the selected filters.";
             paymentsTbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 20px; font-style: italic;">${msg}</td></tr>`;
+            renderPaymentsPagination(0);
             return;
         }
 
-        filtered.forEach(p => {
+        pagedPayments.forEach(p => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-family: monospace; font-size: 0.88rem; white-space: nowrap;">${escapeHtml(p.date_display || p.payment_date)}</td>
@@ -1245,6 +1420,56 @@
             `;
             paymentsTbody.appendChild(tr);
         });
+
+        renderPaymentsPagination(totalPages);
+    }
+
+    function renderPaymentsPagination(totalPages) {
+        const topPills = document.getElementById('paymentsTopPaginationPills');
+        const botBtns = document.getElementById('paymentsBottomPaginationButtons');
+
+        if (totalPages <= 1) {
+            if (topPills) topPills.innerHTML = '';
+            if (botBtns) botBtns.innerHTML = '';
+            return;
+        }
+
+        if (topPills) {
+            topPills.innerHTML = `
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPaymentsPage(${paymentsCurrentPage - 1})" ${paymentsCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px;">Page ${paymentsCurrentPage} of ${totalPages}</span>
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPaymentsPage(${paymentsCurrentPage + 1})" ${paymentsCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+            `;
+        }
+
+        if (botBtns) {
+            let html = `<button type="button" class="pagination-btn" onclick="goToPaymentsPage(1)" ${paymentsCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPaymentsPage(${paymentsCurrentPage - 1})" ${paymentsCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+            const maxP = 5;
+            let startP = Math.max(1, paymentsCurrentPage - 2);
+            let endP = Math.min(totalPages, startP + maxP - 1);
+            if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+            for (let p = startP; p <= endP; p++) {
+                html += `<button type="button" class="pagination-btn ${p === paymentsCurrentPage ? 'active' : ''}" onclick="goToPaymentsPage(${p})">${p}</button>`;
+            }
+
+            html += `<button type="button" class="pagination-btn" onclick="goToPaymentsPage(${paymentsCurrentPage + 1})" ${paymentsCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPaymentsPage(${totalPages})" ${paymentsCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+            botBtns.innerHTML = html;
+        }
+    }
+
+    function goToPaymentsPage(p) {
+        paymentsCurrentPage = p;
+        renderPaymentsTable();
+    }
+
+    function changePaymentsPageSize(val) {
+        paymentsPageSize = (val === 'all') ? 'all' : (parseInt(val, 10) || 10);
+        paymentsCurrentPage = 1;
+        renderPaymentsTable();
     }
 
     // -------------------------------------------------------------
@@ -1407,7 +1632,14 @@
         if (window.executePrintRehydration) {
             window.executePrintRehydration();
         }
+        const prevSize = paymentsPageSize;
+        const prevPage = paymentsCurrentPage;
+        paymentsPageSize = 'all';
+        renderPaymentsTable();
         window.print();
+        paymentsPageSize = prevSize;
+        paymentsCurrentPage = prevPage;
+        renderPaymentsTable();
     }
 </script>
 </body>

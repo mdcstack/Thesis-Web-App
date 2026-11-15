@@ -301,6 +301,12 @@
                 gap: 10px !important;
             }
         }
+
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -356,10 +362,24 @@
                     <option value="">-- All Sections --</option>
                 </select>
 
+                <!-- Page Size Selector -->
+                <select id="filterPageSize" onchange="changePageSize(this.value)" style="width: 130px; height: 44px; padding: 0 10px; font-size: 0.95rem; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; cursor: pointer; color: #1e293b; flex-shrink: 0;" title="Rows per page">
+                    <option value="10" selected>10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
+                </select>
+
                 <!-- Refresh / Reset Button inside the filter bar -->
                 <button type="button" onclick="refreshData()" class="btn-refresh-icon" title="Clear filters & Refresh">
                     🔄
                 </button>
+            </div>
+
+            <!-- DIRECTORY SUMMARY & TOP PAGINATION -->
+            <div id="topPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; color: #64748b; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px 0;">
+                <div id="topPaginationSummary" style="font-weight: 600; color: #334155;">Loading records...</div>
+                <div id="topPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
             </div>
 
             <div class="table-responsive">
@@ -378,6 +398,14 @@
                         <tr><td colspan="6" style="text-align: center;">Loading records...</td></tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- BOTTOM PAGINATION -->
+            <div id="bottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 12px; margin-top: 14px;">
+                <div id="bottomPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 records
+                </div>
+                <div id="bottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
             </div>
         </div>
     </div>
@@ -512,6 +540,9 @@
     let globalBookletPrice = [];
     let allSections = [];
     let isDateRangeActive = false;
+    let receiptsCurrentPage = 1;
+    let receiptsPageSize = 10;
+    let currentFilteredReceipts = [];
 
     window.onload = function() {
         fetchData();
@@ -643,6 +674,10 @@
         document.getElementById('filterTeacher').value = "";
         document.getElementById('filterDept').value = "";
         document.getElementById('filterSection').value = "";
+        const sizeSelect = document.getElementById('filterPageSize');
+        if (sizeSelect) sizeSelect.value = "10";
+        receiptsPageSize = 10;
+        receiptsCurrentPage = 1;
     }
 
     function populateDropdowns() {
@@ -702,7 +737,10 @@
         });
     }
 
-    function applyFilters() {
+    function applyFilters(keepPage = false) {
+        if (!keepPage) {
+            receiptsCurrentPage = 1;
+        }
         const teacher = document.getElementById('filterTeacher').value;
         const dept = document.getElementById('filterDept').value;
         const section = document.getElementById('filterSection').value;
@@ -762,19 +800,36 @@
             filtered = filtered.filter(row => row.section === section);
         }
 
+        currentFilteredReceipts = filtered;
         renderTable(filtered);
     }
 
     function renderTable(dataArray) {
+        currentFilteredReceipts = dataArray || [];
+        const total = currentFilteredReceipts.length;
+        const totalPages = (receiptsPageSize >= 999999) ? 1 : (Math.ceil(total / receiptsPageSize) || 1);
+        if (receiptsCurrentPage > totalPages) receiptsCurrentPage = totalPages;
+        if (receiptsCurrentPage < 1) receiptsCurrentPage = 1;
+
+        const startIdx = (receiptsCurrentPage - 1) * receiptsPageSize;
+        const endIdx = Math.min(startIdx + receiptsPageSize, total);
+        const pageData = (receiptsPageSize >= 999999) ? currentFilteredReceipts : currentFilteredReceipts.slice(startIdx, endIdx);
+
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
 
-        if (dataArray.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #7f8c8d;">No distribution records match your filters.</td></tr>';
+        if (total === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #7f8c8d; padding: 25px;">No distribution records match your filters.</td></tr>';
+            const summaryStr = 'Showing 0 of 0 records';
+            const topSum = document.getElementById('topPaginationSummary');
+            if (topSum) topSum.innerText = summaryStr;
+            const botSum = document.getElementById('bottomPaginationSummary');
+            if (botSum) botSum.innerText = summaryStr;
+            renderReceiptsPagination(0);
             return;
         }
 
-        dataArray.forEach((row, index) => {
+        pageData.forEach((row, index) => {
             const globalIndex = globalReceipts.indexOf(row);
 
             let tr = document.createElement('tr');
@@ -792,6 +847,65 @@
             `;
             tbody.appendChild(tr);
         });
+
+        const summaryStr = (receiptsPageSize >= 999999)
+            ? `Showing all ${total} records`
+            : `Showing ${startIdx + 1}–${endIdx} of ${total} records`;
+
+        const topSum = document.getElementById('topPaginationSummary');
+        if (topSum) topSum.innerText = summaryStr;
+        const botSum = document.getElementById('bottomPaginationSummary');
+        if (botSum) botSum.innerText = summaryStr;
+
+        renderReceiptsPagination(totalPages);
+    }
+
+    function renderReceiptsPagination(totalPages) {
+        const topPills = document.getElementById('topPaginationPills');
+        const botBtns = document.getElementById('bottomPaginationButtons');
+
+        if (totalPages <= 1) {
+            if (topPills) topPills.innerHTML = '';
+            if (botBtns) botBtns.innerHTML = '';
+            return;
+        }
+
+        if (topPills) {
+            topPills.innerHTML = `
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPage(${receiptsCurrentPage - 1})" ${receiptsCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px;">Page ${receiptsCurrentPage} of ${totalPages}</span>
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPage(${receiptsCurrentPage + 1})" ${receiptsCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+            `;
+        }
+
+        if (botBtns) {
+            let html = `<button type="button" class="pagination-btn" onclick="goToPage(1)" ${receiptsCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${receiptsCurrentPage - 1})" ${receiptsCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+            const maxP = 5;
+            let startP = Math.max(1, receiptsCurrentPage - 2);
+            let endP = Math.min(totalPages, startP + maxP - 1);
+            if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+            for (let p = startP; p <= endP; p++) {
+                html += `<button type="button" class="pagination-btn ${p === receiptsCurrentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+            }
+
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${receiptsCurrentPage + 1})" ${receiptsCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${totalPages})" ${receiptsCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+            botBtns.innerHTML = html;
+        }
+    }
+
+    function goToPage(p) {
+        receiptsCurrentPage = p;
+        renderTable(currentFilteredReceipts);
+    }
+
+    function changePageSize(val) {
+        receiptsPageSize = (val === 'all') ? 999999 : (parseInt(val, 10) || 10);
+        receiptsCurrentPage = 1;
+        renderTable(currentFilteredReceipts);
     }
 
     var currentReceiptIndex = null;
@@ -925,7 +1039,7 @@
                 var tBody = document.getElementById('tableBody');
                 if (tBody) {
                     window.protectContainer(tBody, function() {
-                        applyFilters();
+                        applyFilters(true);
                     });
                 }
             }

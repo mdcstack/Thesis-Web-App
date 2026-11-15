@@ -150,6 +150,12 @@
         }
 
             @media (max-width: 900px) { .mobile-hide { display: none !important; } }
+
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -204,8 +210,21 @@
                     <option value="Partially Paid">🟠 Partially Paid</option>
                     <option value="Unpaid">🔴 Unpaid</option>
                 </select>
+
+                <select id="filterPageSize" onchange="changePageSize(this.value)" style="width: 130px; height: 44px; padding: 0 10px; font-size: 0.95rem; border: 1px solid #ccc; border-radius: 4px; background-color: #fff; cursor: pointer; color: #2c3e50; flex-shrink: 0;" title="Rows per page">
+                    <option value="10" selected>10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
+                </select>
                 
                 <button class="btn-refresh" onclick="refreshData()" title="Refresh Database">🔄</button>
+            </div>
+
+            <!-- DIRECTORY SUMMARY & TOP PAGINATION -->
+            <div id="topPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; color: #64748b; flex-wrap: wrap; gap: 8px; margin: 12px 0 8px 0;">
+                <div id="topPaginationSummary" style="font-weight: 600; color: #334155;">Loading records...</div>
+                <div id="topPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
             </div>
 
             <table id="auditTable">
@@ -227,6 +246,14 @@
                     </tr>
                 </tbody>
             </table>
+
+            <!-- BOTTOM PAGINATION -->
+            <div id="bottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 12px; margin-top: 14px;">
+                <div id="bottomPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 records
+                </div>
+                <div id="bottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
         </div>
     </div>
 
@@ -280,6 +307,9 @@
     let allSections = [];
     let matchedKeys = null; 
     let systemActivePeriod = "";
+    let historyCurrentPage = 1;
+    let historyPageSize = 10;
+    let currentFilteredHistory = [];
     
     // --- IN-APP MODAL DIALOG SYSTEM ---
     function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
@@ -455,12 +485,21 @@ ${message}`));
             }
         });
     }
-    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    if (window.updateSidebarUser) {
+        window.updateSidebarUser(activeUser);
+    } else {
+        const uEl = document.getElementById('loggedInUser');
+        if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+        const rEl = document.getElementById('loggedInRole');
+        if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+    }
     if (activeUser.role !== 'Admin') {
         document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
         const navUsers = document.getElementById('navManageUsers');
-        if (navUsers) navUsers.innerHTML = '👤 My Account';
+        if (navUsers) {
+            navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+            navUsers.title = 'My Account';
+        }
     }
 
     async function logout() {
@@ -646,6 +685,11 @@ ${message}`));
         if (document.getElementById('filterPaymentStatus')) {
             document.getElementById('filterPaymentStatus').value = "";
         }
+        if (document.getElementById('filterPageSize')) {
+            document.getElementById('filterPageSize').value = "10";
+        }
+        historyPageSize = 10;
+        historyCurrentPage = 1;
         matchedKeys = null; 
         fetchData();
     }
@@ -700,7 +744,10 @@ ${message}`));
         }, 500); 
     }
 
-    function applyFilters() {
+    function applyFilters(keepPage = false) {
+        if (!keepPage) {
+            historyCurrentPage = 1;
+        }
         const targetDate = document.getElementById('filterDate').value;
         const teacher = document.getElementById('filterTeacher').value;
         const dept = document.getElementById('filterDept').value;
@@ -753,6 +800,7 @@ ${message}`));
         if (section) filtered = filtered.filter(row => row.section === section);
         if (status) filtered = filtered.filter(row => row.payment_status === status);
         
+        currentFilteredHistory = filtered;
         renderTable(filtered);
     }
 
@@ -766,15 +814,31 @@ ${message}`));
     }
 
     function _executeRenderTable(dataArray) {
+        currentFilteredHistory = dataArray || [];
+        const total = currentFilteredHistory.length;
+        const totalPages = (historyPageSize >= 999999) ? 1 : (Math.ceil(total / historyPageSize) || 1);
+        if (historyCurrentPage > totalPages) historyCurrentPage = totalPages;
+        if (historyCurrentPage < 1) historyCurrentPage = 1;
+
+        const startIdx = (historyCurrentPage - 1) * historyPageSize;
+        const endIdx = Math.min(startIdx + historyPageSize, total);
+        const pageData = (historyPageSize >= 999999) ? currentFilteredHistory : currentFilteredHistory.slice(startIdx, endIdx);
+
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         
-        if (dataArray.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #7f8c8d;">No records match your filters.</td></tr>';
+        if (total === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #7f8c8d; padding: 25px;">No records match your filters.</td></tr>';
+            const summaryStr = 'Showing 0 of 0 records';
+            const topSum = document.getElementById('topPaginationSummary');
+            if (topSum) topSum.innerText = summaryStr;
+            const botSum = document.getElementById('bottomPaginationSummary');
+            if (botSum) botSum.innerText = summaryStr;
+            renderHistoryPagination(0);
             return;
         }
 
-        dataArray.forEach(row => {
+        pageData.forEach(row => {
             let tr = document.createElement('tr');
             let actionHtml = "";
             
@@ -833,7 +897,7 @@ ${message}`));
                         Due: ₱${totalBill.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (@ ₱${price.toFixed(2)})
                     </div>
                     <div style="margin-top: 2px;">
-                        <a href="/payment-tracking" style="font-size: 0.72rem; color: #3498db; text-decoration: none; font-weight: bold;">💳 Settle Balance ➔</a>
+                        <a href="/payment-tracking" style="font-size: 0.72rem; color: #3498db; text-decoration: none; font-weight: bold;">Settle Balance</a>
                     </div>
                 `;
             }
@@ -876,12 +940,72 @@ ${message}`));
             `;
             tbody.appendChild(tr);
         });
+
+        // Summary string
+        const summaryStr = (historyPageSize >= 999999)
+            ? `Showing all ${total} records`
+            : `Showing ${startIdx + 1}–${endIdx} of ${total} records`;
+
+        const topSum = document.getElementById('topPaginationSummary');
+        if (topSum) topSum.innerText = summaryStr;
+        const botSum = document.getElementById('bottomPaginationSummary');
+        if (botSum) botSum.innerText = summaryStr;
+
+        renderHistoryPagination(totalPages);
+    }
+
+    function renderHistoryPagination(totalPages) {
+        const topPills = document.getElementById('topPaginationPills');
+        const botBtns = document.getElementById('bottomPaginationButtons');
+
+        if (totalPages <= 1) {
+            if (topPills) topPills.innerHTML = '';
+            if (botBtns) botBtns.innerHTML = '';
+            return;
+        }
+
+        if (topPills) {
+            topPills.innerHTML = `
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPage(${historyCurrentPage - 1})" ${historyCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px;">Page ${historyCurrentPage} of ${totalPages}</span>
+                <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToPage(${historyCurrentPage + 1})" ${historyCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+            `;
+        }
+
+        if (botBtns) {
+            let html = `<button type="button" class="pagination-btn" onclick="goToPage(1)" ${historyCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${historyCurrentPage - 1})" ${historyCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+            const maxP = 5;
+            let startP = Math.max(1, historyCurrentPage - 2);
+            let endP = Math.min(totalPages, startP + maxP - 1);
+            if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+            for (let p = startP; p <= endP; p++) {
+                html += `<button type="button" class="pagination-btn ${p === historyCurrentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+            }
+
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${historyCurrentPage + 1})" ${historyCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+            html += `<button type="button" class="pagination-btn" onclick="goToPage(${totalPages})" ${historyCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+            botBtns.innerHTML = html;
+        }
+    }
+
+    function goToPage(p) {
+        historyCurrentPage = p;
+        renderTable(currentFilteredHistory);
+    }
+
+    function changePageSize(val) {
+        historyPageSize = (val === 'all') ? 999999 : (parseInt(val, 10) || 10);
+        historyCurrentPage = 1;
+        renderTable(currentFilteredHistory);
     }
 
     // Register pre-print rehydration to wipe out Inspect Element edits
     if (window.registerPrintRehydrator) {
         window.registerPrintRehydrator(function() {
-            applyFilters();
+            applyFilters(true);
         });
     }
 
@@ -892,7 +1016,7 @@ ${message}`));
                 var tbody = document.getElementById('tableBody');
                 if (tbody) {
                     window.protectContainer(tbody, function() {
-                        applyFilters();
+                        applyFilters(true);
                     });
                 }
             }

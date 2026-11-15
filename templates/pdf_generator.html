@@ -152,7 +152,11 @@
             transform: translateY(-1px);
         }
 
-
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -167,6 +171,9 @@
                 <p style="margin: 0; color: #64748b; font-size: 0.88rem;">Automated Master Batch Stamping &amp; Sequential Control Numbering</p>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="/material-spoilage" style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #b91c1c; border: 1.5px solid #fecaca; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.86rem; cursor: pointer; text-decoration: none; transition: all 0.2s;" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'" title="Record printer paper jams, misprinted sheets, or defective booklets">
+                    <span>📉</span> Log Paper Jam / Spoilage
+                </a>
                 <button type="button" class="btn-storage-loc" onclick="openStorageModal('front_page_pdfs')" style="display: inline-flex; align-items: center; gap: 6px; background: #ffffff; color: #334155; border: 1.5px solid #cbd5e1; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.86rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#ffffff'">
                     <span>📁</span> Storage Location
                 </button>
@@ -378,7 +385,7 @@
             </div>
 
             <!-- Batches Table Filter Toolbar -->
-            <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center;">
                 <input type="text" id="batchSearchInput" placeholder="🔍 Search Batch ID, Control No, or SRN..." oninput="filterBatchesTable()" style="flex: 1; min-width: 220px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none;">
                 <select id="batchCourseFilter" onchange="filterBatchesTable()" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; background: white;">
                     <option value="ALL">All Courses</option>
@@ -388,6 +395,20 @@
                     <option value="EXISTS">🟢 Available on Disk</option>
                     <option value="MISSING">🔴 Missing from Disk</option>
                 </select>
+                <select id="batchPageSize" onchange="changeBatchPageSize(this.value)" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; outline: none; background: white; cursor: pointer;" title="Batches per page">
+                    <option value="10" selected>10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
+                </select>
+            </div>
+
+            <!-- TOP BATCHES PAGINATION CONTROLS -->
+            <div id="batchTopPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div id="batchTopPaginationSummary" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                    Showing 0 of 0 batches
+                </div>
+                <div id="batchTopPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
             </div>
 
             <!-- Batches Table -->
@@ -409,6 +430,14 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- BOTTOM BATCHES PAGINATION CONTROLS -->
+            <div id="batchBottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px; padding: 10px 4px 4px 4px; border-top: 1px solid #e2e8f0;">
+                <div id="batchBottomPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 batches
+                </div>
+                <div id="batchBottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
             </div>
         </div>
     </div>
@@ -665,15 +694,24 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
     if (!activeUser) {
         window.location.href = '/login';
     } else {
-        document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-        document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+        if (window.updateSidebarUser) {
+            window.updateSidebarUser(activeUser);
+        } else {
+            const uEl = document.getElementById('loggedInUser');
+            if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+            const rEl = document.getElementById('loggedInRole');
+            if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+        }
 
         // NEW: Hide admin-only links (Manage Classes) if the user is a clerk
         if (activeUser.role !== 'Admin') {
             const adminLinks = document.querySelectorAll('.admin-only');
             adminLinks.forEach(link => link.style.display = 'none');
             const navUsers = document.getElementById('navManageUsers');
-            if (navUsers) navUsers.innerHTML = '👤 My Account';
+            if (navUsers) {
+                navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+                navUsers.title = 'My Account';
+            }
         }
     }
 
@@ -2296,10 +2334,16 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     })
                 });
                 
-                const data = await response.json();
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (jsonErr) {
+                    const rawText = await response.text();
+                    data = { detail: rawText || `Server error (${response.status})` };
+                }
                 clearInterval(progressTimer);
 
-                if (response.ok) {
+                if (response.ok && data && data.master_batch_id) {
                     if (pBar) pBar.style.width = '100%';
                     if (pPercent) pPercent.innerText = '100%';
                     if (pEta) pEta.innerText = 'Complete!';
@@ -2356,11 +2400,11 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 } else {
                     isStampingInProgress = false;
                     modal.style.display = 'none';
-                    if (data.detail && (data.detail.includes("examination period") || data.detail.includes("UNSET") || data.detail.includes("template"))) {
+                    if (data && data.detail && (data.detail.includes("examination period") || data.detail.includes("UNSET") || data.detail.includes("template"))) {
                         await fetchGeneratorSettings();
                         await fetchTemplateStatuses(false);
                     }
-                    await showAppAlert("Batch Production Error", data.detail || "Could not generate batch.", "danger");
+                    await showAppAlert("Batch Production Error", (data && data.detail) || "Could not generate batch.", "danger");
                     msg.style.display = 'none';
                 }
             } catch (error) {
@@ -2368,7 +2412,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 isStampingInProgress = false;
                 modal.style.display = 'none';
                 console.error(error);
-                await showAppAlert("Connection Error", "A network error occurred while reaching the offline server.", "danger");
+                await showAppAlert("Connection Error", "A network error occurred while reaching the offline server: " + (error.message || "Cannot connect"), "danger");
                 msg.style.display = 'none';
             } finally {
                 btn.disabled = false;
@@ -2484,6 +2528,14 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
         // PHYSICAL STORAGE LOCATION & BATCH RECOVERY
         // ==========================================
         let _allBatches = [];
+        let batchCurrentPage = 1;
+        let batchPageSize = 10;
+        let currentFilteredBatches = [];
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
 
         async function openStorageModal() {
             const modal = document.getElementById('storageLocationModal');
@@ -2624,9 +2676,13 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             }
         }
 
-        function filterBatchesTable() {
+        function filterBatchesTable(keepPage = false) {
             const tbody = document.getElementById('batchHistoryTableBody');
             if (!tbody) return;
+
+            if (!keepPage) {
+                batchCurrentPage = 1;
+            }
 
             const search = (document.getElementById('batchSearchInput')?.value || '').toLowerCase().trim();
             const course = document.getElementById('batchCourseFilter')?.value || 'ALL';
@@ -2647,12 +2703,38 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 return true;
             });
 
-            if (filtered.length === 0) {
+            currentFilteredBatches = filtered;
+            const total = filtered.length;
+
+            const countBadge = document.getElementById('batchCountBadge');
+            if (countBadge) {
+                countBadge.innerText = `${total} Batch${total === 1 ? '' : 'es'}`;
+            }
+
+            const totalPages = (batchPageSize >= 999999) ? 1 : (Math.ceil(total / batchPageSize) || 1);
+            if (batchCurrentPage > totalPages) batchCurrentPage = totalPages;
+            if (batchCurrentPage < 1) batchCurrentPage = 1;
+
+            const startIdx = (batchPageSize >= 999999) ? 0 : (batchCurrentPage - 1) * batchPageSize;
+            const endIdx = (batchPageSize >= 999999) ? total : Math.min(startIdx + batchPageSize, total);
+            const pagedBatches = (batchPageSize >= 999999) ? filtered : filtered.slice(startIdx, endIdx);
+
+            const summaryStr = (batchPageSize >= 999999)
+                ? `Showing all ${total} batches`
+                : (total === 0 ? 'Showing 0 of 0 batches' : `Showing ${startIdx + 1}–${endIdx} of ${total} batches`);
+
+            const topSummary = document.getElementById('batchTopPaginationSummary');
+            if (topSummary) topSummary.innerText = summaryStr;
+            const botSummary = document.getElementById('batchBottomPaginationSummary');
+            if (botSummary) botSummary.innerText = summaryStr;
+
+            if (total === 0) {
                 tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 25px;">No batches found matching filter.</td></tr>`;
+                renderBatchPagination(0);
                 return;
             }
 
-            tbody.innerHTML = filtered.map(b => {
+            tbody.innerHTML = pagedBatches.map(b => {
                 const dateStr = b.created_at ? new Date(b.created_at).toLocaleString() : '--';
                 const fileBadge = b.file_exists
                     ? `<span style="display: inline-flex; align-items: center; gap: 4px; color: #166534; background: #dcfce7; padding: 3px 8px; border-radius: 12px; font-size: 0.78rem; font-weight: 600;">🟢 On Disk</span>`
@@ -2661,30 +2743,30 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 return `
                     <tr style="border-bottom: 1px solid #f1f5f9;">
                         <td style="padding: 10px 12px;">
-                            <div style="font-weight: 700; color: #1e293b; font-family: monospace;">${b.master_batch_id}</div>
-                            <div style="font-size: 0.78rem; color: #64748b;">${b.pdf_filename || ''}</div>
+                            <div style="font-weight: 700; color: #1e293b; font-family: monospace;">${escapeHtml(b.master_batch_id || '')}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">${escapeHtml(b.pdf_filename || '')}</div>
                         </td>
                         <td style="padding: 10px 12px;">
-                            <div style="font-weight: 600; color: #2563eb;">${b.department || 'N/A'}</div>
-                            <div style="font-size: 0.78rem; color: #64748b;">Slot ${b.template_slot || '1'}</div>
+                            <div style="font-weight: 600; color: #2563eb;">${escapeHtml(b.department || 'N/A')}</div>
+                            <div style="font-size: 0.78rem; color: #64748b;">Slot ${escapeHtml(b.template_slot || '1')}</div>
                         </td>
                         <td style="padding: 10px 12px;">
                             <div style="font-weight: 600; color: #1e293b;">${(b.booklets_generated || 0).toLocaleString()} Booklets <span style="font-size: 0.78rem; color: #64748b; font-weight: normal;">(${b.reams_consumed || 0} Ream${b.reams_consumed === 1 ? '' : 's'})</span></div>
-                            <div style="font-family: monospace; font-size: 0.78rem; color: #475569;">${b.start_control_num || '--'} ➔ ${b.end_control_num || '--'}</div>
-                            <div style="font-family: monospace; font-size: 0.75rem; color: #2563eb;">${b.start_srn || '--'} ➔ ${b.end_srn || '--'}</div>
+                            <div style="font-family: monospace; font-size: 0.78rem; color: #475569;">${escapeHtml(b.start_control_num || '--')} ➔ ${escapeHtml(b.end_control_num || '--')}</div>
+                            <div style="font-family: monospace; font-size: 0.75rem; color: #2563eb;">${escapeHtml(b.start_srn || '--')} ➔ ${escapeHtml(b.end_srn || '--')}</div>
                         </td>
                         <td style="padding: 10px 12px; font-size: 0.82rem; color: #64748b;">
-                            ${dateStr}
+                            ${escapeHtml(dateStr)}
                         </td>
                         <td style="padding: 10px 12px;">
                             ${fileBadge}
                         </td>
                         <td style="padding: 10px 12px; text-align: right;">
                             <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                                <a href="${b.download_url}" target="_blank" style="text-decoration: none; background: #2563eb; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                                <a href="${escapeHtml(b.download_url || '#')}" target="_blank" style="text-decoration: none; background: #2563eb; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
                                     📥 Download
                                 </a>
-                                <button type="button" onclick="regenerateBatchPdf('${b.master_batch_id}')" title="Reconstruct PDF from database records" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                <button type="button" onclick="regenerateBatchPdf('${escapeHtml(b.master_batch_id || '')}')" title="Reconstruct PDF from database records" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; padding: 5px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                                     ⚡ Regenerate
                                 </button>
                             </div>
@@ -2692,6 +2774,57 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     </tr>
                 `;
             }).join('');
+
+            renderBatchPagination(totalPages);
+        }
+
+        function renderBatchPagination(totalPages) {
+            const topPills = document.getElementById('batchTopPaginationPills');
+            const botBtns = document.getElementById('batchBottomPaginationButtons');
+
+            if (totalPages <= 1) {
+                if (topPills) topPills.innerHTML = '';
+                if (botBtns) botBtns.innerHTML = '';
+                return;
+            }
+
+            if (topPills) {
+                topPills.innerHTML = `
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToBatchPage(${batchCurrentPage - 1})" ${batchCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                    <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px; color: #475569;">Page ${batchCurrentPage} of ${totalPages}</span>
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToBatchPage(${batchCurrentPage + 1})" ${batchCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+                `;
+            }
+
+            if (botBtns) {
+                let html = `<button type="button" class="pagination-btn" onclick="goToBatchPage(1)" ${batchCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToBatchPage(${batchCurrentPage - 1})" ${batchCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+                const maxP = 5;
+                let startP = Math.max(1, batchCurrentPage - 2);
+                let endP = Math.min(totalPages, startP + maxP - 1);
+                if (endP - startP + 1 < maxP) startP = Math.max(1, endP - maxP + 1);
+
+                for (let p = startP; p <= endP; p++) {
+                    const isActive = p === batchCurrentPage ? 'active' : '';
+                    html += `<button type="button" class="pagination-btn ${isActive}" onclick="goToBatchPage(${p})">${p}</button>`;
+                }
+
+                html += `<button type="button" class="pagination-btn" onclick="goToBatchPage(${batchCurrentPage + 1})" ${batchCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToBatchPage(${totalPages})" ${batchCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+                botBtns.innerHTML = html;
+            }
+        }
+
+        function goToBatchPage(p) {
+            batchCurrentPage = p;
+            filterBatchesTable(true);
+        }
+
+        function changeBatchPageSize(val) {
+            batchPageSize = (val === 'all') ? 999999 : (parseInt(val, 10) || 10);
+            batchCurrentPage = 1;
+            filterBatchesTable(true);
         }
 
         async function regenerateBatchPdf(batchId) {
@@ -2757,10 +2890,16 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                const data = await res.json();
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    const rawText = await res.text();
+                    data = { detail: rawText || `Server error (${res.status})` };
+                }
                 clearInterval(progressTimer);
 
-                if (res.ok) {
+                if (res.ok && data) {
                     if (pBar) pBar.style.width = '100%';
                     if (pPercent) pPercent.innerText = '100%';
                     if (pEta) pEta.innerText = 'Complete!';
@@ -2845,10 +2984,16 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                const data = await res.json();
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    const rawText = await res.text();
+                    data = { detail: rawText || `Server error (${res.status})` };
+                }
                 clearInterval(progressTimer);
 
-                if (res.ok) {
+                if (res.ok && data) {
                     if (pBar) pBar.style.width = '100%';
                     if (pPercent) pPercent.innerText = '100%';
                     if (pEta) pEta.innerText = 'Complete!';

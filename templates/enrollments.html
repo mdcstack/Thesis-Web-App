@@ -158,6 +158,89 @@
             border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
 
+        /* Section Code Builder Component */
+        .section-input-group {
+            display: flex;
+            align-items: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #ffffff;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            width: 100%;
+            height: 42px;
+            box-sizing: border-box;
+        }
+        .section-input-group:focus-within {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        .section-input-group.invalid {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+        }
+        .section-prefix-badge {
+            background: #f1f5f9;
+            color: #1e293b;
+            font-weight: 800;
+            font-size: 0.95rem;
+            padding: 0 12px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid #cbd5e1;
+            user-select: none;
+            pointer-events: none;
+            letter-spacing: 0.05em;
+        }
+        .section-segment {
+            border: none !important;
+            outline: none !important;
+            padding: 8px 8px !important;
+            font-family: monospace, inherit !important;
+            font-size: 0.95rem !important;
+            font-weight: 700 !important;
+            color: #1e293b !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            height: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .section-segment::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+            font-family: inherit;
+        }
+        .sec-prog {
+            flex: 1.5;
+            min-width: 60px;
+            text-transform: uppercase;
+            padding-left: 10px !important;
+        }
+        .section-dash-separator {
+            color: #64748b;
+            font-weight: 800;
+            font-size: 1.15rem;
+            padding: 0 4px;
+            user-select: none;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sec-year {
+            width: 44px;
+            text-align: center;
+            padding: 8px 4px !important;
+        }
+        .sec-letter {
+            width: 44px;
+            text-align: center;
+            text-transform: uppercase;
+            padding: 8px 4px !important;
+        }
+
         /* Bulk Import Tabs & Dropzone */
         .bulk-tab-btn { padding: 9px 16px; font-weight: 700; border: none; background: #e2e8f0; color: #475569; border-radius: 6px 6px 0 0; cursor: pointer; font-size: 0.86rem; transition: all 0.15s; }
         .bulk-tab-btn.active { background: #2563eb; color: white; }
@@ -438,8 +521,6 @@
                     </h3>
                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 0.85rem; color: #64748b; flex-wrap: wrap;">
                         <span id="detailModalDeptBadge" class="badge-dept badge-cs">CS</span>
-                        <span id="detailModalUsername" class="username-chip">@username</span>
-                        <span>•</span>
                         <span id="detailModalStatsText" style="font-weight: 600; color: #334155;">0 Subjects • 0 Sections • 0 Pax</span>
                         <span>•</span>
                         <span id="detailModalLockBadge" class="status-pill status-submitted">🟢 Open</span>
@@ -547,7 +628,7 @@
         <div class="modal-card" style="max-width: 800px;">
             <div class="modal-header">
                 <div>
-                    <h3><span>📥</span> Import Faculty Roster</h3>
+                    <h3>Import Faculty Roster</h3>
                     <p style="margin: 3px 0 0 0; color: #64748b; font-size: 0.8rem;">
                         Onboard faculty members for this semester. System automatically provisions accounts in <strong>Manage Users</strong>.
                     </p>
@@ -557,8 +638,8 @@
 
             <!-- TABS -->
             <div style="display: flex; gap: 5px; border-bottom: 2px solid #e2e8f0; margin-bottom: 15px;">
-                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('roster')">📁 Faculty Roster Import</button>
-                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('schedule')">⚡ Advanced: Full Schedule Import</button>
+                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('roster')">Faculty Roster Import</button>
+                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('schedule')">Advanced: Full Schedule Import</button>
             </div>
 
             <!-- TAB 1: FACULTY ROSTER (FILE UPLOAD & DIRECT PASTE UNIFIED) -->
@@ -738,10 +819,40 @@
                 </div>
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <label for="section" style="margin: 0;">Section</label>
+                        <label for="sec_program" style="margin: 0;">Section</label>
                         <span id="section-dept-badge" style="font-size: 0.75rem; font-weight: 700;"></span>
                     </div>
-                    <input type="text" id="section" placeholder="e.g., BSCS-1E" required autocomplete="off">
+
+                    <!-- Structured Section Code Builder Group -->
+                    <div class="section-input-group" id="sectionInputGroup">
+                        <span class="section-prefix-badge" title="Permanent Bachelor of Science prefix">BS</span>
+                        <input type="text" id="sec_program" class="section-segment sec-prog" 
+                               placeholder="CS" maxlength="6" autocomplete="off" list="sectionProgramDatalist"
+                               oninput="onSectionSegmentInput(this, 'program')"
+                               title="Course code configured in Settings (e.g., CS, IT, CPE)">
+                        <datalist id="sectionProgramDatalist"></datalist>
+
+                        <span class="section-dash-separator">-</span>
+
+                        <input type="text" id="sec_year" class="section-segment sec-year" 
+                               placeholder="1" maxlength="1" inputmode="numeric" pattern="[1-9]" autocomplete="off"
+                               oninput="onSectionSegmentInput(this, 'year')"
+                               title="Year level digit (e.g., 1, 2, 3, 4)">
+
+                        <input type="text" id="sec_letter" class="section-segment sec-letter" 
+                               placeholder="A" maxlength="2" autocomplete="off"
+                               oninput="onSectionSegmentInput(this, 'letter')"
+                               title="Section letter (e.g., A, B, E)">
+                    </div>
+
+                    <!-- Hidden synchronized master section input for form submission and duplicate checks -->
+                    <input type="hidden" id="section" name="section" required>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 0.76rem;">
+                        <span style="color: #64748b;">Format: <strong>BS[Course]-[Year][Section]</strong> (e.g., BSCS-1E)</span>
+                        <span id="section-preview-tag" style="font-weight: 700; color: #2563eb; font-family: monospace;"></span>
+                    </div>
+                    <div id="section_builder_error" style="display: none; color: #dc2626; font-size: 0.78rem; font-weight: 600; margin-top: 4px;"></div>
                 </div>
                 <div class="form-group">
                     <label for="subject">Subject</label>
@@ -1185,7 +1296,6 @@
                         <tr onclick="openInstructorDetailModal('${escapeHtml(inst.name)}')" title="Click row to view and edit ${escapeHtml(inst.name)}'s classes">
                             <td>
                                 <strong style="color: #0f172a; font-size: 0.94rem;">${escapeHtml(inst.name)}</strong>
-                                <span class="username-chip">@${escapeHtml(inst.username || 'user')}</span>
                             </td>
                             <td style="text-align: center;">
                                 <span class="badge-dept ${deptClass}">${escapeHtml(inst.department || 'CS')}</span>
@@ -1322,7 +1432,6 @@
 
             const titleName = document.getElementById('detailModalTeacherName');
             const deptBadge = document.getElementById('detailModalDeptBadge');
-            const userChip = document.getElementById('detailModalUsername');
             const statsText = document.getElementById('detailModalStatsText');
             const totalBadge = document.getElementById('detailModalTotalBadge');
             const tbody = document.getElementById('detailModalClassesTableBody');
@@ -1332,7 +1441,6 @@
                 deptBadge.className = `badge-dept ${inst.department === 'IT' ? 'badge-it' : 'badge-cs'}`;
                 deptBadge.innerText = inst.department || 'CS';
             }
-            if (userChip) userChip.innerText = `@${inst.username || 'user'}`;
             if (statsText) statsText.innerText = `${inst.total_subjects} Subject(s) • ${inst.total_sections} Section(s) • ${inst.total_headcount} Pax`;
             if (totalBadge) totalBadge.innerText = `Total Student Demand: ${inst.total_headcount.toLocaleString()} Pax`;
 
@@ -2743,6 +2851,21 @@
                     teacher.style.cursor = '';
                 }
             }
+            // Clear and initialize section builder segments
+            const secProg = document.getElementById('sec_program');
+            const secYear = document.getElementById('sec_year');
+            const secLetter = document.getElementById('sec_letter');
+            const previewTag = document.getElementById('section-preview-tag');
+            const errorEl = document.getElementById('section_builder_error');
+            const groupEl = document.getElementById('sectionInputGroup');
+
+            if (secProg) secProg.value = '';
+            if (secYear) secYear.value = '';
+            if (secLetter) secLetter.value = '';
+            if (previewTag) previewTag.innerText = '';
+            if (errorEl) errorEl.style.display = 'none';
+            if (groupEl) groupEl.classList.remove('invalid');
+
             if (section) section.value = '';
             if (subject) subject.value = '';
             if (headcount) headcount.value = '';
@@ -2750,7 +2873,7 @@
 
             if (modal) modal.style.display = 'flex';
             setTimeout(() => {
-                if (resolvedTeacher && section) section.focus();
+                if (resolvedTeacher && secProg) secProg.focus();
                 else if (teacher) teacher.focus();
             }, 60);
         }
@@ -2821,10 +2944,45 @@
                     teacher.style.cursor = '';
                 }
             }
-            if (section) section.value = sectionVal || '';
+            // Populate section builder segments from existing sectionVal
+            const secProg = document.getElementById('sec_program');
+            const secYear = document.getElementById('sec_year');
+            const secLetter = document.getElementById('sec_letter');
+            const errorEl = document.getElementById('section_builder_error');
+            const groupEl = document.getElementById('sectionInputGroup');
+            if (errorEl) errorEl.style.display = 'none';
+            if (groupEl) groupEl.classList.remove('invalid');
+
+            if (sectionVal) {
+                const s = sectionVal.trim().toUpperCase();
+                // Match standard BS<PROG>-<YEAR><LETTER> e.g. BSCS-1E, BSIT-2A
+                const stdMatch = s.match(/^BS([A-Z0-9]+)-(\d)([A-Z0-9]+)$/i);
+                // Fallback: match without BS e.g. CS-1E
+                const altMatch = s.match(/^([A-Z0-9]+)-(\d)([A-Z0-9]+)$/i);
+
+                if (stdMatch) {
+                    if (secProg) secProg.value = stdMatch[1];
+                    if (secYear) secYear.value = stdMatch[2];
+                    if (secLetter) secLetter.value = stdMatch[3];
+                } else if (altMatch) {
+                    if (secProg) secProg.value = altMatch[1];
+                    if (secYear) secYear.value = altMatch[2];
+                    if (secLetter) secLetter.value = altMatch[3];
+                } else {
+                    // Non-standard format fallback
+                    if (secProg) secProg.value = s.replace(/^BS/i, '').replace(/[^A-Z0-9]/g, '');
+                    if (secYear) secYear.value = '1';
+                    if (secLetter) secLetter.value = 'A';
+                }
+            } else {
+                if (secProg) secProg.value = '';
+                if (secYear) secYear.value = '';
+                if (secLetter) secLetter.value = '';
+            }
+            syncSectionFromSegments();
+
             if (subject) subject.value = subjectVal || '';
             if (headcount) headcount.value = headcountVal || '';
-            updateSectionDeptBadge('section', 'section-dept-badge');
 
             if (modal) modal.style.display = 'flex';
         }
@@ -2838,6 +2996,26 @@
             e.preventDefault();
             const editId = document.getElementById('classEditId').value;
             const teacherVal = document.getElementById('teacher').value.trim();
+
+            const secProg = (document.getElementById('sec_program') ? document.getElementById('sec_program').value : '').trim().toUpperCase();
+            const secYear = (document.getElementById('sec_year') ? document.getElementById('sec_year').value : '').trim();
+            const secLetter = (document.getElementById('sec_letter') ? document.getElementById('sec_letter').value : '').trim().toUpperCase();
+            const errorEl = document.getElementById('section_builder_error');
+            const groupEl = document.getElementById('sectionInputGroup');
+
+            if (!secProg || !secYear || !secLetter) {
+                if (errorEl) {
+                    errorEl.innerText = "⚠️ Please complete all section parts: Course (e.g., CS), Year Level (1 digit), and Section Letter (e.g., E).";
+                    errorEl.style.display = 'block';
+                }
+                if (groupEl) groupEl.classList.add('invalid');
+                if (!secProg) document.getElementById('sec_program').focus();
+                else if (!secYear) document.getElementById('sec_year').focus();
+                else document.getElementById('sec_letter').focus();
+                return;
+            }
+
+            syncSectionFromSegments();
             const sectionVal = document.getElementById('section').value.trim().toUpperCase();
             const subjectVal = document.getElementById('subject').value.trim();
             const headcountVal = parseInt(document.getElementById('headcount').value, 10);
@@ -2979,6 +3157,12 @@
                             `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`
                         ).join('');
                     }
+                    const progDatalist = document.getElementById('sectionProgramDatalist');
+                    if (progDatalist && enrolledAcademicPrograms.length > 0) {
+                        progDatalist.innerHTML = enrolledAcademicPrograms.map(p => 
+                            `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}</option>`
+                        ).join('');
+                    }
                 }
             } catch (e) {
                 console.error("Failed to load academic programs:", e);
@@ -2994,6 +3178,59 @@
 
             const prog = detectProgramFromSection(val);
             badge.innerHTML = `<span class="badge-dept ${prog.code === 'IT' ? 'badge-it' : 'badge-cs'}">🏷️ ${prog.name} (${prog.code})</span>`;
+        }
+
+        // --- SECTION CODE BUILDER CONTROLLERS ---
+        function syncSectionFromSegments() {
+            const progEl = document.getElementById('sec_program');
+            const yearEl = document.getElementById('sec_year');
+            const letterEl = document.getElementById('sec_letter');
+            const masterInput = document.getElementById('section');
+            const previewTag = document.getElementById('section-preview-tag');
+            const errorEl = document.getElementById('section_builder_error');
+            const groupEl = document.getElementById('sectionInputGroup');
+
+            if (!progEl || !yearEl || !letterEl || !masterInput) return;
+
+            const prog = progEl.value.trim().toUpperCase();
+            const year = yearEl.value.trim();
+            const letter = letterEl.value.trim().toUpperCase();
+
+            if (prog && year && letter) {
+                const fullSection = `BS${prog}-${year}${letter}`;
+                masterInput.value = fullSection;
+                if (previewTag) previewTag.innerText = `Preview: ${fullSection}`;
+                if (errorEl) errorEl.style.display = 'none';
+                if (groupEl) groupEl.classList.remove('invalid');
+                updateSectionDeptBadge('section', 'section-dept-badge');
+            } else if (prog || year || letter) {
+                const partial = `BS${prog || '??'}-${year || '?'}${letter || '?'}`;
+                masterInput.value = '';
+                if (previewTag) previewTag.innerText = `Preview: ${partial}`;
+                updateSectionDeptBadge('section', 'section-dept-badge');
+            } else {
+                masterInput.value = '';
+                if (previewTag) previewTag.innerText = '';
+                const badge = document.getElementById('section-dept-badge');
+                if (badge) badge.innerHTML = '';
+            }
+        }
+
+        function onSectionSegmentInput(inputEl, segmentType) {
+            if (!inputEl) return;
+            if (segmentType === 'program') {
+                inputEl.value = inputEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            } else if (segmentType === 'year') {
+                inputEl.value = inputEl.value.replace(/[^1-9]/g, '').slice(0, 1);
+                // Auto-advance to section letter when a single digit year is typed
+                if (inputEl.value.length === 1) {
+                    const letterEl = document.getElementById('sec_letter');
+                    if (letterEl) letterEl.focus();
+                }
+            } else if (segmentType === 'letter') {
+                inputEl.value = inputEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2);
+            }
+            syncSectionFromSegments();
         }
 
         // --- ARCHIVE STATUS CHECKER ---

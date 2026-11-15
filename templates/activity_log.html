@@ -413,7 +413,7 @@
         /* Print Stylesheet */
         @media print {
             body { background: white; color: black; }
-            .sidebar, .mobile-header, .filter-container, .btn-refresh, .btn-export, .btn-print, .user-profile { display: none !important; }
+            .sidebar, .mobile-header, .filter-container, .btn-refresh, .btn-export, .btn-print, .user-profile, .no-print { display: none !important; }
             .main-content { padding: 0 !important; overflow: visible !important; }
             .card { box-shadow: none !important; padding: 0 !important; }
             .payment-card { width: 100% !important; box-shadow: none !important; padding: 0 !important; }
@@ -558,14 +558,9 @@
                 <div style="font-size: 0.8rem; color: #64748b; margin-top: 3px;">Immutable system ledger of all user and administrative actions.</div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <!-- Top Quick Pagination Pills (Uniform with enrollments.html) -->
-                <div id="topPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
                 <button type="button" onclick="exportSemesterAuditTrailCSV()" class="btn-download-audit" title="Download Semester Audit Trail (CSV)">
                     📥 Download Semester Audit Trail (.csv)
                 </button>
-                <div id="logCountLabel" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
-                    Showing 0 log entries
-                </div>
             </div>
         </div>
 
@@ -611,16 +606,22 @@
                 <option value="month">Past 30 Days</option>
             </select>
 
-            <!-- Rows Per Page Selector (Uniform with enrollments.html) -->
+            <!-- Rows Per Page Selector (Uniform with payment_tracking & history) -->
             <select id="filterPageSize" onchange="changePageSize(this.value)" style="flex: 0.9; min-width: 125px;" title="Events per page">
-                <option value="10">10 per page</option>
+                <option value="10" selected>10 per page</option>
                 <option value="25">25 per page</option>
-                <option value="50" selected>50 per page</option>
-                <option value="100">100 per page</option>
+                <option value="50">50 per page</option>
+                <option value="all">Show All</option>
             </select>
 
             <!-- Standard Bookledger Icon Refresh Button -->
             <button type="button" class="btn-refresh" onclick="fetchActivityLogs(true)" title="Refresh Database">🔄</button>
+        </div>
+
+        <!-- DIRECTORY SUMMARY & TOP PAGINATION -->
+        <div id="topPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; color: #64748b; flex-wrap: wrap; gap: 8px; margin: 12px 22px 10px 22px;">
+            <div id="topPaginationSummary" style="font-weight: 600; color: #334155;">Showing 0 log entries</div>
+            <div id="topPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
         </div>
 
         <div class="activity-scroll-wrapper">
@@ -646,8 +647,8 @@
             </table>
         </div>
 
-        <!-- BOTTOM PAGINATION (Uniform with enrollments.html) -->
-        <div id="bottomPaginationContainer">
+        <!-- BOTTOM PAGINATION (Uniform with payment_tracking & history) -->
+        <div id="bottomPaginationContainer" class="no-print">
             <div id="bottomPaginationSummary">
                 Showing 0 of 0 events
             </div>
@@ -660,7 +661,7 @@
     let searchTimeout = null;
     let currentLogsData = [];
     let currentPage = 1;
-    let pageSize = 50;
+    let pageSize = 10;
     let totalPages = 1;
     let totalCount = 0;
 
@@ -691,7 +692,7 @@
     }
 
     function changePageSize(val) {
-        pageSize = parseInt(val) || 50;
+        pageSize = (val === 'all') ? 999999 : (parseInt(val, 10) || 10);
         currentPage = 1;
         fetchActivityLogs(false);
     }
@@ -756,11 +757,6 @@
                 renderOperatorDropdown(data.available_operators, operator);
                 renderLogsTable(currentLogsData);
                 renderPagination(totalPages);
-
-                const countEl = document.getElementById('logCountLabel');
-                if (countEl) {
-                    countEl.innerText = `Showing ${currentLogsData.length.toLocaleString()} of ${totalCount.toLocaleString()} log entries`;
-                }
             } else {
                 renderEmptyState("Error loading logs", data.message || "Failed to retrieve audit records.");
             }
@@ -775,16 +771,14 @@
         const topPills = document.getElementById('topPaginationPills');
         const botBtns = document.getElementById('bottomPaginationButtons');
         const botSummary = document.getElementById('bottomPaginationSummary');
+        const topSummary = document.getElementById('topPaginationSummary');
 
-        if (botSummary) {
-            if (totalCount === 0) {
-                botSummary.innerText = "Showing 0 of 0 events";
-            } else {
-                const startItem = (currentPage - 1) * pageSize + 1;
-                const endItem = Math.min(totalCount, startItem + currentLogsData.length - 1);
-                botSummary.innerText = `Showing ${startItem}–${endItem} of ${totalCount.toLocaleString()} events`;
-            }
-        }
+        const summaryStr = (pageSize >= 999999 || totalCount === 0)
+            ? `Showing ${totalCount === 0 ? '0' : `all ${totalCount.toLocaleString()}`} events`
+            : `Showing ${((currentPage - 1) * pageSize) + 1}–${Math.min(totalCount, ((currentPage - 1) * pageSize) + currentLogsData.length)} of ${totalCount.toLocaleString()} events`;
+
+        if (botSummary) botSummary.innerText = summaryStr;
+        if (topSummary) topSummary.innerText = summaryStr;
 
         if (totalP <= 1) {
             if (topPills) topPills.innerHTML = '';
@@ -1130,6 +1124,17 @@
                 tbody.innerHTML = '';
             }
             tbody.insertAdjacentHTML('afterbegin', rowHtml);
+
+            // Keep table bounded to pageSize if on page 1
+            if (currentPage === 1 && pageSize < 999999) {
+                while (tbody.children.length > pageSize) {
+                    tbody.lastElementChild.remove();
+                }
+            }
+
+            totalCount++;
+            totalPages = (pageSize >= 999999) ? 1 : Math.ceil(totalCount / pageSize);
+            renderPagination(totalPages);
 
             const totalEl = document.getElementById('statTotalActions');
             const todayEl = document.getElementById('statTodayActions');

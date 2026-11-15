@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Spoilage &amp; Net Loss - Bookledger</title>
+    <script>
+        (function() {
+            try {
+                var userStr = localStorage.getItem('bookletlog_user');
+                if (!userStr) {
+                    window.location.replace('/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search));
+                    return;
+                }
+                var user = JSON.parse(userStr);
+                var role = (user.role || '').toLowerCase();
+                var allowed = ['admin', 'staff'];
+                if (allowed.indexOf(role) === -1) {
+                    document.documentElement.style.display = 'none';
+                    if (role === 'viewer') {
+                        window.location.replace('/transaction-profile?error=unauthorized');
+                    } else {
+                        window.location.replace('/login?error=unauthorized');
+                    }
+                }
+            } catch (e) {
+                window.location.replace('/login?error=unauthorized');
+            }
+        })();
+    </script>
+    <script src="/static/lan_sync.js"></script>
+    <script src="/static/dom_integrity.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
+
+        /* Main Content */
+        .main-content { flex: 1; padding: 30px; overflow-y: auto; overflow-x: hidden; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #ecf0f1; padding-bottom: 15px; flex-wrap: wrap; gap: 15px; }
+        .header-bar h2 { color: #2c3e50; font-size: 1.75rem; font-weight: bold; }
+        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+        /* KPI Cards Grid */
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 25px; }
+        .stat-card { background: white; padding: 20px 22px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); border-left: 5px solid #e74c3c; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .stat-card.sheets { border-left-color: #e67e22; }
+        .stat-card.booklets { border-left-color: #8e44ad; }
+        .stat-card.cost { border-left-color: #c0392b; }
+        .stat-card.rate { border-left-color: #16a085; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        .stat-card p { color: #7f8c8d; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold; margin-bottom: 8px; }
+        .stat-card h2 { font-size: 1.85rem; font-weight: bold; color: #2c3e50; }
+        .stat-card small { color: #95a5a6; font-size: 0.78rem; display: block; margin-top: 4px; }
+
+        /* Filter Section Styles */
+        .filter-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            background: white;
+            padding: 18px 22px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .filter-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .filter-group label { font-size: 0.85rem; font-weight: bold; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
+        .filter-group select, .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            color: #2c3e50;
+            outline: none;
+            background: #fff;
+            transition: border-color 0.2s;
+        }
+        .filter-group select:focus, .filter-group input:focus { border-color: #3498db; }
+
+        /* Card & Table */
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .card-title { margin-bottom: 20px; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .card-title h2 { font-size: 1.35rem; font-weight: bold; color: #2c3e50; }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #ecf0f1; font-size: 0.9rem; }
+        th { background-color: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; }
+        tr:hover { background-color: #fdfdfd; }
+
+        /* Badges */
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; }
+        .badge-sheet { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+        .badge-booklet { background-color: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
+        .badge-dept { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+        /* Buttons */
+        .btn { padding: 9px 16px; border-radius: 6px; font-size: 0.88rem; font-weight: bold; cursor: pointer; border: none; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+        .btn-primary { background-color: #e74c3c; color: white; }
+        .btn-primary:hover { background-color: #c0392b; }
+        .btn-secondary { background-color: #95a5a6; color: white; }
+        .btn-secondary:hover { background-color: #7f8c8d; }
+        .btn-light { background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+        .btn-light:hover { background-color: #e2e8f0; }
+        .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+        .btn-danger-outline { background: transparent; color: #ef4444; border: 1px solid #fca5a5; }
+        .btn-danger-outline:hover { background: #fee2e2; }
+
+        /* Modal Styles */
+        .modal-overlay { display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 99999; justify-content: center; align-items: center; }
+        .modal-card { background: white; border-radius: 12px; width: 92%; max-width: 540px; padding: 26px; box-shadow: 0 20px 45px rgba(0,0,0,0.25); border-top: 5px solid #e74c3c; font-family: Arial, sans-serif; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-header h3 { font-size: 1.25rem; font-weight: bold; color: #1e293b; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 0.82rem; font-weight: bold; color: #475569; margin-bottom: 5px; }
+        .form-group select, .form-group input, .form-group textarea { width: 100%; padding: 9px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.92rem; outline: none; }
+        .form-group select:focus, .form-group input:focus, .form-group textarea:focus { border-color: #e74c3c; }
+
+        .preview-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px 14px; margin-bottom: 16px; }
+        .preview-box p { font-size: 0.85rem; color: #991b1b; line-height: 1.4; }
+
+        /* Toast */
+        #toastContainer { position: fixed; bottom: 25px; right: 25px; z-index: 100000; }
+        .toast { background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.25); margin-top: 10px; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; animation: slideIn 0.25s ease-out; }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        @media print {
+            .no-print, .header-actions, .filter-container, .btn-danger-outline { display: none !important; }
+            body { background: white !important; height: auto !important; overflow: visible !important; }
+            .main-content { padding: 0 !important; overflow: visible !important; }
+            .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Modular Component -->
+    {% include 'sidebar.html' %}
+
+    <div class="main-content">
+        <!-- Header Bar -->
+        <div class="header-bar">
+            <div>
+                <h2>📉 Material Spoilage &amp; Net Loss</h2>
+                <p style="color: #64748b; font-size: 0.9rem; margin-top: 4px;">
+                    Track misprinted paper sheets, printer paper jams, and defective booklets recorded as unrecoverable net loss (0 ROI).
+                </p>
+            </div>
+            <div class="header-actions no-print">
+                <button class="btn btn-primary" onclick="openLogSpoilageModal()">
+                    <span>➕</span> Log Spoilage Incident
+                </button>
+                <button class="btn btn-light" onclick="syncDefectiveReturns()" title="Sync voided misprint booklets from faculty returns">
+                    <span>🔄</span> Sync Faculty Returns
+                </button>
+                <a href="/expenditure-report" class="btn btn-light" title="View in Expenditure Report & Financial Statement">
+                    <span>💰</span> Financial Statement ➔
+                </a>
+                <button class="btn btn-secondary" onclick="window.print()">
+                    <span>🖨️</span> Print Report
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI Metric Cards Grid -->
+        <div class="summary-grid">
+            <div class="stat-card sheets">
+                <p>Wasted Paper Sheets</p>
+                <h2 id="kpiWastedSheets">0</h2>
+                <small id="kpiReamsEquiv">0.00 reams equivalent</small>
+            </div>
+            <div class="stat-card booklets">
+                <p>Scrapped Booklets</p>
+                <h2 id="kpiScrappedBooklets">0</h2>
+                <small>Defective or misbound</small>
+            </div>
+            <div class="stat-card cost">
+                <p>Total Net Loss</p>
+                <h2 id="kpiTotalCost" style="color: #c0392b;">₱0.00</h2>
+                <small>Unrecoverable direct material cost</small>
+            </div>
+            <div class="stat-card rate">
+                <p>Spoilage Rate</p>
+                <h2 id="kpiSpoilageRate">0.0%</h2>
+                <small>Wastage vs total consumed materials</small>
+            </div>
+        </div>
+
+        <!-- Filter Container -->
+        <div class="filter-container no-print">
+            <div class="filter-group">
+                <label for="periodFilter">Exam Period:</label>
+                <select id="periodFilter" onchange="onPeriodChange()">
+                    <option value="">Loading periods...</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="deptFilter">Course / Department:</label>
+                <select id="deptFilter" onchange="applyFilters()">
+                    <option value="ALL">All Departments</option>
+                    <option value="CS">Computer Science (CS)</option>
+                    <option value="IT">Information Technology (IT)</option>
+                    <option value="GENERAL">General Office / Print</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="typeFilter">Category:</label>
+                <select id="typeFilter" onchange="applyFilters()">
+                    <option value="ALL">All Categories</option>
+                    <option value="paper_sheet">Loss Paper Sheets</option>
+                    <option value="whole_booklet">Entire Booklet</option>
+                </select>
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 200px;">
+                <input type="text" id="searchInput" placeholder="Search reason, control #, clerk..." oninput="applyFilters()" style="width: 100%;">
+            </div>
+        </div>
+
+        <!-- Audit Trail Table Card -->
+        <div class="card">
+            <div class="card-title">
+                <h2>Spoilage &amp; Waste Incident History</h2>
+                <span id="recordCountLabel" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">0 incident(s) recorded</span>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date &amp; Time</th>
+                            <th>Category</th>
+                            <th>Course</th>
+                            <th>Quantity Wasted</th>
+                            <th>Net Loss (₱)</th>
+                            <th>Primary Reason / Cause</th>
+                            <th>Control # / SRN</th>
+                            <th>Recorded By</th>
+                            <th class="no-print">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="spoilageTableBody">
+                        <tr>
+                            <td colspan="9" style="text-align: center; color: #7f8c8d; padding: 25px;">Loading spoilage records...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOG SPOILAGE MODAL -->
+    <div id="logSpoilageModal" class="modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Log Material Spoilage / Misprint</h3>
+                <button onclick="closeLogSpoilageModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+            </div>
+            <form id="spoilageForm" onsubmit="submitSpoilage(event)">
+                <div class="form-group">
+                    <label for="modalLossType">Loss Category *</label>
+                    <select id="modalLossType" required onchange="updateModalCostPreview()">
+                        <option value="paper_sheet">Loss Paper Sheets (Printer Jam, Toner Smear, Bad Feed)</option>
+                        <option value="whole_booklet">Entire Misprinted Booklet (Binding / Cutting / Defect)</option>
+                    </select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label for="modalDept">Course / Dept *</label>
+                        <select id="modalDept" required onchange="updateModalCostPreview()">
+                            <option value="GENERAL">General Office / Print</option>
+                            <option value="CS">Computer Science (CS)</option>
+                            <option value="IT">Information Technology (IT)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalQty">Quantity *</label>
+                        <input type="number" id="modalQty" min="1" max="5000" value="1" required oninput="updateModalCostPreview()">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modalReason">Primary Reason / Defect Cause *</label>
+                    <select id="modalReason" required>
+                        <option value="Printer Paper Jam / Paper Eaten">Printer Paper Jam / Paper Eaten</option>
+                        <option value="Toner Smear / Blurred or Faded Print">Toner Smear / Blurred or Faded Print</option>
+                        <option value="Cutting / Trimming Misalignment">Cutting / Trimming Misalignment</option>
+                        <option value="Stapler Jam / Misfired Binding">Stapler Jam / Misfired Binding</option>
+                        <option value="Blank or Missing Pages">Blank or Missing Pages</option>
+                        <option value="Water / Handling Damage">Water / Handling Damage</option>
+                        <option value="Other">Other Defect (Describe in notes)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="modalControlNum">Booklet Control # / SRN (Optional)</label>
+                    <input type="text" id="modalControlNum" placeholder="e.g. CS-2026-0042 or SRN if registered">
+                    <small style="color: #64748b; font-size: 0.75rem;">If entered, this registered booklet will be marked as voided automatically.</small>
+                </div>
+                <div class="form-group">
+                    <label for="modalNotes">Remarks / Notes (Optional)</label>
+                    <textarea id="modalNotes" rows="2" placeholder="Additional details regarding printer model, tray, or batch..."></textarea>
+                </div>
+
+                <!-- Live Calculation Preview -->
+                <div class="preview-box">
+                    <p><strong>Accounting Impact:</strong></p>
+                    <p id="modalCostPreviewText">Calculating estimated net loss...</p>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
+                    <button type="button" class="btn btn-light" onclick="closeLogSpoilageModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="modalSubmitBtn">Record Net Loss</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer"></div>
+
+    <script>
+        let allSpoilageRecords = [];
+        let activePeriod = "";
+        let unitPaperCost = 0.50;
+        let unitStapleCost = 0.01;
+        let sheetsPerBooklet = 6;
+        let currentUserRole = "Staff";
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                const uStr = localStorage.getItem('bookletlog_user');
+                if (uStr) {
+                    const u = JSON.parse(uStr);
+                    currentUserRole = u.role || 'Staff';
+                }
+            } catch (e) {}
+
+            await loadPeriods();
+            await fetchSpoilageData();
+
+            if (window.lanSync) {
+                window.lanSync.onUpdate(() => {
+                    fetchSpoilageData(true);
+                });
+            }
+        });
+
+        async function loadPeriods() {
+            try {
+                const res = await fetch('/api/period-configurations');
+                const raw = await res.json();
+                const sel = document.getElementById('periodFilter');
+                sel.innerHTML = '';
+
+                let configs = [];
+                let activeFromApi = "";
+
+                if (Array.isArray(raw)) {
+                    configs = raw;
+                    const activeItem = configs.find(c => c.is_active);
+                    if (activeItem) {
+                        activeFromApi = activeItem.academic_period || activeItem.exam_period || "";
+                    }
+                } else if (raw && Array.isArray(raw.configurations)) {
+                    configs = raw.configurations;
+                    activeFromApi = raw.active_period || "";
+                }
+
+                if (configs.length > 0) {
+                    activePeriod = activeFromApi || configs[0].academic_period || configs[0].exam_period;
+                    configs.forEach(cfg => {
+                        const pName = cfg.academic_period || cfg.exam_period;
+                        if (!pName) return;
+                        const opt = document.createElement('option');
+                        opt.value = pName;
+                        const isThisActive = (pName === activePeriod) || Boolean(cfg.is_active);
+                        opt.textContent = pName + (isThisActive ? ' (Active)' : '');
+                        sel.appendChild(opt);
+                    });
+                    sel.value = activePeriod;
+                } else {
+                    const fallback = '1st Sem 2026-2027';
+                    activePeriod = fallback;
+                    sel.innerHTML = `<option value="${fallback}">${fallback} (Active)</option>`;
+                }
+            } catch (e) {
+                console.error("Error loading periods:", e);
+            }
+        }
+
+        function onPeriodChange() {
+            activePeriod = document.getElementById('periodFilter').value;
+            fetchSpoilageData(false);
+        }
+
+        async function fetchSpoilageData(isSilent = false) {
+            const period = document.getElementById('periodFilter').value || activePeriod;
+            try {
+                const res = await fetch(`/api/material-loss?period=${encodeURIComponent(period)}`);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    allSpoilageRecords = data.records || [];
+                    document.getElementById('kpiWastedSheets').innerText = (data.total_sheets || 0).toLocaleString();
+                    document.getElementById('kpiReamsEquiv').innerText = `${(data.reams_equivalent || 0).toFixed(2)} reams equivalent`;
+                    document.getElementById('kpiScrappedBooklets').innerText = (data.total_booklets || 0).toLocaleString();
+                    document.getElementById('kpiTotalCost').innerText = `₱${(data.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    document.getElementById('kpiSpoilageRate').innerText = `${(data.spoilage_rate_pct || 0).toFixed(1)}%`;
+
+                    applyFilters();
+                    if (!isSilent) {
+                        showToast(`Loaded ${allSpoilageRecords.length} spoilage record(s).`);
+                    }
+                }
+            } catch (e) {
+                console.error("Error fetching spoilage data:", e);
+                document.getElementById('spoilageTableBody').innerHTML = `
+                    <tr><td colspan="9" style="text-align: center; color: #ef4444; padding: 20px;">Failed to load records.</td></tr>
+                `;
+            }
+        }
+
+        function applyFilters() {
+            const dept = document.getElementById('deptFilter').value;
+            const type = document.getElementById('typeFilter').value;
+            const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+
+            const filtered = allSpoilageRecords.filter(r => {
+                if (dept !== 'ALL' && (r.department || '').toUpperCase() !== dept) return false;
+                if (type !== 'ALL' && r.loss_type !== type) return false;
+                if (search) {
+                    const matchText = `${r.reason || ''} ${r.booklet_control_num || ''} ${r.recorded_by || ''} ${r.notes || ''}`.toLowerCase();
+                    if (!matchText.includes(search)) return false;
+                }
+                return true;
+            });
+
+            renderTable(filtered);
+        }
+
+        function renderTable(records) {
+            const tbody = document.getElementById('spoilageTableBody');
+            document.getElementById('recordCountLabel').innerText = `${records.length} incident(s) recorded`;
+
+            if (records.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: #7f8c8d; padding: 30px;">
+                            No material spoilage incidents found matching the selected filters.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            const isAdmin = (currentUserRole || '').toLowerCase() === 'admin';
+
+            tbody.innerHTML = records.map(r => {
+                const isBooklet = r.loss_type === 'whole_booklet';
+                const badgeClass = isBooklet ? 'badge-booklet' : 'badge-sheet';
+                const categoryLabel = isBooklet ? '📘 Booklet' : '📄 Loss Paper Sheet';
+                const qtyDisplay = isBooklet
+                    ? `<strong>${r.quantity}</strong> booklet(s) <small style="color: #64748b;">(${r.sheets_wasted} sh, ${r.staples_wasted} st)</small>`
+                    : `<strong>${r.quantity}</strong> sheet(s)`;
+
+                const deleteBtn = isAdmin ? `
+                    <button class="btn btn-sm btn-danger-outline" onclick="deleteSpoilage(${r.id})" title="Delete record (Admin only)">
+                        🗑️ Delete
+                    </button>
+                ` : `<span style="color: #94a3b8; font-size: 0.75rem;">Audited</span>`;
+
+                return `
+                    <tr>
+                        <td style="white-space: nowrap; color: #475569;">${escapeHtml(r.recorded_at || '')}</td>
+                        <td><span class="badge ${badgeClass}">${categoryLabel}</span></td>
+                        <td><span class="badge badge-dept">${escapeHtml(r.department || 'GENERAL')}</span></td>
+                        <td>${qtyDisplay}</td>
+                        <td style="color: #c0392b; font-weight: 800; white-space: nowrap;">- ₱${Number(r.total_loss_cost || 0).toFixed(2)}</td>
+                        <td style="font-weight: 600; color: #1e293b;">${escapeHtml(r.reason || '')}</td>
+                        <td style="font-family: monospace; color: #3b82f6;">${escapeHtml(r.booklet_control_num || '—')}</td>
+                        <td style="color: #64748b;">${escapeHtml(r.recorded_by || '')}</td>
+                        <td class="no-print">${deleteBtn}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function openLogSpoilageModal() {
+            document.getElementById('spoilageForm').reset();
+            updateModalCostPreview();
+            document.getElementById('logSpoilageModal').style.display = 'flex';
+        }
+
+        function closeLogSpoilageModal() {
+            document.getElementById('logSpoilageModal').style.display = 'none';
+        }
+
+        function updateModalCostPreview() {
+            const lossType = document.getElementById('modalLossType').value;
+            const dept = document.getElementById('modalDept').value;
+            const qty = Math.max(1, parseInt(document.getElementById('modalQty').value || 1, 10));
+
+            let sheets = qty;
+            let staples = 0;
+            if (lossType === 'whole_booklet') {
+                const sPerB = (dept === 'CS') ? 10 : (dept === 'IT' ? 6 : 6);
+                sheets = qty * sPerB;
+                staples = qty * 2;
+            }
+
+            const cost = (sheets * unitPaperCost) + (staples * unitStapleCost);
+            const textEl = document.getElementById('modalCostPreviewText');
+            textEl.innerHTML = `
+                This entry records <strong>${sheets} wasted paper sheet(s)</strong> (${cost > 0 ? `₱${cost.toFixed(2)}` : '₱0.00'} unrecoverable cost).<br/>
+                It will be accounted as <strong>Less: Net Loss</strong> in the Income Statement with <strong>0 ROI</strong>.
+            `;
+        }
+
+        async function submitSpoilage(e) {
+            e.preventDefault();
+            const btn = document.getElementById('modalSubmitBtn');
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
+            const payload = {
+                academic_period: document.getElementById('periodFilter').value || activePeriod,
+                department: document.getElementById('modalDept').value,
+                loss_type: document.getElementById('modalLossType').value,
+                quantity: parseInt(document.getElementById('modalQty').value, 10),
+                reason: document.getElementById('modalReason').value,
+                booklet_control_num: document.getElementById('modalControlNum').value.trim() || null,
+                notes: document.getElementById('modalNotes').value.trim() || null,
+                source: 'manual'
+            };
+
+            try {
+                const res = await fetch('/api/material-loss', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    showToast('Material spoilage recorded successfully!');
+                    closeLogSpoilageModal();
+                    await fetchSpoilageData();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to save record'));
+                }
+            } catch (err) {
+                alert('Network error while saving: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Record Net Loss';
+            }
+        }
+
+        async function deleteSpoilage(id) {
+            if (!confirm('Are you sure you want to delete this spoilage record? This will adjust financial loss calculations.')) {
+                return;
+            }
+            try {
+                const res = await fetch(`/api/material-loss/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showToast('Spoilage record deleted.');
+                    await fetchSpoilageData();
+                } else {
+                    alert('Error: ' + (data.detail || data.message || 'Failed to delete'));
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            }
+        }
+
+        async function syncDefectiveReturns() {
+            const period = document.getElementById('periodFilter').value || activePeriod;
+            try {
+                const res = await fetch(`/api/material-loss/sync-returns?period=${encodeURIComponent(period)}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    if (data.synced_count > 0) {
+                        showToast(`Synchronized ${data.synced_count} defective return(s) into spoilage!`);
+                        await fetchSpoilageData();
+                    } else {
+                        showToast('All defective returns are already up to date in spoilage records.');
+                    }
+                } else {
+                    alert('Sync failed: ' + (data.message || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Network error during sync: ' + err.message);
+            }
+        }
+
+        function showToast(msg) {
+            const c = document.getElementById('toastContainer');
+            const t = document.createElement('div');
+            t.className = 'toast';
+            t.innerHTML = `<span>ℹ️</span> <span>${escapeHtml(msg)}</span>`;
+            c.appendChild(t);
+            setTimeout(() => {
+                t.style.opacity = '0';
+                t.style.transition = 'opacity 0.3s';
+                setTimeout(() => t.remove(), 300);
+            }, 3200);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, function(m) {
+                switch(m) {
+                    case '&': return '&amp;';
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                    case '"': return '&quot;';
+                    case "'": return '&#39;';
+                    default: return m;
+                }
+            });
+        }
+    </script>
+</body>
+</html>

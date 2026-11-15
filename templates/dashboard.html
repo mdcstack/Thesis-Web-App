@@ -569,13 +569,22 @@
             }
         });
     }
-    document.getElementById('loggedInUser').innerText = activeUser.username.toUpperCase();
-    document.getElementById('loggedInRole').innerText = activeUser.role + " (" + activeUser.department + ")";
+    if (window.updateSidebarUser) {
+        window.updateSidebarUser(activeUser);
+    } else {
+        const uEl = document.getElementById('loggedInUser');
+        if (uEl) uEl.innerText = (activeUser.full_name && activeUser.full_name.trim()) ? activeUser.full_name.trim() : activeUser.username;
+        const rEl = document.getElementById('loggedInRole');
+        if (rEl) rEl.innerText = activeUser.role + " (" + activeUser.department + ")";
+    }
     
     if (activeUser.role !== 'Admin') {
         document.querySelectorAll('.admin-only').forEach(link => link.style.display = 'none');
         const navUsers = document.getElementById('navManageUsers');
-        if (navUsers) navUsers.innerHTML = '👤 My Account';
+        if (navUsers) {
+            navUsers.innerHTML = '<span class="nav-icon">👤</span><span class="nav-label">My Account</span>';
+            navUsers.title = 'My Account';
+        }
     }
 
     // Global Cache

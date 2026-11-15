@@ -650,8 +650,14 @@ def generate_batch_pdf(start_num, total_yield, batch_id, prefix, start_srn_num=1
         fresh_page.merge_page(overlay_page, over=True)
         writer.add_page(fresh_page)
 
-    with open(output_path, "wb") as f:
-        writer.write(f)
+    try:
+        with open(output_path, "wb") as f:
+            writer.write(f)
+    except PermissionError:
+        target_name = os.path.basename(output_path)
+        raise PermissionError(
+            f"The PDF file '{target_name}' is currently open and locked by another program (such as WPS PDF, Adobe Acrobat, or your browser). Please close the document and try again."
+        )
         
     return output_path
 

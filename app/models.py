@@ -263,3 +263,24 @@ class ActivityLog(Base):
     department = Column(String(50), default="All")  # CS, IT, All
     academic_period = Column(String(100), nullable=True, index=True)
     ip_address = Column(String(100), default="127.0.0.1")
+
+class MaterialLoss(Base):
+    __tablename__ = "material_losses"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    academic_period = Column(String(100), nullable=False, index=True)
+    department = Column(String(50), nullable=False, default="GENERAL")  # CS, IT, GENERAL
+    loss_type = Column(String(50), nullable=False)  # "paper_sheet" or "whole_booklet"
+    quantity = Column(Integer, nullable=False, default=1)
+    sheets_wasted = Column(Integer, nullable=False, default=0)
+    staples_wasted = Column(Integer, nullable=False, default=0)
+    unit_paper_cost = Column(Float, nullable=False, default=0.50)
+    unit_staple_cost = Column(Float, nullable=False, default=0.01)
+    total_loss_cost = Column(Float, nullable=False, default=0.0)
+    reason = Column(String(255), nullable=False)  # e.g. "Printer Paper Jam", "Toner Smear"
+    booklet_control_num = Column(String(100), nullable=True)  # Linked if registered booklet was scrapped
+    source = Column(String(50), nullable=False, default="manual")  # "manual", "printer_jam", "faculty_return"
+    recorded_by = Column(String(100), nullable=False, default="Staff")
+    recorded_at = Column(DateTime, default=datetime.now, nullable=False)
+    notes = Column(Text, nullable=True)
+
