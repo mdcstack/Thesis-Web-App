@@ -30,9 +30,187 @@
     </script>
     <script src="/static/lan_sync.js"></script>
     <script src="/static/dom_integrity.js"></script>
+    <script src="/static/html5-qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; height: 100vh; overflow: hidden; color: #2c3e50; }
+
+        /* Booklet Tags / Chips Styling */
+        .booklet-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+            border-radius: 5px;
+            padding: 3px 8px;
+            font-size: 0.82rem;
+            font-family: 'Consolas', monospace;
+            font-weight: 700;
+        }
+        .booklet-chip .remove-chip {
+            cursor: pointer;
+            color: #ef4444;
+            font-weight: bold;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .booklet-chip .remove-chip:hover {
+            color: #b91c1c;
+        }
+
+        /* Strict Modal Stacking Hierarchy */
+        #logSpoilageModal { z-index: 99999 !important; }
+        #spoilageScannerModal { z-index: 100002 !important; }
+        #appDialogModal { z-index: 100005 !important; }
+
+        /* Modern App Dialog Card & Buttons */
+        .app-dialog-card {
+            background: #fff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #ef4444;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .dialog-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* Unified Modern HTML5-QRCODE Scanner UI (Matching distribution.html) */
+        #spoilage-reader {
+            width: 100% !important;
+            margin: auto;
+            border: 2px solid #cbd5e1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 16px;
+            background: #f8fafc;
+            padding: 10px;
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.04);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        #spoilage-reader video {
+            border-radius: 8px !important;
+            max-width: 100% !important;
+        }
+        #spoilage-reader__dashboard_section {
+            padding: 8px 0 !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            justify-content: center !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+        #spoilage-reader__dashboard_section > div {
+            display: inline-flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            margin: 0 !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-permission {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            padding: 10px 20px !important;
+            margin: 4px !important;
+            border-radius: 8px !important;
+            background: #2563eb !important;
+            color: #ffffff !important;
+            border: 1px solid #1d4ed8 !important;
+            font-weight: 700 !important;
+            font-size: 0.9rem !important;
+            font-family: inherit !important;
+            cursor: pointer !important;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25) !important;
+            transition: all 0.18s ease !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-permission:hover {
+            background: #1d4ed8 !important;
+            border-color: #1e40af !important;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.35) !important;
+            transform: translateY(-1px) !important;
+        }
+        #spoilage-reader #html5-qrcode-select-camera {
+            padding: 9px 14px !important;
+            border-radius: 6px !important;
+            border: 1.5px solid #cbd5e1 !important;
+            background: #ffffff !important;
+            color: #1e293b !important;
+            font-size: 0.9rem !important;
+            font-family: inherit !important;
+            outline: none !important;
+            margin: 4px !important;
+            cursor: pointer !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-start {
+            background: #10b981 !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 9px 18px !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+            font-size: 0.88rem !important;
+            cursor: pointer !important;
+            margin: 4px !important;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25) !important;
+            transition: all 0.15s ease !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-start:hover {
+            background: #059669 !important;
+            transform: translateY(-1px) !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-stop {
+            background: #ef4444 !important;
+            color: #ffffff !important;
+            border: none !important;
+            padding: 9px 18px !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+            font-size: 0.88rem !important;
+            cursor: pointer !important;
+            margin: 4px !important;
+            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.25) !important;
+            transition: all 0.15s ease !important;
+        }
+        #spoilage-reader #html5-qrcode-button-camera-stop:hover {
+            background: #dc2626 !important;
+            transform: translateY(-1px) !important;
+        }
+        /* Completely suppress file / image upload controls */
+        #spoilage-reader #html5-qrcode-anchor-scan-type-change,
+        #spoilage-reader #html5-qrcode-button-file-selection,
+        #spoilage-reader #html5-qrcode-private-filescan-input,
+        #spoilage-reader #qr-canvas-visible {
+            display: none !important;
+        }
+        /* Viewfinder Flash Animations */
+        @keyframes posFlashGreen {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.9); border-color: #22c55e; }
+            50% { box-shadow: 0 0 25px 8px rgba(34, 197, 94, 0.7); border-color: #22c55e; }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); border-color: #cbd5e1; }
+        }
+        .viewfinder-flash-green { animation: posFlashGreen 0.5s ease-out !important; }
 
         /* Main Content */
         .main-content { flex: 1; padding: 30px; overflow-y: auto; overflow-x: hidden; }
@@ -107,6 +285,12 @@
         .btn-danger-outline { background: transparent; color: #ef4444; border: 1px solid #fca5a5; }
         .btn-danger-outline:hover { background: #fee2e2; }
 
+        /* Pagination Buttons */
+        .pagination-btn { background: #ffffff; color: #334155; border: 1px solid #cbd5e1; padding: 5px 11px; border-radius: 6px; font-size: 0.84rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; }
+        .pagination-btn:hover:not(:disabled) { background: #f1f5f9; border-color: #94a3b8; }
+        .pagination-btn.active { background: #2563eb !important; color: white !important; border-color: #2563eb !important; font-weight: 700; cursor: default; }
+        .pagination-btn:disabled { background: #f8fafc !important; color: #94a3b8 !important; border-color: #e2e8f0 !important; cursor: not-allowed !important; opacity: 0.6; }
+
         /* Modal Styles */
         .modal-overlay { display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 99999; justify-content: center; align-items: center; }
         .modal-card { background: white; border-radius: 12px; width: 92%; max-width: 540px; padding: 26px; box-shadow: 0 20px 45px rgba(0,0,0,0.25); border-top: 5px solid #e74c3c; font-family: Arial, sans-serif; }
@@ -151,9 +335,6 @@
                 <button class="btn btn-primary" onclick="openLogSpoilageModal()">
                     <span>➕</span> Log Spoilage Incident
                 </button>
-                <button class="btn btn-light" onclick="syncDefectiveReturns()" title="Sync voided misprint booklets from faculty returns">
-                    <span>🔄</span> Sync Faculty Returns
-                </button>
                 <a href="/expenditure-report" class="btn btn-light" title="View in Expenditure Report & Financial Statement">
                     <span>💰</span> Financial Statement ➔
                 </a>
@@ -161,6 +342,10 @@
                     <span>🖨️</span> Print Report
                 </button>
             </div>
+        </div>
+
+        <!-- BUFFER EXHAUSTION ROLE-BASED BANNER -->
+        <div id="bufferExhaustionBanner" style="display: none; margin-bottom: 25px; border-radius: 10px; padding: 18px 22px; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.12); border: 1.5px solid #fca5a5; background: #fff1f2;">
         </div>
 
         <!-- KPI Metric Cards Grid -->
@@ -221,8 +406,25 @@
         <div class="card">
             <div class="card-title">
                 <h2>Spoilage &amp; Waste Incident History</h2>
-                <span id="recordCountLabel" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">0 incident(s) recorded</span>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <span id="recordCountLabel" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">0 incident(s) recorded</span>
+                    <select id="spoilagePageSize" class="no-print" onchange="changeSpoilagePageSize(this.value)" style="padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.84rem; outline: none; background: white; cursor: pointer; color: #334155; font-weight: 600;" title="Incidents per page">
+                        <option value="10" selected>10 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="all">Show All</option>
+                    </select>
+                </div>
             </div>
+
+            <!-- TOP SPOILAGE PAGINATION CONTROLS -->
+            <div id="spoilageTopPaginationBar" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div id="spoilageTopPaginationSummary" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                    Showing 0 of 0 records
+                </div>
+                <div id="spoilageTopPaginationPills" style="display: flex; gap: 4px; align-items: center;"></div>
+            </div>
+
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
@@ -245,6 +447,14 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- BOTTOM SPOILAGE PAGINATION CONTROLS -->
+            <div id="spoilageBottomPaginationContainer" class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 10px; padding: 10px 4px 4px 4px; border-top: 1px solid #e2e8f0;">
+                <div id="spoilageBottomPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">
+                    Showing 0 of 0 records
+                </div>
+                <div id="spoilageBottomPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
         </div>
     </div>
 
@@ -258,7 +468,7 @@
             <form id="spoilageForm" onsubmit="submitSpoilage(event)">
                 <div class="form-group">
                     <label for="modalLossType">Loss Category *</label>
-                    <select id="modalLossType" required onchange="updateModalCostPreview()">
+                    <select id="modalLossType" required onchange="onLossTypeChanged()">
                         <option value="paper_sheet">Loss Paper Sheets (Printer Jam, Toner Smear, Bad Feed)</option>
                         <option value="whole_booklet">Entire Misprinted Booklet (Binding / Cutting / Defect)</option>
                     </select>
@@ -273,8 +483,9 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="modalQty">Quantity *</label>
+                        <label for="modalQty" id="modalQtyLabel">Quantity (Paper Sheets) *</label>
                         <input type="number" id="modalQty" min="1" max="5000" value="1" required oninput="updateModalCostPreview()">
+                        <small id="modalQtyHelp" style="color: #64748b; font-size: 0.72rem; display: none;">Quantity locked to queued booklets count.</small>
                     </div>
                 </div>
                 <div class="form-group">
@@ -289,10 +500,38 @@
                         <option value="Other">Other Defect (Describe in notes)</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="modalControlNum">Booklet Control # / SRN (Optional)</label>
-                    <input type="text" id="modalControlNum" placeholder="e.g. CS-2026-0042 or SRN if registered">
-                    <small style="color: #64748b; font-size: 0.75rem;">If entered, this registered booklet will be marked as voided automatically.</small>
+
+                <!-- DYNAMIC MULTI-BOOKLET IDENTIFICATION SECTION (Hidden for Paper Sheets, Shown & Required for Booklets) -->
+                <div id="modalControlNumGroup" style="display: none; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label style="font-weight: 700; color: #1e293b; margin: 0; font-size: 0.88rem;">
+                            Defective Booklet Identification <span style="color: #ef4444;">*</span>
+                        </label>
+                        <button type="button" class="btn btn-sm" onclick="openSpoilageScanner()" style="background: #2563eb; color: #fff; font-size: 0.8rem; padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                            <span>📷</span> Camera Scanner
+                        </button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="modalControlNumInput" placeholder="Enter or paste Control # / SRN (e.g. 1ST26-CS-0001)..." 
+                               onkeydown="if(event.key === 'Enter'){ event.preventDefault(); addManualBooklet(); }" 
+                               style="flex: 1; padding: 8px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.88rem;">
+                        <button type="button" onclick="addManualBooklet()" style="white-space: nowrap; font-size: 0.82rem; padding: 6px 14px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 700;">
+                            + Add
+                        </button>
+                    </div>
+                    <small style="color: #64748b; font-size: 0.76rem; display: block; margin-bottom: 10px;">
+                        Enter multiple control numbers separated by commas, spaces, or scan with camera. Each registered booklet will be permanently voided.
+                    </small>
+
+                    <!-- Queued Booklets Chips List -->
+                    <div id="queuedBookletsContainer" style="display: none; background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 6px; padding: 10px; max-height: 140px; overflow-y: auto;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.78rem; font-weight: 700; color: #475569;">
+                            <span>Queued Booklets to Void (<span id="queuedBookletsCount">0</span>):</span>
+                            <button type="button" onclick="clearQueuedBooklets()" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.75rem; text-decoration: underline;">Clear All</button>
+                        </div>
+                        <div id="queuedBookletsList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="modalNotes">Remarks / Notes (Optional)</label>
@@ -313,11 +552,63 @@
         </div>
     </div>
 
+    <!-- SCANNER MODAL FOR MATERIAL SPOILAGE (UNIFIED WITH DISTRIBUTION.HTML) -->
+    <div class="modal-overlay" id="spoilageScannerModal" style="display: none; z-index: 100002 !important;">
+        <div class="modal-card" style="max-width: 480px; width: 92%;">
+            <h3 id="spoilage-scanner-title" style="color: #2c3e50; margin-bottom: 8px;">Scan Defective Booklet</h3>
+            <p id="spoilage-scanner-msg" style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 12px;">
+                Position the booklet QR code inside the camera frame.
+            </p>
+
+            <!-- CONTINUOUS SCAN HUD (Matching distribution.html) -->
+            <div id="spoilage-scanner-hud-container" style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">Queued</span>
+                        <span id="spoilage-hud-counter" style="background: #2563eb; color: #ffffff; font-weight: 800; font-size: 0.9rem; padding: 2px 10px; border-radius: 999px;">
+                            0
+                        </span>
+                    </div>
+                    <span id="spoilage-hud-ticker" style="font-size: 0.85rem; font-weight: 600; color: #059669; font-family: monospace;">
+                        Awaiting first scan...
+                    </span>
+                </div>
+            </div>
+
+            <div id="spoilage-reader"></div>
+
+            <div style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+                <button id="spoilage-scanner-done-btn" class="btn" onclick="closeSpoilageScanner()" style="margin: 0; padding: 10px 20px; background: #10b981; color: white; font-weight: bold; border-radius: 6px; border: none; cursor: pointer;">
+                    ✅ Done (Keep Scanned)
+                </button>
+                <button class="btn" onclick="cancelSpoilageScanner()" style="margin: 0; padding: 10px 20px; background: #ef4444; color: white; font-weight: bold; border-radius: 6px; border: none; cursor: pointer;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP DIALOG MODAL (Styled Popups replacing alert() across application) -->
+    <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 100005 !important;">
+        <div class="app-dialog-card">
+            <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">⚠️</div>
+            <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Notice</h3>
+            <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Message details here...</div>
+            <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
+                <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569; display: none;">Cancel</button>
+                <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">OK</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toastContainer"></div>
 
     <script>
         let allSpoilageRecords = [];
+        let currentFilteredRecords = [];
+        let spoilageCurrentPage = 1;
+        let spoilagePageSize = 10;
         let activePeriod = "";
         let unitPaperCost = 0.50;
         let unitStapleCost = 0.01;
@@ -388,6 +679,7 @@
 
         function onPeriodChange() {
             activePeriod = document.getElementById('periodFilter').value;
+            spoilageCurrentPage = 1;
             fetchSpoilageData(false);
         }
 
@@ -405,10 +697,16 @@
                     document.getElementById('kpiTotalCost').innerText = `₱${(data.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
                     document.getElementById('kpiSpoilageRate').innerText = `${(data.spoilage_rate_pct || 0).toFixed(1)}%`;
 
-                    applyFilters();
-                    if (!isSilent) {
-                        showToast(`Loaded ${allSpoilageRecords.length} spoilage record(s).`);
-                    }
+                    applyFilters(false);
+                }
+
+                // Check and render Paper Safety Buffer Exhaustion alert via DSS metrics
+                try {
+                    const dssRes = await fetch(`/api/dss-alert?period=${encodeURIComponent(period)}`);
+                    const dssData = await dssRes.json();
+                    renderBufferExhaustionBanner(dssData);
+                } catch (dssErr) {
+                    console.warn("DSS Buffer status check error:", dssErr);
                 }
             } catch (e) {
                 console.error("Error fetching spoilage data:", e);
@@ -418,12 +716,69 @@
             }
         }
 
-        function applyFilters() {
+        function renderBufferExhaustionBanner(dss) {
+            const banner = document.getElementById('bufferExhaustionBanner');
+            if (!banner) return;
+            if (!dss || !dss.is_buffer_exhausted) {
+                banner.style.display = 'none';
+                return;
+            }
+
+            const isAdmin = (currentUserRole || '').toLowerCase() === 'admin';
+            const spSheets = Number(dss.total_spoilage_sheets || 0).toLocaleString();
+            const bufSheets = Number(dss.total_buffer_sheets || 0).toLocaleString();
+            const overrunSheets = Number(dss.buffer_overrun_sheets || 0).toLocaleString();
+            const addReams = dss.recommended_additional_reams || 1;
+            const budgetInc = Number(dss.estimated_budget_increase || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+            if (isAdmin) {
+                banner.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                        <div style="flex: 1; min-width: 280px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <span style="font-size: 1.3rem;">⚠️</span>
+                                <strong style="color: #b91c1c; font-size: 1.05rem;">Semester Paper Safety Buffer Exhausted</strong>
+                            </div>
+                            <p style="margin: 0; color: #7f1d1d; font-size: 0.88rem; line-height: 1.5;">
+                                Cumulative material losses and misprints have reached <strong>${spSheets} sheets</strong>, exceeding your allocated safety buffer of <strong>${bufSheets} sheets</strong> by <strong>${overrunSheets} sheets</strong>.<br>
+                                Recommended Action: Add <strong>+${addReams} whole ream(s)</strong> in Settings (Estimated Budget Impact: <strong>+₱${budgetInc}</strong>) to avoid booklet stockouts.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <a href="/settings" class="btn btn-sm" style="background: #dc2626; color: #ffffff; font-weight: 700; text-decoration: none; padding: 8px 16px; border-radius: 6px; box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);">
+                                ⚙️ Navigate to Settings
+                            </a>
+                        </div>
+                    </div>
+                `;
+            } else {
+                banner.innerHTML = `
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <span style="font-size: 1.4rem; color: #dc2626;">⚠️</span>
+                        <div>
+                            <strong style="color: #b91c1c; font-size: 1rem; display: block; margin-bottom: 4px;">
+                                Operational Notice: Paper Safety Buffer Depleted
+                            </strong>
+                            <p style="margin: 0; color: #7f1d1d; font-size: 0.88rem; line-height: 1.5;">
+                                High printer paper spoilage and misprints (${spSheets} sheets wasted) have exhausted the semester's allocated paper buffer (${bufSheets} sheets).<br>
+                                <em>Please inform the <strong>Administrator</strong> to increase ream procurement in <strong>Settings</strong> to ensure sufficient booklet stock for examination day.</em>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            }
+            banner.style.display = 'block';
+        }
+
+        function applyFilters(resetPage = true) {
+            if (resetPage) {
+                spoilageCurrentPage = 1;
+            }
             const dept = document.getElementById('deptFilter').value;
             const type = document.getElementById('typeFilter').value;
             const search = (document.getElementById('searchInput').value || '').toLowerCase().trim();
 
-            const filtered = allSpoilageRecords.filter(r => {
+            currentFilteredRecords = allSpoilageRecords.filter(r => {
                 if (dept !== 'ALL' && (r.department || '').toUpperCase() !== dept) return false;
                 if (type !== 'ALL' && r.loss_type !== type) return false;
                 if (search) {
@@ -433,14 +788,35 @@
                 return true;
             });
 
-            renderTable(filtered);
+            renderTable();
         }
 
-        function renderTable(records) {
+        function renderTable() {
             const tbody = document.getElementById('spoilageTableBody');
-            document.getElementById('recordCountLabel').innerText = `${records.length} incident(s) recorded`;
+            const total = currentFilteredRecords.length;
+            document.getElementById('recordCountLabel').innerText = `${total} incident(s) recorded`;
 
-            if (records.length === 0) {
+            const pageSizeNum = spoilagePageSize === 'all' ? (total || 1) : parseInt(spoilagePageSize, 10);
+            const totalPages = Math.ceil(total / pageSizeNum) || 1;
+
+            if (spoilageCurrentPage > totalPages) spoilageCurrentPage = totalPages;
+            if (spoilageCurrentPage < 1) spoilageCurrentPage = 1;
+
+            const startIdx = (spoilageCurrentPage - 1) * pageSizeNum;
+            const endIdx = spoilagePageSize === 'all' ? total : Math.min(startIdx + pageSizeNum, total);
+
+            const summaryStr = (total === 0)
+                ? 'Showing 0 of 0 records'
+                : (spoilagePageSize === 'all'
+                    ? `Showing all ${total} record(s)`
+                    : `Showing ${startIdx + 1}–${endIdx} of ${total} record(s)`);
+
+            const topSummary = document.getElementById('spoilageTopPaginationSummary');
+            if (topSummary) topSummary.innerText = summaryStr;
+            const botSummary = document.getElementById('spoilageBottomPaginationSummary');
+            if (botSummary) botSummary.innerText = summaryStr;
+
+            if (total === 0) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="9" style="text-align: center; color: #7f8c8d; padding: 30px;">
@@ -448,24 +824,39 @@
                         </td>
                     </tr>
                 `;
+                renderSpoilagePagination(0);
                 return;
             }
 
+            const pagedRecords = spoilagePageSize === 'all'
+                ? currentFilteredRecords
+                : currentFilteredRecords.slice(startIdx, endIdx);
+
             const isAdmin = (currentUserRole || '').toLowerCase() === 'admin';
 
-            tbody.innerHTML = records.map(r => {
+            tbody.innerHTML = pagedRecords.map(r => {
                 const isBooklet = r.loss_type === 'whole_booklet';
                 const badgeClass = isBooklet ? 'badge-booklet' : 'badge-sheet';
-                const categoryLabel = isBooklet ? '📘 Booklet' : '📄 Loss Paper Sheet';
+                const categoryLabel = isBooklet ? 'Booklet' : 'Loss Paper Sheet';
                 const qtyDisplay = isBooklet
                     ? `<strong>${r.quantity}</strong> booklet(s) <small style="color: #64748b;">(${r.sheets_wasted} sh, ${r.staples_wasted} st)</small>`
                     : `<strong>${r.quantity}</strong> sheet(s)`;
 
                 const deleteBtn = isAdmin ? `
                     <button class="btn btn-sm btn-danger-outline" onclick="deleteSpoilage(${r.id})" title="Delete record (Admin only)">
-                        🗑️ Delete
+                        Delete
                     </button>
                 ` : `<span style="color: #94a3b8; font-size: 0.75rem;">Audited</span>`;
+
+                let ctrlDisplay = '—';
+                if (r.booklet_control_num) {
+                    const parts = r.booklet_control_num.split(',').map(p => p.trim()).filter(Boolean);
+                    if (parts.length > 2) {
+                        ctrlDisplay = `<span title="${escapeHtml(r.booklet_control_num)}" style="font-family: monospace; font-size: 0.8rem; background: #eff6ff; color: #1e40af; padding: 2px 6px; border-radius: 4px; border: 1px solid #bfdbfe;">${escapeHtml(parts[0])} +${parts.length - 1} more</span>`;
+                    } else {
+                        ctrlDisplay = parts.map(p => `<span style="font-family: monospace; font-size: 0.8rem; background: #eff6ff; color: #1e40af; padding: 2px 6px; border-radius: 4px; border: 1px solid #bfdbfe; margin-right: 4px;">${escapeHtml(p)}</span>`).join('');
+                    }
+                }
 
                 return `
                     <tr>
@@ -475,17 +866,80 @@
                         <td>${qtyDisplay}</td>
                         <td style="color: #c0392b; font-weight: 800; white-space: nowrap;">- ₱${Number(r.total_loss_cost || 0).toFixed(2)}</td>
                         <td style="font-weight: 600; color: #1e293b;">${escapeHtml(r.reason || '')}</td>
-                        <td style="font-family: monospace; color: #3b82f6;">${escapeHtml(r.booklet_control_num || '—')}</td>
+                        <td>${ctrlDisplay}</td>
                         <td style="color: #64748b;">${escapeHtml(r.recorded_by || '')}</td>
                         <td class="no-print">${deleteBtn}</td>
                     </tr>
                 `;
             }).join('');
+
+            renderSpoilagePagination(totalPages);
         }
+
+        function renderSpoilagePagination(totalPages) {
+            const topPills = document.getElementById('spoilageTopPaginationPills');
+            const botBtns = document.getElementById('spoilageBottomPaginationButtons');
+
+            if (totalPages <= 1) {
+                if (topPills) topPills.innerHTML = '';
+                if (botBtns) botBtns.innerHTML = '';
+                return;
+            }
+
+            if (topPills) {
+                topPills.innerHTML = `
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToSpoilagePage(${spoilageCurrentPage - 1})" ${spoilageCurrentPage === 1 ? 'disabled' : ''}>‹</button>
+                    <span style="font-size: 0.8rem; font-weight: 600; padding: 0 4px; color: #475569;">Page ${spoilageCurrentPage} of ${totalPages}</span>
+                    <button type="button" class="pagination-btn" style="height: 28px; padding: 2px 8px; font-size: 0.8rem;" onclick="goToSpoilagePage(${spoilageCurrentPage + 1})" ${spoilageCurrentPage === totalPages ? 'disabled' : ''}>›</button>
+                `;
+            }
+
+            if (botBtns) {
+                let html = `<button type="button" class="pagination-btn" onclick="goToSpoilagePage(1)" ${spoilageCurrentPage === 1 ? 'disabled' : ''}>« First</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToSpoilagePage(${spoilageCurrentPage - 1})" ${spoilageCurrentPage === 1 ? 'disabled' : ''}>‹ Prev</button>`;
+
+                const maxP = 5;
+                let startP = Math.max(1, spoilageCurrentPage - 2);
+                let endP = Math.min(totalPages, startP + maxP - 1);
+                if (endP - startP + 1 < maxP) {
+                    startP = Math.max(1, endP - maxP + 1);
+                }
+
+                for (let p = startP; p <= endP; p++) {
+                    const isActive = p === spoilageCurrentPage ? 'active' : '';
+                    html += `<button type="button" class="pagination-btn ${isActive}" onclick="goToSpoilagePage(${p})">${p}</button>`;
+                }
+
+                html += `<button type="button" class="pagination-btn" onclick="goToSpoilagePage(${spoilageCurrentPage + 1})" ${spoilageCurrentPage === totalPages ? 'disabled' : ''}>Next ›</button>`;
+                html += `<button type="button" class="pagination-btn" onclick="goToSpoilagePage(${totalPages})" ${spoilageCurrentPage === totalPages ? 'disabled' : ''}>Last »</button>`;
+                botBtns.innerHTML = html;
+            }
+        }
+
+        function goToSpoilagePage(p) {
+            const pageSizeNum = spoilagePageSize === 'all' ? (currentFilteredRecords.length || 1) : parseInt(spoilagePageSize, 10);
+            const totalPages = Math.ceil(currentFilteredRecords.length / pageSizeNum) || 1;
+            if (p < 1) p = 1;
+            if (p > totalPages) p = totalPages;
+            spoilageCurrentPage = p;
+            renderTable();
+        }
+
+        function changeSpoilagePageSize(val) {
+            spoilagePageSize = val === 'all' ? 'all' : parseInt(val, 10);
+            spoilageCurrentPage = 1;
+            renderTable();
+        }
+
+        // --- DYNAMIC MULTI-BOOKLET & SCANNER CONTROLLER ---
+        let spoilageQrScanner = null;
+        let queuedBooklets = [];
 
         function openLogSpoilageModal() {
             document.getElementById('spoilageForm').reset();
-            updateModalCostPreview();
+            queuedBooklets = [];
+            renderQueuedBooklets();
+            onLossTypeChanged();
             document.getElementById('logSpoilageModal').style.display = 'flex';
         }
 
@@ -493,10 +947,305 @@
             document.getElementById('logSpoilageModal').style.display = 'none';
         }
 
+        function onLossTypeChanged() {
+            const lossType = document.getElementById('modalLossType').value;
+            const ctrlGroup = document.getElementById('modalControlNumGroup');
+            const qtyLabel = document.getElementById('modalQtyLabel');
+            const qtyInput = document.getElementById('modalQty');
+            const qtyHelp = document.getElementById('modalQtyHelp');
+
+            if (lossType === 'paper_sheet') {
+                ctrlGroup.style.display = 'none';
+                qtyLabel.innerText = 'Quantity (Paper Sheets) *';
+                qtyInput.readOnly = false;
+                qtyInput.style.backgroundColor = '#ffffff';
+                qtyInput.min = '1';
+                qtyHelp.style.display = 'none';
+            } else {
+                ctrlGroup.style.display = 'block';
+                qtyLabel.innerText = 'Quantity (Booklets) *';
+                qtyInput.readOnly = true;
+                qtyInput.style.backgroundColor = '#f1f5f9';
+                qtyInput.value = Math.max(1, queuedBooklets.length);
+                qtyHelp.style.display = 'block';
+                renderQueuedBooklets();
+            }
+            updateModalCostPreview();
+        }
+
+        function addManualBooklet() {
+            const input = document.getElementById('modalControlNumInput');
+            const val = (input.value || '').trim();
+            if (!val) return;
+
+            const rawItems = val.replace(/[\n\r,]+/g, ' ').split(' ');
+            let addedCount = 0;
+            rawItems.forEach(item => {
+                const clean = item.trim().toUpperCase();
+                if (clean && !queuedBooklets.includes(clean)) {
+                    queuedBooklets.push(clean);
+                    addedCount++;
+                }
+            });
+
+            input.value = '';
+            renderQueuedBooklets();
+            updateModalCostPreview();
+            if (addedCount > 0) {
+                showToast(`Added ${addedCount} booklet(s) to void.`);
+            } else {
+                showToast('Booklet(s) already queued.');
+            }
+        }
+
+        function removeBookletChip(ctrlNum) {
+            queuedBooklets = queuedBooklets.filter(b => b !== ctrlNum);
+            renderQueuedBooklets();
+            updateModalCostPreview();
+        }
+
+        function clearQueuedBooklets() {
+            queuedBooklets = [];
+            renderQueuedBooklets();
+            updateModalCostPreview();
+        }
+
+        function renderQueuedBooklets() {
+            const container = document.getElementById('queuedBookletsContainer');
+            const list = document.getElementById('queuedBookletsList');
+            const countEl = document.getElementById('queuedBookletsCount');
+            const qtyInput = document.getElementById('modalQty');
+
+            countEl.innerText = queuedBooklets.length;
+            if (queuedBooklets.length === 0) {
+                container.style.display = 'none';
+                list.innerHTML = '';
+                if (document.getElementById('modalLossType').value === 'whole_booklet') {
+                    qtyInput.value = 1;
+                }
+                return;
+            }
+
+            container.style.display = 'block';
+            list.innerHTML = queuedBooklets.map(b => `
+                <span class="booklet-chip">
+                    ${escapeHtml(b)}
+                    <span class="remove-chip" onclick="removeBookletChip('${escapeHtml(b)}')" title="Remove">&times;</span>
+                </span>
+            `).join('');
+
+            if (document.getElementById('modalLossType').value === 'whole_booklet') {
+                qtyInput.value = queuedBooklets.length;
+            }
+        }
+
+        // --- CUSTOM STYLED APP DIALOG MODAL (Zero Native alert() / confirm()) ---
+        function showAppAlert(title, message, type = 'warning', confirmText = 'OK') {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    alert(`${title}: ${message}`);
+                    resolve(true);
+                    return;
+                }
+
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                let borderCol = '#3498db';
+                let icon = 'ℹ️';
+                let btnBg = '#2563eb';
+
+                if (type === 'warning') {
+                    borderCol = '#f59e0b';
+                    icon = '⚠️';
+                    btnBg = '#d97706';
+                } else if (type === 'error') {
+                    borderCol = '#ef4444';
+                    icon = '❌';
+                    btnBg = '#dc2626';
+                } else if (type === 'success') {
+                    borderCol = '#10b981';
+                    icon = '✅';
+                    btnBg = '#059669';
+                }
+
+                if (card) card.style.borderTop = `5px solid ${borderCol}`;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = btnBg;
+                cancelBtn.style.display = 'none';
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        function showAppConfirm(title, message, options = {}) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('appDialogModal');
+                if (!modal) {
+                    resolve(confirm(`${title}: ${message}`));
+                    return;
+                }
+
+                const card = modal.querySelector('.app-dialog-card');
+                const iconEl = document.getElementById('appDialogIcon');
+                const titleEl = document.getElementById('appDialogTitle');
+                const msgEl = document.getElementById('appDialogMsg');
+                const confirmBtn = document.getElementById('appDialogConfirmBtn');
+                const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+                const type = options.type || 'warning';
+                let borderCol = (type === 'danger') ? '#ef4444' : '#f59e0b';
+                let icon = (type === 'danger') ? '🗑️' : '⚠️';
+                let btnBg = (type === 'danger') ? '#dc2626' : '#2563eb';
+
+                if (card) card.style.borderTop = `5px solid ${borderCol}`;
+                if (iconEl) iconEl.innerText = icon;
+                if (titleEl) titleEl.innerText = title;
+                if (msgEl) msgEl.innerHTML = String(message).replace(/\n/g, '<br>');
+
+                confirmBtn.innerText = options.confirmText || 'Confirm';
+                confirmBtn.style.background = btnBg;
+                cancelBtn.innerText = options.cancelText || 'Cancel';
+                cancelBtn.style.display = 'inline-block';
+
+                confirmBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(true);
+                };
+
+                cancelBtn.onclick = () => {
+                    modal.style.display = 'none';
+                    resolve(false);
+                };
+
+                modal.style.display = 'flex';
+            });
+        }
+
+        // --- CAMERA SCANNER CONTROLLER (Unified with distribution.html) ---
+        function openSpoilageScanner() {
+            document.getElementById('spoilageScannerModal').style.display = 'flex';
+            document.getElementById('spoilage-hud-counter').innerText = queuedBooklets.length;
+            document.getElementById('spoilage-hud-ticker').innerHTML = queuedBooklets.length > 0 
+                ? `<span style="color: #2563eb;">Ready for next scan (${queuedBooklets.length} queued)</span>` 
+                : 'Awaiting first scan...';
+
+            if (spoilageQrScanner) {
+                try { spoilageQrScanner.clear(); } catch (e) {}
+            }
+
+            if (window.Html5QrcodeScanner) {
+                // Initialize strictly with Camera mode (no image scanning)
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    rememberLastUsedCamera: true
+                };
+                if (window.Html5QrcodeScanType) {
+                    config.supportedScanTypes = [Html5QrcodeScanType.SCAN_TYPE_CAMERA];
+                }
+
+                spoilageQrScanner = new Html5QrcodeScanner("spoilage-reader", config, false);
+                spoilageQrScanner.render(onSpoilageScanSuccess, onSpoilageScanFailure);
+            } else {
+                showAppAlert("Scanner Error", "QR Scanner library not loaded. Please verify your connection or static files.", "error");
+            }
+        }
+
+        function closeSpoilageScanner() {
+            if (spoilageQrScanner) {
+                try {
+                    spoilageQrScanner.clear();
+                } catch (e) {
+                    console.warn("Scanner clear error:", e);
+                }
+                spoilageQrScanner = null;
+            }
+            document.getElementById('spoilageScannerModal').style.display = 'none';
+            renderQueuedBooklets();
+            updateModalCostPreview();
+        }
+
+        function cancelSpoilageScanner() {
+            closeSpoilageScanner();
+        }
+
+        function triggerSpoilageFlash() {
+            const el = document.getElementById('spoilage-reader');
+            if (el) {
+                el.classList.remove('viewfinder-flash-green');
+                void el.offsetWidth;
+                el.classList.add('viewfinder-flash-green');
+                setTimeout(() => el.classList.remove('viewfinder-flash-green'), 550);
+            }
+        }
+
+        function onSpoilageScanSuccess(decodedText) {
+            if (!decodedText) return;
+            const cleanText = decodedText.trim().toUpperCase();
+            if (!cleanText) return;
+
+            if (queuedBooklets.includes(cleanText)) {
+                document.getElementById('spoilage-hud-ticker').innerHTML = `<span style="color: #f59e0b;">⚠️ Already in queue: ${escapeHtml(cleanText)}</span>`;
+                showToast(`Booklet ${cleanText} is already in the list.`);
+                return;
+            }
+
+            queuedBooklets.push(cleanText);
+            document.getElementById('spoilage-hud-counter').innerText = queuedBooklets.length;
+            document.getElementById('spoilage-hud-ticker').innerHTML = `<span style="color: #10b981;">✅ Scanned: ${escapeHtml(cleanText)}</span>`;
+            
+            triggerSpoilageFlash();
+            playScanBeep();
+            renderQueuedBooklets();
+            updateModalCostPreview();
+            showToast(`✓ Scanned & queued: ${cleanText}`);
+        }
+
+        function onSpoilageScanFailure(err) {
+            // Normal continuous scan frame miss, ignore
+        }
+
+        function playScanBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, ctx.currentTime);
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.12);
+            } catch (e) {}
+        }
+
         function updateModalCostPreview() {
             const lossType = document.getElementById('modalLossType').value;
             const dept = document.getElementById('modalDept').value;
-            const qty = Math.max(1, parseInt(document.getElementById('modalQty').value || 1, 10));
+            
+            let qty = 1;
+            if (lossType === 'whole_booklet') {
+                qty = Math.max(1, queuedBooklets.length);
+            } else {
+                qty = Math.max(1, parseInt(document.getElementById('modalQty').value || 1, 10));
+            }
 
             let sheets = qty;
             let staples = 0;
@@ -508,25 +1257,51 @@
 
             const cost = (sheets * unitPaperCost) + (staples * unitStapleCost);
             const textEl = document.getElementById('modalCostPreviewText');
-            textEl.innerHTML = `
-                This entry records <strong>${sheets} wasted paper sheet(s)</strong> (${cost > 0 ? `₱${cost.toFixed(2)}` : '₱0.00'} unrecoverable cost).<br/>
-                It will be accounted as <strong>Less: Net Loss</strong> in the Income Statement with <strong>0 ROI</strong>.
-            `;
+            if (lossType === 'whole_booklet') {
+                textEl.innerHTML = `
+                    This entry records <strong>${qty} defective booklet(s)</strong> (${sheets} paper sheets, ${staples} staples).<br/>
+                    Accounting Impact: <strong>₱${cost.toFixed(2)}</strong> unrecoverable cost accounted as <strong>Less: Net Loss (0 ROI)</strong>.
+                `;
+            } else {
+                textEl.innerHTML = `
+                    This entry records <strong>${sheets} wasted paper sheet(s)</strong> (${cost > 0 ? `₱${cost.toFixed(2)}` : '₱0.00'} unrecoverable cost).<br/>
+                    It will be accounted as <strong>Less: Net Loss</strong> in the Income Statement with <strong>0 ROI</strong>.
+                `;
+            }
         }
 
         async function submitSpoilage(e) {
             e.preventDefault();
+            const lossType = document.getElementById('modalLossType').value;
+
+            if (lossType === 'whole_booklet') {
+                if (queuedBooklets.length === 0) {
+                    await showAppAlert(
+                        "Missing Booklet Identification",
+                        "Please scan or enter at least one Booklet Control # / SRN before recording defective whole booklets.",
+                        "warning"
+                    );
+                    document.getElementById('modalControlNumInput').focus();
+                    return;
+                }
+            }
+
             const btn = document.getElementById('modalSubmitBtn');
             btn.disabled = true;
             btn.innerText = 'Saving...';
 
+            const qty = (lossType === 'whole_booklet') 
+                ? queuedBooklets.length 
+                : Math.max(1, parseInt(document.getElementById('modalQty').value, 10));
+
             const payload = {
                 academic_period: document.getElementById('periodFilter').value || activePeriod,
                 department: document.getElementById('modalDept').value,
-                loss_type: document.getElementById('modalLossType').value,
-                quantity: parseInt(document.getElementById('modalQty').value, 10),
+                loss_type: lossType,
+                quantity: qty,
                 reason: document.getElementById('modalReason').value,
-                booklet_control_num: document.getElementById('modalControlNum').value.trim() || null,
+                booklet_control_num: (lossType === 'whole_booklet') ? queuedBooklets.join(', ') : null,
+                booklet_control_numbers: (lossType === 'whole_booklet') ? queuedBooklets : null,
                 notes: document.getElementById('modalNotes').value.trim() || null,
                 source: 'manual'
             };
@@ -544,10 +1319,10 @@
                     closeLogSpoilageModal();
                     await fetchSpoilageData();
                 } else {
-                    alert('Error: ' + (data.message || 'Failed to save record'));
+                    await showAppAlert("Submission Failed", data.message || 'Failed to save record', "error");
                 }
             } catch (err) {
-                alert('Network error while saving: ' + err.message);
+                await showAppAlert("Submission Error", "Network error while saving: " + err.message, "error");
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Record Net Loss';
@@ -555,9 +1330,13 @@
         }
 
         async function deleteSpoilage(id) {
-            if (!confirm('Are you sure you want to delete this spoilage record? This will adjust financial loss calculations.')) {
-                return;
-            }
+            const confirmed = await showAppConfirm(
+                "Confirm Record Deletion",
+                "Are you sure you want to delete this spoilage record? This will adjust financial loss calculations.",
+                { type: "danger", confirmText: "Delete Record", cancelText: "Keep Record" }
+            );
+            if (!confirmed) return;
+
             try {
                 const res = await fetch(`/api/material-loss/${id}`, { method: 'DELETE' });
                 const data = await res.json();
@@ -565,30 +1344,10 @@
                     showToast('Spoilage record deleted.');
                     await fetchSpoilageData();
                 } else {
-                    alert('Error: ' + (data.detail || data.message || 'Failed to delete'));
+                    await showAppAlert("Deletion Failed", data.detail || data.message || "Failed to delete record.", "error");
                 }
             } catch (err) {
-                alert('Network error: ' + err.message);
-            }
-        }
-
-        async function syncDefectiveReturns() {
-            const period = document.getElementById('periodFilter').value || activePeriod;
-            try {
-                const res = await fetch(`/api/material-loss/sync-returns?period=${encodeURIComponent(period)}`);
-                const data = await res.json();
-                if (data.status === 'success') {
-                    if (data.synced_count > 0) {
-                        showToast(`Synchronized ${data.synced_count} defective return(s) into spoilage!`);
-                        await fetchSpoilageData();
-                    } else {
-                        showToast('All defective returns are already up to date in spoilage records.');
-                    }
-                } else {
-                    alert('Sync failed: ' + (data.message || 'Unknown error'));
-                }
-            } catch (err) {
-                alert('Network error during sync: ' + err.message);
+                await showAppAlert("Network Error", "A network error occurred while deleting the record: " + err.message, "error");
             }
         }
 

@@ -1876,14 +1876,14 @@
                 currentFacultyImportMode = 'schedule';
                 if (tabLegacy) tabLegacy.classList.add('active');
                 if (cLegacy) cLegacy.style.display = 'block';
-                if (confirmBtn) confirmBtn.innerText = "🚀 Import Classes into Masterfile & Auto-Provision Accounts";
+                if (confirmBtn) confirmBtn.innerText = "Import Classes & Create Accounts";
                 if (parsedLegacyScheduleRows.length > 0) renderScheduleImportPreview();
                 else hideImportPreview();
             } else {
                 currentFacultyImportMode = 'roster';
                 if (tabRoster) tabRoster.classList.add('active');
                 if (cRoster) cRoster.style.display = 'block';
-                if (confirmBtn) confirmBtn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
+                if (confirmBtn) confirmBtn.innerText = "Import & Create Accounts";
                 if (parsedFacultyRows.length > 0) renderFacultyPreview();
                 else hideImportPreview();
             }
@@ -1921,7 +1921,7 @@
             if (preview) preview.style.display = 'none';
             if (btn) {
                 btn.disabled = true;
-                btn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
+                btn.innerText = "Import & Create Accounts";
             }
         }
 
@@ -2590,7 +2590,7 @@
             } finally {
                 hideBlockerModal();
                 btn.disabled = false;
-                btn.innerText = "🚀 Onboard Faculty Roster & Create Accounts";
+                btn.innerText = "Import & Create Accounts";
             }
         }
 
@@ -2634,7 +2634,7 @@
             } finally {
                 hideBlockerModal();
                 btn.disabled = false;
-                btn.innerText = "🚀 Import Classes into Masterfile & Auto-Provision Accounts";
+                btn.innerText = "Import Classes & Create Accounts";
             }
         }
 

@@ -1410,52 +1410,25 @@
 
         <div style="background: white; border-radius: 12px; width: 92%; max-width: 580px; box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: popIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;">
 
-            
-
             <!-- Modal Header -->
-
-            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 22px 24px; color: white;">
-
-                <div style="display: flex; align-items: center; gap: 12px;">
-
-                    <div style="width: 44px; height: 44px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
-
-                        ⚠️
-
-                    </div>
-
-                    <div>
-
-                        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700;">Confirm Configuration Save</h2>
-
-                        <p style="margin: 3px 0 0; font-size: 0.85rem; opacity: 0.92;">Notice: This action will overwrite system and period parameters</p>
-
-                    </div>
-
+            <div id="confirmModalHeader" style="background: linear-gradient(135deg, #10b981, #059669); padding: 22px 24px; color: white;">
+                <div>
+                    <h2 id="confirmModalTitle" style="margin: 0; font-size: 1.25rem; font-weight: 700;">Confirm Initial Configuration</h2>
+                    <p id="confirmModalSubtitle" style="margin: 4px 0 0; font-size: 0.85rem; opacity: 0.95;">Notice: Establishing new parameters for this examination semester</p>
                 </div>
-
             </div>
 
-
-
             <!-- Modal Body -->
-
             <div style="padding: 22px 24px;">
 
-                <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.88rem; color: #92400e; line-height: 1.5;">
-
-                    ⚠️ <strong>Warning:</strong> Saving will overwrite or establish the configuration parameters for <strong id="confirmModalPeriod" style="color: #78350f;">-</strong>. All future booklet allocations, DSS inventory projections, and financial expenditure calculations for this period will adopt these values.
-
+                <div id="confirmModalNoticeBox" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.88rem; color: #166534; line-height: 1.5;">
+                    <span id="confirmModalNoticeText"><strong>Initial Setup:</strong> Saving will establish configuration parameters for <strong id="confirmModalPeriod" style="color: #14532d;">-</strong> for the first time. All future booklet allocations, DSS inventory projections, and financial expenditure calculations for this period will adopt these initial values.</span>
                 </div>
-
-
 
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; font-size: 0.85rem; color: #334155; margin-bottom: 20px;">
 
                     <div style="font-weight: 700; color: #1e293b; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-size: 0.78rem;">
-
-                        📋 Parameters to be Saved
-
+                        Parameters to be Saved
                     </div>
 
                     <div class="settings-confirm-grid">
@@ -1484,20 +1457,14 @@
 
                 </div>
 
-
-
                 <div style="display: flex; gap: 12px; justify-content: flex-end;">
 
                     <button type="button" onclick="closeConfirmSaveSettingsModal()" style="background: #e2e8f0; color: #334155; border: none; padding: 11px 18px; border-radius: 6px; font-weight: 600; font-size: 0.92rem; cursor: pointer; transition: background 0.2s;">
-
                         Cancel
-
                     </button>
 
-                    <button type="button" id="confirmSaveSettingsBtn" onclick="executeSaveSettings()" style="background: #d97706; color: white; border: none; padding: 11px 22px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(217,119,6,0.3);">
-
-                        Confirm &amp; Overwrite Configuration
-
+                    <button type="button" id="confirmSaveSettingsBtn" onclick="executeSaveSettings()" style="background: #059669; color: white; border: none; padding: 11px 22px; border-radius: 6px; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: background 0.2s; box-shadow: 0 2px 4px rgba(5, 150, 105, 0.3);">
+                        Confirm &amp; Save Configuration
                     </button>
 
                 </div>
@@ -5081,9 +5048,59 @@
 
             if (!modal) return;
 
+            let isOverwrite = false;
+            if (window.currentPeriodState && window.currentPeriodState.periodName === payload.active_period) {
+                isOverwrite = Boolean(window.currentPeriodState.isFound);
+            } else if (Array.isArray(window.cachedPeriodArchiveList) && window.cachedPeriodArchiveList.length > 0) {
+                isOverwrite = window.cachedPeriodArchiveList.some(c => (c.academic_period || c.exam_period) === payload.active_period);
+            }
+            window._currentSettingsSaveIsOverwrite = isOverwrite;
 
+            const headerEl = document.getElementById('confirmModalHeader');
+            const titleEl = document.getElementById('confirmModalTitle');
+            const subtitleEl = document.getElementById('confirmModalSubtitle');
+            const noticeBox = document.getElementById('confirmModalNoticeBox');
+            const noticeText = document.getElementById('confirmModalNoticeText');
+            const confirmBtn = document.getElementById('confirmSaveSettingsBtn');
 
-            document.getElementById('confirmModalPeriod').innerText = payload.active_period;
+            if (isOverwrite) {
+                if (headerEl) headerEl.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                if (titleEl) titleEl.innerText = 'Confirm Configuration Overwrite';
+                if (subtitleEl) subtitleEl.innerText = 'Notice: This action will overwrite existing system and period parameters';
+                if (noticeBox) {
+                    noticeBox.style.background = '#fffbeb';
+                    noticeBox.style.borderColor = '#fde68a';
+                    noticeBox.style.color = '#92400e';
+                }
+                if (noticeText) {
+                    noticeText.innerHTML = `<strong>Warning:</strong> You are about to overwrite previously saved configuration parameters for <strong id="confirmModalPeriod" style="color: #78350f;">${escapeHtml(payload.active_period)}</strong>. All future booklet allocations, DSS inventory projections, and financial expenditure calculations for this period will adopt these updated values.`;
+                }
+                if (confirmBtn) {
+                    confirmBtn.style.background = '#d97706';
+                    confirmBtn.style.boxShadow = '0 2px 4px rgba(217, 119, 6, 0.3)';
+                    confirmBtn.innerText = 'Confirm & Overwrite Configuration';
+                }
+            } else {
+                if (headerEl) headerEl.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                if (titleEl) titleEl.innerText = 'Confirm Initial Configuration';
+                if (subtitleEl) subtitleEl.innerText = 'Notice: Establishing baseline parameters for this examination semester';
+                if (noticeBox) {
+                    noticeBox.style.background = '#f0fdf4';
+                    noticeBox.style.borderColor = '#bbf7d0';
+                    noticeBox.style.color = '#166534';
+                }
+                if (noticeText) {
+                    noticeText.innerHTML = `<strong>Initial Setup:</strong> Saving will establish configuration parameters for <strong id="confirmModalPeriod" style="color: #14532d;">${escapeHtml(payload.active_period)}</strong> for the first time. All future booklet allocations, DSS inventory projections, and financial expenditure calculations for this period will adopt these initial values.`;
+                }
+                if (confirmBtn) {
+                    confirmBtn.style.background = '#059669';
+                    confirmBtn.style.boxShadow = '0 2px 4px rgba(5, 150, 105, 0.3)';
+                    confirmBtn.innerText = 'Confirm & Save Configuration';
+                }
+            }
+
+            const periodPeriodEl = document.getElementById('confirmModalPeriod');
+            if (periodPeriodEl) periodPeriodEl.innerText = payload.active_period;
 
             document.getElementById('confirmModalPeriodVal').innerText = payload.active_period;
 
@@ -5116,8 +5133,6 @@
             document.getElementById('confirmModalStaplesPerBooklet').innerText = `${payload.staples_per_booklet} staples / booklet`;
 
             document.getElementById('confirmModalStaplesPerBox').innerText = `${payload.staples_per_box.toLocaleString()} pcs / box`;
-
-
 
             modal.style.display = 'flex';
 
@@ -5276,21 +5291,31 @@
 
 
 
+            let fetchHeaders = {
+                'Content-Type': 'application/json'
+            };
             try {
+                const uStr = localStorage.getItem('bookletlog_user');
+                if (uStr) {
+                    const u = JSON.parse(uStr);
+                    if (u.session_token) fetchHeaders['X-Session-Token'] = u.session_token;
+                    if (u.username) fetchHeaders['X-Username'] = u.username;
+                }
+            } catch (authErr) {}
 
+            try {
                 let res = await fetch('/api/settings', {
-
                     method: 'POST',
-
-                    headers: {'Content-Type': 'application/json'},
-
+                    headers: fetchHeaders,
                     body: JSON.stringify(payload)
-
                 });
 
-                
-
-                let data = await res.json();
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    console.warn("Server response was not JSON:", jsonErr);
+                }
 
                 if (res.status === 409 || (data && data.message && (data.message.includes('locked') || data.message.includes('immutable')))) {
                     closeConfirmSaveSettingsModal();
@@ -5304,10 +5329,8 @@
 
                 let alertBox = document.getElementById('alertBox');
 
-                if (data.status === 'success') {
-
+                if (data && data.status === 'success') {
                     window.systemLiveActivePeriod = payload.active_period;
-
                     closeConfirmSaveSettingsModal();
 
                     // Immediately update in-memory defaults
@@ -5332,21 +5355,15 @@
                     }
 
                     showSaveSuccessModal(data.message, payload);
-
                     loadPeriodConfigurationsHistory();
-
                     await fetchSettings(true);
                     await loadAcademicPrograms();
                     broadcastAcademicProgramsUpdated();
 
                     if (typeof window.refreshSidebarDSSAlert === 'function') {
-
                         window.refreshSidebarDSSAlert();
-
                     }
-
                 } else {
-
                     let errorMsg = 'Error saving settings.';
                     if (data) {
                         if (typeof data.detail === 'string') {
@@ -5356,36 +5373,27 @@
                         } else if (data.message) {
                             errorMsg = data.message;
                         }
+                    } else if (!res.ok) {
+                        errorMsg = `Server error (${res.status}): Please check backend logs or verify configuration parameters.`;
                     }
 
                     if (alertBox) {
-
                         alertBox.className = 'alert error';
-
                         alertBox.innerText = errorMsg;
-
                         alertBox.style.display = 'block';
-
                     }
 
                     alert(errorMsg);
-
                 }
-
             } catch(e) {
-
-                console.error(e);
-
-                alert('Connection error occurred while saving configuration.');
-
+                console.error("Network or execution error saving configuration:", e);
+                const errMsg = e && e.message ? `Connection error: ${e.message}` : 'Connection error occurred while saving configuration.';
+                alert(errMsg);
             } finally {
 
                 if (modalBtn) {
-
                     modalBtn.disabled = false;
-
-                    modalBtn.innerText = 'Confirm & Overwrite Configuration';
-
+                    modalBtn.innerText = window._currentSettingsSaveIsOverwrite ? 'Confirm & Overwrite Configuration' : 'Confirm & Save Configuration';
                 }
 
                 if (saveBtn) {

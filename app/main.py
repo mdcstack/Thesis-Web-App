@@ -2921,6 +2921,13 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "alert": True,
             "is_configured": True,
             "has_enrollments": True,
+            "is_buffer_exhausted": metrics.get("is_buffer_exhausted", False),
+            "total_spoilage_sheets": metrics.get("total_spoilage_sheets", 0),
+            "total_buffer_sheets": metrics.get("total_buffer_sheets", 0),
+            "buffer_overrun_sheets": metrics.get("buffer_overrun_sheets", 0),
+            "recommended_additional_reams": metrics.get("recommended_additional_reams", 0),
+            "estimated_budget_increase": metrics.get("estimated_budget_increase", 0.0),
+            "ream_price": metrics.get("ream_price", 250.0),
             "message": msg,
             "deficit_booklets": total_deficit,
             "deficit_sheets": deficit_sheets,
@@ -2943,10 +2950,48 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "pending_unlock_count": pending_unlock_count
         }
 
+    if metrics.get("is_buffer_exhausted"):
+        sp_sheets = metrics.get("total_spoilage_sheets", 0)
+        buf_sheets = metrics.get("total_buffer_sheets", 0)
+        add_reams = metrics.get("recommended_additional_reams", 1)
+        est_cost = metrics.get("estimated_budget_increase", 0.0)
+        return {
+            "alert": True,
+            "is_configured": True,
+            "has_enrollments": True,
+            "is_buffer_exhausted": True,
+            "total_spoilage_sheets": sp_sheets,
+            "total_buffer_sheets": buf_sheets,
+            "buffer_overrun_sheets": metrics.get("buffer_overrun_sheets", 0),
+            "recommended_additional_reams": add_reams,
+            "estimated_budget_increase": est_cost,
+            "ream_price": metrics.get("ream_price", 250.0),
+            "status": "buffer_exhausted",
+            "message": f"Safety Buffer Exhausted: Cumulative spoilage ({sp_sheets:,} sheets) exceeds allocated safety buffer ({buf_sheets:,} sheets). Procure +{add_reams} ream(s) (Est. +₱{est_cost:,.2f}) to avoid stockouts.",
+            "reams_needed": add_reams,
+            "deficit_booklets": 0,
+            "deficit_sheets": 0,
+            "buffer_booklets": total_buffer_booklets,
+            "buffer_sheets": total_buffer_booklets * sheets_per_b,
+            "buffer_percent": buffer_pct,
+            "target_production": 0,
+            "total_sheets_needed": 0,
+            "courses": metrics.get("courses", {}),
+            "unlock_requests": unlock_req_list,
+            "pending_unlock_count": pending_unlock_count
+        }
+
     return {
         "alert": False,
         "is_configured": True,
         "has_enrollments": True,
+        "is_buffer_exhausted": False,
+        "total_spoilage_sheets": metrics.get("total_spoilage_sheets", 0),
+        "total_buffer_sheets": metrics.get("total_buffer_sheets", 0),
+        "buffer_overrun_sheets": 0,
+        "recommended_additional_reams": 0,
+        "estimated_budget_increase": 0.0,
+        "ream_price": metrics.get("ream_price", 250.0),
         "status": "sufficient",
         "message": "Inventory levels are sufficient. No active alerts.",
         "reams_needed": 0,
@@ -4746,10 +4791,22 @@ def process_return(req: schemas.ReturnRequest, db: Session = Depends(get_db)):
                 models.PeriodConfiguration.academic_period == b_period
             ).first() if b_period else None
 
-            ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings_rec.ream_price if settings_rec else 250.0))
+            ream_price = float(
+                (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
+                or (settings_rec.ream_price if settings_rec and settings_rec.ream_price is not None else None)
+                or 250.0
+            )
             unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
-            staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings_rec.staples_box_price if settings_rec else 50.0))
-            staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings_rec.staples_per_box if settings_rec else 5000))
+            staples_box_price = float(
+                (period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else None)
+                or (settings_rec.staples_box_price if settings_rec and settings_rec.staples_box_price is not None else None)
+                or 50.0
+            )
+            staples_per_box = int(
+                (period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else None)
+                or (settings_rec.staples_per_box if settings_rec and settings_rec.staples_per_box is not None else None)
+                or 5000
+            )
             unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
 
             prog = db.query(models.AcademicProgram).filter(models.AcademicProgram.code == enr_dept).first() if enr_dept != "GENERAL" else None
@@ -6117,7 +6174,8 @@ def calculate_course_production_metrics(
     db: Session,
     active_period: Optional[str] = None,
     override_buffer_pct: Optional[float] = None,
-    override_sheets_per_booklet: Optional[int] = None
+    override_sheets_per_booklet: Optional[int] = None,
+    override_ream_price: Optional[float] = None
 ):
     """Calculates period-isolated production demand broken down across all active academic courses with dynamic buffer margin and prior period excess paper sheets credit."""
     if not active_period:
@@ -6130,17 +6188,21 @@ def calculate_course_production_metrics(
 
     if override_sheets_per_booklet is not None:
         sheets_per_b = int(override_sheets_per_booklet)
-    elif period_cfg:
-        sheets_per_b = period_cfg.sheets_per_booklet or (settings.sheets_per_booklet if settings else 6)
+    elif period_cfg and period_cfg.sheets_per_booklet:
+        sheets_per_b = int(period_cfg.sheets_per_booklet)
+    elif settings and settings.sheets_per_booklet:
+        sheets_per_b = int(settings.sheets_per_booklet)
     else:
-        sheets_per_b = settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6
+        sheets_per_b = 6
 
     if override_buffer_pct is not None:
         buffer_pct = float(override_buffer_pct)
-    elif period_cfg:
-        buffer_pct = float(period_cfg.reorder_buffer_percent if period_cfg.reorder_buffer_percent is not None else (settings.reorder_buffer_percent if settings and settings.reorder_buffer_percent is not None else 15.0))
+    elif period_cfg and period_cfg.reorder_buffer_percent is not None:
+        buffer_pct = float(period_cfg.reorder_buffer_percent)
+    elif settings and settings.reorder_buffer_percent is not None:
+        buffer_pct = float(settings.reorder_buffer_percent)
     else:
-        buffer_pct = float(settings.reorder_buffer_percent if settings and settings.reorder_buffer_percent is not None else 15.0)
+        buffer_pct = 15.0
 
     yield_per_r = 500 // sheets_per_b if sheets_per_b > 0 else 83
 
@@ -6255,6 +6317,14 @@ def calculate_course_production_metrics(
         # Batches converted in active period for this department (tracking actual paper consumption)
         dept_current_batches = [b for b in all_dept_batches if b.registered_period == active_period]
         dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or course_sheets_per_b) for b in dept_current_batches)
+        
+        # Add physical paper sheets wasted from printer jams, spoiled sheets, and defective booklets in active period
+        dept_spoilage_query = db.query(func.sum(models.MaterialLoss.sheets_wasted)).filter(
+            models.MaterialLoss.academic_period == active_period,
+            models.MaterialLoss.department == dept
+        ).scalar() or 0
+        dept_spoilage_sheets = int(dept_spoilage_query)
+        dept_consumed_sheets += dept_spoilage_sheets
         # Commercial whole reams required for actual sheets converted so far (avoiding over-counting individual small top-up batches)
         net_converted_sheets = max(0, dept_consumed_sheets - prev_excess)
         dept_reams_used = math.ceil(net_converted_sheets / 500) if net_converted_sheets > 0 else 0
@@ -6361,6 +6431,26 @@ def calculate_course_production_metrics(
     total_excess_booklets = sum(c["excess_booklets_yield"] for c in data.values())
     total_sheets_procured = sum_course_planned_reams * 500
 
+    # Material Spoilage & Buffer Safety Exhaustion Analysis
+    total_spoilage_sheets = int(db.query(func.sum(models.MaterialLoss.sheets_wasted)).filter(
+        models.MaterialLoss.academic_period == active_period
+    ).scalar() or 0)
+    
+    total_buffer_sheets = sum(c.get("buffer_booklets", 0) * c.get("sheets_per_booklet", sheets_per_b) for c in data.values())
+    buffer_overrun_sheets = max(0, total_spoilage_sheets - total_buffer_sheets)
+    is_buffer_exhausted = bool(total_buffer_sheets > 0 and total_spoilage_sheets > total_buffer_sheets)
+    
+    if override_ream_price is not None:
+        ream_price = float(override_ream_price)
+    else:
+        ream_price = float(
+            (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
+            or (settings.ream_price if settings and settings.ream_price is not None else None)
+            or 250.0
+        )
+    recommended_additional_reams = math.ceil(buffer_overrun_sheets / 500) if buffer_overrun_sheets > 0 else (1 if is_buffer_exhausted else 0)
+    estimated_budget_increase = round(recommended_additional_reams * ream_price, 2)
+
     return {
         "status": "success",
         "has_enrollments": has_system_enrollments,
@@ -6374,6 +6464,13 @@ def calculate_course_production_metrics(
         "courses": data,
         "total_deficit": total_deficit,
         "total_buffer_booklets": total_buffer_booklets,
+        "total_buffer_sheets": total_buffer_sheets,
+        "total_spoilage_sheets": total_spoilage_sheets,
+        "buffer_overrun_sheets": buffer_overrun_sheets,
+        "is_buffer_exhausted": is_buffer_exhausted,
+        "recommended_additional_reams": recommended_additional_reams,
+        "estimated_budget_increase": estimated_budget_increase,
+        "ream_price": ream_price,
         "total_target_production": total_target_production,
         "total_planned_production": total_planned_production,
         "total_gross_sheets_needed": total_gross_sheets_needed,
@@ -8067,7 +8164,8 @@ def update_settings(req: SettingsUpdate, request: Request, db: Session = Depends
         db,
         req.active_period,
         override_buffer_pct=req.reorder_buffer_percent,
-        override_sheets_per_booklet=req.sheets_per_booklet
+        override_sheets_per_booklet=req.sheets_per_booklet,
+        override_ream_price=req.ream_price
     )
     sum_rounded_reams = course_metrics.get("sum_course_rounded_reams", 0)
     total_planned_bks = course_metrics.get("total_planned_production") or course_metrics.get("total_target_production", 0)
@@ -9019,6 +9117,7 @@ class MaterialLossCreateRequest(BaseModel):
     quantity: int = 1
     reason: str
     booklet_control_num: Optional[str] = None
+    booklet_control_numbers: Optional[List[str]] = None
     notes: Optional[str] = None
     source: Optional[str] = "manual"
     recorded_by: Optional[str] = "Staff"
@@ -9111,11 +9210,23 @@ def create_material_loss(
             models.PeriodConfiguration.academic_period == active_period
         ).first() if active_period else None
 
-        ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings.ream_price if settings else 250.0))
+        ream_price = float(
+            (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
+            or (settings.ream_price if settings and settings.ream_price is not None else None)
+            or 250.0
+        )
         unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
         
-        staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings.staples_box_price if settings else 50.0))
-        staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings.staples_per_box if settings else 5000))
+        staples_box_price = float(
+            (period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else None)
+            or (settings.staples_box_price if settings and settings.staples_box_price is not None else None)
+            or 50.0
+        )
+        staples_per_box = int(
+            (period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else None)
+            or (settings.staples_per_box if settings and settings.staples_per_box is not None else None)
+            or 5000
+        )
         unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
 
         dept_clean = (req.department or "GENERAL").strip().upper()
@@ -9128,9 +9239,28 @@ def create_material_loss(
         else:
             sheets_per_b = int(settings.sheets_per_booklet if settings and settings.sheets_per_booklet else 6)
 
-        staples_per_b = int(period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else (settings.staples_per_booklet if settings else 2))
+        staples_per_b = int(
+            (period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else None)
+            or (settings.staples_per_booklet if settings and settings.staples_per_booklet is not None else None)
+            or 2
+        )
 
-        qty = max(1, int(req.quantity))
+        # Parse and collect all targeted booklet identification numbers
+        target_ids = []
+        if req.booklet_control_numbers:
+            for item in req.booklet_control_numbers:
+                if item and str(item).strip():
+                    target_ids.append(str(item).strip())
+        if req.booklet_control_num:
+            for item in str(req.booklet_control_num).replace("\n", ",").split(","):
+                clean_id = item.strip()
+                if clean_id and clean_id not in target_ids:
+                    target_ids.append(clean_id)
+
+        if req.loss_type == "whole_booklet" and target_ids:
+            qty = len(target_ids)
+        else:
+            qty = max(1, int(req.quantity))
         
         if req.loss_type == "whole_booklet":
             sheets_wasted = qty * sheets_per_b
@@ -9141,14 +9271,23 @@ def create_material_loss(
             staples_wasted = 0
             total_cost = round(sheets_wasted * unit_paper_cost, 2)
 
-        ctrl_num = (req.booklet_control_num or "").strip()
-        if ctrl_num:
-            target_booklet = db.query(models.Booklet).filter(
-                or_(models.Booklet.control_number == ctrl_num, models.Booklet.srn == ctrl_num)
-            ).first()
-            if target_booklet:
-                target_booklet.status = "voided"
-                target_booklet.return_reason = f"Scrapped Spoilage: {req.reason}"
+        # Void matching booklets in database using correct model attributes
+        if target_ids:
+            matching_booklets = db.query(models.Booklet).filter(
+                or_(
+                    models.Booklet.control_num.in_(target_ids),
+                    models.Booklet.sort_record_num.in_(target_ids)
+                )
+            ).all()
+            for tb in matching_booklets:
+                tb.status = "voided"
+                tb.return_reason = f"Scrapped Spoilage: {req.reason.strip()}"
+            
+            # Infer department if set to GENERAL
+            if dept_clean == "GENERAL" and matching_booklets and matching_booklets[0].master_batch:
+                dept_clean = matching_booklets[0].master_batch.department or dept_clean
+
+        saved_ctrl_num = ", ".join(target_ids) if target_ids else ((req.booklet_control_num or "").strip() or None)
 
         loss_entry = models.MaterialLoss(
             academic_period=active_period,
@@ -9161,7 +9300,7 @@ def create_material_loss(
             unit_staple_cost=unit_staple_cost,
             total_loss_cost=total_cost,
             reason=req.reason.strip(),
-            booklet_control_num=ctrl_num or None,
+            booklet_control_num=saved_ctrl_num,
             source=req.source or "manual",
             recorded_by=username,
             notes=req.notes
@@ -9175,7 +9314,7 @@ def create_material_loss(
             action_type="PRODUCTION",
             action_title="Material Spoilage Logged",
             details=f"Recorded {qty} {log_type_label} ({sheets_wasted} sheets wasted, ₱{total_cost:.2f} Net Loss). Reason: {req.reason.strip()}",
-            target_ref=ctrl_num or f"{dept_clean} {log_type_label}",
+            target_ref=saved_ctrl_num or f"{dept_clean} {log_type_label}",
             department=dept_clean if dept_clean != "GENERAL" else "All",
             academic_period=active_period,
             ip_address=request.client.host if request.client else "127.0.0.1"
@@ -9248,11 +9387,23 @@ def sync_defective_returns_to_spoilage(
             models.PeriodConfiguration.academic_period == active_period
         ).first() if active_period else None
 
-        ream_price = float(period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else (settings.ream_price if settings else 250.0))
+        ream_price = float(
+            (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
+            or (settings.ream_price if settings and settings.ream_price is not None else None)
+            or 250.0
+        )
         unit_paper_cost = round(ream_price / 500.0, 4) if ream_price > 0 else 0.50
         
-        staples_box_price = float(period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else (settings.staples_box_price if settings else 50.0))
-        staples_per_box = int(period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else (settings.staples_per_box if settings else 5000))
+        staples_box_price = float(
+            (period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else None)
+            or (settings.staples_box_price if settings and settings.staples_box_price is not None else None)
+            or 50.0
+        )
+        staples_per_box = int(
+            (period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else None)
+            or (settings.staples_per_box if settings and settings.staples_per_box is not None else None)
+            or 5000
+        )
         unit_staple_cost = round(staples_box_price / staples_per_box, 4) if staples_per_box > 0 else 0.01
 
         defective_booklets = db.query(models.Booklet).filter(
