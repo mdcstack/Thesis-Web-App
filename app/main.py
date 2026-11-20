@@ -379,6 +379,12 @@ def verify_page_role_access(request: Request, allowed_roles: List[str], db: Sess
 
     return None
 
+def is_mobile_user_agent(request: Request) -> bool:
+    """Checks if the client HTTP User-Agent indicates a mobile or tablet device."""
+    ua = (request.headers.get("user-agent") or "").lower()
+    mobile_tokens = ["android", "iphone", "ipad", "ipod", "blackberry", "iemobile", "opera mini", "mobile"]
+    return any(token in ua for token in mobile_tokens)
+
 def verify_api_role_access(request: Request, allowed_roles: List[str], db: Session) -> models.User:
     """
     Enforces RBAC on sensitive API endpoints. Raises HTTPException(401/403) if unauthorized.
@@ -1638,7 +1644,8 @@ def get_batches_history(request: Request = None, db: Session = Depends(get_db)):
             "file_exists": file_exists,
             "file_size_kb": file_size_kb,
             "pdf_filename": f"{b.qr_code_id}.pdf",
-            "download_url": f"/api/download-batch-pdf/{b.qr_code_id}"
+            "download_url": f"/api/download-batch-pdf/{b.qr_code_id}",
+            "view_url": f"/api/view-batch-pdf/{b.qr_code_id}"
         })
         
     return {"status": "success", "batches": batch_list}
@@ -1655,13 +1662,14 @@ def regenerate_batch_pdf_endpoint(batch_id: str, request: Request = None, db: Se
             "batch_id": batch_id,
             "filename": f"{batch_id}.pdf",
             "download_url": f"/api/download-batch-pdf/{batch_id}",
+            "view_url": f"/api/view-batch-pdf/{batch_id}",
             "file_path": f"/{out_path}"
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Regeneration failed: {str(e)}")
 
 @app.get("/api/download-batch-pdf/{batch_id}")
-def download_batch_pdf_stream(batch_id: str, db: Session = Depends(get_db)):
+def download_batch_pdf_stream(batch_id: str, view: bool = False, db: Session = Depends(get_db)):
     """Self-healing download endpoint: automatically regenerates missing PDFs before serving."""
     batch = db.query(models.MasterBatch).filter(models.MasterBatch.qr_code_id == batch_id).first()
     if not batch:
@@ -1677,11 +1685,21 @@ def download_batch_pdf_stream(batch_id: str, db: Session = Depends(get_db)):
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="File could not be recovered.")
         
+    if view:
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            content_disposition_type="inline"
+        )
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
         filename=f"{batch_id}.pdf"
     )
+
+@app.get("/api/view-batch-pdf/{batch_id}")
+def view_batch_pdf_stream(batch_id: str, db: Session = Depends(get_db)):
+    return download_batch_pdf_stream(batch_id=batch_id, view=True, db=db)
 
 @app.post("/api/batches/regenerate-all-missing")
 def regenerate_all_missing_batches(request: Request = None, db: Session = Depends(get_db)):
@@ -1773,13 +1791,14 @@ def get_packs_history(request: Request = None, db: Session = Depends(get_db)):
             "file_size_kb": file_size_kb,
             "file_filename": f"{pid}_LABEL.png",
             "download_url": f"/api/download-pack-label/{pid}",
+            "view_url": f"/api/view-pack-label/{pid}",
             "label_url": f"/{file_path}" if file_exists else None
         })
         
     return {"status": "success", "packs": pack_list}
 
 @app.get("/api/download-pack-label/{pack_id}")
-def download_pack_label_stream(pack_id: str, db: Session = Depends(get_db)):
+def download_pack_label_stream(pack_id: str, view: bool = False, db: Session = Depends(get_db)):
     """Self-healing download endpoint: automatically reconstructs missing pack QR label stickers before serving."""
     batches = db.query(models.MasterBatch).filter(models.MasterBatch.pack_qr_id == pack_id).all()
     if not batches:
@@ -1795,11 +1814,21 @@ def download_pack_label_stream(pack_id: str, db: Session = Depends(get_db)):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Label file could not be recovered.")
         
+    if view:
+        return FileResponse(
+            file_path,
+            media_type="image/png",
+            content_disposition_type="inline"
+        )
     return FileResponse(
         file_path,
         media_type="image/png",
         filename=f"{pack_id}_LABEL.png"
     )
+
+@app.get("/api/view-pack-label/{pack_id}")
+def view_pack_label_stream(pack_id: str, db: Session = Depends(get_db)):
+    return download_pack_label_stream(pack_id=pack_id, view=True, db=db)
 
 @app.post("/api/packs/{pack_id}/regenerate-qr")
 def regenerate_pack_qr_endpoint(pack_id: str, request: Request = None, db: Session = Depends(get_db)):
@@ -1946,6 +1975,8 @@ def view_generator(request: Request, db: Session = Depends(get_db)):
     guard = verify_page_role_access(request, ["Admin", "Staff"], db)
     if guard:
         return guard
+    if is_mobile_user_agent(request):
+        return RedirectResponse(url="/dashboard?error=mobile_restricted", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse("pdf_generator.html", {"request": request})
 
 from fastapi import HTTPException
@@ -1955,6 +1986,8 @@ def view_qr_registration(request: Request, db: Session = Depends(get_db)):
     guard = verify_page_role_access(request, ["Admin", "Staff"], db)
     if guard:
         return guard
+    if is_mobile_user_agent(request):
+        return RedirectResponse(url="/dashboard?error=mobile_restricted", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse("qr_registration.html", {"request": request})
 
 @app.get("/api/pending-batches")
@@ -3334,9 +3367,22 @@ def get_enrollments_roster(db: Session = Depends(get_db)):
     
     for u in faculty_users:
         disp_name = (u.full_name or u.username).strip()
-        k = disp_name.lower()
-        processed_keys.add(k)
-        classes = enr_by_teacher.get(k, [])
+        fn_key = (u.full_name or "").strip().lower()
+        un_key = (u.username or "").strip().lower()
+        disp_key = disp_name.lower()
+        
+        # Merge classes keyed by either full_name or username (avoiding duplicates by enrollment id)
+        classes_map = {}
+        for key in filter(None, [fn_key, un_key, disp_key]):
+            for c in enr_by_teacher.get(key, []):
+                classes_map[c["id"]] = c
+        classes = list(classes_map.values())
+        
+        if fn_key:
+            processed_keys.add(fn_key)
+        if un_key:
+            processed_keys.add(un_key)
+        processed_keys.add(disp_key)
         
         # Unique subjects
         unique_subjects = list(dict.fromkeys([c["subject"] for c in classes if c.get("subject")]))
@@ -3476,21 +3522,28 @@ def add_single_faculty(item: schemas.FacultyRosterItem, request: Request, db: Se
     user, is_new = auto_provision_instructor_account(name, dept, db)
     if not user:
         return {"status": "error", "message": "Failed to provision faculty account."}
-        
-    if is_new:
-        notify_lan_mutation("USER_UPDATED", {"action": "create", "username": user.username, "id": user.id}, db=db)
+
+    if not is_new:
+        return {
+            "status": "warning",
+            "message": f"Instructor '{name}' already exists in the faculty roster (account @{user.username}).",
+            "user_id": user.id,
+            "username": user.username,
+            "name": user.full_name,
+            "is_new": False
+        }
+
+    notify_lan_mutation("USER_UPDATED", {"action": "create", "username": user.username, "id": user.id}, db=db)
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "add_faculty", "name": name}, db=db)
-    
-    msg = f"Faculty '{name}' added successfully!"
-    if is_new:
-        msg += f" Login account provisioned: @{user.username} (default password: user12345)."
+
+    msg = f"Faculty '{name}' added successfully! Login account provisioned: @{user.username} (default password: user12345)."
     return {
         "status": "success",
         "message": msg,
         "user_id": user.id,
         "username": user.username,
         "name": user.full_name,
-        "is_new": is_new
+        "is_new": True
     }
 
 @app.post("/api/enrollments/faculty-upload")
@@ -3509,20 +3562,25 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, request: Request, 
 
     # Strict Viewer role isolation: Faculty members can ONLY upload schedules for their own account
     if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
-        u_fullname = (auth_user.full_name or "").strip().lower()
-        u_username = (auth_user.username or "").strip().lower()
+        u_fullname = (auth_user.full_name or "").strip()
+        u_username = (auth_user.username or "").strip()
+        u_fullname_lower = u_fullname.lower()
+        u_username_lower = u_username.lower()
         req_teacher_lower = t_name.lower()
-        if req_teacher_lower != u_fullname and req_teacher_lower != u_username:
+        if req_teacher_lower != u_fullname_lower and req_teacher_lower != u_username_lower:
             raise HTTPException(
                 status_code=403,
                 detail="Access denied: Faculty members can only upload schedules for their own account."
             )
+        # Canonicalize to the faculty user's official full name or username
+        t_name = u_fullname if u_fullname else u_username
 
     if not req.classes:
         return {"status": "error", "message": "No class schedule items provided."}
         
     added_count = 0
     updated_count = 0
+    skipped_conflicts = []
     
     # Ensure user exists for this instructor
     auto_provision_instructor_account(t_name, "CS", db)
@@ -3546,10 +3604,11 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, request: Request, 
         if existing:
             # If owned by another instructor and current user is Viewer, avoid hijacking
             if auth_user.role and auth_user.role.strip().capitalize() == "Viewer":
-                u_fullname = (auth_user.full_name or "").strip().lower()
-                u_username = (auth_user.username or "").strip().lower()
+                u_fullname_lower = (auth_user.full_name or "").strip().lower()
+                u_username_lower = (auth_user.username or "").strip().lower()
                 curr_owner = (existing.teacher_name or "").strip().lower()
-                if curr_owner != u_fullname and curr_owner != u_username:
+                if curr_owner != u_fullname_lower and curr_owner != u_username_lower:
+                    skipped_conflicts.append(f"{sec_upper} - {subj_upper} (assigned to {existing.teacher_name})")
                     continue  # Skip class section assigned to another faculty member
             existing.teacher_name = t_name
             existing.student_headcount = headcount
@@ -3568,6 +3627,28 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, request: Request, 
             added_count += 1
             
     db.commit()
+    
+    if added_count == 0 and updated_count == 0:
+        if skipped_conflicts:
+            conflict_preview = ", ".join(skipped_conflicts[:2])
+            if len(skipped_conflicts) > 2:
+                conflict_preview += f" and {len(skipped_conflicts) - 2} more"
+            return {
+                "status": "warning",
+                "message": f"No classes enrolled. Submitted section(s) conflict with existing enrollments: {conflict_preview}.",
+                "added": 0,
+                "updated": 0,
+                "total": 0,
+                "skipped": skipped_conflicts
+            }
+        return {
+            "status": "warning",
+            "message": "No valid class schedule records were found to enroll.",
+            "added": 0,
+            "updated": 0,
+            "total": 0
+        }
+
     notify_lan_mutation("ENROLLMENT_UPDATED", {"action": "faculty_upload", "teacher": t_name, "added": added_count, "updated": updated_count}, db=db)
     log_system_activity(
         action_type="ROSTER",
@@ -3579,12 +3660,15 @@ def faculty_upload_classes(req: schemas.FacultyUploadRequest, request: Request, 
     )
     
     msg = f"Schedule updated for {t_name}: {added_count} class(es) added, {updated_count} class(es) updated."
+    if skipped_conflicts:
+        msg += f" (Note: {len(skipped_conflicts)} conflicting section(s) were skipped)."
     return {
         "status": "success",
         "message": msg,
         "added": added_count,
         "updated": updated_count,
-        "total": added_count + updated_count
+        "total": added_count + updated_count,
+        "skipped": skipped_conflicts
     }
 
 @app.get("/api/enrollments/faculty-roster-template")
@@ -9878,6 +9962,8 @@ def get_booklet_template_page(request: Request, db: Session = Depends(get_db)):
     guard = verify_page_role_access(request, ["Admin", "Staff"], db)
     if guard:
         return guard
+    if is_mobile_user_agent(request):
+        return RedirectResponse(url="/dashboard?error=mobile_restricted", status_code=status.HTTP_302_FOUND)
     return templates.TemplateResponse("booklet_template.html", {"request": request})
 
 @app.get("/api/booklet-template/status")

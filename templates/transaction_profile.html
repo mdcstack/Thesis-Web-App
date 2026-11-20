@@ -132,6 +132,37 @@
             padding: 40px 20px; 
             box-sizing: border-box; 
         }
+
+        /* Modern App Dialog Card & Buttons */
+        .app-dialog-card {
+            background: #ffffff;
+            padding: 26px 28px;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.25);
+            border-top: 5px solid #ef4444;
+            animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            margin: auto;
+            box-sizing: border-box;
+        }
+        @keyframes modalPopIn {
+            0% { transform: scale(0.92); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .dialog-btn {
+            border: none;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dialog-btn:hover {
+            filter: brightness(0.92);
+        }
         .receipt-card { 
             background: #fff; 
             padding: 30px; 
@@ -709,9 +740,114 @@
         window.location.replace(`/login?redirect=${redirectTarget}`);
     }
 
+    function showAppConfirm(title, message, options = {}) {
+        return new Promise(resolve => {
+            const {
+                type = 'warning',
+                confirmText = 'Confirm',
+                cancelText = 'Cancel',
+                confirmBg = null,
+                icon: customIcon = null
+            } = options;
+
+            const modal = document.getElementById('appDialogModal');
+            if (!modal) {
+                resolve(window.confirm(`${title}\n\n${message}`));
+                return;
+            }
+
+            const card = modal.querySelector('.app-dialog-card');
+            const iconEl = document.getElementById('appDialogIcon');
+            const titleEl = document.getElementById('appDialogTitle');
+            const msgEl = document.getElementById('appDialogMsg');
+            const confirmBtn = document.getElementById('appDialogConfirmBtn');
+            const cancelBtn = document.getElementById('appDialogCancelBtn');
+
+            let borderCol = '#f59e0b';
+            let icon = '⚠️';
+            let defaultBg = '#3498db';
+
+            if (type === 'danger') {
+                borderCol = '#ef4444';
+                icon = '🛑';
+                defaultBg = '#e74c3c';
+            } else if (type === 'info') {
+                borderCol = '#3498db';
+                icon = '🔒';
+                defaultBg = '#34495e';
+            } else if (type === 'success') {
+                borderCol = '#10b981';
+                icon = '✅';
+                defaultBg = '#10b981';
+            }
+
+            if (card) card.style.borderTop = `5px solid ${borderCol}`;
+            if (iconEl) iconEl.innerText = customIcon || icon;
+            if (titleEl) titleEl.innerText = title;
+            if (msgEl) msgEl.innerHTML = typeof message === 'string' ? message : String(message);
+
+            if (confirmBtn) {
+                confirmBtn.innerText = confirmText;
+                confirmBtn.style.background = confirmBg || defaultBg;
+                confirmBtn.style.color = '#ffffff';
+            }
+
+            if (cancelBtn) {
+                cancelBtn.style.display = 'inline-block';
+                cancelBtn.innerText = cancelText;
+            }
+
+            function cleanup(result) {
+                modal.style.display = 'none';
+                if (confirmBtn) confirmBtn.onclick = null;
+                if (cancelBtn) cancelBtn.onclick = null;
+                document.removeEventListener('keydown', handleKey);
+                modal.onclick = null;
+                resolve(result);
+            }
+
+            function handleKey(e) {
+                if (e.key === 'Escape') {
+                    cleanup(false);
+                }
+            }
+
+            if (confirmBtn) confirmBtn.onclick = () => cleanup(true);
+            if (cancelBtn) cancelBtn.onclick = () => cleanup(false);
+
+            modal.onclick = (e) => {
+                if (e.target === modal) cleanup(false);
+            };
+            document.addEventListener('keydown', handleKey);
+
+            modal.style.display = 'flex';
+        });
+    }
+
+    async function logout() {
+        const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+            type: 'danger',
+            confirmText: 'Log Out',
+            cancelText: 'Cancel',
+            confirmBg: '#e74c3c'
+        });
+        if (!confirmed) return;
+
+        const username = (typeof activeUser !== 'undefined' && activeUser && activeUser.username) ? activeUser.username : '';
+
+        fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username })
+        }).finally(() => {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.href = '/login';
+        });
+    }
+
     function logoutViewer() {
-        localStorage.removeItem('bookletlog_user');
-        window.location.href = '/login';
+        logout();
     }
 
     window.onload = function() {
@@ -1642,5 +1778,19 @@
         renderPaymentsTable();
     }
 </script>
+
+<!-- APP CUSTOM DIALOG MODAL (Replaces native alert/confirm) -->
+<div class="modal-overlay" id="appDialogModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 10005; justify-content: center; align-items: center;">
+    <div class="app-dialog-card">
+        <div id="appDialogIcon" style="font-size: 2.6rem; margin-bottom: 12px; line-height: 1;">🛑</div>
+        <h3 id="appDialogTitle" style="color: #1e293b; margin: 0 0 10px 0; font-size: 1.25rem; font-weight: 700;">Confirm Logout</h3>
+        <div id="appDialogMsg" style="color: #475569; font-size: 0.95rem; line-height: 1.55; margin-bottom: 22px; text-align: center; white-space: pre-line;">Are you sure you want to end your current session?</div>
+        <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
+            <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
+            <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Log Out</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>

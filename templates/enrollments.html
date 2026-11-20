@@ -600,7 +600,9 @@
             <form onsubmit="submitSingleFaculty(event)">
                 <div class="form-group">
                     <label for="newFacultyName">Instructor Full Name</label>
-                    <input type="text" id="newFacultyName" placeholder="e.g., Dr. Maria Santos" required autocomplete="off">
+                    <input type="text" id="newFacultyName" placeholder="e.g., Dr. Maria Santos" required autocomplete="off"
+                           oninput="this.value = this.value.replace(/[0-9]/g, '')"
+                           pattern="[^0-9]+" title="Instructor name must not contain numbers">
                 </div>
                 <div class="form-group">
                     <label for="newFacultyDept">Department / Academic Program</label>
@@ -614,7 +616,7 @@
                     A login account with role <code>Viewer</code> will automatically be created in <strong>Manage Users</strong> with default password: <code>user12345</code>.
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <button type="submit" class="btn-primary" style="flex: 1;" id="saveFacultyBtn">Save &amp; Onboard Faculty</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;" id="saveFacultyBtn">Save &amp; Add Faculty</button>
                     <button type="button" class="btn-cancel-modal" style="flex: 1;" onclick="closeAddFacultyModal()">Cancel</button>
                 </div>
             </form>
@@ -638,8 +640,8 @@
 
             <!-- TABS -->
             <div style="display: flex; gap: 5px; border-bottom: 2px solid #e2e8f0; margin-bottom: 15px;">
-                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('roster')">Faculty Roster Import</button>
-                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('schedule')">Advanced: Full Schedule Import</button>
+                <button type="button" class="bulk-tab-btn active" id="tabRosterUploadBtn" onclick="switchFacultyTab('roster')">Import List of Faculty Members</button>
+                <button type="button" class="bulk-tab-btn" id="tabLegacyScheduleBtn" onclick="switchFacultyTab('schedule')">Advanced: Import Whole Class Enrollment Info</button>
             </div>
 
             <!-- TAB 1: FACULTY ROSTER (FILE UPLOAD & DIRECT PASTE UNIFIED) -->
@@ -814,8 +816,10 @@
                 <input type="hidden" id="classEditId">
                 <div class="form-group">
                     <label for="teacher">Instructor</label>
-                    <input type="text" id="teacher" placeholder="e.g., Grace S. Ibañez" required list="instructorSuggestions" autocomplete="off">
-                    <datalist id="instructorSuggestions"></datalist>
+                    <input type="text" id="teacher" placeholder="Assigned Instructor" required readonly
+                           style="background-color: #f1f5f9; cursor: not-allowed; color: #475569;"
+                           autocomplete="off" title="Instructor assignment is locked to the selected faculty member">
+                    
                 </div>
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
@@ -840,9 +844,9 @@
                                title="Year level digit (e.g., 1, 2, 3, 4)">
 
                         <input type="text" id="sec_letter" class="section-segment sec-letter" 
-                               placeholder="A" maxlength="2" autocomplete="off"
+                               placeholder="A" maxlength="1" pattern="[A-Za-z]" autocomplete="off"
                                oninput="onSectionSegmentInput(this, 'letter')"
-                               title="Section letter (e.g., A, B, E)">
+                               title="Section letter (e.g., A, B, C)">
                     </div>
 
                     <!-- Hidden synchronized master section input for form submission and duplicate checks -->
@@ -856,7 +860,9 @@
                 </div>
                 <div class="form-group">
                     <label for="subject">Subject</label>
-                    <input type="text" id="subject" placeholder="e.g., COSC 105" required autocomplete="off">
+                    <input type="text" id="subject" placeholder="e.g., DISCRETE STRUCTURE" required autocomplete="off"
+                           oninput="this.value = this.value.replace(/[0-9]/g, '')"
+                           pattern="[^0-9]+" title="Subject description must not contain numbers">
                 </div>
                 <div class="form-group">
                     <label for="headcount">Student Headcount</label>
@@ -1813,6 +1819,25 @@
             const dept = (deptInput ? deptInput.value : 'CS').trim();
             if (!name) return;
 
+            if (/\d/.test(name)) {
+                showToast("Instructor name cannot contain numbers. Please enter alphabetic characters only.", "warning", "Validation Error");
+                if (nameInput) nameInput.focus();
+                return;
+            }
+
+            // Client-Side Duplicate Prevention Pre-Check
+            const cleanName = name.trim().toLowerCase();
+            const instList = (window.getAuthoritativeData ? window.getAuthoritativeData('enrollments_roster') : allInstructors) || allInstructors || [];
+            const existingInst = instList.find(i => 
+                (i.name || '').trim().toLowerCase() === cleanName || 
+                (i.username || '').trim().toLowerCase() === cleanName
+            );
+            if (existingInst) {
+                showToast(`Instructor '${name}' already exists in the faculty roster.`, "warning", "Instructor Already Exists");
+                if (nameInput) nameInput.focus();
+                return;
+            }
+
             btn.disabled = true;
             btn.innerText = "Provisioning...";
 
@@ -1823,10 +1848,13 @@
                     body: JSON.stringify({ name: name, department: dept })
                 });
                 const data = await res.json();
-                if (data.status === 'success') {
+                if (data.status === 'success' && data.is_new !== false) {
                     showToast(data.message || "Faculty added successfully!", "success", "Faculty Onboarded");
                     closeAddFacultyModal();
                     loadRoster(false);
+                } else if (data.status === 'warning' || data.is_new === false) {
+                    showToast(data.message || `Instructor '${name}' already exists in the faculty roster.`, "warning", "Instructor Already Exists");
+                    if (nameInput) nameInput.focus();
                 } else {
                     showToast(data.message || "Failed to add faculty.", "error", "Error");
                 }
@@ -1835,7 +1863,7 @@
                 showToast("A network error occurred while adding faculty.", "error", "Network Error");
             } finally {
                 btn.disabled = false;
-                btn.innerText = "Save & Onboard Faculty";
+                btn.innerText = "Save & Add Faculty";
             }
         }
 
@@ -2645,7 +2673,12 @@
         let parsedScheduleRows = [];
 
         function openFacultyUploadModal(teacherName = '') {
-            targetScheduleTeacher = teacherName || (activeUser.full_name || activeUser.username);
+            const myName = (activeUser && (activeUser.full_name || activeUser.username) || '').trim().toLowerCase();
+            const matchedInst = allInstructors.find(i => 
+                (i.name || '').trim().toLowerCase() === myName || 
+                (i.username || '').trim().toLowerCase() === myName
+            );
+            targetScheduleTeacher = teacherName || (matchedInst ? matchedInst.name : (activeUser ? (activeUser.full_name || activeUser.username) : ''));
             
             // Guard: Schedule locked check for non-admin
             if (!isAdmin && targetScheduleTeacher) {
@@ -2699,36 +2732,91 @@
         function parseSingleFacultyScheduleRecords(text) {
             if (!text || !text.trim()) return [];
             const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-            const records = [];
+            if (lines.length === 0) return [];
 
-            for (let lIdx = 0; lIdx < lines.length; lIdx++) {
+            const records = [];
+            let headerSubjectIdx = -1;
+            let headerSectionIdx = -1;
+            let headerCountIdx = -1;
+            let startRowIdx = 0;
+
+            // Check if line 0 is a header row
+            const firstTokens = tokenizeCsvLine(lines[0]);
+            if (firstTokens.length >= 2) {
+                firstTokens.forEach((tok, idx) => {
+                    const clean = (tok || '').toLowerCase().trim();
+                    if (headerSubjectIdx === -1 && (clean.includes('subject') || clean.includes('course') || clean.includes('title') || clean.includes('description'))) {
+                        headerSubjectIdx = idx;
+                    } else if (headerSectionIdx === -1 && (clean.includes('section') || clean === 'sec' || clean.includes('class'))) {
+                        headerSectionIdx = idx;
+                    } else if (headerCountIdx === -1 && (clean.includes('headcount') || clean.includes('count') || clean.includes('student') || clean.includes('pax') || clean.includes('enrolled') || clean.includes('size'))) {
+                        headerCountIdx = idx;
+                    }
+                });
+
+                if (headerSubjectIdx !== -1 || headerSectionIdx !== -1) {
+                    startRowIdx = 1; // Header detected, skip row 0
+                }
+            }
+
+            for (let lIdx = startRowIdx; lIdx < lines.length; lIdx++) {
                 const line = lines[lIdx].trim();
                 if (!line) continue;
                 const tokens = tokenizeCsvLine(line);
                 if (tokens.length === 0) continue;
 
-                if (lIdx === 0 && tokens.length <= 3) {
-                    const t0 = (tokens[0] || '').toLowerCase();
-                    const t1 = (tokens[1] || '').toLowerCase();
-                    if (t0.includes('subject') || t1.includes('section')) {
+                // Mode A: Dynamic column indices from detected header
+                if (headerSubjectIdx !== -1 && headerSectionIdx !== -1) {
+                    const subject = (tokens[headerSubjectIdx] || '').trim();
+                    const section = (tokens[headerSectionIdx] || '').trim().toUpperCase();
+                    const rawCount = headerCountIdx !== -1 ? (tokens[headerCountIdx] || '').trim().replace(/[^\d]/g, '') : '';
+                    const count = parseInt(rawCount, 10);
+
+                    if (subject && section && !isNaN(count) && count > 0) {
+                        records.push({
+                            subject: subject,
+                            section: section,
+                            student_headcount: count
+                        });
                         continue;
                     }
                 }
 
+                // Mode B: Heuristic scanning across consecutive tokens
+                let matched = false;
                 let i = 0;
                 while (i < tokens.length) {
                     if (i + 2 < tokens.length) {
-                        const subject = tokens[i].trim();
-                        const section = tokens[i + 1].trim().toUpperCase();
-                        const rawCount = tokens[i + 2].trim();
-                        const count = parseInt(rawCount, 10);
+                        // Check standard order: Subject, Section, Count
+                        const subCandidate = tokens[i].trim();
+                        const secCandidate = tokens[i + 1].trim().toUpperCase();
+                        const countRaw1 = tokens[i + 2].trim().replace(/[^\d]/g, '');
+                        const count1 = parseInt(countRaw1, 10);
 
-                        if (subject && section && !isNaN(count) && count > 0) {
+                        if (subCandidate && secCandidate && !isNaN(count1) && count1 > 0 && !subCandidate.toLowerCase().includes('subject')) {
                             records.push({
-                                subject: subject,
-                                section: section,
-                                student_headcount: count
+                                subject: subCandidate,
+                                section: secCandidate,
+                                student_headcount: count1
                             });
+                            matched = true;
+                            i += 3;
+                            continue;
+                        }
+
+                        // Check inverted order: Section, Subject, Count
+                        const secCandidate2 = tokens[i].trim().toUpperCase();
+                        const subCandidate2 = tokens[i + 1].trim();
+                        const countRaw2 = tokens[i + 2].trim().replace(/[^\d]/g, '');
+                        const count2 = parseInt(countRaw2, 10);
+
+                        if (secCandidate2 && subCandidate2 && !isNaN(count2) && count2 > 0 && !subCandidate2.toLowerCase().includes('subject')) {
+                            records.push({
+                                subject: subCandidate2,
+                                section: secCandidate2,
+                                student_headcount: count2
+                            });
+                            matched = true;
                             i += 3;
                             continue;
                         }
@@ -2782,22 +2870,35 @@
                 parsedScheduleRows.length
             );
 
+            const authHeaders = {
+                'Content-Type': 'application/json',
+                'X-Session-Token': localStorage.getItem('session_token') || (activeUser && activeUser.session_token) || '',
+                'X-Username': localStorage.getItem('username') || (activeUser && activeUser.username) || ''
+            };
+
             try {
                 const res = await fetch('/api/enrollments/faculty-upload', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders,
                     body: JSON.stringify({
                         teacher_name: targetScheduleTeacher,
                         classes: parsedScheduleRows
                     })
                 });
                 const data = await res.json();
-                if (data.status === 'success') {
+                if (res.ok && data.status === 'success') {
                     showToast(data.message, "success", "Schedule Enrolled");
                     closeScheduleUploadModal();
                     loadRoster(false);
+                } else if (data.status === 'warning') {
+                    showToast(data.message || "Schedule processed with warnings.", "warning", "Schedule Warning");
+                    if (data.total > 0) {
+                        closeScheduleUploadModal();
+                        loadRoster(false);
+                    }
                 } else {
-                    showToast(data.message || "Failed to enroll schedule.", "error", "Error");
+                    const errMsg = data.detail || data.message || "Failed to enroll schedule.";
+                    showToast(errMsg, "error", "Error");
                 }
             } catch (err) {
                 console.error("Upload schedule error:", err);
@@ -2815,6 +2916,11 @@
         function openAddClassModal(teacherName = '') {
             const isViewer = activeUser && activeUser.role === 'Viewer';
             const resolvedTeacher = isViewer ? (activeUser.full_name || activeUser.username) : (teacherName || '');
+
+            if (!resolvedTeacher) {
+                showToast("Please select an instructor from the directory to add a class.", "warning", "Instructor Required");
+                return;
+            }
 
             if (!isAdmin && resolvedTeacher) {
                 const checkTeacher = resolvedTeacher.trim().toLowerCase();
@@ -2841,15 +2947,9 @@
 
             if (teacher) {
                 teacher.value = resolvedTeacher;
-                if (isViewer) {
-                    teacher.readOnly = true;
-                    teacher.style.backgroundColor = '#f1f5f9';
-                    teacher.style.cursor = 'not-allowed';
-                } else {
-                    teacher.readOnly = false;
-                    teacher.style.backgroundColor = '';
-                    teacher.style.cursor = '';
-                }
+                teacher.readOnly = true;
+                teacher.style.backgroundColor = '#f1f5f9';
+                teacher.style.cursor = 'not-allowed';
             }
             // Clear and initialize section builder segments
             const secProg = document.getElementById('sec_program');
@@ -2873,8 +2973,7 @@
 
             if (modal) modal.style.display = 'flex';
             setTimeout(() => {
-                if (resolvedTeacher && secProg) secProg.focus();
-                else if (teacher) teacher.focus();
+                if (secProg) secProg.focus();
             }, 60);
         }
 
@@ -2931,18 +3030,11 @@
             if (editId) editId.value = id;
             if (title) title.innerHTML = `<span>✏️</span> Edit Class Record`;
 
-            const isViewer = activeUser && activeUser.role === 'Viewer';
             if (teacher) {
                 teacher.value = teacherName || '';
-                if (isViewer) {
-                    teacher.readOnly = true;
-                    teacher.style.backgroundColor = '#f1f5f9';
-                    teacher.style.cursor = 'not-allowed';
-                } else {
-                    teacher.readOnly = false;
-                    teacher.style.backgroundColor = '';
-                    teacher.style.cursor = '';
-                }
+                teacher.readOnly = true;
+                teacher.style.backgroundColor = '#f1f5f9';
+                teacher.style.cursor = 'not-allowed';
             }
             // Populate section builder segments from existing sectionVal
             const secProg = document.getElementById('sec_program');
@@ -2956,18 +3048,18 @@
             if (sectionVal) {
                 const s = sectionVal.trim().toUpperCase();
                 // Match standard BS<PROG>-<YEAR><LETTER> e.g. BSCS-1E, BSIT-2A
-                const stdMatch = s.match(/^BS([A-Z0-9]+)-(\d)([A-Z0-9]+)$/i);
+                const stdMatch = s.match(/^BS([A-Z0-9]+)-(\d)([A-Za-z])$/i);
                 // Fallback: match without BS e.g. CS-1E
-                const altMatch = s.match(/^([A-Z0-9]+)-(\d)([A-Z0-9]+)$/i);
+                const altMatch = s.match(/^([A-Z0-9]+)-(\d)([A-Za-z])$/i);
 
                 if (stdMatch) {
                     if (secProg) secProg.value = stdMatch[1];
                     if (secYear) secYear.value = stdMatch[2];
-                    if (secLetter) secLetter.value = stdMatch[3];
+                    if (secLetter) secLetter.value = stdMatch[3].slice(0, 1).toUpperCase().replace(/[^A-Z]/g, '');
                 } else if (altMatch) {
                     if (secProg) secProg.value = altMatch[1];
                     if (secYear) secYear.value = altMatch[2];
-                    if (secLetter) secLetter.value = altMatch[3];
+                    if (secLetter) secLetter.value = altMatch[3].slice(0, 1).toUpperCase().replace(/[^A-Z]/g, '');
                 } else {
                     // Non-standard format fallback
                     if (secProg) secProg.value = s.replace(/^BS/i, '').replace(/[^A-Z0-9]/g, '');
@@ -3015,12 +3107,34 @@
                 return;
             }
 
+            if (!/^[A-Z]$/.test(secLetter)) {
+                if (errorEl) {
+                    errorEl.innerText = "⚠️ Section letter must be a single letter only (e.g., A, B, C).";
+                    errorEl.style.display = 'block';
+                }
+                if (groupEl) groupEl.classList.add('invalid');
+                document.getElementById('sec_letter').focus();
+                return;
+            }
+
             syncSectionFromSegments();
             const sectionVal = document.getElementById('section').value.trim().toUpperCase();
             const subjectVal = document.getElementById('subject').value.trim();
             const headcountVal = parseInt(document.getElementById('headcount').value, 10);
 
             if (!teacherVal || !sectionVal || !subjectVal || headcountVal < 1) return;
+
+            if (/\d/.test(teacherVal)) {
+                showToast("Instructor name cannot contain numbers. Please enter alphabetic characters only.", "warning", "Validation Error");
+                document.getElementById('teacher').focus();
+                return;
+            }
+
+            if (/\d/.test(subjectVal)) {
+                showToast("Subject description cannot contain numbers. Please enter alphabetic characters only.", "warning", "Validation Error");
+                document.getElementById('subject').focus();
+                return;
+            }
 
             // Client-Side Duplicate Prevention Check: Check existing active classes
             const editIdNum = editId ? parseInt(editId, 10) : null;
@@ -3228,7 +3342,7 @@
                     if (letterEl) letterEl.focus();
                 }
             } else if (segmentType === 'letter') {
-                inputEl.value = inputEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2);
+                inputEl.value = inputEl.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 1);
             }
             syncSectionFromSegments();
         }

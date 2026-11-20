@@ -413,12 +413,18 @@
                 } else if (!selectedPeriod && isActive && !hasSelected) {
                     opt.selected = true;
                     hasSelected = true;
+                    selectedPeriod = periodName;
                 }
                 sel.appendChild(opt);
             });
 
+            if (!selectedPeriod && sel.value) {
+                selectedPeriod = sel.value;
+            }
+
             if (!hasSelected && filtered.length > 0) {
                 sel.selectedIndex = 0;
+                selectedPeriod = sel.value;
                 if (targetYearStr && sel.value !== selectedPeriod) {
                     onPeriodFilterChange(sel.value);
                 }
@@ -486,12 +492,14 @@
         function updatePeriodStatusBadge() {
             const badge = document.getElementById('periodStatusBadge');
             if (!badge) return;
-            if (!selectedPeriod) {
+            const sel = document.getElementById('periodFilterSelect');
+            const effectivePeriod = selectedPeriod || (sel ? sel.value : '') || currentSystemActivePeriod;
+            if (!effectivePeriod) {
                 badge.style.backgroundColor = '#94a3b8';
                 badge.innerText = 'NO RECORDS';
                 return;
             }
-            const isHistorical = currentSystemActivePeriod && selectedPeriod !== currentSystemActivePeriod;
+            const isHistorical = currentSystemActivePeriod && effectivePeriod !== currentSystemActivePeriod;
             if (isHistorical) {
                 badge.style.backgroundColor = '#64748b';
                 badge.innerText = 'ARCHIVED';
@@ -616,6 +624,7 @@
                                 const sel = document.getElementById('periodFilterSelect');
                                 if (sel && (!selectedPeriod || selectedPeriod === activePeriod)) {
                                     sel.value = activePeriod;
+                                    selectedPeriod = activePeriod;
                                 }
                                 syncDeptYearInputsWithPeriod(activePeriod);
                             }

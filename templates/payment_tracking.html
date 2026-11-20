@@ -599,18 +599,18 @@
 
 <!-- Final Payment Confirmation Modal -->
 <div class="modal-overlay" id="paymentConfirmModal">
-    <div class="modal-card" style="border-top: 6px solid #f39c12;">
+    <div class="modal-card" style="border-top: 6px solid #f39c12; max-width: 580px; width: 95%;">
         <h3 style="color: #d68910; margin-bottom: 10px; text-align: center;">⚠️ Confirm Payment</h3>
         <p style="color: #7f8c8d; font-size: 0.9rem; text-align: center; margin-bottom: 20px;">Please verify the amount received from the instructor before completing this transaction.</p>
         
         <div style="background: #f8f9fa; border: 1px solid #ecf0f1; border-radius: 6px; padding: 18px; margin-bottom: 20px; text-align: left;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem;">
-                <span style="color: #7f8c8d; font-weight: bold;">Instructor:</span>
-                <span id="confirmInstructor" style="font-weight: bold; color: #2c3e50;">-</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.95rem; gap: 12px;">
+                <span style="color: #7f8c8d; font-weight: bold; flex-shrink: 0;">Instructor:</span>
+                <span id="confirmInstructor" style="font-weight: bold; color: #2c3e50; text-align: right;">-</span>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem;">
-                <span style="color: #7f8c8d; font-weight: bold;">Exam Period:</span>
-                <span id="confirmPeriod" style="font-weight: bold; color: #2980b9;">-</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.95rem; gap: 12px;">
+                <span style="color: #7f8c8d; font-weight: bold; flex-shrink: 0;">Exam Period:</span>
+                <span id="confirmPeriod" style="font-weight: bold; color: #2980b9; white-space: nowrap; text-align: right;">-</span>
             </div>
             <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95rem;">
                 <span style="color: #7f8c8d; font-weight: bold;">Current Outstanding:</span>

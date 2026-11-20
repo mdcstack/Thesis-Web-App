@@ -333,7 +333,7 @@
             </div>
             <div class="header-actions no-print">
                 <button class="btn btn-primary" onclick="openLogSpoilageModal()">
-                    <span>➕</span> Log Spoilage Incident
+                    <span>➕</span> Log Material Wastage
                 </button>
                 <a href="/expenditure-report" class="btn btn-light" title="View in Expenditure Report & Financial Statement">
                     <span>💰</span> Financial Statement ➔
@@ -383,10 +383,9 @@
             <div class="filter-group">
                 <label for="deptFilter">Course / Department:</label>
                 <select id="deptFilter" onchange="applyFilters()">
-                    <option value="ALL">All Departments</option>
+                    <option value="ALL">All Courses</option>
                     <option value="CS">Computer Science (CS)</option>
                     <option value="IT">Information Technology (IT)</option>
-                    <option value="GENERAL">General Office / Print</option>
                 </select>
             </div>
             <div class="filter-group">
@@ -462,7 +461,7 @@
     <div id="logSpoilageModal" class="modal-overlay">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>Log Material Spoilage / Misprint</h3>
+                <h3>Log Material Wastage / Misprint</h3>
                 <button onclick="closeLogSpoilageModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
             </div>
             <form id="spoilageForm" onsubmit="submitSpoilage(event)">
@@ -477,8 +476,7 @@
                     <div class="form-group">
                         <label for="modalDept">Course / Dept *</label>
                         <select id="modalDept" required onchange="updateModalCostPreview()">
-                            <option value="GENERAL">General Office / Print</option>
-                            <option value="CS">Computer Science (CS)</option>
+                            <option value="CS" selected>Computer Science (CS)</option>
                             <option value="IT">Information Technology (IT)</option>
                         </select>
                     </div>
@@ -497,7 +495,7 @@
                         <option value="Stapler Jam / Misfired Binding">Stapler Jam / Misfired Binding</option>
                         <option value="Blank or Missing Pages">Blank or Missing Pages</option>
                         <option value="Water / Handling Damage">Water / Handling Damage</option>
-                        <option value="Other">Other Defect (Describe in notes)</option>
+                        <option value="Other">Other Defect / Reason</option>
                     </select>
                 </div>
 
@@ -532,10 +530,6 @@
                         </div>
                         <div id="queuedBookletsList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
                     </div>
-                </div>
-                <div class="form-group">
-                    <label for="modalNotes">Remarks / Notes (Optional)</label>
-                    <textarea id="modalNotes" rows="2" placeholder="Additional details regarding printer model, tray, or batch..."></textarea>
                 </div>
 
                 <!-- Live Calculation Preview -->
@@ -614,6 +608,7 @@
         let unitStapleCost = 0.01;
         let sheetsPerBooklet = 6;
         let currentUserRole = "Staff";
+        let academicProgramsMap = {};
 
         document.addEventListener('DOMContentLoaded', async function() {
             try {
@@ -624,6 +619,7 @@
                 }
             } catch (e) {}
 
+            await loadSpoilageAcademicPrograms();
             await loadPeriods();
             await fetchSpoilageData();
 
@@ -633,6 +629,40 @@
                 });
             }
         });
+
+        async function loadSpoilageAcademicPrograms() {
+            try {
+                const res = await fetch('/api/academic-programs');
+                const data = await res.json();
+                if (data.status === 'success' && Array.isArray(data.programs) && data.programs.length > 0) {
+                    academicProgramsMap = {};
+                    data.programs.forEach(p => {
+                        academicProgramsMap[p.code] = p;
+                    });
+                    const modalSel = document.getElementById('modalDept');
+                    const filterSel = document.getElementById('deptFilter');
+
+                    if (modalSel) {
+                        const currentModalVal = modalSel.value;
+                        modalSel.innerHTML = data.programs.map(p => 
+                            `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`
+                        ).join('');
+                        if (currentModalVal && modalSel.querySelector(`option[value="${currentModalVal}"]`)) {
+                            modalSel.value = currentModalVal;
+                        }
+                    }
+                    if (filterSel) {
+                        const currentFilterVal = filterSel.value;
+                        filterSel.innerHTML = `<option value="ALL">All Courses</option>` + data.programs.map(p => 
+                            `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} (${escapeHtml(p.code)})</option>`
+                        ).join('');
+                        if (currentFilterVal) filterSel.value = currentFilterVal;
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not load dynamic academic programs for spoilage, using default courses:", e);
+            }
+        }
 
         async function loadPeriods() {
             try {
@@ -1109,8 +1139,8 @@
 
                 const type = options.type || 'warning';
                 let borderCol = (type === 'danger') ? '#ef4444' : '#f59e0b';
-                let icon = (type === 'danger') ? '🗑️' : '⚠️';
-                let btnBg = (type === 'danger') ? '#dc2626' : '#2563eb';
+                let icon = options.icon || ((type === 'danger') ? '🛑' : '⚠️');
+                let btnBg = options.confirmBg || ((type === 'danger') ? '#e74c3c' : '#2563eb');
 
                 if (card) card.style.borderTop = `5px solid ${borderCol}`;
                 if (iconEl) iconEl.innerText = icon;
@@ -1250,7 +1280,10 @@
             let sheets = qty;
             let staples = 0;
             if (lossType === 'whole_booklet') {
-                const sPerB = (dept === 'CS') ? 10 : (dept === 'IT' ? 6 : 6);
+                const progConfig = academicProgramsMap[dept];
+                const sPerB = (progConfig && progConfig.sheets_per_booklet) 
+                    ? parseInt(progConfig.sheets_per_booklet, 10) 
+                    : ((dept === 'CS') ? 10 : (dept === 'IT' ? 6 : 6));
                 sheets = qty * sPerB;
                 staples = qty * 2;
             }
@@ -1302,7 +1335,7 @@
                 reason: document.getElementById('modalReason').value,
                 booklet_control_num: (lossType === 'whole_booklet') ? queuedBooklets.join(', ') : null,
                 booklet_control_numbers: (lossType === 'whole_booklet') ? queuedBooklets : null,
-                notes: document.getElementById('modalNotes').value.trim() || null,
+                notes: null,
                 source: 'manual'
             };
 
@@ -1362,6 +1395,29 @@
                 t.style.transition = 'opacity 0.3s';
                 setTimeout(() => t.remove(), 300);
             }, 3200);
+        }
+
+        async function logout() {
+            const confirmed = await showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+                type: 'danger',
+                icon: '🛑',
+                confirmText: 'Log Out',
+                cancelText: 'Cancel',
+                confirmBg: '#e74c3c'
+            });
+            if (!confirmed) return;
+
+            const username = (typeof activeUser !== 'undefined' && activeUser && activeUser.username) ? activeUser.username : '';
+
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username })
+            }).finally(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.href = '/login';
+            });
         }
 
         function escapeHtml(str) {

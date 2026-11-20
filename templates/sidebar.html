@@ -341,7 +341,12 @@
         .sidebar-overlay { z-index: 1999 !important; }
         .sidebar-overlay.active { display: block !important; pointer-events: auto !important; visibility: visible !important; opacity: 1 !important; }
         .main-content { margin-left: 0 !important; margin-top: 0 !important; width: 100% !important; }
-        .mobile-hide { display: none !important; }
+        .sidebar .nav-link.mobile-hide,
+        .sidebar.collapsed .nav-link.mobile-hide,
+        .nav-link.mobile-hide,
+        .mobile-hide {
+            display: none !important;
+        }
     }
 
     @media print {
@@ -639,7 +644,7 @@
         <span class="nav-icon">📥</span><span class="nav-label">QR Registration</span>
     </a>
     <a href="/material-spoilage" class="nav-link staff-op" id="navMaterialSpoilage" data-route="/material-spoilage" title="Material Spoilage">
-        <span class="nav-icon">📉</span><span class="nav-label">Material Spoilage</span>
+        <span class="nav-icon">📉</span><span class="nav-label">Material Wastage</span>
     </a>
     <a href="/distribution" class="nav-link staff-op" data-route="/distribution" title="Point of Distribution">
         <span class="nav-icon">🛒</span><span class="nav-label">Point of Distribution</span>
@@ -670,6 +675,24 @@
 </div>
 
 <script>
+    // Immediate Synchronous Route Guard for Mobile-Restricted Modules
+    (function enforceMobileRestrictedPages() {
+        try {
+            const restrictedPaths = ['/generator', '/qr-registration', '/booklet-template'];
+            const currentPath = window.location.pathname.toLowerCase();
+            const isRestricted = restrictedPaths.some(p => currentPath === p || currentPath.startsWith(p + '/') || currentPath.startsWith(p + '?'));
+            if (!isRestricted) return;
+
+            const isMobile = window.innerWidth <= 900 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile) {
+                const userStr = localStorage.getItem('bookletlog_user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                const target = (user && user.role === 'Viewer') ? '/transaction-profile' : '/dashboard';
+                window.location.replace(target + '?error=mobile_restricted');
+            }
+        } catch (e) {}
+    })();
+
     // Dedicated Mobile Drawer Dismissal
     function closeMobileSidebar() {
         const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
@@ -711,6 +734,32 @@
         const isDesktop = window.innerWidth > 900;
         const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
         const ov = document.getElementById('sidebarOverlay') || document.querySelector('.sidebar-overlay');
+
+        // If user resizes browser down to mobile while viewing a mobile-restricted module, redirect immediately
+        const restrictedPaths = ['/generator', '/qr-registration', '/booklet-template'];
+        const currentPath = window.location.pathname.toLowerCase();
+        if (!isDesktop && restrictedPaths.some(p => currentPath === p || currentPath.startsWith(p + '/'))) {
+            const userStr = localStorage.getItem('bookletlog_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const target = (user && user.role === 'Viewer') ? '/transaction-profile' : '/dashboard';
+            window.location.replace(target + '?error=mobile_restricted');
+            return;
+        }
+
+        // Dynamically update mobile-hide element styles on resize
+        const isMobileScreen = window.innerWidth <= 900;
+        document.querySelectorAll('.mobile-hide').forEach(el => {
+            if (isMobileScreen) {
+                el.style.setProperty('display', 'none', 'important');
+            } else {
+                const userStr = localStorage.getItem('bookletlog_user');
+                const user = userStr ? JSON.parse(userStr) : null;
+                const role = user && user.role ? user.role : 'Viewer';
+                if (role !== 'Viewer') {
+                    el.style.setProperty('display', el.classList.contains('icon-utility-btn') ? 'inline-flex' : 'flex', 'important');
+                }
+            }
+        });
 
         if (isDesktop) {
             if (sb && sb.classList.contains('active')) sb.classList.remove('active');
@@ -971,7 +1020,7 @@
                                 <div style="font-weight: 700; color: #ef4444; font-size: 0.82rem;">Critical Shortage</div>
                                 <div style="font-size: 0.74rem; color: #cbd5e1; margin-top: 2px; line-height: 1.35;">${data.message}</div>
                             </div>
-                            <a href="/generator" onclick="closeNotifPanel()" style="color: #f87171; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(239, 68, 68, 0.12); border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; flex-shrink: 0; transition: background 0.15s;">Generate ➔</a>
+                            <a href="/generator" class="mobile-hide" onclick="closeNotifPanel()" style="color: #f87171; text-decoration: none; font-weight: 700; font-size: 0.76rem; white-space: nowrap; padding: 5px 10px; background: rgba(239, 68, 68, 0.12); border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; flex-shrink: 0; transition: background 0.15s;">Generate ➔</a>
                         </div>
                     `;
                 } else {
@@ -1228,8 +1277,15 @@
             const navUsers = document.getElementById('navManageUsers');
             const navEnrollments = document.getElementById('navEnrollments');
 
+            const isMobileViewport = () => window.innerWidth <= 900 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
             const showElement = (el) => {
-                if (el) el.style.setProperty('display', el.classList.contains('icon-utility-btn') ? 'inline-flex' : 'flex', 'important');
+                if (!el) return;
+                if (el.classList.contains('mobile-hide') && isMobileViewport()) {
+                    el.style.setProperty('display', 'none', 'important');
+                    return;
+                }
+                el.style.setProperty('display', el.classList.contains('icon-utility-btn') ? 'inline-flex' : 'flex', 'important');
             };
 
             if (user && user.role === 'Viewer') {
@@ -1280,6 +1336,13 @@
                     navEnrollments.innerHTML = '<span class="nav-icon">🎓</span><span class="nav-label">Manage Classes</span>';
                     navEnrollments.title = 'Manage Classes';
                 }
+            }
+
+            // Strictly ensure mobile-hide items remain hidden on mobile viewports
+            if (isMobileViewport()) {
+                document.querySelectorAll('.mobile-hide').forEach(el => {
+                    el.style.setProperty('display', 'none', 'important');
+                });
             }
 
             // Self-healing observer: automatically normalizes any raw innerHTML string from parent pages into .nav-icon and .nav-label spans
@@ -1460,7 +1523,18 @@
     // Fallback universal logout if not defined by the host page
     if (!window.logout) {
         window.logout = async function() {
-            if (!confirm('Are you sure you want to end your current session?')) return;
+            if (typeof window.showAppConfirm === 'function') {
+                const confirmed = await window.showAppConfirm("Confirm Logout", "Are you sure you want to end your current session?", {
+                    type: 'danger',
+                    icon: '🛑',
+                    confirmText: 'Log Out',
+                    cancelText: 'Cancel',
+                    confirmBg: '#e74c3c'
+                });
+                if (!confirmed) return;
+            } else {
+                if (!confirm('Are you sure you want to end your current session?')) return;
+            }
             const userStr = localStorage.getItem('bookletlog_user');
             let username = '';
             try { username = JSON.parse(userStr).username || ''; } catch(e) {}
@@ -1528,11 +1602,12 @@
         }
     };
 
-    // --- UNAUTHORIZED REDIRECT TOAST NOTIFIER ---
+    // --- UNAUTHORIZED / RESTRICTED REDIRECT TOAST NOTIFIER ---
     (function checkUnauthorizedRedirect() {
         try {
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('error') === 'unauthorized') {
+            const errType = urlParams.get('error');
+            if (errType === 'unauthorized' || errType === 'mobile_restricted') {
                 urlParams.delete('error');
                 const newQuery = urlParams.toString();
                 const newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '') + window.location.hash;
@@ -1540,13 +1615,18 @@
 
                 setTimeout(() => {
                     const toast = document.createElement('div');
-                    toast.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 999999; background: #dc2626; color: white; padding: 14px 22px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-family: Arial, sans-serif; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; pointer-events: none; transition: opacity 0.4s ease;';
-                    toast.innerHTML = '<span style="font-size: 18px;">🚫</span><span>Access Denied: You do not have permission to view that page.</span>';
+                    if (errType === 'mobile_restricted') {
+                        toast.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 999999; background: #d97706; color: white; padding: 14px 22px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-family: Arial, sans-serif; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; pointer-events: none; transition: opacity 0.4s ease; max-width: 440px; line-height: 1.4;';
+                        toast.innerHTML = '<span style="font-size: 20px; flex-shrink: 0;">📱</span><span><strong>Desktop Only:</strong> PDF Generator, QR Registration, and Booklet Template are not accessible on mobile devices. Please access them on a desktop computer.</span>';
+                    } else {
+                        toast.style.cssText = 'position: fixed; top: 24px; right: 24px; z-index: 999999; background: #dc2626; color: white; padding: 14px 22px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); font-family: Arial, sans-serif; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 12px; pointer-events: none; transition: opacity 0.4s ease;';
+                        toast.innerHTML = '<span style="font-size: 18px;">🚫</span><span>Access Denied: You do not have permission to view that page.</span>';
+                    }
                     document.body.appendChild(toast);
                     setTimeout(() => {
                         toast.style.opacity = '0';
                         setTimeout(() => toast.remove(), 400);
-                    }, 4000);
+                    }, 4500);
                 }, 200);
             }
         } catch(e) {}
