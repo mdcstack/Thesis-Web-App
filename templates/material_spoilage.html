@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Material Spoilage &amp; Net Loss - Bookledger</title>
+    <title>Material Spoilage &amp; Physical Wastage - Bookledger</title>
     <script>
         (function() {
             try {
@@ -326,9 +326,9 @@
         <!-- Header Bar -->
         <div class="header-bar">
             <div>
-                <h2>📉 Material Spoilage &amp; Net Loss</h2>
+                <h2>Material Spoilage &amp; Physical Wastage</h2>
                 <p style="color: #64748b; font-size: 0.9rem; margin-top: 4px;">
-                    Track misprinted paper sheets, printer paper jams, and defective booklets recorded as unrecoverable net loss (0 ROI).
+                    Track misprinted paper sheets, printer paper jams, and defective booklets to maintain physical inventory and ream consumption accuracy.
                 </p>
             </div>
             <div class="header-actions no-print">
@@ -361,9 +361,9 @@
                 <small>Defective or misbound</small>
             </div>
             <div class="stat-card cost">
-                <p>Total Net Loss</p>
-                <h2 id="kpiTotalCost" style="color: #c0392b;">₱0.00</h2>
-                <small>Unrecoverable direct material cost</small>
+                <p>Equivalent Reams Lost</p>
+                <h2 id="kpiTotalCost" style="color: #c0392b;">0.00 Reams</h2>
+                <small>Physical ream deficit incurred</small>
             </div>
             <div class="stat-card rate">
                 <p>Spoilage Rate</p>
@@ -432,7 +432,7 @@
                             <th>Category</th>
                             <th>Course</th>
                             <th>Quantity Wasted</th>
-                            <th>Net Loss (₱)</th>
+                            <th>Physical Impact</th>
                             <th>Primary Reason / Cause</th>
                             <th>Control # / SRN</th>
                             <th>Recorded By</th>
@@ -475,7 +475,7 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div class="form-group">
                         <label for="modalDept">Course / Dept *</label>
-                        <select id="modalDept" required onchange="updateModalCostPreview()">
+                        <select id="modalDept" required onchange="onModalDeptChanged()">
                             <option value="CS" selected>Computer Science (CS)</option>
                             <option value="IT">Information Technology (IT)</option>
                         </select>
@@ -486,6 +486,9 @@
                         <small id="modalQtyHelp" style="color: #64748b; font-size: 0.72rem; display: none;">Quantity locked to queued booklets count.</small>
                     </div>
                 </div>
+
+                <!-- Course Live Stock and Excess Reserve Status -->
+                <div id="modalCourseStockInfo" style="display: none; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.82rem; line-height: 1.5;"></div>
                 <div class="form-group">
                     <label for="modalReason">Primary Reason / Defect Cause *</label>
                     <select id="modalReason" required>
@@ -534,13 +537,13 @@
 
                 <!-- Live Calculation Preview -->
                 <div class="preview-box">
-                    <p><strong>Accounting Impact:</strong></p>
-                    <p id="modalCostPreviewText">Calculating estimated net loss...</p>
+                    <p><strong>Physical Impact:</strong></p>
+                    <p id="modalCostPreviewText">Calculating physical inventory impact...</p>
                 </div>
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px;">
                     <button type="button" class="btn btn-light" onclick="closeLogSpoilageModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="modalSubmitBtn">Record Net Loss</button>
+                    <button type="submit" class="btn btn-primary" id="modalSubmitBtn">Record Material Wastage</button>
                 </div>
             </form>
         </div>
@@ -582,6 +585,26 @@
         </div>
     </div>
 
+    <!-- PAPER DEFICIT NOTIFICATION MODAL -->
+    <div class="modal-overlay" id="spoilageDeficitModal" style="display: none; z-index: 100004 !important;">
+        <div class="modal-card" style="max-width: 540px; border-top: 5px solid #dc2626; box-shadow: 0 10px 25px rgba(220, 38, 38, 0.2);">
+            <div style="display: flex; align-items: flex-start; gap: 14px; margin-bottom: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 50%; background: #fee2e2; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; color: #dc2626;">
+                    ⚠️
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <h3 id="deficitModalTitle" style="margin: 0 0 6px 0; color: #991b1b; font-size: 1.15rem; font-weight: 700;">Paper Demand Deficit Warning</h3>
+                    <div id="deficitModalBody" style="color: #334155; font-size: 0.9rem; line-height: 1.55;">
+                        <!-- Injected dynamically based on role -->
+                    </div>
+                </div>
+            </div>
+            <div id="deficitModalActions" style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 8px;">
+                <!-- Injected dynamically based on role -->
+            </div>
+        </div>
+    </div>
+
     <!-- APP DIALOG MODAL (Styled Popups replacing alert() across application) -->
     <div class="modal-overlay" id="appDialogModal" style="display: none; z-index: 100005 !important;">
         <div class="app-dialog-card">
@@ -609,6 +632,7 @@
         let sheetsPerBooklet = 6;
         let currentUserRole = "Staff";
         let academicProgramsMap = {};
+        let currentCoursePaperStats = {};
 
         document.addEventListener('DOMContentLoaded', async function() {
             try {
@@ -721,10 +745,11 @@
 
                 if (data.status === 'success') {
                     allSpoilageRecords = data.records || [];
+                    currentCoursePaperStats = data.course_paper_stats || {};
                     document.getElementById('kpiWastedSheets').innerText = (data.total_sheets || 0).toLocaleString();
                     document.getElementById('kpiReamsEquiv').innerText = `${(data.reams_equivalent || 0).toFixed(2)} reams equivalent`;
                     document.getElementById('kpiScrappedBooklets').innerText = (data.total_booklets || 0).toLocaleString();
-                    document.getElementById('kpiTotalCost').innerText = `₱${(data.total_cost || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    document.getElementById('kpiTotalCost').innerText = `${(data.reams_equivalent || 0).toFixed(2)} Reams`;
                     document.getElementById('kpiSpoilageRate').innerText = `${(data.spoilage_rate_pct || 0).toFixed(1)}%`;
 
                     applyFilters(false);
@@ -754,7 +779,7 @@
                 return;
             }
 
-            const isAdmin = (currentUserRole || '').toLowerCase() === 'admin';
+            const isAdmin = ['admin', 'administrator'].includes((currentUserRole || '').toLowerCase());
             const spSheets = Number(dss.total_spoilage_sheets || 0).toLocaleString();
             const bufSheets = Number(dss.total_buffer_sheets || 0).toLocaleString();
             const overrunSheets = Number(dss.buffer_overrun_sheets || 0).toLocaleString();
@@ -862,7 +887,7 @@
                 ? currentFilteredRecords
                 : currentFilteredRecords.slice(startIdx, endIdx);
 
-            const isAdmin = (currentUserRole || '').toLowerCase() === 'admin';
+            const isAdmin = ['admin', 'administrator'].includes((currentUserRole || '').toLowerCase());
 
             tbody.innerHTML = pagedRecords.map(r => {
                 const isBooklet = r.loss_type === 'whole_booklet';
@@ -894,7 +919,7 @@
                         <td><span class="badge ${badgeClass}">${categoryLabel}</span></td>
                         <td><span class="badge badge-dept">${escapeHtml(r.department || 'GENERAL')}</span></td>
                         <td>${qtyDisplay}</td>
-                        <td style="color: #c0392b; font-weight: 800; white-space: nowrap;">- ₱${Number(r.total_loss_cost || 0).toFixed(2)}</td>
+                        <td style="color: #475569; font-weight: 700; white-space: nowrap;">${r.loss_type === 'whole_booklet' ? `${r.sheets_wasted} sheets (${r.quantity} booklet${r.quantity > 1 ? 's' : ''})` : `${r.sheets_wasted} paper sheets`}</td>
                         <td style="font-weight: 600; color: #1e293b;">${escapeHtml(r.reason || '')}</td>
                         <td>${ctrlDisplay}</td>
                         <td style="color: #64748b;">${escapeHtml(r.recorded_by || '')}</td>
@@ -970,6 +995,7 @@
             queuedBooklets = [];
             renderQueuedBooklets();
             onLossTypeChanged();
+            updateCourseStockInfo();
             document.getElementById('logSpoilageModal').style.display = 'flex';
         }
 
@@ -1000,7 +1026,91 @@
                 qtyHelp.style.display = 'block';
                 renderQueuedBooklets();
             }
+            updateCourseStockInfo();
             updateModalCostPreview();
+        }
+
+        function onModalDeptChanged() {
+            updateCourseStockInfo();
+            updateModalCostPreview();
+        }
+
+        function updateCourseStockInfo() {
+            const deptEl = document.getElementById('modalDept');
+            if (!deptEl) return;
+            const dept = deptEl.value;
+            const stockInfo = document.getElementById('modalCourseStockInfo');
+            const qtyInput = document.getElementById('modalQty');
+            const lossType = document.getElementById('modalLossType').value;
+            if (!stockInfo) return;
+
+            // Hide course paper stock info when recording whole booklet loss
+            if (lossType === 'whole_booklet') {
+                stockInfo.style.display = 'none';
+                return;
+            }
+
+            const stats = currentCoursePaperStats[dept];
+            if (!stats) {
+                stockInfo.style.display = 'none';
+                return;
+            }
+
+            const isBooklet = lossType === 'whole_booklet';
+            const allocated = stats.total_allocated_sheets || 0;
+            const remaining = stats.remaining_available_sheets || 0;
+            const excess = stats.excess_sheets || 0;
+            const hasRegistered = Boolean(stats.has_registered_batches);
+
+            let guidanceHtml = '';
+            let maxAllowed = remaining;
+
+            if (hasRegistered) {
+                maxAllowed = excess;
+                guidanceHtml = `
+                    <div style="margin-top: 6px; padding: 6px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #1e40af; font-size: 0.76rem;">
+                        <strong>📦 Registered Exam Booklets Locked:</strong> Blank exam booklets for ${escapeHtml(dept)} are already registered in the vault. Loose paper wastage can only deduct from the <strong>Excess Reserve (+${excess.toLocaleString()} sheets)</strong>.
+                    </div>
+                `;
+            } else {
+                maxAllowed = remaining;
+                guidanceHtml = `
+                    <div style="margin-top: 6px; padding: 6px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; color: #166534; font-size: 0.76rem;">
+                        <strong>🌿 Dynamic Excess Deduction:</strong> Wastage first deducts from the <strong>Excess Reserve (+${excess.toLocaleString()} sheets)</strong>. Any wastage beyond excess will cut into paper allocated for student booklet production.
+                    </div>
+                `;
+            }
+
+            if (stats.paper_deficit_sheets && stats.paper_deficit_sheets > 0) {
+                guidanceHtml += `
+                    <div style="margin-top: 6px; padding: 6px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 0.76rem;">
+                        <strong>⚠️ Active Allocation Deficit:</strong> This course is currently short by <strong>-${stats.paper_deficit_sheets.toLocaleString()} sheets</strong> from student booklet demand.
+                    </div>
+                `;
+            }
+
+            if (!isBooklet && qtyInput) {
+                qtyInput.max = maxAllowed > 0 ? String(maxAllowed) : '1';
+            }
+
+            stockInfo.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-weight: 700; color: #1e293b;">
+                    <span>Course Paper Allocation Status (${escapeHtml(dept)}):</span>
+                    <span style="font-size: 0.75rem; color: #64748b;">Total Allocated: ${allocated.toLocaleString()} sheets</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; font-size: 0.78rem;">
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px;">
+                        <span style="color: #64748b; display: block;">Excess Reserve:</span>
+                        <strong style="color: ${excess > 0 ? '#15803d' : '#dc2626'}; font-size: 0.95rem;">+${excess.toLocaleString()} Sheets</strong>
+                    </div>
+                    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px;">
+                        <span style="color: #64748b; display: block;">Max Wasted Allowed:</span>
+                        <strong style="color: ${maxAllowed > 0 ? '#0284c7' : '#dc2626'}; font-size: 0.95rem;">${maxAllowed.toLocaleString()} Sheets</strong>
+                    </div>
+                </div>
+                ${guidanceHtml}
+            `;
+            stockInfo.style.display = 'block';
         }
 
         function addManualBooklet() {
@@ -1288,17 +1398,16 @@
                 staples = qty * 2;
             }
 
-            const cost = (sheets * unitPaperCost) + (staples * unitStapleCost);
             const textEl = document.getElementById('modalCostPreviewText');
             if (lossType === 'whole_booklet') {
                 textEl.innerHTML = `
                     This entry records <strong>${qty} defective booklet(s)</strong> (${sheets} paper sheets, ${staples} staples).<br/>
-                    Accounting Impact: <strong>₱${cost.toFixed(2)}</strong> unrecoverable cost accounted as <strong>Less: Net Loss (0 ROI)</strong>.
+                    
                 `;
             } else {
                 textEl.innerHTML = `
-                    This entry records <strong>${sheets} wasted paper sheet(s)</strong> (${cost > 0 ? `₱${cost.toFixed(2)}` : '₱0.00'} unrecoverable cost).<br/>
-                    It will be accounted as <strong>Less: Net Loss</strong> in the Income Statement with <strong>0 ROI</strong>.
+                    This entry records <strong>${sheets} wasted paper sheet(s)</strong>.<br/>
+                    
                 `;
             }
         }
@@ -1306,6 +1415,7 @@
         async function submitSpoilage(e) {
             e.preventDefault();
             const lossType = document.getElementById('modalLossType').value;
+            const dept = document.getElementById('modalDept').value;
 
             if (lossType === 'whole_booklet') {
                 if (queuedBooklets.length === 0) {
@@ -1319,17 +1429,45 @@
                 }
             }
 
-            const btn = document.getElementById('modalSubmitBtn');
-            btn.disabled = true;
-            btn.innerText = 'Saving...';
-
             const qty = (lossType === 'whole_booklet') 
                 ? queuedBooklets.length 
                 : Math.max(1, parseInt(document.getElementById('modalQty').value, 10));
 
+            // Hard-cap validation on paper sheets
+            if (lossType === 'paper_sheet') {
+                const stats = currentCoursePaperStats[dept];
+                if (stats) {
+                    const maxAllowed = stats.has_registered_batches ? stats.excess_sheets : stats.remaining_available_sheets;
+                    if (maxAllowed <= 0) {
+                        await showAppAlert(
+                            "No Paper Sheets Available",
+                            stats.has_registered_batches
+                                ? `Cannot record paper sheet wastage for ${dept}. All excess reserve sheets have been depleted and finished exam booklets are already locked in the vault.`
+                                : `Cannot record paper sheet wastage for ${dept}. No remaining paper sheets are available in the course allocation.`,
+                            "warning"
+                        );
+                        return;
+                    }
+                    if (qty > maxAllowed) {
+                        await showAppAlert(
+                            "Quantity Exceeds Allocation Limit",
+                            stats.has_registered_batches
+                                ? `Quantity (${qty.toLocaleString()} sheets) exceeds available excess reserve (${maxAllowed.toLocaleString()} sheets) for ${dept}.`
+                                : `Quantity (${qty.toLocaleString()} sheets) exceeds remaining available paper (${maxAllowed.toLocaleString()} sheets) for ${dept}.`,
+                            "warning"
+                        );
+                        return;
+                    }
+                }
+            }
+
+            const btn = document.getElementById('modalSubmitBtn');
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
+
             const payload = {
                 academic_period: document.getElementById('periodFilter').value || activePeriod,
-                department: document.getElementById('modalDept').value,
+                department: dept,
                 loss_type: lossType,
                 quantity: qty,
                 reason: document.getElementById('modalReason').value,
@@ -1348,9 +1486,15 @@
                 const data = await res.json();
 
                 if (data.status === 'success') {
-                    showToast('Material spoilage recorded successfully!');
+                    showToast('Material wastage recorded successfully!');
                     closeLogSpoilageModal();
                     await fetchSpoilageData();
+                    if (typeof window.refreshSidebarDSSAlert === 'function') {
+                        window.refreshSidebarDSSAlert();
+                    }
+                    if (data.deficit_detected) {
+                        showDeficitAlertModal(data);
+                    }
                 } else {
                     await showAppAlert("Submission Failed", data.message || 'Failed to save record', "error");
                 }
@@ -1358,8 +1502,72 @@
                 await showAppAlert("Submission Error", "Network error while saving: " + err.message, "error");
             } finally {
                 btn.disabled = false;
-                btn.innerText = 'Record Net Loss';
+                btn.innerText = 'Record Material Wastage';
             }
+        }
+
+        function showDeficitAlertModal(data) {
+            const modal = document.getElementById('spoilageDeficitModal');
+            const titleEl = document.getElementById('deficitModalTitle');
+            const bodyEl = document.getElementById('deficitModalBody');
+            const actionsEl = document.getElementById('deficitModalActions');
+            if (!modal) return;
+
+            const isAdmin = ['admin', 'administrator'].includes((currentUserRole || '').toLowerCase());
+            const dept = data.department || 'Course';
+            const deficitSheets = (data.deficit_sheets || 0).toLocaleString();
+            const recReams = data.recommended_reams || 1;
+            const estCost = Number(data.estimated_cost || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+            if (isAdmin) {
+                titleEl.innerText = "Paper Allocation Deficit - Settings Adjustment Required";
+                bodyEl.innerHTML = `
+                    <p style="margin: 0 0 10px 0;">
+                        The excess reserve for <strong>${escapeHtml(dept)}</strong> has been fully depleted. The newly recorded wastage is now cutting into paper sheets allocated for student examination booklets by <strong>${deficitSheets} sheets</strong>.
+                    </p>
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px;">
+                        <div style="font-weight: 700; color: #991b1b; font-size: 0.88rem; margin-bottom: 4px;">Recommended Action:</div>
+                        <div style="color: #7f1d1d; font-size: 0.85rem;">
+                            Procure <strong>+${recReams} whole ream(s)</strong> (Estimated Cost: <strong>+₱${estCost}</strong>) in Settings to restore sufficient booklet production capacity.
+                        </div>
+                    </div>
+                    <p style="margin: 0; font-size: 0.84rem; color: #64748b;">
+                        Please navigate to Settings to increase your procurement budget and ream allocation so it fits or exceeds the updated demand.
+                    </p>
+                `;
+                actionsEl.innerHTML = `
+                    <button type="button" class="btn btn-light" onclick="closeDeficitAlertModal()">Acknowledge</button>
+                    <a href="/settings" class="btn" style="background: #dc2626; color: white; text-decoration: none; font-weight: 700; padding: 8px 16px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                        ⚙️ Go to Settings
+                    </a>
+                `;
+            } else {
+                titleEl.innerText = "Paper Allocation Deficit - Inform Administrator";
+                bodyEl.innerHTML = `
+                    <p style="margin: 0 0 10px 0;">
+                        The excess reserve for <strong>${escapeHtml(dept)}</strong> has been depleted, and the recorded wastage is now cutting into paper sheets allocated for student examination booklets (<strong>-${deficitSheets} sheets deficit</strong>).
+                    </p>
+                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px;">
+                        <div style="font-weight: 700; color: #92400e; font-size: 0.88rem; margin-bottom: 4px;">Action Required:</div>
+                        <div style="color: #78350f; font-size: 0.85rem;">
+                            Please inform the <strong>System Administrator</strong> immediately to adjust Settings and add <strong>+${recReams} whole ream(s)</strong> of paper to ensure all examination booklets can be produced.
+                        </div>
+                    </div>
+                    <p style="margin: 0; font-size: 0.84rem; color: #64748b; font-style: italic;">
+                        The notification bell will maintain this alert until the Administrator updates the procurement settings.
+                    </p>
+                `;
+                actionsEl.innerHTML = `
+                    <button type="button" class="btn btn-primary" onclick="closeDeficitAlertModal()">Understood</button>
+                `;
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeDeficitAlertModal() {
+            const modal = document.getElementById('spoilageDeficitModal');
+            if (modal) modal.style.display = 'none';
         }
 
         async function deleteSpoilage(id) {

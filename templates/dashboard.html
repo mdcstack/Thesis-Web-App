@@ -549,6 +549,8 @@
         </div>
     </div>
 
+
+
 <script>
     // --- AUTHENTICATION & GLOBAL STATE ---
     const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
@@ -1647,9 +1649,13 @@
                 const courseProcuredSheets = courseRoundedReams * 500;
                 const courseExcessSheets = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : 0;
                 const courseExcessBooklets = (d.excess_booklets_yield !== undefined && d.excess_booklets_yield !== null) ? d.excess_booklets_yield : (sheetsPerB > 0 ? Math.floor(courseExcessSheets / sheetsPerB) : 0);
-                const paperText = d.paper_required_text || (d.target_production === 0 ? '0 Sheets (Demand Met)' : `${Math.floor(sheetsNeeded / 500)} Ream(s) & ${sheetsNeeded % 500} Sheet(s)`);
-                const mainReamsDisplay = (d.target_production === 0) ? '0 Whole Reams' : `${courseRoundedReams} Whole Reams`;
-                const totalSheetsSubtext = (d.target_production > 0) ? `(${paperText} • ${sheetsNeeded.toLocaleString()} sheets)` : '(Demand Met)';
+                
+                const plannedPaperText = d.planned_paper_text || d.paper_required_text || (d.target_production === 0 ? '0 Sheets (Demand Met)' : `${Math.floor(sheetsNeeded / 500)} Ream(s) & ${sheetsNeeded % 500} Sheet(s)`);
+                const plannedSheets = (d.planned_sheets_needed !== undefined && d.planned_sheets_needed !== null) ? d.planned_sheets_needed : sheetsNeeded;
+                const plannedReams = (d.planned_reams_needed !== undefined && d.planned_reams_needed !== null) ? d.planned_reams_needed : courseRoundedReams;
+
+                const mainReamsDisplay = `${plannedReams} Whole Reams`;
+                const totalSheetsSubtext = (plannedSheets > 0) ? `(${plannedPaperText} • ${plannedSheets.toLocaleString()} sheets)` : '(Demand Met)';
 
                 return `
                     <div id="course-card-${deptCode.toLowerCase()}" style="background: white; border: 2px solid ${color}40; border-radius: 8px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); min-width: 0; box-sizing: border-box; overflow: hidden; border-top: 4px solid ${color};">
@@ -1704,13 +1710,33 @@
                         ` : ''}
                         ${(courseExcessSheets > 0) ? `
                         <div style="margin-top: 8px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
-                            <span style="color: #166534; font-weight: 600;">🌿 Residual Excess Reserve:</span>
+                            <span style="color: #166534; font-weight: 600;"> Excess Paper Sheets:</span>
                             <span style="color: #15803d; font-weight: 700;">+${courseExcessSheets.toLocaleString()} Sheets (~${courseExcessBooklets.toLocaleString()} extra booklets)</span>
+                        </div>
+                        ` : ''}
+                        ${(d.paper_deficit_sheets && d.paper_deficit_sheets > 0) ? `
+                        <div style="margin-top: 8px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+                            <span style="color: #991b1b; font-weight: 600;">Paper Demand Deficit:</span>
+                            <span style="color: #dc2626; font-weight: 700;">-${d.paper_deficit_sheets.toLocaleString()} Sheets (Allocation Exceeded)</span>
                         </div>
                         ` : ''}
                     </div>
                 `;
             }).join('');
+        }
+
+        checkAndShowDashboardDeficitModal(courseProd);
+    }
+
+    function checkAndShowDashboardDeficitModal(courseProd) {
+        if (typeof window.checkAndShowPaperDeficitModal === 'function') {
+            window.checkAndShowPaperDeficitModal(courseProd);
+        }
+    }
+
+    function closeDashboardDeficitModal(sessionDismissKey) {
+        if (typeof window.closePaperDeficitModal === 'function') {
+            window.closePaperDeficitModal(sessionDismissKey);
         }
     }
 
@@ -1782,9 +1808,13 @@
 
         // Shortage / Production Needed View:
         const totalReams = rec.total_reams_to_procure || 0;
-        const sumCourseRounded = (rec.sum_course_rounded_reams !== undefined && rec.sum_course_rounded_reams !== null)
-            ? rec.sum_course_rounded_reams
-            : (rec.course_allocations ? rec.course_allocations.reduce((acc, c) => acc + (c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500)), 0) : totalReams);
+        const sumCourseRounded = (rec.sum_course_required_reams !== undefined && rec.sum_course_required_reams !== null)
+            ? rec.sum_course_required_reams
+            : ((rec.sum_course_planned_reams !== undefined && rec.sum_course_planned_reams !== null)
+                ? rec.sum_course_planned_reams
+                : ((rec.sum_course_rounded_reams !== undefined && rec.sum_course_rounded_reams !== null)
+                    ? rec.sum_course_rounded_reams
+                    : (rec.course_allocations ? rec.course_allocations.reduce((acc, c) => acc + (c.total_required_reams || c.planned_reams_needed || c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500)), 0) : totalReams)));
         const totalSheetsNum = rec.total_sheets_needed || 0;
         const exactReams = Math.floor(totalSheetsNum / 500);
         const looseSheets = totalSheetsNum % 500;
@@ -1827,6 +1857,11 @@
                             ${sumCourseRounded} Whole Ream(s)
                         </strong>
                         <span style="font-size: 0.78rem; color: #64748b;">${(sumCourseRounded * 500).toLocaleString()} sheets total (@ 500 sheets/ream)</span>
+                        ${(rec.spoilage_deficit_reams && rec.spoilage_deficit_reams > 0) ? `
+                        <div style="font-size: 0.73rem; color: #dc2626; font-weight: 700; margin-top: 3px;">
+                            Includes +${rec.spoilage_deficit_reams} ream(s) to replace ${(rec.spoilage_deficit_sheets || 0).toLocaleString()} sheets lost to material wastage
+                        </div>
+                        ` : ''}
                     </div>
 
                     <!-- Net Paper Required per Course -->
@@ -1836,22 +1871,28 @@
                         </span>
                         <div style="display: flex; flex-direction: column; gap: 4px;">
                             ${(rec.course_allocations || []).map((c, idx) => {
-                                const cReams = c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500) || 0;
+                                const cReams = (c.total_required_reams !== undefined && c.total_required_reams !== null)
+                                    ? c.total_required_reams
+                                    : (c.planned_reams_needed || c.reams_needed || Math.ceil((c.sheets_needed || 0) / 500) || 0);
                                 const isLast = idx === (rec.course_allocations.length - 1);
                                 const borderStyle = isLast ? '' : 'border-bottom: 1px dashed #e2e8f0; padding-bottom: 4px; margin-bottom: 3px;';
                                 const prevCreditedText = (c.prev_excess_sheets && c.prev_excess_sheets > 0)
                                     ? ` <span style="color: #0284c7; font-size: 0.72rem; font-weight: normal;">(credited ${c.prev_excess_sheets.toLocaleString()} leftover sh)</span>`
                                     : '';
+                                const deficitText = (c.spoilage_deficit_reams && c.spoilage_deficit_reams > 0)
+                                    ? ` <span style="color: #dc2626; font-size: 0.72rem; font-weight: 700;">(${c.base_reams_needed || (cReams - c.spoilage_deficit_reams)} base + ${c.spoilage_deficit_reams} deficit)</span>`
+                                    : '';
+                                const paperDisplay = c.planned_paper_text || c.paper_required_text || `${cReams} Whole Reams`;
                                 return `
                                     <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; ${borderStyle}">
-                                        <strong style="font-size: 1.15rem; color: #0369a1; font-weight: 700;">${cReams} Reams${prevCreditedText}</strong>
-                                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600; text-align: right;">(${escapeHtml(c.paper_required_text)}) - ${escapeHtml(c.code)}</span>
+                                        <strong style="font-size: 1.15rem; color: #0369a1; font-weight: 700;">${cReams} Whole Reams${deficitText}${prevCreditedText}</strong>
+                                        <span style="font-size: 0.78rem; color: #64748b; font-weight: 600; text-align: right;">(${escapeHtml(paperDisplay)}) - ${escapeHtml(c.code)}</span>
                                     </div>
                                 `;
                             }).join('')}
                         </div>
                         <span style="font-size: 0.76rem; color: #64748b; display: block; margin-top: 6px; border-top: 1px solid #f1f5f9; padding-top: 5px;">
-                            Combined: ${escapeHtml(paperMainDisplay)} (${totalSheets} sheets for ${targetBooklets} booklets)
+                            Combined: ${sumCourseRounded} Whole Ream(s) (${(sumCourseRounded * 500).toLocaleString()} sheets for ${targetBooklets} booklets)
                         </span>
                     </div>
 

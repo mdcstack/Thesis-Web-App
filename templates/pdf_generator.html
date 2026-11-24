@@ -167,7 +167,7 @@
         <!-- Page Header Toolbar with Storage Locator -->
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
             <div>
-                <h1 style="font-size: 1.5rem; color: #1e293b; margin: 0 0 4px 0; font-weight: 700;">🖨️ PDF Generator</h1>
+                <h1 style="font-size: 1.5rem; color: #1e293b; margin: 0 0 4px 0; font-weight: 700;">PDF Generator</h1>
                 <p style="margin: 0; color: #64748b; font-size: 0.88rem;">Automated Master Batch Stamping &amp; Sequential Control Numbering</p>
             </div>
             <div style="display: flex; gap: 10px; align-items: center;">
@@ -198,7 +198,7 @@
                 <!-- Target Course / Department Selection -->
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; text-align: left;">
                     <label for="deptSelect" style="display: block; font-weight: bold; color: #2c3e50; font-size: 0.92rem; margin-bottom: 8px;">
-                        🎯 Target Course / Department:
+                        Target Course / Department:
                     </label>
                     <select id="deptSelect" onchange="onDepartmentChange()" style="width: 100%; padding: 11px 14px; font-size: 0.98rem; font-weight: 600; border: 2px solid #cbd5e1; border-radius: 6px; background: white; color: #1e293b; cursor: pointer; transition: border-color 0.2s;">
                         <option value="CS" selected>Computer Science (CS)</option>
@@ -209,7 +209,7 @@
                 <!-- Target Template Slot Selection -->
                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; text-align: left;">
                     <label for="templateSelect" style="display: block; font-weight: bold; color: #2c3e50; font-size: 0.92rem; margin-bottom: 8px;">
-                        📄 Select Booklet Cover Template:
+                        Select Booklet Cover Template:
                     </label>
                     <select id="templateSelect" onchange="onTemplateSlotChange()" style="width: 100%; padding: 11px 14px; font-size: 0.98rem; font-weight: 600; border: 2px solid #cbd5e1; border-radius: 6px; background: white; color: #1e293b; cursor: pointer; transition: border-color 0.2s;">
                         <option value="1">Template 1</option>
@@ -1641,17 +1641,26 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             const targetEl = document.getElementById('cardTargetProduction');
             if (targetEl) targetEl.innerText = `${(d.target_production || 0).toLocaleString()} booklets`;
 
+            const sheetsPerB = currentSheetsPerBooklet || 6;
+            const targetProd = d.target_production || 0;
+            const priorExcess = d.prev_excess_sheets || 0;
+            const sheetsNeededForTarget = Math.max(0, (targetProd * sheetsPerB) - priorExcess);
+            const reamsForTarget = (sheetsNeededForTarget > 0) ? Math.ceil(sheetsNeededForTarget / 500) : 0;
+            const recReams = Math.max(
+                Number(d.base_reams_needed || 0),
+                Number(d.reams_needed || 0),
+                reamsForTarget
+            );
+
             const recReamsEl = document.getElementById('cardRecommendedReams');
-            if (recReamsEl) recReamsEl.innerText = `${d.reams_needed || 0} Ream(s)`;
+            if (recReamsEl) recReamsEl.innerText = `${recReams || 0} Ream(s)`;
 
             const carryoverNotice = document.getElementById('cardVaultCarryoverNotice');
             const residualReserveText = document.getElementById('cardResidualReserveText');
             const priorExcessText = document.getElementById('cardPriorExcessText');
             const priorExcessLine = document.getElementById('cardPriorExcessLine');
             const residualExcess = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : 0;
-            const sheetsPerB = currentSheetsPerBooklet || 6;
             const residualBooklets = (d.excess_booklets_yield !== undefined && d.excess_booklets_yield !== null) ? d.excess_booklets_yield : (sheetsPerB > 0 ? Math.floor(residualExcess / sheetsPerB) : 0);
-            const priorExcess = d.prev_excess_sheets || 0;
 
             if (carryoverNotice) {
                 if ((residualExcess > 0 || priorExcess > 0) && !d.is_satisfied && (d.target_production || 0) > 0) {
@@ -1729,9 +1738,6 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     capBadge.style.color = '#059669';
                 }
             } else {
-                const recReams = d.reams_needed || 0;
-                const targetProd = d.target_production || 0;
-                const sheetsPerB = currentSheetsPerBooklet || 6;
                 const canUseResidualOnly = Boolean(recReams === 0 && residualExcess >= sheetsPerB);
 
                 let minAllowed = 1;
@@ -1800,9 +1806,17 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
             const reamInput = document.getElementById('reamCount');
             if (reamInput) {
-                const recReams = d.reams_needed || 0;
-                const residualExcess = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : 0;
                 const sheetsPerB = currentSheetsPerBooklet || 6;
+                const targetProd = d.target_production || 0;
+                const priorExcess = d.prev_excess_sheets || 0;
+                const sheetsNeededForTarget = Math.max(0, (targetProd * sheetsPerB) - priorExcess);
+                const reamsForTarget = (sheetsNeededForTarget > 0) ? Math.ceil(sheetsNeededForTarget / 500) : 0;
+                const recReams = Math.max(
+                    Number(d.base_reams_needed || 0),
+                    Number(d.reams_needed || 0),
+                    reamsForTarget
+                );
+                const residualExcess = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : 0;
                 if (recReams === 0 && residualExcess >= sheetsPerB) {
                     reamInput.value = 0;
                 } else {
@@ -1839,13 +1853,19 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
 
             const deptName = (d && d.name) ? `${d.name} (${selectedDept})` : getProgramLabel(selectedDept);
             const target = d.target_production || 0;
-            const reamsNeeded = d.reams_needed || 0;
+            const sheetsPerB = currentSheetsPerBooklet || 6;
+            const priorExcess = d.prev_excess_sheets || 0;
+            const sheetsNeededForTarget = Math.max(0, (target * sheetsPerB) - priorExcess);
+            const reamsForTarget = (sheetsNeededForTarget > 0) ? Math.ceil(sheetsNeededForTarget / 500) : 0;
+            const reamsNeeded = Math.max(
+                Number(d.base_reams_needed || 0),
+                Number(d.reams_needed || 0),
+                reamsForTarget
+            );
             const rawReamVal = document.getElementById('reamCount').value;
             let reamsRequested = parseInt(rawReamVal);
             if (isNaN(reamsRequested) || reamsRequested < 0) reamsRequested = 0;
             const residualExcess = (d.excess_sheets !== undefined && d.excess_sheets !== null) ? d.excess_sheets : (d.prev_excess_sheets || 0);
-            const priorExcess = d.prev_excess_sheets || 0;
-            const sheetsPerB = currentSheetsPerBooklet || 6;
             const totalSheets = (reamsRequested === 0) ? residualExcess : ((reamsRequested * 500) + priorExcess);
             const conversionCapacity = Math.floor(totalSheets / sheetsPerB);
             const cappedYield = (target > 0) ? Math.min(conversionCapacity, target) : conversionCapacity;
@@ -2075,7 +2095,15 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
             if (courseProductionData && courseProductionData.courses && courseProductionData.courses[batch.selectedDept]) {
                 const d = courseProductionData.courses[batch.selectedDept];
                 const target = d.target_production || 0;
-                const reamsNeeded = d.reams_needed || 0;
+                const sheetsPerB = currentSheetsPerBooklet || 6;
+                const priorExcess = d.prev_excess_sheets || 0;
+                const sheetsNeededForTarget = Math.max(0, (target * sheetsPerB) - priorExcess);
+                const reamsForTarget = (sheetsNeededForTarget > 0) ? Math.ceil(sheetsNeededForTarget / 500) : 0;
+                const reamsNeeded = Math.max(
+                    Number(d.base_reams_needed || 0),
+                    Number(d.reams_needed || 0),
+                    reamsForTarget
+                );
                 const existingStock = (d.total_existing_stock !== undefined) ? d.total_existing_stock : ((d.pending_stock || 0) + (d.available_stock || 0));
                 const grossDemand = d.gross_demand_booklets || (target + existingStock);
                 const projectedStock = existingStock + batch.totalYield;
@@ -2090,34 +2118,34 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     // User requested more reams than needed to satisfy the target
                     const surplus = Math.max(0, projectedStock - grossDemand);
                     if (card) card.style.borderTopColor = '#f59e0b';
-                    if (icon) icon.innerText = '⚠️';
+                    if (icon) icon.innerText = '';
                     if (badge) {
                         badge.style.background = '#fef3c7';
                         badge.style.color = '#b45309';
                         badge.style.borderColor = '#fde68a';
-                        badge.innerText = `⚠️ Overproduction Warning: +${surplus.toLocaleString()} Surplus Booklets`;
+                        badge.innerText = `Overproduction Warning: +${surplus.toLocaleString()} Surplus Booklets`;
                     }
                     if (proceedBtn) proceedBtn.style.background = '#d97706';
                 } else if (batch.reamsRequested === reamsNeeded || projectedStock >= grossDemand || batch.totalYield >= target) {
                     // Target Demand Met Exactly - Produced reams fulfill target demand
                     if (card) card.style.borderTopColor = '#10b981';
-                    if (icon) icon.innerText = '🎯';
+                    if (icon) icon.innerText = '';
                     if (badge) {
                         badge.style.background = '#dcfce7';
                         badge.style.color = '#15803d';
                         badge.style.borderColor = '#86efac';
-                        badge.innerText = `🎯 Target Demand Satisfied (100% Demand Met)`;
+                        badge.innerText = `Target Demand Satisfied (100% Demand Met)`;
                     }
                     if (proceedBtn) proceedBtn.style.background = '#16a34a';
                 } else {
                     // Partial Batch - Still below target demand
                     if (card) card.style.borderTopColor = '#3b82f6';
-                    if (icon) icon.innerText = '📋';
+                    if (icon) icon.innerText = '';
                     if (badge) {
                         badge.style.background = '#e0f2fe';
                         badge.style.color = '#0369a1';
                         badge.style.borderColor = '#bae6fd';
-                        badge.innerText = `ℹ️ Partial Batch Allocation (${projectedStock.toLocaleString()} of ${grossDemand.toLocaleString()} Target Demand)`;
+                        badge.innerText = `Partial Batch Allocation (${projectedStock.toLocaleString()} of ${grossDemand.toLocaleString()} Target Demand)`;
                     }
                     if (proceedBtn) proceedBtn.style.background = '#2563eb';
                 }
@@ -2127,7 +2155,7 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                     badge.style.background = '#e0f2fe';
                     badge.style.color = '#0369a1';
                     badge.style.borderColor = '#bae6fd';
-                    badge.innerText = `📋 Standard Batch Registration`;
+                    badge.innerText = `Standard Batch Registration`;
                 }
                 if (proceedBtn) proceedBtn.style.background = '#2563eb';
             }
@@ -2221,7 +2249,13 @@ const activeUser = JSON.parse(localStorage.getItem('bookletlog_user'));
                 reamsRequested = (residualReserve >= sheetsPerB && targetNeeded > 0) ? 0 : 1;
             }
 
-            const recReams = currentDeptDemand ? (currentDeptDemand.reams_needed || 0) : 0;
+            const sheetsNeededForTarget = Math.max(0, (targetNeeded * sheetsPerB) - prevExcess);
+            const reamsForTarget = (sheetsNeededForTarget > 0) ? Math.ceil(sheetsNeededForTarget / 500) : 0;
+            const recReams = Math.max(
+                Number(currentDeptDemand ? currentDeptDemand.base_reams_needed : 0) || 0,
+                Number(currentDeptDemand ? currentDeptDemand.reams_needed : 0) || 0,
+                reamsForTarget
+            );
             const maxAllowed = (recReams === 0 && residualReserve >= sheetsPerB) ? 0 : recReams;
 
             if (reamsRequested > maxAllowed) {

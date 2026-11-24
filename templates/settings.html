@@ -3009,23 +3009,27 @@
             let totalBookletsToCreate = 0;
 
             let totalRoundedReams = 0;
+            let totalDeficitReamsAll = 0;
+            let totalDeficitSheetsAll = 0;
 
             let courseBreakdownParts = [];
             let courseProductionParts = [];
             const hasPrevPeriod = Boolean(currentPreviousSummary && currentPreviousSummary.has_previous_period);
 
             if (courseDemandList && courseDemandList.length > 0) {
+                const isCurrentActive = Boolean(window.currentPeriodState && window.currentPeriodState.isActive);
+
                 courseDemandList.forEach(c => {
                     const rawTarget = bufferPct > 0 ? Math.ceil(c.headcount * (1 + (bufferPct / 100))) : c.headcount;
                     const cDistributed = c.distributed || 0;
                     const unfulfilledDemand = Math.max(0, rawTarget - cDistributed);
 
-                    // True physical ready booklets sitting in vault from prior periods
+                    // True physical ready booklets sitting in vault carried over from prior periods
                     const availBooklets = (c.prior_available_booklets !== undefined && c.prior_available_booklets !== null && c.prior_available_booklets > 0)
                         ? c.prior_available_booklets
-                        : (hasPrevPeriod && currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].available_booklets !== undefined
+                        : ((!isCurrentActive && hasPrevPeriod && currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].available_booklets !== undefined)
                             ? (currentPreviousCourseExcess[c.code].available_booklets || 0)
-                            : ((c.available_stock !== undefined && c.available_stock !== null) ? c.available_stock : 0));
+                            : 0);
 
                     // Net booklets that must physically be produced
                     const cTarget = Math.max(0, unfulfilledDemand - availBooklets);
@@ -3054,24 +3058,33 @@
 
                     const cGrossSheets = cTarget * courseSheets;
 
-                    // Physical blank paper stock sitting in vault
-                    const prevExcess = (c.excess_sheets !== undefined && c.excess_sheets !== null)
-                        ? (c.excess_sheets || 0)
-                        : (hasPrevPeriod
-                            ? ((currentPreviousCourseExcess && currentPreviousCourseExcess[c.code]) 
-                                ? (currentPreviousCourseExcess[c.code].excess_sheets || 0) 
-                                : (c.prev_excess_sheets || 0))
-                            : 0);
+                    // Physical blank paper stock sitting in vault carried over strictly from a concluded prior period
+                    const prevExcess = (!isCurrentActive && hasPrevPeriod)
+                        ? ((currentPreviousCourseExcess && currentPreviousCourseExcess[c.code] && currentPreviousCourseExcess[c.code].excess_sheets !== undefined) 
+                            ? (currentPreviousCourseExcess[c.code].excess_sheets || 0) 
+                            : (c.prev_excess_sheets || 0))
+                        : 0;
 
                     // Net paper sheets required after consuming vault leftover sheets
                     const cNetSheets = Math.max(0, cGrossSheets - prevExcess);
-                    const cReams = cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0;
+                    const cBaseReams = (c.base_reams_needed !== undefined && c.base_reams_needed !== null)
+                        ? Number(c.base_reams_needed)
+                        : (cNetSheets > 0 ? Math.ceil(cNetSheets / 500) : 0);
+
+                    // Deficit paper sheets lost to reported material wastage requiring commercial replenishment
+                    const cDeficitSheets = Number((c.spoilage_deficit_sheets !== undefined && c.spoilage_deficit_sheets !== null) ? c.spoilage_deficit_sheets : (c.paper_deficit_sheets || 0));
+                    const cDeficitReams = Number((c.spoilage_deficit_reams !== undefined && c.spoilage_deficit_reams !== null) ? c.spoilage_deficit_reams : (cDeficitSheets > 0 ? Math.ceil(cDeficitSheets / 500) : 0));
+                    const cTotalReams = (c.total_required_reams !== undefined && c.total_required_reams !== null && Number(c.total_required_reams) > 0)
+                        ? Number(c.total_required_reams)
+                        : Math.max(cBaseReams + cDeficitReams, Number(c.planned_reams_needed || 0));
 
                     totalRawBookletsDemand += rawTarget;
                     totalVaultBooklets += availBooklets;
                     totalBookletsDemand += cTarget;
-                    totalRoundedReams += cReams;
+                    totalRoundedReams += cTotalReams;
                     totalBookletsToCreate += cTarget;
+                    totalDeficitReamsAll += cDeficitReams;
+                    totalDeficitSheetsAll += cDeficitSheets;
 
                     courseProductionParts.push(`
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
@@ -3084,14 +3097,16 @@
                     const rmPart = Math.floor(cNetSheets / 500);
                     const shPart = cNetSheets % 500;
                     const toPurchaseDisplay = `${rmPart}rm(s) ${shPart}sh`;
-                    const reamLabel = `${cReams} Ream${cReams !== 1 ? 's' : ''}`;
+                    const reamLabel = cDeficitReams > 0
+                        ? `${cTotalReams} Reams <span style="font-size: 0.68rem; font-weight: 700; color: #dc2626;">(${cBaseReams} base + ${cDeficitReams} deficit)</span>`
+                        : `${cTotalReams} Ream${cTotalReams !== 1 ? 's' : ''}`;
 
                     courseBreakdownParts.push(`
                         <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 6px 8px; font-size: 0.73rem;">
                             <!-- Course Header -->
                             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 3px; margin-bottom: 4px; font-weight: 700;">
                                 <span style="color: #1e293b;">${c.code} <span style="font-size: 0.68rem; font-weight: 600; color: #64748b;">(${courseSheets} sh/bk)</span>:</span>
-                                <span style="color: ${cReams > 0 ? '#2563eb' : '#15803d'};">${reamLabel}</span>
+                                <span style="color: ${cTotalReams > 0 ? '#2563eb' : '#15803d'};">${reamLabel}</span>
                             </div>
                             <!-- 2-Column Aligned Ledger Rows -->
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; color: #64748b;">
@@ -3122,6 +3137,12 @@
                                 <span style="font-weight: 600;">Stock Deficit</span>
                                 <span style="font-weight: 700; color: ${cNetSheets > 0 ? '#2563eb' : '#15803d'}; text-align: right;">${toPurchaseDisplay}</span>
                             </div>
+                            ${cDeficitSheets > 0 ? `
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px; color: #dc2626;">
+                                <span style="font-weight: 600;">Wastage Deficit</span>
+                                <span style="font-weight: 700; text-align: right;">+${cDeficitSheets.toLocaleString()} sh (+${cDeficitReams} rm${cDeficitReams > 1 ? 's' : ''})</span>
+                            </div>
+                            ` : ''}
                         </div>
                     `);
                 });
@@ -3231,7 +3252,10 @@
 
                 }
 
-                if (metricReams) metricReams.innerText = `${reamsNeeded} ream${reamsNeeded !== 1 ? 's' : ''} (₱${paperBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})`;
+                if (metricReams) {
+                    metricReams.innerHTML = `${reamsNeeded} ream${reamsNeeded !== 1 ? 's' : ''} (₱${paperBudget.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})})` +
+                        (totalDeficitReamsAll > 0 ? `<div style="font-size: 0.73rem; color: #dc2626; font-weight: 700; margin-top: 3px;">Includes +${totalDeficitReamsAll} ream(s) to replace ${totalDeficitSheetsAll.toLocaleString()} sheets lost to material wastage</div>` : '');
+                }
 
                 if (metricReamsBreakdown) metricReamsBreakdown.innerHTML = courseBreakdownParts.length > 0 ? courseBreakdownParts.join('') : '-';
 
@@ -4641,6 +4665,7 @@
                 }
 
                 courseDemandList = data.course_demands || [];
+                window.currentPeriodConfig = data;
 
                 window.currentPeriodActuals = {
                     total_generated: data.actual_generated || 0,
@@ -5742,6 +5767,7 @@
             currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
 
             courseDemandList = data.course_demands || [];
+            window.currentPeriodConfig = data;
 
             window.currentPeriodActuals = {
                 total_generated: data.actual_generated || 0,
@@ -6415,7 +6441,7 @@
 
             window.lanSync.onUpdate((payload) => {
 
-                if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET") {
+                if (payload.event === "ENROLLMENT_UPDATED" || payload.event === "SYSTEM_RESET" || payload.event === "MATERIAL_SPOILAGE_MUTATED") {
 
                     fetch('/api/settings').then(r => r.json()).then(data => {
 
@@ -6424,6 +6450,7 @@
                             currentTotalDemand = data.total_booklet_demand || data.total_demand || 0;
 
                             courseDemandList = data.course_demands || [];
+                            window.currentPeriodConfig = data;
 
                             window.currentPeriodActuals = {
                                 total_generated: data.actual_generated || 0,

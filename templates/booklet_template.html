@@ -294,7 +294,7 @@
         <div class="header-bar">
             <div>
                 <h2 style="color: #2c3e50; font-size: 1.6rem; display: flex; align-items: center; gap: 10px;">
-                    📄 Booklet Cover Template &amp; Calibration
+                    Booklet Cover Template &amp; Calibration
                 </h2>
                 <p style="color: #7f8c8d; font-size: 0.95rem; margin-top: 4px;">
                     Visually position and calibrate the Control Number, Sort Record Number (SRN), and QR Code stamped onto booklet covers.
@@ -1526,8 +1526,7 @@
                 showToast(`No booklet cover template has been uploaded for ${currentDept} (${activeConfig.template_name || `Template ${currentSlot}`}) yet. Please upload a PDF cover template first.`, 'warning', 'Upload Needed');
                 return;
             }
-            // Automatically save active coordinates silently in draft state so preview reflects latest calibration without activating template
-            await saveTemplateConfig(true, false);
+            // Generate live print preview modal using active in-memory coordinates without saving or mutating database
             await openPrintPreviewModal();
         }
 
@@ -1557,7 +1556,23 @@
             if (modal) modal.style.display = 'flex';
 
             try {
-                const res = await fetch(`/api/booklet-template/preview?department=${currentDept}&slot=${currentSlot}`);
+                const queryParams = new URLSearchParams({
+                    department: currentDept,
+                    slot: currentSlot,
+                    control_x: activeConfig.control_x,
+                    control_y: activeConfig.control_y,
+                    control_font_size: activeConfig.control_font_size,
+                    control_enabled: activeConfig.control_enabled,
+                    srn_x: activeConfig.srn_x,
+                    srn_y: activeConfig.srn_y,
+                    srn_font_size: activeConfig.srn_font_size,
+                    srn_enabled: activeConfig.srn_enabled,
+                    qr_x: activeConfig.qr_x,
+                    qr_y: activeConfig.qr_y,
+                    qr_size: activeConfig.qr_size,
+                    qr_enabled: activeConfig.qr_enabled
+                });
+                const res = await fetch(`/api/booklet-template/preview?${queryParams.toString()}`);
                 const data = await res.json();
                 if (data.status === 'success' && data.preview_url) {
                     if (dlBtn) dlBtn.href = data.preview_url;
@@ -1644,14 +1659,30 @@
             const qrBox = document.getElementById('stampQrBox');
 
             if (isProofActive) {
-                // First save draft coordinates silently and fetch latest proof image
+                // Fetch latest proof image on the fly with in-memory coordinates without saving or mutating database
                 try {
-                    await saveTemplateConfig(true, false);
-                    const res = await fetch(`/api/booklet-template/preview?department=${currentDept}&slot=${currentSlot}`);
+                    const queryParams = new URLSearchParams({
+                        department: currentDept,
+                        slot: currentSlot,
+                        control_x: activeConfig.control_x,
+                        control_y: activeConfig.control_y,
+                        control_font_size: activeConfig.control_font_size,
+                        control_enabled: activeConfig.control_enabled,
+                        srn_x: activeConfig.srn_x,
+                        srn_y: activeConfig.srn_y,
+                        srn_font_size: activeConfig.srn_font_size,
+                        srn_enabled: activeConfig.srn_enabled,
+                        qr_x: activeConfig.qr_x,
+                        qr_y: activeConfig.qr_y,
+                        qr_size: activeConfig.qr_size,
+                        qr_enabled: activeConfig.qr_enabled
+                    });
+                    const res = await fetch(`/api/booklet-template/preview?${queryParams.toString()}`);
                     const data = await res.json();
-                    if (data.status === 'success' && data.preview_image_url) {
+                    const proofUrl = data.preview_image_url || data.preview_url;
+                    if (data.status === 'success' && proofUrl) {
                         if (proofImg) {
-                            proofImg.src = data.preview_image_url;
+                            proofImg.src = proofUrl;
                             proofImg.style.display = 'block';
                         }
                     }
@@ -1751,14 +1782,11 @@
                 });
                 const data = await res.json();
                 if (res.ok && data.status === 'success') {
-                    if (activeConfig) {
-                        activeConfig.has_pdf_file = true;
-                        activeConfig.is_configured = false;
+                    const previewUrl = data.preview_image_url || data.preview_url;
+                    if (previewUrl) {
+                        setCanvasBackground(previewUrl);
                     }
-                    document.getElementById('activePdfName').innerText = `active_template_${currentDept}_slot${currentSlot}.pdf (🟡 Draft / Unsaved)`;
-                    if (data.preview_image_url) {
-                        setCanvasBackground(data.preview_image_url);
-                    }
+                    await loadTemplateConfig(currentDept, currentSlot);
                     await refreshDeptStatuses();
                     showToast(`[${currentDept} - Template ${currentSlot}] ` + data.message, 'info', 'Template Staged in Draft');
                 } else {
@@ -1766,6 +1794,10 @@
                 }
             } catch (err) {
                 showToast('Network error uploading template: ' + err.message, 'error', 'Network Error');
+            } finally {
+                if (e && e.target) {
+                    e.target.value = '';
+                }
             }
         }
 
@@ -1915,16 +1947,28 @@
             window.lanSync.onUpdate(async (payload) => {
                 if (!payload) return;
                 const evt = payload.event;
-                if (evt === 'TEMPLATE_UPDATED' || evt === 'TEMPLATE_DELETED' || evt === 'PROGRAM_CREATED' || evt === 'PROGRAM_UPDATED' || evt === 'PROGRAM_DELETED') {
-                    const evtDept = (payload.department || '').toUpperCase();
-                    const evtSlot = parseInt(payload.slot || 1);
-                    const updatedBy = payload.updated_by || 'Another terminal';
-                    const userRole = payload.role ? ` (${payload.role})` : '';
+                if (evt === 'TEMPLATE_UPDATED' || evt === 'TEMPLATE_DELETED' || evt === 'PROGRAM_CREATED' || evt === 'PROGRAM_UPDATED' || evt === 'PROGRAM_DELETED' || evt === 'VERSION_DESYNC_DETECTED') {
+                    const details = payload.details || {};
+                    // If it is a TEMPLATE_UPDATED event, only sync if it was saved as official!
+                    if (evt === 'TEMPLATE_UPDATED' && details.is_official === false) {
+                        return;
+                    }
+                    // Filter out self-echoes so the operator who initiated the save does not receive their own broadcast and reset their canvas
+                    const currentUsername = (activeUser && (activeUser.username || activeUser.full_name)) || '';
+                    if (details.updated_by && currentUsername && details.updated_by.toLowerCase() === currentUsername.toLowerCase()) {
+                        return;
+                    }
+                    const evtDept = (details.department || payload.department || '').toUpperCase();
+                    const evtSlot = parseInt(details.slot || payload.slot || 1);
+                    const updatedBy = details.updated_by || payload.updated_by || 'Another terminal';
+                    const userRole = (details.role || payload.role) ? ` (${details.role || payload.role})` : '';
 
                     // Invalidate caches
                     try {
                         if (evtDept && evtSlot) {
                             sessionStorage.removeItem(`${TPL_CONFIG_CACHE_PREFIX}${evtDept}_slot${evtSlot}`);
+                        } else {
+                            sessionStorage.removeItem(`${TPL_CONFIG_CACHE_PREFIX}${currentDept}_slot${currentSlot}`);
                         }
                         sessionStorage.removeItem(TPL_STATUS_CACHE_KEY);
                         if (evt && evt.startsWith('PROGRAM_')) {
@@ -1940,8 +1984,8 @@
                         await refreshDeptStatuses();
                     }
 
-                    // If the active department & slot matches the modified template
-                    if (evtDept === currentDept && evtSlot === currentSlot) {
+                    // If the active department & slot matches the modified template, or version desync
+                    if (!evtDept || (evtDept === currentDept && evtSlot === currentSlot)) {
                         const checkAndReload = async () => {
                             // If user is currently dragging an element on canvas, defer reload slightly
                             if (document.querySelector('.is-dragging')) {

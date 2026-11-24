@@ -1316,7 +1316,13 @@ def register_ream(request_data: ReamRequest, db: Session = Depends(get_db)):
     unused_carryover = max(0, (reams_already_used * 500 + prev_excess) - sheets_already_consumed)
 
     target_needed = course_metric.get("target_production", 0) if course_metric else 0
-    reams_needed_quota = course_metric.get("reams_needed", 0) if course_metric else 0
+    sheets_needed_for_target = max(0, (target_needed * sheets_per_b) - unused_carryover) if sheets_per_b > 0 else 0
+    reams_for_target = math.ceil(sheets_needed_for_target / 500) if sheets_needed_for_target > 0 else 0
+    reams_needed_quota = max(
+        int(course_metric.get("base_reams_needed", 0) or 0) if course_metric else 0,
+        int(course_metric.get("reams_needed", 0) or 0) if course_metric else 0,
+        reams_for_target
+    )
     if ream_count > reams_needed_quota:
         raise HTTPException(
             status_code=400,
@@ -2924,11 +2930,12 @@ def check_dss_alert(db: Session = Depends(get_db)):
     total_prev_excess_credited = metrics.get("total_prev_excess_credited", 0)
     total_sheets_needed = metrics.get("total_sheets_needed", 0)
     total_reams_to_procure = metrics.get("total_reams_to_procure", 0)
+    sum_course_planned_reams = metrics.get("sum_course_planned_reams", 0)
     sum_course_rounded_reams = metrics.get("sum_course_rounded_reams", total_reams_to_procure)
     buffer_pct = metrics.get("buffer_percent", 0.0)
 
-    # Reams recommendation aligns strictly with course-level procurement sum (e.g. 82 whole reams)
-    reams_recommended = sum_course_rounded_reams if sum_course_rounded_reams > 0 else total_reams_to_procure
+    # Reams recommendation aligns strictly with course-level procurement sum (e.g. 4 whole reams planned)
+    reams_recommended = sum_course_planned_reams if sum_course_planned_reams > 0 else (sum_course_rounded_reams if sum_course_rounded_reams > 0 else total_reams_to_procure)
 
     # 3. Decision Support Logic (Is there production demand / deficit?)
     if total_target_production > 0:
@@ -2938,10 +2945,10 @@ def check_dss_alert(db: Session = Depends(get_db)):
         loose_sheets = total_sheets_needed % 500
         usage_text = f"{exact_reams} Ream(s) and {loose_sheets} paper sheets" if exact_reams > 0 else f"{loose_sheets} paper sheets"
 
-        # Format course breakdown summary for admin guidance
+        # Format course breakdown summary for admin guidance (using planned reams per course)
         course_parts = []
         for c_code, c_info in metrics.get("courses", {}).items():
-            c_reams = c_info.get("reams_needed", 0)
+            c_reams = c_info.get("planned_reams_needed") if c_info.get("planned_reams_needed") is not None else c_info.get("reams_needed", 0)
             course_parts.append(f"{c_code}: {c_reams} Ream{'s' if c_reams != 1 else ''}")
         course_breakdown_text = f" ({', '.join(course_parts)})" if course_parts else ""
 
@@ -2957,6 +2964,7 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "is_buffer_exhausted": metrics.get("is_buffer_exhausted", False),
             "total_spoilage_sheets": metrics.get("total_spoilage_sheets", 0),
             "total_buffer_sheets": metrics.get("total_buffer_sheets", 0),
+            "total_paper_deficit_sheets": metrics.get("total_paper_deficit_sheets", 0),
             "buffer_overrun_sheets": metrics.get("buffer_overrun_sheets", 0),
             "recommended_additional_reams": metrics.get("recommended_additional_reams", 0),
             "estimated_budget_increase": metrics.get("estimated_budget_increase", 0.0),
@@ -2976,6 +2984,7 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "sheets_per_booklet": sheets_per_b,
             "yield_per_ream": yield_per_r,
             "reams_needed": reams_recommended,
+            "sum_course_planned_reams": sum_course_planned_reams,
             "sum_course_rounded_reams": sum_course_rounded_reams,
             "total_reams_to_procure": reams_recommended,
             "courses": metrics.get("courses", {}),
@@ -2983,11 +2992,19 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "pending_unlock_count": pending_unlock_count
         }
 
-    if metrics.get("is_buffer_exhausted"):
+    if metrics.get("is_buffer_exhausted") or metrics.get("total_paper_deficit_sheets", 0) > 0:
         sp_sheets = metrics.get("total_spoilage_sheets", 0)
         buf_sheets = metrics.get("total_buffer_sheets", 0)
+        deficit_sheets = metrics.get("total_paper_deficit_sheets", 0)
+        overrun_sheets = metrics.get("buffer_overrun_sheets", 0)
         add_reams = metrics.get("recommended_additional_reams", 1)
         est_cost = metrics.get("estimated_budget_increase", 0.0)
+
+        if deficit_sheets > 0:
+            msg = f"Paper Allocation Deficit: Material wastage has exceeded excess paper reserves by {deficit_sheets:,} sheets, cutting into student booklet demand. Procure +{add_reams} ream(s) (Est. +₱{est_cost:,.2f}) in Settings to avoid booklet shortages."
+        else:
+            msg = f"Safety Buffer Exhausted: Cumulative spoilage ({sp_sheets:,} sheets) exceeds allocated safety buffer ({buf_sheets:,} sheets). Procure +{add_reams} ream(s) (Est. +₱{est_cost:,.2f}) in Settings to avoid stockouts."
+
         return {
             "alert": True,
             "is_configured": True,
@@ -2995,15 +3012,15 @@ def check_dss_alert(db: Session = Depends(get_db)):
             "is_buffer_exhausted": True,
             "total_spoilage_sheets": sp_sheets,
             "total_buffer_sheets": buf_sheets,
-            "buffer_overrun_sheets": metrics.get("buffer_overrun_sheets", 0),
+            "total_paper_deficit_sheets": deficit_sheets,
+            "buffer_overrun_sheets": overrun_sheets,
             "recommended_additional_reams": add_reams,
             "estimated_budget_increase": est_cost,
             "ream_price": metrics.get("ream_price", 250.0),
             "status": "buffer_exhausted",
-            "message": f"Safety Buffer Exhausted: Cumulative spoilage ({sp_sheets:,} sheets) exceeds allocated safety buffer ({buf_sheets:,} sheets). Procure +{add_reams} ream(s) (Est. +₱{est_cost:,.2f}) to avoid stockouts.",
-            "reams_needed": add_reams,
+            "message": msg,
             "deficit_booklets": 0,
-            "deficit_sheets": 0,
+            "deficit_sheets": deficit_sheets,
             "buffer_booklets": total_buffer_booklets,
             "buffer_sheets": total_buffer_booklets * sheets_per_b,
             "buffer_percent": buffer_pct,
@@ -6152,9 +6169,23 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
 
         # Net paper sheets to procure after crediting incoming excess paper stock on hand
         net_sheets = max(0, gross_sheets - inc_excess)
-        dept_reams = math.ceil(net_sheets / 500) if net_sheets > 0 else 0
+        base_reams = math.ceil(net_sheets / 500) if net_sheets > 0 else 0
+        base_allocated_sheets = (base_reams * 500) + inc_excess
+        base_excess = max(0, base_allocated_sheets - gross_sheets)
+
+        # Deficit replenishment for material wastage (spoilage) in previous period
+        dept_spoilage_query = db.query(func.sum(models.MaterialLoss.sheets_wasted)).filter(
+            models.MaterialLoss.academic_period == prev_period,
+            models.MaterialLoss.department == d_code
+        ).scalar() or 0
+        dept_spoilage_sheets = int(dept_spoilage_query)
+
+        spoilage_deficit_sheets = max(0, dept_spoilage_sheets - base_excess)
+        spoilage_deficit_reams = math.ceil(spoilage_deficit_sheets / 500) if spoilage_deficit_sheets > 0 else 0
+
+        dept_reams = base_reams + spoilage_deficit_reams
         dept_procured_sheets = dept_reams * 500
-        excess_sheets = max(0, (dept_procured_sheets + inc_excess) - gross_sheets)
+        excess_sheets = max(0, (dept_procured_sheets + inc_excess) - gross_sheets - dept_spoilage_sheets)
 
         # Undistributed available physical ready booklets in department vault as of prev_period
         prev_rank = parse_period_chronological_rank(prev_period) if prev_period else 0
@@ -6179,6 +6210,7 @@ def get_previous_period_financial_summary(current_period: Optional[str], db: Ses
             "sheets_procured": dept_procured_sheets,
             "distributed_booklets": dept_distributed,
             "sheets_consumed": gross_sheets,
+            "spoilage_sheets": dept_spoilage_sheets,
             "excess_sheets": excess_sheets,
             "available_booklets": dept_available_booklets
         }
@@ -6320,7 +6352,40 @@ def calculate_course_production_metrics(
             for p in active_progs
         ]
 
-    data = {}
+    # Authorized material budget & pricing parameters
+    allocated_budget = None
+    if period_cfg and period_cfg.department_ream_budget is not None and period_cfg.department_ream_budget > 0:
+        allocated_budget = float(period_cfg.department_ream_budget)
+    elif settings and settings.department_ream_budget is not None and settings.department_ream_budget > 0:
+        allocated_budget = float(settings.department_ream_budget)
+
+    if override_ream_price is not None:
+        effective_ream_price = float(override_ream_price)
+    else:
+        effective_ream_price = float(
+            (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
+            or (settings.ream_price if settings and settings.ream_price is not None else None)
+            or 250.0
+        )
+
+    staples_per_booklet = int(
+        (period_cfg.staples_per_booklet if period_cfg and period_cfg.staples_per_booklet is not None else None)
+        or (settings.staples_per_booklet if settings and settings.staples_per_booklet is not None else None)
+        or 2
+    )
+    staples_per_box = int(
+        (period_cfg.staples_per_box if period_cfg and period_cfg.staples_per_box is not None else None)
+        or (settings.staples_per_box if settings and settings.staples_per_box is not None else None)
+        or 1000
+    )
+    staples_box_price = float(
+        (period_cfg.staples_box_price if period_cfg and period_cfg.staples_box_price is not None else None)
+        or (settings.staples_box_price if settings and settings.staples_box_price is not None else None)
+        or 50.0
+    )
+
+    # --- PASS 1: Calculate course-level baseline demand and raw wastage deficit ---
+    pre_courses = []
     for p_info in program_list:
         dept = p_info["code"]
         course_sheets_per_b = int(p_info.get("sheets_per_booklet") or sheets_per_b)
@@ -6346,11 +6411,7 @@ def calculate_course_production_metrics(
         
         # Strictly preceding period batches (Prior Buffer Stock carried over into this period)
         prior_batch_ids = [b.id for b in all_dept_batches if b.registered_period and parse_period_chronological_rank(b.registered_period) < active_rank] if active_rank > 0 else []
-        
-        # Current period batches
         current_batch_ids = [b.id for b in all_dept_batches if b.registered_period == active_period]
-        
-        # As-of period batches (Cumulative stock up to and including active period)
         as_of_batch_ids = [b.id for b in all_dept_batches if b.registered_period and parse_period_chronological_rank(b.registered_period) <= active_rank] if active_rank > 0 else current_batch_ids
 
         prior_available_booklets = 0
@@ -6362,7 +6423,6 @@ def calculate_course_production_metrics(
                 if b.status in ["available", "loose_stock"]:
                     prior_available_booklets += 1
                 elif b.status == "distributed" and b.exam_period:
-                    # If distributed in active_period or a later period, it was ready in vault at the start of active_period
                     if parse_period_chronological_rank(b.exam_period) >= active_rank:
                         prior_available_booklets += 1
 
@@ -6376,7 +6436,6 @@ def calculate_course_production_metrics(
             models.Booklet.status.in_(["available", "loose_stock"])
         ).count() if as_of_batch_ids else 0
 
-        # Pending generated stock (batches stamped/printed on PDF but not yet activated into supply packs) for active period
         pending_stock = db.query(models.Booklet).join(models.MasterBatch).filter(
             models.MasterBatch.department == dept,
             models.MasterBatch.registered_period == active_period,
@@ -6385,60 +6444,151 @@ def calculate_course_production_metrics(
         
         total_existing_stock = available + pending_stock
 
-        # Two-Tier Production Requirement:
-        # Tier 1 (Finished Goods): Gross demand = Headcount + Safety Buffer.
         buffer_booklets = math.ceil(headcount * (buffer_pct / 100.0)) if (headcount > 0 and buffer_pct > 0) else 0
         gross_demand_booklets = headcount + buffer_booklets
-        
-        # Deduct ready physical booklets in stock (both prior buffer carryover and active vault stock).
         unfulfilled_demand = max(0, gross_demand_booklets - distributed)
         target_production = max(0, unfulfilled_demand - total_existing_stock)
         deficit = max(0, remaining_demand - total_existing_stock)
         
-        # Excess paper sheets carried over from prior examination period
         prev_excess = prev_course_excess_map.get(dept, {}).get("excess_sheets", 0)
 
-        # Batches converted in active period for this department (tracking actual paper consumption)
         dept_current_batches = [b for b in all_dept_batches if b.registered_period == active_period]
-        dept_consumed_sheets = sum(b.total_yield * (b.sheets_per_booklet or course_sheets_per_b) for b in dept_current_batches)
+        dept_batch_sheets = sum(b.total_yield * (b.sheets_per_booklet or course_sheets_per_b) for b in dept_current_batches)
         
-        # Add physical paper sheets wasted from printer jams, spoiled sheets, and defective booklets in active period
         dept_spoilage_query = db.query(func.sum(models.MaterialLoss.sheets_wasted)).filter(
             models.MaterialLoss.academic_period == active_period,
             models.MaterialLoss.department == dept
         ).scalar() or 0
         dept_spoilage_sheets = int(dept_spoilage_query)
-        dept_consumed_sheets += dept_spoilage_sheets
-        # Commercial whole reams required for actual sheets converted so far (avoiding over-counting individual small top-up batches)
+        dept_consumed_sheets = dept_batch_sheets + dept_spoilage_sheets
         net_converted_sheets = max(0, dept_consumed_sheets - prev_excess)
         dept_reams_used = math.ceil(net_converted_sheets / 500) if net_converted_sheets > 0 else 0
         dept_procured_sheets = dept_reams_used * 500
 
-        # Live paper sheets physically remaining in vault reserve from opened reams and prior excess
-        live_residual_sheets = max(0, (dept_procured_sheets + prev_excess) - dept_consumed_sheets)
-
-        # Baseline Planned Material Allocation across entire academic semester:
-        # Grounded strictly in Headcount + Safety Buffer Demand and whole reams procured.
-        # This represents raw blank paper sheets and is completely immune to booklet distributions or returns.
         course_planned_production = max(0, gross_demand_booklets - prior_available_booklets)
         course_planned_gross_sheets = course_planned_production * course_sheets_per_b
         course_planned_net_sheets = max(0, course_planned_gross_sheets - prev_excess)
-        course_planned_reams = math.ceil(course_planned_net_sheets / 500) if course_planned_net_sheets > 0 else 0
+        c_base_reams = math.ceil(course_planned_net_sheets / 500) if course_planned_net_sheets > 0 else 0
+        c_base_allocated_sheets = (c_base_reams * 500) + prev_excess
+        c_base_excess = max(0, c_base_allocated_sheets - course_planned_gross_sheets)
+        
+        c_spoilage_deficit_sheets = max(0, dept_spoilage_sheets - c_base_excess)
+        c_spoilage_deficit_reams = math.ceil(c_spoilage_deficit_sheets / 500) if c_spoilage_deficit_sheets > 0 else 0
 
-        # Tier 2 (Raw Materials): Exact paper sheets needed for current unfulfilled replenishment target
+        pre_courses.append({
+            "p_info": p_info,
+            "dept": dept,
+            "course_sheets_per_b": course_sheets_per_b,
+            "course_yield_per_r": course_yield_per_r,
+            "dept_enrollments": dept_enrollments,
+            "dept_enrollment_count": dept_enrollment_count,
+            "headcount": headcount,
+            "dept_has_enrollments": dept_has_enrollments,
+            "distributed": distributed,
+            "remaining_demand": remaining_demand,
+            "prior_available_booklets": prior_available_booklets,
+            "current_available_booklets": current_available_booklets,
+            "available": available,
+            "pending_stock": pending_stock,
+            "total_existing_stock": total_existing_stock,
+            "buffer_booklets": buffer_booklets,
+            "gross_demand_booklets": gross_demand_booklets,
+            "unfulfilled_demand": unfulfilled_demand,
+            "target_production": target_production,
+            "deficit": deficit,
+            "prev_excess": prev_excess,
+            "dept_batch_sheets": dept_batch_sheets,
+            "dept_spoilage_sheets": dept_spoilage_sheets,
+            "dept_consumed_sheets": dept_consumed_sheets,
+            "dept_reams_used": dept_reams_used,
+            "dept_procured_sheets": dept_procured_sheets,
+            "course_planned_production": course_planned_production,
+            "course_planned_gross_sheets": course_planned_gross_sheets,
+            "course_planned_net_sheets": course_planned_net_sheets,
+            "c_base_reams": c_base_reams,
+            "c_base_allocated_sheets": c_base_allocated_sheets,
+            "c_base_excess": c_base_excess,
+            "c_spoilage_deficit_sheets": c_spoilage_deficit_sheets,
+            "c_spoilage_deficit_reams": c_spoilage_deficit_reams
+        })
+
+    # --- PASS 2: Budget purchasing power and funded replacement reams distribution ---
+    sum_base_reams = sum(c["c_base_reams"] for c in pre_courses)
+    sum_spoilage_deficit_reams = sum(c["c_spoilage_deficit_reams"] for c in pre_courses)
+    sum_total_required_reams = sum_base_reams + sum_spoilage_deficit_reams
+
+    total_planned_bks = sum(c["course_planned_production"] for c in pre_courses)
+    staples_needed = total_planned_bks * staples_per_booklet
+    prev_staples = (prev_summary and prev_summary.get("prev_excess_staples")) or 0
+    net_staples = max(0, staples_needed - prev_staples)
+    staple_boxes = math.ceil(net_staples / staples_per_box) if staples_per_box > 0 and net_staples > 0 else 0
+    staples_cost = staple_boxes * staples_box_price
+    min_recommended_budget = round((sum_total_required_reams * effective_ream_price) + staples_cost, 2)
+
+    if allocated_budget is not None and allocated_budget > 0:
+        paper_funds = max(0.0, allocated_budget - staples_cost)
+        total_funded_reams = int(round(paper_funds / effective_ream_price, 4)) if effective_ream_price > 0 else 0
+    else:
+        total_funded_reams = sum_base_reams
+
+    extra_funded_reams = max(0, total_funded_reams - sum_base_reams)
+    
+    course_funded_map = {}
+    if extra_funded_reams >= sum_spoilage_deficit_reams:
+        for c_item in pre_courses:
+            course_funded_map[c_item["dept"]] = c_item["c_spoilage_deficit_reams"]
+    elif extra_funded_reams > 0:
+        rem_extra = extra_funded_reams
+        for c_item in sorted(pre_courses, key=lambda x: x["c_spoilage_deficit_sheets"], reverse=True):
+            need = c_item["c_spoilage_deficit_reams"]
+            alloc = min(rem_extra, need)
+            course_funded_map[c_item["dept"]] = alloc
+            rem_extra -= alloc
+    else:
+        for c_item in pre_courses:
+            course_funded_map[c_item["dept"]] = 0
+
+    # --- PASS 3: Finalize course metrics with funded allocation applied ---
+    data = {}
+    for c_item in pre_courses:
+        dept = c_item["dept"]
+        p_info = c_item["p_info"]
+        course_sheets_per_b = c_item["course_sheets_per_b"]
+        course_yield_per_r = c_item["course_yield_per_r"]
+        prev_excess = c_item["prev_excess"]
+        dept_spoilage_sheets = c_item["dept_spoilage_sheets"]
+        course_planned_gross_sheets = c_item["course_planned_gross_sheets"]
+        course_planned_net_sheets = c_item["course_planned_net_sheets"]
+        c_base_reams = c_item["c_base_reams"]
+        funded_deficit_reams = course_funded_map.get(dept, 0)
+
+        course_allocated_reams = c_base_reams + funded_deficit_reams
+        total_course_allocated_sheets = (course_allocated_reams * 500) + prev_excess
+        initial_planned_excess = max(0, total_course_allocated_sheets - course_planned_gross_sheets)
+        current_excess_sheets = max(0, initial_planned_excess - dept_spoilage_sheets)
+        dept_demand_deficit = max(0, dept_spoilage_sheets - initial_planned_excess)
+        course_excess_booklets = current_excess_sheets // course_sheets_per_b if course_sheets_per_b > 0 else 0
+
+        course_remaining_available_sheets = max(0, total_course_allocated_sheets - c_item["dept_consumed_sheets"])
+        live_residual_sheets = max(0, (c_item["dept_procured_sheets"] + prev_excess) - c_item["dept_consumed_sheets"])
+
+        # Tier 2 replenishment
+        target_production = c_item["target_production"]
         gross_sheets_needed = target_production * course_sheets_per_b
-        # Offset replenishment demand using actual live residual paper sheets currently in the vault
-        net_sheets_needed = max(0, gross_sheets_needed - live_residual_sheets)
-
+        # Paper required from whole reams to produce target booklets minus any prior period carryover
+        net_sheets_needed = max(0, gross_sheets_needed - prev_excess)
         reams_whole = net_sheets_needed // 500
         sheets_remainder = net_sheets_needed % 500
         reams_needed = math.ceil(net_sheets_needed / 500) if net_sheets_needed > 0 else 0
 
-        # Dynamic Residual Excess Reserve:
-        # Strictly represents physical blank paper sheets currently sitting in the vault.
-        # Excess sheets are only deducted when the user actually generates batch PDF front pages.
-        course_excess_sheets = live_residual_sheets
-        course_excess_booklets = course_excess_sheets // course_sheets_per_b if course_sheets_per_b > 0 else 0
+        planned_reams_whole = course_planned_net_sheets // 500
+        planned_sheets_remainder = course_planned_net_sheets % 500
+        if c_item["course_planned_production"] == 0:
+            planned_paper_text = "0 Sheets (Demand Met)"
+        elif course_planned_net_sheets == 0:
+            planned_paper_text = "0 Sheets (Excess Stock Met)"
+        else:
+            planned_paper_text = f"{course_allocated_reams} Whole Ream(s)" if course_allocated_reams > planned_reams_whole else f"{planned_reams_whole} Ream(s) & {planned_sheets_remainder} Sheet(s)"
 
         if target_production == 0:
             paper_required_text = "0 Sheets (Demand Met)"
@@ -6446,9 +6596,7 @@ def calculate_course_production_metrics(
             paper_required_text = "0 Sheets (Excess Stock Met)"
         else:
             paper_required_text = f"{reams_whole} Ream(s) & {sheets_remainder} Sheet(s)"
-            
-        projected_yield = target_production
-        
+
         data[dept] = {
             "code": dept,
             "name": p_info["name"],
@@ -6457,38 +6605,51 @@ def calculate_course_production_metrics(
             "sheets_per_booklet": course_sheets_per_b,
             "yield_per_ream": course_yield_per_r,
             "booklet_price": p_info.get("booklet_price"),
-            "headcount": headcount,
-            "enrollment_count": dept_enrollment_count,
-            "has_enrollments": dept_has_enrollments,
-            "distributed": distributed,
-            "remaining_demand": remaining_demand,
-            "available_stock": available,
-            "prior_available_booklets": prior_available_booklets,
-            "current_available_booklets": current_available_booklets,
-            "pending_stock": pending_stock,
-            "total_existing_stock": total_existing_stock,
-            "gross_demand_booklets": gross_demand_booklets,
-            "deficit": deficit,
+            "headcount": c_item["headcount"],
+            "enrollment_count": c_item["dept_enrollment_count"],
+            "has_enrollments": c_item["dept_has_enrollments"],
+            "distributed": c_item["distributed"],
+            "remaining_demand": c_item["remaining_demand"],
+            "available_stock": c_item["available"],
+            "prior_available_booklets": c_item["prior_available_booklets"],
+            "current_available_booklets": c_item["current_available_booklets"],
+            "pending_stock": c_item["pending_stock"],
+            "total_existing_stock": c_item["total_existing_stock"],
+            "gross_demand_booklets": c_item["gross_demand_booklets"],
+            "deficit": c_item["deficit"],
             "buffer_percent": buffer_pct,
-            "buffer_booklets": buffer_booklets,
+            "buffer_booklets": c_item["buffer_booklets"],
             "target_production": target_production,
             "gross_sheets_needed": gross_sheets_needed,
             "prev_excess_sheets": prev_excess,
             "live_residual_sheets": live_residual_sheets,
-            "dept_reams_used": dept_reams_used,
-            "dept_consumed_sheets": dept_consumed_sheets,
+            "dept_reams_used": c_item["dept_reams_used"],
+            "dept_consumed_sheets": c_item["dept_consumed_sheets"],
+            "dept_batch_sheets": c_item["dept_batch_sheets"],
+            "dept_spoilage_sheets": dept_spoilage_sheets,
             "net_sheets_needed": net_sheets_needed,
             "sheets_needed": net_sheets_needed,
             "reams_whole": reams_whole,
             "sheets_remainder": sheets_remainder,
             "paper_required_text": paper_required_text,
+            "planned_paper_text": planned_paper_text,
             "reams_needed": reams_needed,
-            "planned_production": course_planned_production,
-            "planned_reams_needed": course_planned_reams,
+            "planned_production": c_item["course_planned_production"],
+            "planned_reams_needed": course_allocated_reams,
             "planned_sheets_needed": course_planned_net_sheets,
-            "excess_sheets": course_excess_sheets,
+            "base_reams_needed": c_base_reams,
+            "funded_deficit_reams": funded_deficit_reams,
+            "spoilage_deficit_sheets": c_item["c_spoilage_deficit_sheets"],
+            "spoilage_deficit_reams": c_item["c_spoilage_deficit_reams"],
+            "total_required_reams": c_base_reams + c_item["c_spoilage_deficit_reams"],
+            "total_allocated_sheets": total_course_allocated_sheets,
+            "initial_excess_sheets": initial_planned_excess,
+            "excess_sheets": current_excess_sheets,
             "excess_booklets_yield": course_excess_booklets,
-            "projected_yield": projected_yield,
+            "paper_deficit_sheets": dept_demand_deficit,
+            "remaining_available_sheets": course_remaining_available_sheets,
+            "has_registered_batches": bool(c_item["dept_batch_sheets"] > 0),
+            "projected_yield": target_production,
             "sheets_per_booklet": course_sheets_per_b,
             "yield_per_ream": course_yield_per_r,
             "prev_period_name": prev_period_name,
@@ -6521,19 +6682,15 @@ def calculate_course_production_metrics(
     ).scalar() or 0)
     
     total_buffer_sheets = sum(c.get("buffer_booklets", 0) * c.get("sheets_per_booklet", sheets_per_b) for c in data.values())
-    buffer_overrun_sheets = max(0, total_spoilage_sheets - total_buffer_sheets)
-    is_buffer_exhausted = bool(total_buffer_sheets > 0 and total_spoilage_sheets > total_buffer_sheets)
+    total_paper_deficit_sheets = sum(c.get("paper_deficit_sheets", 0) for c in data.values())
     
-    if override_ream_price is not None:
-        ream_price = float(override_ream_price)
-    else:
-        ream_price = float(
-            (period_cfg.ream_price if period_cfg and period_cfg.ream_price is not None else None)
-            or (settings.ream_price if settings and settings.ream_price is not None else None)
-            or 250.0
-        )
-    recommended_additional_reams = math.ceil(buffer_overrun_sheets / 500) if buffer_overrun_sheets > 0 else (1 if is_buffer_exhausted else 0)
-    estimated_budget_increase = round(recommended_additional_reams * ream_price, 2)
+    buffer_overrun_sheets = total_paper_deficit_sheets
+    is_buffer_exhausted = bool(total_paper_deficit_sheets > 0)
+    
+    unfunded_deficit_reams = math.ceil(total_paper_deficit_sheets / 500) if total_paper_deficit_sheets > 0 else 0
+    recommended_additional_reams = unfunded_deficit_reams
+    estimated_budget_increase = round(unfunded_deficit_reams * effective_ream_price, 2)
+    ream_price = effective_ream_price
 
     return {
         "status": "success",
@@ -6550,6 +6707,7 @@ def calculate_course_production_metrics(
         "total_buffer_booklets": total_buffer_booklets,
         "total_buffer_sheets": total_buffer_sheets,
         "total_spoilage_sheets": total_spoilage_sheets,
+        "total_paper_deficit_sheets": total_paper_deficit_sheets,
         "buffer_overrun_sheets": buffer_overrun_sheets,
         "is_buffer_exhausted": is_buffer_exhausted,
         "recommended_additional_reams": recommended_additional_reams,
@@ -6563,6 +6721,11 @@ def calculate_course_production_metrics(
         "total_reams_to_procure": total_reams_to_procure,
         "sum_course_planned_reams": sum_course_planned_reams,
         "sum_course_rounded_reams": sum_course_rounded_reams,
+        "sum_course_base_reams": sum_base_reams,
+        "sum_course_required_reams": sum_total_required_reams,
+        "min_recommended_budget": min_recommended_budget,
+        "total_funded_reams": total_funded_reams,
+        "allocated_budget": allocated_budget,
         "total_sheets_procured": total_sheets_procured,
         "excess_sheets": total_excess_sheets,
         "excess_booklets_yield": total_excess_booklets,
@@ -7007,7 +7170,15 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             prev_excess = c_metric.get("prev_excess_sheets", 0)
             gross_sheets = c_sheets if c_sheets > 0 else (c_metric.get("gross_sheets_needed", sheets_used))
             net_sheets = max(0, gross_sheets - prev_excess)
-            course_reams_needed = math.ceil(net_sheets / 500) if net_sheets > 0 else 0
+            course_base_reams = math.ceil(net_sheets / 500) if net_sheets > 0 else 0
+            if c_metric.get("base_reams_needed") is not None and c_metric.get("base_reams_needed") > 0:
+                course_base_reams = c_metric.get("base_reams_needed")
+
+            c_spoilage_deficit_reams = c_metric.get("spoilage_deficit_reams", 0)
+            c_spoilage_sheets = c_metric.get("dept_spoilage_sheets", 0)
+            course_total_reams = c_metric.get("total_required_reams", course_base_reams + c_spoilage_deficit_reams)
+            if not course_total_reams:
+                course_total_reams = course_base_reams + c_spoilage_deficit_reams
 
             course_actual_paper[code] = {
                 "code": code,
@@ -7020,19 +7191,28 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
                 "net_sheets": net_sheets,
                 "reams_whole": r_whole,
                 "sheets_remainder": s_rem,
-                "reams_converted": course_reams_needed,
+                "base_reams": course_base_reams,
+                "spoilage_deficit_reams": c_spoilage_deficit_reams,
+                "dept_spoilage_sheets": c_spoilage_sheets,
+                "total_required_reams": course_total_reams,
+                "reams_converted": course_total_reams,
                 "converted_sheets": c_sheets,
-                "reams_needed": course_reams_needed,
+                "reams_needed": course_total_reams,
                 "display": f"{r_whole} ream(s) & {s_rem} paper sheets ({sheets_used:,} sheets)" if sheets_used > 0 else (
-                    f"{course_reams_needed} ream(s) converted ({c_sheets:,} sheets)" if c_sheets > 0 else "0 paper sheets"
+                    f"{course_total_reams} ream(s) converted ({c_sheets:,} sheets)" if c_sheets > 0 else "0 paper sheets"
                 )
             }
             total_actual_consumed_sheets += sheets_used
             total_actual_consumed_booklets += dist_b
 
-        sum_actual_course_reams = sum(c["reams_needed"] for c in course_actual_paper.values()) if course_actual_paper else 0
+        sum_actual_course_reams = sum(c["total_required_reams"] for c in course_actual_paper.values()) if course_actual_paper else 0
         effective_reams = sum_actual_course_reams if sum_actual_course_reams > 0 else (course_metrics.get("sum_course_planned_reams", 0) or 0)
         paper_cost = effective_reams * ream_price
+
+        sum_base_course_reams = sum(c["base_reams"] for c in course_actual_paper.values()) if course_actual_paper else 0
+        finished_paper_cost = sum_base_course_reams * ream_price
+        spoilage_paper_cost = max(0.0, paper_cost - finished_paper_cost)
+
         total_staples_consumed = total_generated * staples_per_booklet
         # Only booklets manufactured in batches belonging to the active period consume current staples.
         # Distributed booklets from carried-over vault stock were already bound and accounted for in past periods.
@@ -7049,6 +7229,7 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         whole_boxes_to_buy = math.ceil(net_staples_needed / staples_per_box) if net_staples_needed > 0 and staples_per_box > 0 else 0
         staples_cost = whole_boxes_to_buy * staples_box_price
         production_cost = paper_cost + staples_cost
+        finished_production_cost = finished_paper_cost + staples_cost
 
         # Material Spoilage / Net Loss calculation for the active period
         period_material_losses = db.query(models.MaterialLoss).filter(
@@ -7058,7 +7239,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
         total_spoilage_sheets = sum(m.sheets_wasted for m in period_material_losses)
         total_spoilage_booklets = sum(m.quantity for m in period_material_losses if m.loss_type == "whole_booklet")
 
-        net_income = combined_subtotal - igp_share - production_cost - total_net_loss_cost
+        # Standard Cost Accounting: Total Direct Materials (Paper + Staples) deducted once
+        # Replacement reams are funded under direct materials; no double deduction of material loss cost
+        net_income = combined_subtotal - igp_share - production_cost
 
         procured_staples = whole_boxes_to_buy * staples_per_box
         residual_excess_staples = max(0, (procured_staples + prev_excess_staples) - staples_needed)
@@ -7136,7 +7319,8 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
 
         # Direct materials required to suffice total semester demand
         planned_reams_sum = course_metrics.get("sum_course_planned_reams", 0) or 0
-        effective_demand_reams = max(effective_reams, planned_reams_sum)
+        additional_reams = int(course_metrics.get("recommended_additional_reams", 0) or 0)
+        effective_demand_reams = max(effective_reams, planned_reams_sum) + additional_reams
         expected_paper_cost = round(effective_demand_reams * ream_price, 2)
         expected_materials_cost = round(expected_paper_cost + staples_cost, 2)
 
@@ -7160,6 +7344,9 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "prev_period_name": prev_summary.get("prev_period_name", "") if has_prior_period else "",
             "department_ream_budget": department_ream_budget,
             "reams_purchasing_power": reams_purchasing_power,
+            "effective_demand_reams": effective_demand_reams,
+            "total_paper_deficit_sheets": course_metrics.get("total_paper_deficit_sheets", 0),
+            "recommended_additional_reams": additional_reams,
             "accounts_receivable": accounts_receivable,
             "accounts_receivable_cs": accounts_receivable_cs,
             "accounts_receivable_it": accounts_receivable_it,
@@ -7182,8 +7369,11 @@ def get_dashboard_stats(period: str = None, db: Session = Depends(get_db)):
             "collected_by_dept": collected_by_dept,
             "accounts_payable": igp_share,
             "paper_cost": paper_cost,
+            "finished_paper_cost": finished_paper_cost,
+            "spoilage_paper_cost": spoilage_paper_cost,
             "staples_cost": staples_cost,
             "production_cost": production_cost,
+            "finished_production_cost": finished_production_cost,
             "staples_box_price": staples_box_price,
             "staples_per_box": staples_per_box,
             "staples_per_booklet": staples_per_booklet,
@@ -7537,6 +7727,11 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
         expert_advice.append("System analyzing active period and inventory variables...")
 
     # 3. Build Structured Recommendation Object for Modern UI
+    procure_reams_display = 0
+    procure_sheets_display = 0
+    excess_sheets_display = course_metrics.get("excess_sheets", 0)
+    excess_booklets_display = course_metrics.get("excess_booklets_yield", 0)
+
     if is_settings_unconfigured:
         status_title = "Awaiting System Settings Configuration"
         status_type = "standby"
@@ -7557,19 +7752,19 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
             "Verify curriculum subjects and academic program assignments before printing booklets."
         ]
     elif total_target_production > 0:
-        if "Final" in period_name:
+        if period_name and "Final" in period_name:
             status_title = "Semester Ending (Final Exam)"
             status_type = "danger"
             badge_color = "#e74c3c"
-        elif "Midterm" in period_name:
+        elif period_name and "Midterm" in period_name:
             status_title = "Critical Peak Demand (Midterm Exam)"
             status_type = "critical"
             badge_color = "#c0392b"
-        elif "Midyear" in period_name:
+        elif period_name and "Midyear" in period_name:
             status_title = "Midyear Term Demand"
             status_type = "warning"
             badge_color = "#e67e22"
-        elif "Prelims" in period_name:
+        elif period_name and "Prelims" in period_name:
             status_title = "Normal Deficit (Prelims Exam)"
             status_type = "warning"
             badge_color = "#e67e22"
@@ -7579,27 +7774,36 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
             badge_color = "#d97706"
 
         buf_note = f" (+{buffer_pct:g}% safety buffer included)" if buffer_pct > 0 else ""
-        procure_reams_display = sum_course_rounded_reams if sum_course_rounded_reams > 0 else total_reams_to_procure
+        total_required_reams = course_metrics.get("sum_course_required_reams") or course_metrics.get("sum_course_planned_reams") or sum_course_rounded_reams
+        procure_reams_display = total_required_reams if total_required_reams > 0 else (sum_course_rounded_reams if sum_course_rounded_reams > 0 else total_reams_to_procure)
         procure_sheets_display = procure_reams_display * 500
-        excess_sheets_display = max(0, procure_sheets_display - total_sheets_needed)
-        excess_booklets_display = excess_sheets_display // sheets_per_b if sheets_per_b > 0 else 0
+        excess_sheets_display = course_metrics.get("excess_sheets", 0)
+        excess_booklets_display = course_metrics.get("excess_booklets_yield", 0)
+
+        spoilage_sheets_all = course_metrics.get("total_spoilage_sheets", 0)
+        spoilage_reams_all = course_metrics.get("recommended_additional_reams", 0)
+        spoilage_note = f" (includes +{spoilage_reams_all} ream(s) to replace {spoilage_sheets_all:,} sheets lost to material wastage)" if spoilage_reams_all > 0 else ""
 
         summary_text = (
             f"Production needed across {len(deficit_courses)} course(s): Total target of {total_target_production:,} booklets "
             f"({total_sheets_needed:,} paper sheets){buf_note}. "
-            f"Procure {procure_reams_display:,} Whole Ream(s) total from suppliers."
+            f"Procure {procure_reams_display:,} Whole Ream(s) total from suppliers{spoilage_note}."
         )
 
         action_steps = [
             f"Procure {procure_reams_display:,} Whole Ream(s) of bond paper ({procure_sheets_display:,} sheets total, 500 sheets/ream)."
         ]
         for c in deficit_courses:
+            c_reams = c.get("total_required_reams") or c.get("planned_reams_needed") or c.get("reams_needed", 0)
+            c_deficit_reams = c.get("spoilage_deficit_reams", 0)
+            deficit_note = f" (incl. +{c_deficit_reams} ream(s) wastage replacement)" if c_deficit_reams > 0 else ""
+            c_paper_text = c.get("planned_paper_text") or c.get("paper_required_text")
             action_steps.append(
-                f"Print & convert {c['target_production']:,} booklets for {c['name']} ({c['code']}) — exact paper: {c['paper_required_text']} ({c['sheets_needed']:,} sheets) using [{c['prefix']}] template."
+                f"Print & convert {c['target_production']:,} booklets for {c['name']} ({c['code']}) — exact paper: {c_reams} Whole Reams ({c_paper_text}{deficit_note}) using [{c['prefix']}] template."
             )
-        if excess_sheets > 0:
+        if excess_sheets_display > 0:
             action_steps.append(
-                f"Reserve the remaining {excess_sheets:,} excess paper sheets as buffer stock (yields up to ~{excess_booklets_yield:,} reserve booklets)."
+                f"Reserve the remaining {excess_sheets_display:,} excess paper sheets as buffer stock (yields up to ~{excess_booklets_display:,} reserve booklets)."
             )
         action_steps.append(
             "Scan and activate generated Master QR packs in Booklet Generator before releasing to instructors."
@@ -7630,24 +7834,37 @@ def reorder_decision_expert(db: Session = Depends(get_db)):
             "prev_excess_sheets": c.get("prev_excess_sheets", 0),
             "net_sheets_needed": c.get("net_sheets_needed", c["sheets_needed"]),
             "sheets_needed": c["sheets_needed"],
-            "reams_needed": c.get("reams_needed", math.ceil(c["sheets_needed"] / 500) if c["sheets_needed"] > 0 else 0),
+            "reams_needed": c.get("total_required_reams", c.get("planned_reams_needed", c.get("reams_needed", math.ceil(c["sheets_needed"] / 500) if c["sheets_needed"] > 0 else 0))),
+            "base_reams_needed": c.get("base_reams_needed", c.get("reams_needed", 0)),
+            "spoilage_deficit_reams": c.get("spoilage_deficit_reams", 0),
+            "spoilage_deficit_sheets": c.get("spoilage_deficit_sheets", 0),
+            "total_required_reams": c.get("total_required_reams", c.get("planned_reams_needed", 0)),
+            "planned_reams_needed": c.get("planned_reams_needed", 0),
+            "planned_paper_text": c.get("planned_paper_text", c.get("paper_required_text")),
             "excess_sheets": c.get("excess_sheets", 0),
             "excess_booklets_yield": c.get("excess_booklets_yield", 0),
             "reams_whole": c["reams_whole"],
             "sheets_remainder": c["sheets_remainder"],
-            "paper_required_text": c["paper_required_text"],
+            "paper_required_text": c.get("planned_paper_text", c["paper_required_text"]),
             "is_satisfied": c["is_satisfied"]
         }
         for c in courses_dict.values()
     ]
+
+    spoilage_sheets_all = course_metrics.get("total_spoilage_sheets", 0)
+    spoilage_reams_all = course_metrics.get("recommended_additional_reams", 0)
 
     recommendation = {
         "status_title": status_title,
         "status_type": status_type,
         "badge_color": badge_color,
         "summary": summary_text,
-        "total_reams_to_procure": sum_course_rounded_reams,
-        "sum_course_rounded_reams": sum_course_rounded_reams,
+        "total_reams_to_procure": procure_reams_display,
+        "sum_course_rounded_reams": procure_reams_display,
+        "sum_course_required_reams": procure_reams_display,
+        "sum_course_planned_reams": course_metrics.get("sum_course_planned_reams", procure_reams_display),
+        "spoilage_deficit_reams": spoilage_reams_all,
+        "spoilage_deficit_sheets": spoilage_sheets_all,
         "total_sheets_needed": total_sheets_needed,
         "total_sheets_procured": procure_sheets_display if total_target_production > 0 else 0,
         "excess_sheets": excess_sheets_display if total_target_production > 0 else 0,
@@ -8154,34 +8371,54 @@ def get_settings(db: Session = Depends(get_db)):
             "sheets_needed": c["sheets_needed"],
             "reams_needed": c["reams_needed"],
             "excess_sheets": c.get("excess_sheets", 0),
-            "excess_booklets_yield": c.get("excess_booklets_yield", 0)
+            "excess_booklets_yield": c.get("excess_booklets_yield", 0),
+            "sheets_per_booklet": c.get("sheets_per_booklet"),
+            "yield_per_ream": c.get("yield_per_ream"),
+            "paper_deficit_sheets": c.get("paper_deficit_sheets", 0),
+            "dept_spoilage_sheets": c.get("dept_spoilage_sheets", 0),
+            "base_reams_needed": c.get("base_reams_needed", c.get("reams_needed", 0)),
+            "spoilage_deficit_sheets": c.get("spoilage_deficit_sheets", 0),
+            "spoilage_deficit_reams": c.get("spoilage_deficit_reams", 0),
+            "total_required_reams": c.get("total_required_reams", c.get("planned_reams_needed", 0)),
+            "total_allocated_sheets": c.get("total_allocated_sheets", 0),
+            "remaining_available_sheets": c.get("remaining_available_sheets", 0),
+            "planned_reams_needed": c.get("planned_reams_needed", 0),
+            "planned_sheets_needed": c.get("planned_sheets_needed", 0)
         }
         for c in course_metrics.get("courses", {}).values()
     ]
+    sum_course_planned_reams = course_metrics.get("sum_course_planned_reams", 0)
     sum_course_rounded_reams = course_metrics.get("sum_course_rounded_reams", 0)
+    additional_reams = int(course_metrics.get("recommended_additional_reams", 0) or 0)
+    total_paper_deficit_sheets = int(course_metrics.get("total_paper_deficit_sheets", 0) or 0)
+    is_buffer_exhausted = bool(course_metrics.get("is_buffer_exhausted", False))
+    estimated_budget_increase = float(course_metrics.get("estimated_budget_increase", 0.0) or 0.0)
+    total_spoilage_sheets = int(course_metrics.get("total_spoilage_sheets", 0) or 0)
+
     total_booklet_demand = course_metrics.get("total_target_production", total_demand)
     if total_booklet_demand == 0:
         total_booklet_demand = total_demand
 
-    if yield_per_r and yield_per_r > 0 and total_demand > 0 and ream_p and ream_p > 0:
-        recommended_reams = sum_course_rounded_reams if sum_course_rounded_reams > 0 else math.ceil(total_demand / yield_per_r)
-        paper_budget = recommended_reams * ream_p
+    prev_summary_data = get_previous_period_financial_summary(period_name, db)
+    prev_excess_st = prev_summary_data.get("prev_excess_staples", 0) if prev_summary_data else 0
 
-        st_box_price = float(settings.staples_box_price if settings.staples_box_price is not None else 50.0)
-        st_per_box = int(settings.staples_per_box if settings.staples_per_box is not None else 1000)
-        st_per_booklet = int(settings.staples_per_booklet if settings.staples_per_booklet is not None else 2)
+    recommended_reams = course_metrics.get("sum_course_required_reams", (sum_course_planned_reams if sum_course_planned_reams > 0 else sum_course_rounded_reams) + additional_reams)
+    recommended_budget = course_metrics.get("min_recommended_budget")
 
-        total_staples = total_booklet_demand * st_per_booklet
-        staples_boxes = math.ceil(total_staples / st_per_box) if st_per_box > 0 else 0
-        staples_budget = staples_boxes * st_box_price
+    st_box_price = float(settings.staples_box_price if settings and settings.staples_box_price is not None else 50.0)
+    st_per_box = int(settings.staples_per_box if settings and settings.staples_per_box is not None else 1000)
+    st_per_booklet = int(settings.staples_per_booklet if settings and settings.staples_per_booklet is not None else 2)
 
-        recommended_budget = round(paper_budget + staples_budget, 2)
-    else:
-        recommended_reams = sum_course_rounded_reams
-        recommended_budget = 0.0
-        st_box_price = float(settings.staples_box_price if settings and settings.staples_box_price is not None else 50.0)
-        st_per_box = int(settings.staples_per_box if settings and settings.staples_per_box is not None else 1000)
-        st_per_booklet = int(settings.staples_per_booklet if settings and settings.staples_per_booklet is not None else 2)
+    if recommended_budget is None:
+        if yield_per_r and yield_per_r > 0 and total_demand > 0 and ream_p and ream_p > 0:
+            paper_budget = recommended_reams * ream_p
+            total_staples = total_booklet_demand * st_per_booklet
+            net_staples_needed = max(0, total_staples - prev_excess_st)
+            staples_boxes = math.ceil(net_staples_needed / st_per_box) if st_per_box > 0 and net_staples_needed > 0 else 0
+            staples_budget = staples_boxes * st_box_price
+            recommended_budget = round(paper_budget + staples_budget, 2)
+        else:
+            recommended_budget = round(additional_reams * ream_p, 2) if additional_reams > 0 and ream_p else 0.0
 
     # Actual production batches generated for the period (for physical staple alignment)
     period_batches = db.query(models.MasterBatch).filter(models.MasterBatch.registered_period == period_name).all() if period_name else []
@@ -8191,8 +8428,6 @@ def get_settings(db: Session = Depends(get_db)):
         dept_actual_generated[b.department] = dept_actual_generated.get(b.department, 0) + b.total_yield
 
     actual_staples_consumed = total_generated * st_per_booklet if total_generated > 0 else 0
-    prev_summary_data = get_previous_period_financial_summary(period_name, db)
-    prev_excess_st = prev_summary_data.get("prev_excess_staples", 0) if prev_summary_data else 0
     actual_boxes = math.ceil(max(0, actual_staples_consumed - prev_excess_st) / st_per_box) if st_per_box > 0 and actual_staples_consumed > 0 else 0
     actual_residual_staples = max(0, (actual_boxes * st_per_box + prev_excess_st) - actual_staples_consumed) if total_generated > 0 else 0
 
@@ -8214,9 +8449,15 @@ def get_settings(db: Session = Depends(get_db)):
         "actual_staples_consumed": actual_staples_consumed,
         "actual_residual_staples": actual_residual_staples,
         "course_demands": course_demand_list,
+        "sum_course_planned_reams": sum_course_planned_reams,
         "sum_course_rounded_reams": sum_course_rounded_reams,
         "recommended_reams": recommended_reams,
         "recommended_budget": recommended_budget,
+        "total_paper_deficit_sheets": total_paper_deficit_sheets,
+        "is_buffer_exhausted": is_buffer_exhausted,
+        "recommended_additional_reams": additional_reams,
+        "estimated_budget_increase": estimated_budget_increase,
+        "total_spoilage_sheets": total_spoilage_sheets,
         "staples_box_price": float(settings.staples_box_price) if (settings and settings.staples_box_price is not None) else None,
         "staples_per_box": int(settings.staples_per_box) if (settings and settings.staples_per_box is not None) else None,
         "staples_per_booklet": int(settings.staples_per_booklet) if (settings and settings.staples_per_booklet is not None) else None,
@@ -8254,22 +8495,26 @@ def update_settings(req: SettingsUpdate, request: Request, db: Session = Depends
     sum_rounded_reams = course_metrics.get("sum_course_rounded_reams", 0)
     total_planned_bks = course_metrics.get("total_planned_production") or course_metrics.get("total_target_production", 0)
 
-    if sum_rounded_reams > 0 and req.ream_price:
-        paper_cost = sum_rounded_reams * req.ream_price
-        staples_needed = total_planned_bks * (req.staples_per_booklet if req.staples_per_booklet is not None else 2)
-        prev_summary = get_previous_period_financial_summary(req.active_period, db)
-        prev_staples = (prev_summary and prev_summary.get("prev_excess_staples")) or 0
-        net_staples = max(0, staples_needed - prev_staples)
-        staples_box_cap = req.staples_per_box if req.staples_per_box is not None else 1000
-        staple_boxes = math.ceil(net_staples / staples_box_cap) if staples_box_cap > 0 and net_staples > 0 else 0
-        staples_cost = staple_boxes * (req.staples_box_price if req.staples_box_price is not None else 50.0)
-        min_rec_budget = round(paper_cost + staples_cost, 2)
+    min_rec_budget = course_metrics.get("min_recommended_budget")
+    if min_rec_budget is None:
+        if sum_rounded_reams > 0 and req.ream_price:
+            paper_cost = sum_rounded_reams * req.ream_price
+            staples_needed = total_planned_bks * (req.staples_per_booklet if req.staples_per_booklet is not None else 2)
+            prev_summary = get_previous_period_financial_summary(req.active_period, db)
+            prev_staples = (prev_summary and prev_summary.get("prev_excess_staples")) or 0
+            net_staples = max(0, staples_needed - prev_staples)
+            staples_box_cap = req.staples_per_box if req.staples_per_box is not None else 1000
+            staple_boxes = math.ceil(net_staples / staples_box_cap) if staples_box_cap > 0 and net_staples > 0 else 0
+            staples_cost = staple_boxes * (req.staples_box_price if req.staples_box_price is not None else 50.0)
+            min_rec_budget = round(paper_cost + staples_cost, 2)
+        else:
+            min_rec_budget = 0.0
 
-        if req.department_ream_budget is not None and req.department_ream_budget < min_rec_budget:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Department material budget (₱{req.department_ream_budget:,.2f}) cannot be lower than the minimum recommended budget (₱{min_rec_budget:,.2f}) required for course production."
-            )
+    if min_rec_budget and req.department_ream_budget is not None and req.department_ream_budget < min_rec_budget:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Department material budget (₱{req.department_ream_budget:,.2f}) cannot be lower than the minimum recommended budget (₱{min_rec_budget:,.2f}) required for course production."
+        )
 
     if req.reorder_buffer_percent is None or req.reorder_buffer_percent < 0 or req.reorder_buffer_percent > 100:
         raise HTTPException(status_code=400, detail="Reorder buffer safety margin must be between 0% and 100%.")
@@ -8482,6 +8727,9 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "name": c["name"],
             "headcount": c["headcount"],
             "target_production": c["target_production"],
+            "gross_sheets_needed": c.get("gross_sheets_needed", 0),
+            "prev_excess_sheets": c.get("prev_excess_sheets", 0),
+            "net_sheets_needed": c.get("net_sheets_needed", c["sheets_needed"]),
             "sheets_needed": c["sheets_needed"],
             "reams_needed": c["reams_needed"],
             "distributed": c.get("distributed", 0),
@@ -8491,7 +8739,17 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "excess_sheets": c.get("excess_sheets", 0),
             "excess_booklets_yield": c.get("excess_booklets_yield", 0),
             "sheets_per_booklet": c.get("sheets_per_booklet"),
-            "yield_per_ream": c.get("yield_per_ream")
+            "yield_per_ream": c.get("yield_per_ream"),
+            "paper_deficit_sheets": c.get("paper_deficit_sheets", 0),
+            "dept_spoilage_sheets": c.get("dept_spoilage_sheets", 0),
+            "base_reams_needed": c.get("base_reams_needed", c.get("reams_needed", 0)),
+            "spoilage_deficit_sheets": c.get("spoilage_deficit_sheets", 0),
+            "spoilage_deficit_reams": c.get("spoilage_deficit_reams", 0),
+            "total_required_reams": c.get("total_required_reams", c.get("planned_reams_needed", 0)),
+            "total_allocated_sheets": c.get("total_allocated_sheets", 0),
+            "remaining_available_sheets": c.get("remaining_available_sheets", 0),
+            "planned_reams_needed": c.get("planned_reams_needed", 0),
+            "planned_sheets_needed": c.get("planned_sheets_needed", 0)
         }
         for c in course_metrics.get("courses", {}).values()
     ]
@@ -8509,38 +8767,35 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
     if total_booklet_demand == 0:
         total_booklet_demand = total_demand
     
+    additional_reams = int(course_metrics.get("recommended_additional_reams", 0) or 0)
+    total_paper_deficit_sheets = int(course_metrics.get("total_paper_deficit_sheets", 0) or 0)
+    is_buffer_exhausted = bool(course_metrics.get("is_buffer_exhausted", False))
+    estimated_budget_increase = float(course_metrics.get("estimated_budget_increase", 0.0) or 0.0)
+    total_spoilage_sheets = int(course_metrics.get("total_spoilage_sheets", 0) or 0)
+
+    recommended_reams = course_metrics.get("sum_course_required_reams", (sum_course_planned_reams if sum_course_planned_reams > 0 else sum_course_rounded_reams) + additional_reams)
+    recommended_budget = course_metrics.get("min_recommended_budget")
+
     if cfg:
         yield_per_r = cfg.yield_per_ream or (500 // cfg.sheets_per_booklet)
-        if total_demand > 0 and yield_per_r > 0 and cfg.ream_price:
-            effective_reams = sum_course_rounded_reams if sum_course_rounded_reams > 0 else (sum_course_planned_reams if sum_course_planned_reams > 0 else math.ceil(total_demand / yield_per_r))
-            recommended_reams = effective_reams
-            paper_budget = recommended_reams * float(cfg.ream_price)
+        st_box_price = float(cfg.staples_box_price if cfg.staples_box_price is not None else 50.0)
+        st_per_box = int(cfg.staples_per_box if cfg.staples_per_box is not None else 1000)
+        st_per_booklet = int(cfg.staples_per_booklet if cfg.staples_per_booklet is not None else 2)
 
-            st_box_price = float(cfg.staples_box_price if cfg.staples_box_price is not None else 50.0)
-            st_per_box = int(cfg.staples_per_box if cfg.staples_per_box is not None else 1000)
-            st_per_booklet = int(cfg.staples_per_booklet if cfg.staples_per_booklet is not None else 2)
+        total_staples = total_booklet_demand * st_per_booklet
+        prev_excess_staples = prev_summary.get("prev_excess_staples", 0) if prev_summary else 0
+        net_staples_needed = max(0, total_staples - prev_excess_staples)
+        staples_boxes = math.ceil(net_staples_needed / st_per_box) if st_per_box > 0 and net_staples_needed > 0 else 0
+        staples_budget = staples_boxes * st_box_price
+        procured_staples = staples_boxes * st_per_box
+        residual_excess_staples = max(0, (procured_staples + prev_excess_staples) - total_staples)
 
-            total_staples = total_booklet_demand * st_per_booklet
-            prev_excess_staples = prev_summary.get("prev_excess_staples", 0) if prev_summary else 0
-            net_staples_needed = max(0, total_staples - prev_excess_staples)
-            staples_boxes = math.ceil(net_staples_needed / st_per_box) if st_per_box > 0 and net_staples_needed > 0 else 0
-            staples_budget = staples_boxes * st_box_price
-            procured_staples = staples_boxes * st_per_box
-            residual_excess_staples = max(0, (procured_staples + prev_excess_staples) - total_staples)
-
-            recommended_budget = round(paper_budget + staples_budget, 2)
-        else:
-            recommended_reams = sum_course_rounded_reams
-            recommended_budget = 0.0
-            st_box_price = float(cfg.staples_box_price if cfg and cfg.staples_box_price is not None else 50.0)
-            st_per_box = int(cfg.staples_per_box if cfg and cfg.staples_per_box is not None else 1000)
-            st_per_booklet = int(cfg.staples_per_booklet if cfg and cfg.staples_per_booklet is not None else 2)
-            total_staples = 0
-            prev_excess_staples = 0
-            net_staples_needed = 0
-            staples_boxes = 0
-            staples_budget = 0.0
-            residual_excess_staples = 0
+        if recommended_budget is None:
+            if total_demand > 0 and yield_per_r > 0 and cfg.ream_price:
+                paper_budget = recommended_reams * float(cfg.ream_price)
+                recommended_budget = round(paper_budget + staples_budget, 2)
+            else:
+                recommended_budget = round(additional_reams * float(cfg.ream_price or 250.0), 2) if additional_reams > 0 else 0.0
 
         actual_staples_consumed = total_generated * st_per_booklet if total_generated > 0 else 0
         actual_boxes = math.ceil(max(0, actual_staples_consumed - prev_excess_staples) / st_per_box) if st_per_box > 0 and actual_staples_consumed > 0 else 0
@@ -8579,8 +8834,14 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "staples_budget": staples_budget,
             "residual_excess_staples": residual_excess_staples,
             "course_demands": course_demand_list,
+            "sum_course_planned_reams": sum_course_planned_reams,
             "sum_course_rounded_reams": sum_course_rounded_reams,
-            "previous_period_summary": prev_summary
+            "previous_period_summary": prev_summary,
+            "total_paper_deficit_sheets": total_paper_deficit_sheets,
+            "is_buffer_exhausted": is_buffer_exhausted,
+            "recommended_additional_reams": additional_reams,
+            "estimated_budget_increase": estimated_budget_increase,
+            "total_spoilage_sheets": total_spoilage_sheets
         }
     else:
         # Unconfigured period: carry over settings from preceding period or global system settings so admin does not have to retype
@@ -8647,16 +8908,22 @@ def get_period_configuration(period: str, db: Session = Depends(get_db)):
             "staples_box_price": carried_staples_box_price,
             "staples_per_box": carried_staples_per_box,
             "staples_per_booklet": carried_staples_per_booklet,
-            "recommended_budget": recommended_budget,
-            "recommended_reams": sum_course_rounded_reams,
+            "recommended_budget": course_metrics.get("min_recommended_budget", recommended_budget),
+            "recommended_reams": course_metrics.get("sum_course_required_reams", (sum_course_planned_reams if sum_course_planned_reams > 0 else sum_course_rounded_reams) + additional_reams),
             "total_demand": total_demand,
             "total_booklet_demand": total_booklet_demand,
             "actual_generated": 0,
             "actual_staples_consumed": 0,
             "actual_residual_staples": 0,
             "course_demands": course_demand_list,
+            "sum_course_planned_reams": sum_course_planned_reams,
             "sum_course_rounded_reams": sum_course_rounded_reams,
-            "previous_period_summary": prev_summary
+            "previous_period_summary": prev_summary,
+            "total_paper_deficit_sheets": total_paper_deficit_sheets,
+            "is_buffer_exhausted": is_buffer_exhausted,
+            "recommended_additional_reams": additional_reams,
+            "estimated_budget_increase": estimated_budget_increase,
+            "total_spoilage_sheets": total_spoilage_sheets
         }
 
 
@@ -9234,6 +9501,24 @@ def get_material_losses(
         total_prod_sheets = sum(b.total_yield * (b.sheets_per_booklet or 6) for b in period_batches)
         spoilage_rate_pct = round((total_sheets / total_prod_sheets * 100), 2) if total_prod_sheets > 0 else 0.0
 
+        # Calculate live course paper metrics for active period
+        metrics = calculate_course_production_metrics(db, active_period)
+        course_paper_stats = {}
+        for c_code, c_info in metrics.get("courses", {}).items():
+            course_paper_stats[c_code] = {
+                "code": c_code,
+                "name": c_info["name"],
+                "total_allocated_sheets": c_info.get("total_allocated_sheets", 0),
+                "initial_excess_sheets": c_info.get("initial_excess_sheets", 0),
+                "excess_sheets": c_info.get("excess_sheets", 0),
+                "excess_booklets_yield": c_info.get("excess_booklets_yield", 0),
+                "dept_spoilage_sheets": c_info.get("dept_spoilage_sheets", 0),
+                "paper_deficit_sheets": c_info.get("paper_deficit_sheets", 0),
+                "remaining_available_sheets": c_info.get("remaining_available_sheets", 0),
+                "has_registered_batches": c_info.get("has_registered_batches", False),
+                "sheets_per_booklet": c_info.get("sheets_per_booklet", 6)
+            }
+
         data = []
         for r in records:
             data.append({
@@ -9264,6 +9549,7 @@ def get_material_losses(
             "total_cost": total_cost,
             "reams_equivalent": total_reams_equiv,
             "spoilage_rate_pct": spoilage_rate_pct,
+            "course_paper_stats": course_paper_stats,
             "count": len(data),
             "records": data
         }
@@ -9373,6 +9659,44 @@ def create_material_loss(
 
         saved_ctrl_num = ", ".join(target_ids) if target_ids else ((req.booklet_control_num or "").strip() or None)
 
+        # Check course paper allocation limits and two-tier deduction
+        metrics = calculate_course_production_metrics(db, active_period)
+        c_stats = metrics.get("courses", {}).get(dept_clean)
+        
+        deficit_detected = False
+        deficit_sheets = 0
+        recommended_reams = 0
+        estimated_cost = 0.0
+
+        if c_stats and dept_clean not in ["GENERAL", "ALL"]:
+            has_registered = c_stats.get("has_registered_batches", False)
+            rem_sheets = c_stats.get("remaining_available_sheets", 0)
+            curr_excess = c_stats.get("excess_sheets", 0)
+            init_excess = c_stats.get("initial_excess_sheets", 0)
+            prior_spoilage = c_stats.get("dept_spoilage_sheets", 0)
+
+            if req.loss_type == "paper_sheet":
+                if has_registered:
+                    # Once exam booklets are registered in QR Registration, loose sheets only deduct from excess reserve
+                    if sheets_wasted > curr_excess:
+                        return {
+                            "status": "error",
+                            "message": f"Wastage ({sheets_wasted:,} sheets) exceeds available excess reserve ({curr_excess:,} sheets) for {dept_clean}. Booklet demand sheets are already locked in finished booklets registered via QR Registration."
+                        }
+                else:
+                    if sheets_wasted > rem_sheets:
+                        return {
+                            "status": "error",
+                            "message": f"Wastage ({sheets_wasted:,} sheets) exceeds total remaining available paper sheets ({rem_sheets:,} sheets) for {dept_clean}."
+                        }
+
+            new_total_spoilage = prior_spoilage + sheets_wasted
+            if new_total_spoilage > init_excess:
+                deficit_detected = True
+                deficit_sheets = new_total_spoilage - init_excess
+                recommended_reams = math.ceil(deficit_sheets / 500) if deficit_sheets > 0 else 1
+                estimated_cost = round(recommended_reams * ream_price, 2)
+
         loss_entry = models.MaterialLoss(
             academic_period=active_period,
             department=dept_clean,
@@ -9414,7 +9738,12 @@ def create_material_loss(
             "message": "Material spoilage successfully recorded as net loss.",
             "loss_id": loss_entry.id,
             "total_loss_cost": total_cost,
-            "sheets_wasted": sheets_wasted
+            "sheets_wasted": sheets_wasted,
+            "deficit_detected": deficit_detected,
+            "deficit_sheets": deficit_sheets,
+            "recommended_reams": recommended_reams,
+            "estimated_cost": estimated_cost,
+            "department": dept_clean
         }
     except Exception as e:
         db.rollback()
@@ -10143,19 +10472,20 @@ def update_booklet_template_api(req: schemas.BookletTemplateUpdate, db: Session 
         except Exception as e:
             print(f"Notice: Failed to update proof image on save: {e}")
 
-    notify_lan_mutation(
-        "TEMPLATE_UPDATED",
-        {
-            "template_id": config.id,
-            "department": dept,
-            "slot": slot_num,
-            "is_official": is_official,
-            "template_name": config.template_name,
-            "updated_by": req.updated_by or "User",
-            "role": req.role or "Staff"
-        },
-        db=db
-    )
+    if is_official:
+        notify_lan_mutation(
+            "TEMPLATE_UPDATED",
+            {
+                "template_id": config.id,
+                "department": dept,
+                "slot": slot_num,
+                "is_official": True,
+                "template_name": config.template_name,
+                "updated_by": req.updated_by or "User",
+                "role": req.role or "Staff"
+            },
+            db=db
+        )
     
     msg = f"Official template for {dept} {config.template_name} saved and activated for printing!" if is_official else f"{dept} {config.template_name} draft coordinates saved."
     return {
@@ -10218,32 +10548,36 @@ async def upload_booklet_template_pdf(
     except Exception as e:
         print(f"Notice: Failed to generate initial proof image on upload: {e}")
 
-    notify_lan_mutation(
-        "TEMPLATE_UPDATED",
-        {
-            "template_id": config.id,
-            "action": "pdf_upload",
-            "department": dept,
-            "slot": slot_num,
-            "template_name": config.template_name or f"Template {slot_num}",
-            "updated_by": updated_by or "User",
-            "role": role or "Staff"
-        },
-        db=db
-    )
     return {
-        "status": "success", 
-        "is_configured": False,
-        "has_pdf_file": True,
-        "department": dept,
-        "slot_number": slot_num,
-        "template_name": config.template_name or f"Template {slot_num}",
-        "message": f"Cover template for {dept} {config.template_name} uploaded to workspace. Calibrate and save as official template to activate for printing.",
-        "preview_image_url": preview_url
+        "status": "success",
+        "message": f"Successfully uploaded cover design PDF for {dept} ({config.template_name or f'Slot {slot_num}'}). Staged in DRAFT mode until saved as official.",
+        "filename": target_filename,
+        "preview_url": preview_url,
+        "preview_image_url": preview_url,
+        "is_configured": False
     }
 
 @app.get("/api/booklet-template/preview")
-def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Session = Depends(get_db)):
+@app.post("/api/booklet-template/preview")
+@app.get("/api/booklet-template/sample-preview")
+@app.post("/api/booklet-template/sample-preview")
+def generate_template_sample_preview_api(
+    department: str = "CS",
+    slot: int = 1,
+    control_x: Optional[float] = None,
+    control_y: Optional[float] = None,
+    control_font_size: Optional[int] = None,
+    control_enabled: Optional[bool] = None,
+    srn_x: Optional[float] = None,
+    srn_y: Optional[float] = None,
+    srn_font_size: Optional[int] = None,
+    srn_enabled: Optional[bool] = None,
+    qr_x: Optional[float] = None,
+    qr_y: Optional[float] = None,
+    qr_size: Optional[float] = None,
+    qr_enabled: Optional[bool] = None,
+    db: Session = Depends(get_db)
+):
     dept = (department or "CS").upper()
     valid_codes = [p.code for p in db.query(models.AcademicProgram).filter_by(is_active=True).all()]
     if valid_codes and dept not in valid_codes:
@@ -10256,6 +10590,21 @@ def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Sess
         slot_num = 1
 
     config = get_active_template_config(db, department=dept, slot=slot_num)
+
+    # In-memory overrides for live preview rendering without database commits or LAN mutation events
+    if control_x is not None: config.control_x = float(control_x)
+    if control_y is not None: config.control_y = float(control_y)
+    if control_font_size is not None: config.control_font_size = int(control_font_size)
+    if control_enabled is not None: config.control_enabled = bool(control_enabled)
+    if srn_x is not None: config.srn_x = float(srn_x)
+    if srn_y is not None: config.srn_y = float(srn_y)
+    if srn_font_size is not None: config.srn_font_size = int(srn_font_size)
+    if srn_enabled is not None: config.srn_enabled = bool(srn_enabled)
+    if qr_x is not None: config.qr_x = float(qr_x)
+    if qr_y is not None: config.qr_y = float(qr_y)
+    if qr_size is not None: config.qr_size = float(qr_size)
+    if qr_enabled is not None: config.qr_enabled = bool(qr_enabled)
+
     preview_path = generate_sample_preview_pdf(department=dept, slot=slot_num, config=config, db=db)
     proof_png_path = f"static/front_page_pdfs/template_preview_{dept}_slot{slot_num}_proof.png"
     timestamp = int(datetime.now().timestamp())
@@ -10265,7 +10614,7 @@ def get_booklet_template_preview(department: str = "CS", slot: int = 1, db: Sess
         "slot_number": slot_num,
         "template_name": config.template_name or f"Template {slot_num}",
         "preview_url": f"/{preview_path}?t={timestamp}",
-        "preview_image_url": f"/{proof_png_path}?t={timestamp}" if os.path.exists(proof_png_path) else None
+        "preview_image_url": f"/{proof_png_path}?t={timestamp}" if os.path.exists(proof_png_path) else f"/{preview_path}?t={timestamp}"
     }
 
 @app.post("/api/booklet-template/delete")
@@ -10394,4 +10743,3 @@ def reset_booklet_template_api(
         "department": dept,
         "slot_number": slot_num
     }
-

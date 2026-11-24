@@ -1201,7 +1201,7 @@
                         ${isScheduleLocked ? `
                             <button class="action-btn" onclick="openScheduleLockedModal()" title="Schedule is locked by Admin" style="font-weight: 600; opacity: 0.85;">🔒 Locked</button>
                         ` : `
-                            <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️ Edit</button>
+                            <button class="action-btn" onclick="openEditClassModal(${c.id})" title="Edit Class">✏️ </button>
                             <button class="action-btn btn-danger-action" onclick="deleteClassRecord(${c.id}, '${escapeHtml(c.section)}', '${escapeHtml(c.subject)}')" title="Delete Class">🗑️</button>
                         `}
                     </td>
