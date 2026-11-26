@@ -70,6 +70,41 @@ def get_active_period(db: Session) -> str:
     return settings.active_period
 
 
+def clean_duplicate_reconciled_payments(db: Session, enrollment_id: Optional[int] = None):
+    """
+    Cleans up phantom duplicate 'Initial / Reconciled Payment' records created by race condition
+    when a genuine 'Supplementary Cash Settlement' was processed at the same time.
+    """
+    try:
+        q = db.query(models.PaymentRecord)
+        if enrollment_id:
+            q = q.filter(models.PaymentRecord.enrollment_id == enrollment_id)
+        all_prs = q.order_by(models.PaymentRecord.enrollment_id.asc(), models.PaymentRecord.id.asc()).all()
+        
+        by_enr = defaultdict(list)
+        for pr in all_prs:
+            by_enr[pr.enrollment_id].append(pr)
+            
+        deleted_any = False
+        for eid, prs in by_enr.items():
+            supp_records = [p for p in prs if (p.notes or "").startswith("Supplementary Cash Settlement")]
+            backfill_records = [p for p in prs if (p.notes or "") == "Initial / Reconciled Payment" and (p.recorded_by or "") in ("System Clerk", "")]
+            
+            for s_pr in supp_records:
+                for b_pr in list(backfill_records):
+                    if round(s_pr.amount, 2) == round(b_pr.amount, 2) and s_pr.payment_period == b_pr.payment_period:
+                        time_diff = abs((s_pr.payment_date - b_pr.payment_date).total_seconds()) if (s_pr.payment_date and b_pr.payment_date) else 0
+                        if time_diff < 120:
+                            db.delete(b_pr)
+                            backfill_records.remove(b_pr)
+                            deleted_any = True
+                            break
+        if deleted_any:
+            db.commit()
+    except Exception as e:
+        print(f"Error cleaning duplicate reconciled payments: {e}")
+
+
 def sync_enrollment_period_billings(db: Session):
     """
     Centralized, idempotent synchronization engine for enrollment_period_billings.
@@ -78,6 +113,7 @@ def sync_enrollment_period_billings(db: Session):
     PaymentRecord.billing_id matching (enrollment_id, exam_period).
     """
     try:
+        clean_duplicate_reconciled_payments(db)
         active_period = get_active_period(db)
         settings = db.query(models.SystemSettings).first()
         global_price = settings.booklet_price if settings else 2.50
@@ -2704,55 +2740,42 @@ def login_user(req: LoginRequest, response: Response, db: Session = Depends(get_
             "message": "This account is deactivated. Please contact an Administrator to activate your account."
         }
 
-    # 2. Lockout Check
-    now = datetime.now()
-    if user.lockout_until and user.lockout_until > now:
-        remaining_seconds = int((user.lockout_until - now).total_seconds())
-        remaining_mins = max(1, (remaining_seconds + 59) // 60)
-        return {
-            "status": "locked",
-            "lockout_seconds": remaining_seconds,
-            "lockout_until": user.lockout_until.isoformat(),
-            "message": f"Account temporarily locked due to multiple failed login attempts. Please wait {remaining_mins} minute(s) before trying again, or contact an Administrator to unlock your account."
-        }
-
-    # 3. Password Verification
+    # 2. Password Verification
     if not bcrypt.checkpw(req.password.encode('utf-8'), user.password.encode('utf-8')):
         attempts = (user.failed_login_attempts or 0) + 1
+        user.failed_login_attempts = attempts
+        user.lockout_until = None
+        user.lockout_tier = 0
+        db.commit()
+
         if attempts >= 5:
-            user.lockout_tier = (user.lockout_tier or 0) + 1
-            delay_mins = 5 * user.lockout_tier  # Progressive 5-min increments: 5m, 10m, 15m...
-            user.lockout_until = now + timedelta(minutes=delay_mins)
-            user.failed_login_attempts = 0
-            db.commit()
             log_system_activity(
                 action_type="SECURITY",
-                action_title="Account Lockout Triggered",
-                details=f"Account '{clean_username}' temporarily locked for {delay_mins} minutes after 5 failed attempts.",
+                action_title="Multiple Failed Login Attempts",
+                details=f"Account '{clean_username}' reached {attempts} consecutive failed login attempts. Advisory OTP reminder triggered.",
                 db=db,
                 target_ref=clean_username,
                 username=clean_username,
                 user_role="User"
             )
             return {
-                "status": "locked",
-                "lockout_seconds": delay_mins * 60,
-                "lockout_until": user.lockout_until.isoformat(),
-                "message": f"Too many failed login attempts. Your account has been temporarily locked for {delay_mins} minutes. Please wait before trying again, or contact an Administrator to unlock your account."
+                "status": "error",
+                "show_otp_reminder": True,
+                "failed_attempts": attempts,
+                "message": "Invalid password. If you have forgotten your password, please contact an Administrator to request a One-Time Password (OTP)."
             }
         else:
-            user.failed_login_attempts = attempts
-            db.commit()
-            remaining_attempts = 5 - attempts
             return {
                 "status": "error",
-                "attempts_left": remaining_attempts,
-                "message": f"Invalid username or password. {remaining_attempts} attempt(s) remaining before account lockout."
+                "show_otp_reminder": False,
+                "failed_attempts": attempts,
+                "message": f"Invalid username or password. ({attempts}/5 attempts before suggestion)"
             }
 
-    # 4. Successful Authentication: Reset lockouts and failed attempts
+    # 3. Successful Authentication: Reset failed attempts
     user.failed_login_attempts = 0
     user.lockout_until = None
+    user.lockout_tier = 0
     new_token = str(uuid.uuid4())
     user.session_token = new_token
     db.commit()
@@ -4093,6 +4116,8 @@ def archive_enrollments(request: Request, db: Session = Depends(get_db), req: Op
     }
 
 @app.get("/api/archived-enrollments")
+@app.get("/api/enrollments/archived")
+@app.get("/api/enrollments/archived-periods")
 def get_archived_enrollments(period: Optional[str] = None, db: Session = Depends(get_db)):
     """Retrieves list of archived academic periods and their historical class records."""
     query = db.query(models.Enrollment).filter(models.Enrollment.is_archived == True)
@@ -4130,7 +4155,8 @@ def get_archived_enrollments(period: Optional[str] = None, db: Session = Depends
     return {
         "status": "success",
         "distinct_periods": distinct_periods,
-        "periods": periods_summary,
+        "periods": distinct_periods,
+        "periods_summary": periods_summary,
         "selected_period": selected_period,
         "classes": selected_classes,
         "total_classes": len(selected_classes)
@@ -4271,7 +4297,9 @@ def reconcile_enrollment_payments(enr: models.Enrollment, db: Session, first_boo
     If an enrollment has amount_paid > sum(recorded payments), auto-creates and persists
     the missing PaymentRecord row in MySQL.
     """
-    logged_sum = sum(round(pr.amount, 2) for pr in (enr.payment_records or []))
+    db.flush()
+    actual_records = db.query(models.PaymentRecord).filter(models.PaymentRecord.enrollment_id == enr.id).all()
+    logged_sum = sum(round(pr.amount, 2) for pr in actual_records)
     unlogged_diff = round((enr.amount_paid or 0.0) - logged_sum, 2)
     if unlogged_diff > 0:
         if first_booklet and getattr(first_booklet, 'date_distributed', None):
@@ -5721,7 +5749,6 @@ def execute_supplementary_distribution(req: schemas.SupplementaryDistributionReq
         )
         db.add(pr)
     
-    reconcile_enrollment_payments(enrollment, db)
     db.commit()
     
     sync_enrollment_period_billings(db)
@@ -7916,7 +7943,8 @@ def get_all_users(response: Response, db: Session = Depends(get_db)):
             "is_active": getattr(u, "is_active", True) if getattr(u, "is_active", True) is not None else True,
             "must_change_password": bool(u.must_change_password),
             "is_locked": is_locked,
-            "lockout_seconds": lockout_sec
+            "lockout_seconds": lockout_sec,
+            "failed_attempts": u.failed_login_attempts or 0
         })
     return {"status": "success", "users": user_list}
 

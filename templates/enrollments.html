@@ -3418,15 +3418,34 @@
             const modal = document.getElementById('archivedRostersModal');
             if (modal) modal.style.display = 'flex';
             const select = document.getElementById('archivedPeriodSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Loading archived periods...</option>';
+            }
             try {
-                const res = await fetch('/api/enrollments/archived-periods');
+                const res = await fetch('/api/archived-enrollments');
                 const data = await res.json();
-                if (data.status === 'success' && data.periods) {
-                    select.innerHTML = '<option value="">-- Select an Archived Semester --</option>' +
-                        data.periods.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+                if (data.status === 'success') {
+                    const rawPeriods = data.distinct_periods || data.periods || [];
+                    const periodsList = rawPeriods.map(p => typeof p === 'object' ? (p.academic_period || p.name || '') : p).filter(Boolean);
+                    
+                    if (periodsList.length === 0) {
+                        select.innerHTML = '<option value="">-- No Archived Semesters Found --</option>';
+                        const tbody = document.getElementById('archivedTableBody');
+                        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">No historical archived rosters found.</td></tr>';
+                    } else {
+                        select.innerHTML = '<option value="">-- Select an Archived Semester --</option>' +
+                            periodsList.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+                        
+                        // Auto-select the first archived period and immediately load classes
+                        select.value = periodsList[0];
+                        onArchivedPeriodChange();
+                    }
+                } else {
+                    if (select) select.innerHTML = '<option value="">Failed to load archived periods</option>';
                 }
             } catch (e) {
                 console.error("Load archived periods error:", e);
+                if (select) select.innerHTML = '<option value="">Error loading archived periods</option>';
             }
         }
 
@@ -3446,11 +3465,13 @@
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">Loading archived classes...</td></tr>';
 
             try {
-                const res = await fetch(`/api/enrollments/archived?period=${encodeURIComponent(period)}`);
+                const res = await fetch(`/api/archived-enrollments?period=${encodeURIComponent(period)}`);
                 const data = await res.json();
                 if (data.status === 'success') {
                     archivedClassesList = data.classes || [];
                     filterArchivedTable();
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #ef4444;">Failed to load archived classes.</td></tr>';
                 }
             } catch (e) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #ef4444;">Failed to load archived classes.</td></tr>';

@@ -1165,9 +1165,8 @@
                 let statusBadge = '';
                 if (!isActive) {
                     statusBadge = `<span class="badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">⛔ Deactivated</span>`;
-                } else if (u.is_locked) {
-                    const remMins = Math.max(1, Math.ceil(u.lockout_seconds / 60));
-                    statusBadge = `<span class="badge" style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;">🔒 Locked (${remMins}m)</span>`;
+                } else if (u.failed_attempts >= 5) {
+                    statusBadge = `<span class="badge" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;" title="${u.failed_attempts} failed login attempts">⚠️ ${u.failed_attempts} Failed Attempts</span>`;
                 } else if (u.is_online) {
                     statusBadge = `<span class="badge badge-online">🟢 Online</span>`;
                 } else {
@@ -1202,7 +1201,7 @@
                                         🔑
                                     </button>
                                 ` : `
-                                    <button class="action-btn" title="Reset Password &amp; Issue Passcode" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name || '')}', '${u.role}', '${u.department}')">
+                                    <button class="action-btn" title="Reset Password &amp; Issue One-Time Password (OTP)" onclick="openAdminResetPwModal(${u.id}, '${escapeHtml(u.username)}', '${escapeHtml(u.full_name || '')}', '${u.role}', '${u.department}')">
                                         🔑
                                     </button>
                                 `}

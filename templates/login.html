@@ -151,29 +151,22 @@
     </div>
 </div>
 
-<!-- MODAL: ACCOUNT LOCKED OUT -->
-<div id="accountLockedModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
-    <div style="background: white; border-radius: 14px; width: 92%; max-width: 450px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #f59e0b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <div style="font-size: 2.8rem; margin-bottom: 8px;">🔒</div>
-        <h3 style="color: #b45309; font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">Account Temporarily Locked</h3>
-        <p style="color: #475569; font-size: 0.9rem; line-height: 1.5; margin-bottom: 14px;">
-            Too many consecutive failed login attempts were detected on this account.
+<!-- MODAL: FORGOTTEN PASSWORD ADVISORY (5 FAILED ATTEMPTS) -->
+<div id="forgotPasswordReminderModal" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 999999; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 14px; width: 92%; max-width: 450px; padding: 28px 24px; text-align: center; box-shadow: 0 20px 45px rgba(0,0,0,0.3); border-top: 5px solid #3b82f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="font-size: 2.8rem; margin-bottom: 8px;">🔑</div>
+        <h3 style="color: #1e3a8a; font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">Need Password Help?</h3>
+        <p style="color: #475569; font-size: 0.9rem; line-height: 1.5; margin-bottom: 16px;">
+            You have entered an incorrect password 5 times on this account.
         </p>
         
-        <div style="background: #fffbeb; border: 1.5px dashed #f59e0b; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
-            <div style="font-size: 0.8rem; color: #92400e; font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Time Remaining Before Retry</div>
-            <div id="lockoutCountdownText" style="font-family: monospace; font-size: 2rem; font-weight: 800; color: #b45309; letter-spacing: 2px;">
-                05:00
-            </div>
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; text-align: left; font-size: 0.88rem; color: #1e40af; line-height: 1.5;">
+            <strong>Forgot your password?</strong><br>
+            Please approach your <strong>System Administrator</strong> to request an official <strong>One-Time Password (OTP)</strong> to reset your access. You can also continue to try logging in if you know your password.
         </div>
 
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; text-align: left; font-size: 0.82rem; color: #475569; line-height: 1.45;">
-            🔑 <strong>Forgot your password?</strong><br>
-            You can wait for the timer above to expire, or approach an <strong>Administrator</strong> to issue a single-use temporary password.
-        </div>
-
-        <button type="button" onclick="closeAccountLockedModal()" style="background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 0.9rem; cursor: pointer; width: 100%;">
-            Close
+        <button type="button" onclick="closeForgotPasswordReminderModal()" style="background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 0.95rem; cursor: pointer; width: 100%; transition: background 0.15s ease;">
+            Close &amp; Try Again
         </button>
     </div>
 </div>
@@ -340,15 +333,14 @@
                 btn.innerText = "Sign In";
                 btn.disabled = false;
                 openAccountDeactivatedModal();
-            } else if (data.status === "locked") {
-                btn.innerText = "Sign In";
-                startLockoutCountdown(data.lockout_seconds || 300);
-                openAccountLockedModal();
             } else {
                 errorMsg.innerText = data.message || "Invalid credentials.";
                 errorMsg.style.display = "block";
                 btn.innerText = "Sign In";
                 btn.disabled = false;
+                if (data.show_otp_reminder) {
+                    openForgotPasswordReminderModal();
+                }
             }
         });
     }
@@ -363,39 +355,19 @@
         if (modal) modal.style.display = 'none';
     }
 
-    let lockoutTimerInterval = null;
-    function startLockoutCountdown(seconds) {
-        if (lockoutTimerInterval) clearInterval(lockoutTimerInterval);
-        let rem = Math.max(0, parseInt(seconds, 10) || 0);
-        const textEl = document.getElementById('lockoutCountdownText');
-        const btn = document.getElementById('loginBtn');
-        if (btn) btn.disabled = true;
-
-        function updateDisplay() {
-            const m = Math.floor(rem / 60);
-            const s = rem % 60;
-            const str = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-            if (textEl) textEl.innerText = str;
-            if (rem <= 0) {
-                clearInterval(lockoutTimerInterval);
-                if (btn) btn.disabled = false;
-                if (textEl) textEl.innerText = "00:00 (Unlocked - Try Again)";
-            }
-            rem--;
-        }
-
-        updateDisplay();
-        lockoutTimerInterval = setInterval(updateDisplay, 1000);
-    }
-
-    function openAccountLockedModal() {
-        const modal = document.getElementById('accountLockedModal');
+    function openForgotPasswordReminderModal() {
+        const modal = document.getElementById('forgotPasswordReminderModal');
         if (modal) modal.style.display = 'flex';
     }
 
-    function closeAccountLockedModal() {
-        const modal = document.getElementById('accountLockedModal');
+    function closeForgotPasswordReminderModal() {
+        const modal = document.getElementById('forgotPasswordReminderModal');
         if (modal) modal.style.display = 'none';
+        const pwInput = document.getElementById('password');
+        if (pwInput) {
+            pwInput.value = '';
+            pwInput.focus();
+        }
     }
 
     function openForgotPasswordModal() {
