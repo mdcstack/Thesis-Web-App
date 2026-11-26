@@ -886,29 +886,44 @@
                 </div>
                 <button type="button" class="modal-close-btn" onclick="closeArchivedRostersModal()">&times;</button>
             </div>
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
-                <select id="archivedPeriodSelect" onchange="onArchivedPeriodChange()" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;">
+            <!-- Filters Row -->
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+                <select id="archivedPeriodSelect" onchange="onArchivedPeriodChange()" style="flex: 1; min-width: 180px; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;">
                     <option value="">Loading archived periods...</option>
                 </select>
-                <input type="text" id="archivedSearchInput" placeholder="Filter classes..." oninput="filterArchivedTable()" style="flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;">
+                <input type="text" id="archivedSearchInput" placeholder="Filter classes..." oninput="archivedCurrentPage=1; filterArchivedTable();" style="flex: 1; min-width: 150px; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;">
+                <select id="archivedPageSizeSelect" onchange="changeArchivedPageSize(this.value)" style="width: 130px; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 0.88rem;" title="Rows per page">
+                    <option value="10" selected>10 per page</option>
+                    <option value="25">25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="all">Show All</option>
+                </select>
             </div>
-            <div style="max-height: 45vh; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px;">
-                <table class="directory-table" style="font-size: 0.85rem;">
-                    <thead>
-                        <tr>
-                            <th>Instructor</th>
-                            <th>Section</th>
-                            <th>Subject</th>
-                            <th style="text-align: center;">Headcount</th>
-                            <th style="text-align: center;">Archived At</th>
-                        </tr>
-                    </thead>
-                    <tbody id="archivedTableBody">
-                        <tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">Select a semester above.</td></tr>
-                    </tbody>
-                </table>
+            <!-- Table -->
+            <div style="border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+                <div style="overflow-x: auto;">
+                    <table class="directory-table" style="font-size: 0.85rem;">
+                        <thead>
+                            <tr>
+                                <th>Instructor</th>
+                                <th>Section</th>
+                                <th>Subject</th>
+                                <th style="text-align: center;">Headcount</th>
+                                <th style="text-align: center;">Archived At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="archivedTableBody">
+                            <tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">Select a semester above.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div style="display: flex; justify-content: flex-end; margin-top: 14px;">
+            <!-- Bottom Pagination Bar -->
+            <div id="archivedPaginationContainer" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 8px; flex-wrap: wrap; gap: 10px;">
+                <div id="archivedPaginationSummary" style="font-size: 0.86rem; color: #475569; font-weight: 600;">Showing 0 of 0 records</div>
+                <div id="archivedPaginationButtons" style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;"></div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
                 <button type="button" class="btn-cancel-modal" onclick="closeArchivedRostersModal()">Close</button>
             </div>
         </div>
@@ -992,6 +1007,15 @@
             <div id="appDialogActions" style="display: flex; gap: 12px; justify-content: center;">
                 <button id="appDialogCancelBtn" class="dialog-btn" style="background: #e2e8f0; color: #475569;">Cancel</button>
                 <button id="appDialogConfirmBtn" class="dialog-btn" style="background: #e74c3c; color: #ffffff;">Confirm</button>
+            </div>
+            <!-- Archive Progress Box (shown only during archive operation) -->
+            <div id="appDialogProgressBox" style="display: none; width: 100%; text-align: center; margin-top: 4px;">
+                <div id="appDialogProgressStepText" style="font-size: 0.88rem; color: #475569; margin-bottom: 10px; font-weight: 600;">Preparing archive...</div>
+                <div style="background: #e2e8f0; border-radius: 999px; height: 12px; overflow: hidden; margin-bottom: 8px;">
+                    <div id="appDialogProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #2563eb, #3b82f6); border-radius: 999px; transition: width 0.5s ease;"></div>
+                </div>
+                <div id="appDialogProgressPct" style="font-size: 0.82rem; color: #64748b; font-weight: 700; margin-bottom: 10px;">0%</div>
+                <div style="font-size: 0.78rem; color: #94a3b8; font-style: italic;">Please wait and do not close this window.</div>
             </div>
         </div>
     </div>
@@ -3392,14 +3416,50 @@
                     type: 'warning',
                     icon: '📁',
                     confirmText: 'Archive Rosters',
-                    confirmBg: '#f59e0b'
+                    confirmBg: '#f59e0b',
+                    keepModalOpen: true
                 }
             );
             if (!confirmed) return;
 
+            // Show progress bar, hide action buttons
+            const actionsEl = document.getElementById('appDialogActions');
+            const progressBox = document.getElementById('appDialogProgressBox');
+            const progressBar = document.getElementById('appDialogProgressBar');
+            const progressPct = document.getElementById('appDialogProgressPct');
+            const stepText = document.getElementById('appDialogProgressStepText');
+
+            if (actionsEl) actionsEl.style.display = 'none';
+            if (progressBox) progressBox.style.display = 'block';
+
+            function setProgress(pct, label) {
+                if (progressBar) progressBar.style.width = pct + '%';
+                if (progressPct) progressPct.textContent = pct + '%';
+                if (stepText) stepText.textContent = label;
+            }
+
+            function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
             try {
+                setProgress(15, 'Step 1 of 3: Preparing archive snapshot...');
+                await delay(600);
+                setProgress(40, 'Step 2 of 3: Writing archive records...');
+
                 const res = await fetch('/api/enrollments/archive', { method: 'POST' });
                 const data = await res.json();
+
+                setProgress(80, 'Step 3 of 3: Finalizing and verifying...');
+                await delay(500);
+                setProgress(100, 'Archive complete!');
+                await delay(600);
+
+                // Close modal and restore state
+                const modal = document.getElementById('appDialogModal');
+                if (modal) modal.style.display = 'none';
+                if (actionsEl) actionsEl.style.display = 'flex';
+                if (progressBox) progressBox.style.display = 'none';
+                if (progressBar) progressBar.style.width = '0%';
+
                 if (data.status === 'success') {
                     showToast(data.message, "success", "Archived");
                     loadRoster(false);
@@ -3409,6 +3469,12 @@
                 }
             } catch (err) {
                 console.error("Archive error:", err);
+                // Close modal and restore state on error
+                const modal = document.getElementById('appDialogModal');
+                if (modal) modal.style.display = 'none';
+                if (actionsEl) actionsEl.style.display = 'flex';
+                if (progressBox) progressBox.style.display = 'none';
+                if (progressBar) progressBar.style.width = '0%';
                 showToast("Network error while archiving enrollments.", "error", "Network Error");
             }
         }
@@ -3458,6 +3524,7 @@
         async function onArchivedPeriodChange() {
             const period = document.getElementById('archivedPeriodSelect').value;
             const tbody = document.getElementById('archivedTableBody');
+            archivedCurrentPage = 1;
             if (!period) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">Select a semester above.</td></tr>';
                 return;
@@ -3478,10 +3545,67 @@
             }
         }
 
+        // --- ARCHIVED ROSTERS PAGINATION STATE ---
+        let archivedCurrentPage = 1;
+        let archivedPageSize = 10;
+
+        function changeArchivedPageSize(val) {
+            archivedPageSize = val === 'all' ? 'all' : parseInt(val, 10);
+            archivedCurrentPage = 1;
+            filterArchivedTable();
+        }
+
+        function goToArchivedPage(page) {
+            archivedCurrentPage = page;
+            filterArchivedTable();
+        }
+
+        function renderArchivedPagination(totalFiltered) {
+            const summaryEl = document.getElementById('archivedPaginationSummary');
+            const buttonsEl = document.getElementById('archivedPaginationButtons');
+            if (!summaryEl || !buttonsEl) return;
+
+            if (archivedPageSize === 'all') {
+                summaryEl.textContent = `Showing all ${totalFiltered} record${totalFiltered !== 1 ? 's' : ''}`;
+                buttonsEl.innerHTML = '';
+                return;
+            }
+
+            const totalPages = Math.max(1, Math.ceil(totalFiltered / archivedPageSize));
+            if (archivedCurrentPage > totalPages) archivedCurrentPage = totalPages;
+            const start = totalFiltered === 0 ? 0 : (archivedCurrentPage - 1) * archivedPageSize + 1;
+            const end = Math.min(archivedCurrentPage * archivedPageSize, totalFiltered);
+            summaryEl.textContent = `Showing ${start}\u2013${end} of ${totalFiltered} record${totalFiltered !== 1 ? 's' : ''}`;
+
+            let btns = '';
+            const makeBtn = (label, page, disabled, active) =>
+                `<button class="pagination-btn${active ? ' active' : ''}" onclick="goToArchivedPage(${page})" ${disabled ? 'disabled' : ''}>${label}</button>`;
+
+            btns += makeBtn('First', 1, archivedCurrentPage === 1, false);
+            btns += makeBtn('Prev', archivedCurrentPage - 1, archivedCurrentPage === 1, false);
+
+            let lo = Math.max(1, archivedCurrentPage - 2);
+            let hi = Math.min(totalPages, archivedCurrentPage + 2);
+            if (hi - lo < 4) {
+                lo = Math.max(1, hi - 4);
+                hi = Math.min(totalPages, lo + 4);
+            }
+            if (lo > 1) btns += `<span style="padding:0 4px;color:#94a3b8;">...</span>`;
+            for (let p = lo; p <= hi; p++) {
+                btns += makeBtn(p, p, false, p === archivedCurrentPage);
+            }
+            if (hi < totalPages) btns += `<span style="padding:0 4px;color:#94a3b8;">...</span>`;
+
+            btns += makeBtn('Next', archivedCurrentPage + 1, archivedCurrentPage === totalPages, false);
+            btns += makeBtn('Last', totalPages, archivedCurrentPage === totalPages, false);
+
+            buttonsEl.innerHTML = btns;
+        }
+
         function filterArchivedTable() {
             const search = (document.getElementById('archivedSearchInput').value || '').toLowerCase();
             const tbody = document.getElementById('archivedTableBody');
-            const filtered = archivedClassesList.filter(c => 
+            const filtered = archivedClassesList.filter(c =>
                 (c.teacher_name || '').toLowerCase().includes(search) ||
                 (c.section || '').toLowerCase().includes(search) ||
                 (c.subject || '').toLowerCase().includes(search)
@@ -3489,10 +3613,17 @@
 
             if (filtered.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">No matching classes found.</td></tr>';
+                renderArchivedPagination(0);
                 return;
             }
 
-            tbody.innerHTML = filtered.map(c => `
+            let pageSlice = filtered;
+            if (archivedPageSize !== 'all') {
+                const start = (archivedCurrentPage - 1) * archivedPageSize;
+                pageSlice = filtered.slice(start, start + archivedPageSize);
+            }
+
+            tbody.innerHTML = pageSlice.map(c => `
                 <tr>
                     <td><strong>${escapeHtml(c.teacher_name)}</strong></td>
                     <td><span style="font-weight: 700;">${escapeHtml(c.section)}</span></td>
@@ -3501,6 +3632,8 @@
                     <td style="text-align: center; color: #64748b; font-size: 0.8rem;">${escapeHtml(c.archived_at || '')}</td>
                 </tr>
             `).join('');
+
+            renderArchivedPagination(filtered.length);
         }
 
         // --- IN-APP CONFIRMATION & ALERT DIALOG SYSTEM (BookletLog Golden Standard) ---
@@ -3511,7 +3644,8 @@
                     confirmText = 'Confirm',
                     cancelText = 'Cancel',
                     confirmBg = null,
-                    icon: customIcon = null
+                    icon: customIcon = null,
+                    keepModalOpen = false
                 } = options;
 
                 const modal = document.getElementById('appDialogModal');
@@ -3566,7 +3700,9 @@
                 }
 
                 function cleanup(result) {
-                    modal.style.display = 'none';
+                    if (!keepModalOpen || !result) {
+                        modal.style.display = 'none';
+                    }
                     if (confirmBtn) confirmBtn.onclick = null;
                     if (cancelBtn) cancelBtn.onclick = null;
                     document.removeEventListener('keydown', handleKey);
